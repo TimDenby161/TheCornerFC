@@ -4348,8 +4348,9 @@ function renderFplNext() {
   const body = list.map((r, i) => {
     const name = decodeEntities(r.name);
     return `<tr><td>${i + 1}</td>
-      <td class="fpl-player">${playerById(r.player) ? playerLink(r.player, name) : escapeHtml(name)}${flag(r.availability)}
-        <div class="fpl-match">${escapeHtml(club(r.team))} ${r.home ? "v" : "at"} ${escapeHtml(club(r.opponent))}</div></td>
+      <td class="fpl-player"><div class="fpl-who"><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="${escapeHtml(club(r.team))}" title="${escapeHtml(club(r.team))}" loading="lazy" onerror="this.style.visibility='hidden'">
+        <div>${playerById(r.player) ? playerLink(r.player, name) : escapeHtml(name)}${flag(r.availability)}
+        <div class="fpl-match">${escapeHtml(club(r.team))} ${r.home ? "v" : "at"} ${escapeHtml(club(r.opponent))}</div></div></div></td>
       <td>${FPL_POS[r.position]}</td>${FPL_COLS.map(([k]) => `<td>${fmt[k](r[k])}</td>`).join("")}</tr>`;
   }).join("");
   el.innerHTML = `
