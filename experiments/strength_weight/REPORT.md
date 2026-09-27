@@ -7,12 +7,13 @@ The broad reconstruction selected 0.6 on validation, and it also minimizes held-
 ## Evidence and design
 
 - Validation: 2023-07-01 through 2024-06-30, **19,239 fixtures**.
-- Held-out: 2024-07-01 onward through the query date, **43,658 fixtures**.
+- Held-out: 2024-07-01 through the frozen sample’s last kickoff on 2026-09-22, **43,658 fixtures**.
+- Reproduced from the original frozen inputs at 2026-09-27T11:17:54.249305+00:00; this rerun adds no new fixtures and is not an independent validation. Input SHA-256: `a5eed585ddd1441a10e307fb89ab86f6f4554eb49ce849544fb4d5dc591f6fe6`.
 - Only completed regulation-time FT matches with the required historical ranks and stored prediction components. Every weight uses exactly the same accepted fixtures within a cohort.
 - Grid: 0, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0 Current; Baseline receives the remainder.
 - Candidate selection uses validation log loss. Held-out grids and subgroups are diagnostic, not permission to retune on the test set.
 - This tests a fixed near-kickoff blend, not the production year-ahead interpolation curve.
-- Database access used an explicitly READ ONLY, REPEATABLE READ transaction. API-Football calls: **zero**. Immutable match snapshots: **0**; immutable odds observations: **0**.
+- Original extraction used an explicitly READ ONLY, REPEATABLE READ transaction. This rerun uses only the frozen local extract, with no database access or API calls. The original extraction reported no immutable match snapshots or odds observations; this is not a claim about current database coverage.
 
 **Reconstruction limitation:** historical rank inputs have been rebuilt, whereas many old prediction rows have not. The broad replay uses rebuilt historical Current/Baseline ranks while freezing each stored prediction’s other contributions: its residual goal margin and home×away xG product. Changing the rank margin through `project()` preserves that product. Unit tests confirm equivalence to the full prediction formula when inputs are internally consistent. Stored injury/lineup/home-edge effects are not retuned. The experiment cannot prove these reconstructed inputs were known before the event or remove historical model/data-revision leakage.
 
@@ -97,7 +98,7 @@ These examples are selected mechanically by maximum absolute Current-minus-Basel
 
 An exact-compatibility sensitivity required stored predictions to match rebuilt historical ranks at 0.6/0.4 and today’s probability formula. It retained only 1,439 validation and 2,246 test fixtures, excluding 59,212 mismatched rows. It selected 0.7 on validation, but 0.7 worsened held-out log loss by 0.000567; its apparent test optimum 0.4 improved by only 0.000401, with an interval crossing zero. This tiny, selected cohort is not representative. Results are retained in `compatible_results.json`, not substituted for the broad analysis.
 
-**Bookmaker paired sample: n=0.** There are no immutable timestamped odds observations yet. Current/latest odds cannot establish what was available on the same historical fixtures at prediction time; no market superiority claim is possible.
+**Bookmaker paired sample: n=0.** The frozen extract contains no timestamped pre-event odds. Current/latest odds cannot establish what was available on the same historical fixtures at prediction time; no market superiority claim is possible.
 
 ## Review recommendation
 
