@@ -22,9 +22,9 @@ Sample-size basis (`power.py` → `power.json`): two-sided α = 0.05, 80% power,
 
 | ID | Hypothesis | Status | Primary comparison | Threshold | Target | First accrual (2026-09-27) |
 |---|---|---|---|---|---|---:|
-| P1 | Club-neutral squad strength after large verified squad changes | **Blocked**: capture needed | Shadow 10-match forecast with vs without neutral squad | ≥1% MSE, raw and adjusted GD | Set when capture exists | — |
-| P2 | Player ratings after verified up/down transfers | **Partial**: descriptive only | Scaled vs neutral/residual for future minutes | ≥1% MSE | Set when capture exists | — |
-| P3 | Re-predicting with the official XI | **Ready** (counterfactual) | Official-XI minus predicted-XI log loss | 0.002 | 600 | 12 |
+| P1 | Club-neutral squad strength after large verified squad changes | **Capturing** from 2026-09-28 (Amendment 1); evaluator not yet built | Shadow 10-match forecast with vs without neutral squad | ≥1% MSE, raw and adjusted GD | Set when capture exists | — |
+| P2 | Player ratings after verified up/down transfers | **Capturing** from 2026-09-28 (Amendment 1); evaluator not yet built | Scaled vs neutral/residual for future minutes | ≥1% MSE | Set when capture exists | — |
+| P3 | Re-predicting with the official XI | **Ready**; operational pre-kickoff capture from 2026-09-27 (Amendment 1) | Official-XI minus predicted-XI log loss | 0.002 | 600 | 12 |
 | P4 | Availability/injury adjustment | **Ready** | Production minus availability-off log loss | 0.002 | 6,500 (re-estimate at 500) | 13 |
 | P5 | Goalkeeper information | **Blocked**: needs a keeper-specific rating | — | — | — | — |
 | P6 | Model vs timestamped pre-kickoff market | **Ready** | Model minus market log loss | Estimation (see P6) | 2,000 (re-estimate at 500) | 79 |
@@ -115,4 +115,15 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
 
 ## Amendments
 
-_None._
+**Amendment 1 (2026-09-27): data capture for P1, P2 and P3.** Added before any P1–P3 outcome was examined. Capture only: ratings and predictions don't read any of it.
+
+- **P3:** the match-day run (every 30 minutes) now records official XIs for player-data fixtures kicking off within 70 minutes that don't yet have both XIs recorded before kickoff (`matchday.capture_prekickoff_lineups`, at most 10 calls a run).
+  - The secondary operational endpoint (`official_recorded_before_kickoff`) accrues from this date. The primary counterfactual definition is unchanged.
+- **P1 dated squads:** each nightly `/players/squads` fetch now appends a `squad_snapshots` row whenever a club's list changes (API ids, mapped match-data ids, names, positions). This costs no extra calls.
+- **P1/P2 verified transfers:** a nightly step fetches `/transfers?team=` for clubs never fetched or whose stored squad changed since their last fetch, at most 300 calls a night.
+  - Transfers dated from 2025-07-01 are kept in `transfer_observations`, and every fetch is logged in `transfer_fetches`.
+  - A "verified transfer" for P1/P2 means a `transfer_observations` event whose `team_in` or `team_out` is the club. The squad-snapshot change dates bound when it took effect.
+- **P1/P2 club-neutral component:** `player_rating_history` now also stores `stat_percentile`, `window_club_rank`, `window_rating` (the rolling club-scaled rating) and `neutral_rating` (the same formula with club strength 1000). These are NULL for captures before 2026-09-28.
+  - The residual variant is derived at analysis time, from a club-expectation fit on data before the evaluation window.
+- **Remains unchanged:** P1/P2 targets and evaluators are still to be registered in a further amendment before any of their outcomes is examined. The P1 primary metric, P2 minutes endpoint and thresholds above stand.
+- **Migration:** `db/migrations/20260927_squad_transfer_capture.sql`, applied 2026-09-27.

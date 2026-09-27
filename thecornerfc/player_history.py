@@ -42,7 +42,8 @@ def build_rows(current, season_rows, season, squads):
     return rows
 
 
-def capture(conn,current,season_rows):
+def capture(conn,current,season_rows,components=None):
+    """components: {player: (stat percentile, window club rank, window rating, club-neutral rating)}."""
     if not current:
         return
     config.require_db_write('capture player rating history')
@@ -62,5 +63,6 @@ def capture(conn,current,season_rows):
     with conn.cursor() as cur:
         cur.executemany('''INSERT INTO player_rating_history
             (capture_id,player_id,rating,world_rank,position,rating_group,team_id,team_source,
-             window_minutes,season_minutes,rating_source) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
-            [(capture_id,*row) for row in rows])
+             window_minutes,season_minutes,rating_source,stat_percentile,window_club_rank,window_rating,
+             neutral_rating) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+            [(capture_id,*row,*(components or {}).get(row[0],(None,)*4)) for row in rows])
