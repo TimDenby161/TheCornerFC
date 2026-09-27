@@ -7,6 +7,7 @@ import html
 import json
 import logging
 import math
+import re
 import shutil
 import tempfile
 from collections import defaultdict
@@ -80,6 +81,28 @@ def site_freshness(conn):
 
 def _r(x, n=2):
     return None if x is None else round(float(x), n)
+
+
+# API-derived values that the site puts into markup: kit colours go into a style attribute and
+# coach photos into an img src, so only a plain hex colour and API-Football's own image host pass
+HEX_COLOR = re.compile(r"[0-9a-fA-F]{6}")
+MEDIA_URL = re.compile(r"https://media\.api-sports\.io/football/[a-z]+/\d+\.(?:png|jpg|svg)")
+
+
+def _hex_color(v):
+    """A six-digit hex colour without the '#', lower-cased, or None."""
+    return v.lower() if isinstance(v, str) and HEX_COLOR.fullmatch(v) else None
+
+
+def _media_url(v):
+    """An API-Football media URL, or None for anything else."""
+    return v if isinstance(v, str) and MEDIA_URL.fullmatch(v) else None
+
+
+def _kit_colors(shirt, number):
+    """[shirt, number] when the shirt colour is valid (a bad number colour becomes None), else None."""
+    shirt = _hex_color(shirt)
+    return [shirt, _hex_color(number)] if shirt else None
 
 
 def _xi_lines(vals):
@@ -1177,9 +1200,9 @@ def export_clubs(conn, out_dir=OUT_DIR):
             select {WEEK.format('f.kickoff')} as part, ff.fixture_id, ff.team_id, ff.formation
             from fixture_formations ff join fixtures f using (fixture_id) where ff.formation is not null""",
             order_by="fixture_id, team_id")}
-    coaches = {t: {"id": c, "name": n, "photo": p, "since": s.isoformat() if s else None}
+    coaches = {t: {"id": c, "name": n, "photo": _media_url(p), "since": s.isoformat() if s else None}
                for t, c, n, p, s in conn.execute("select team_id, coach_id, name, photo, since from team_coaches")}
-    colors = {t: [s, n] for t, s, n in conn.execute("select team_id, shirt, number from team_colors")}
+    colors = {t: _kit_colors(s, n) for t, s, n in conn.execute("select team_id, shirt, number from team_colors")}
     xi_lines = {(f, t): _xi_lines(rest) for f, t, *rest in cached_rows(conn, "xi_lines", f"""
             select {WEEK.format('f.kickoff')} as part, r.fixture_id, r.team_id,
                    r.actual_gk::float8, r.actual_def::float8, r.actual_mid::float8, r.actual_fwd::float8

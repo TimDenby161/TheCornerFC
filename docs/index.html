@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- GitHub Pages can't send security headers, so the policy is here. Scripts: only assets/app.js
+     (no inline script or onerror handlers). Images: this site, API-Football's media host and
+     flagcdn. Inline styles stay allowed for the style="" attributes app.js writes. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https://media.api-sports.io https://flagcdn.com; connect-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>The Corner FC</title>
 <meta name="description" content="Club strength ratings, projected scores and model win/draw/loss probabilities.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -146,6 +151,7 @@
     <div id="club-body"></div>
   </section>
   <footer class="freshness" id="freshness" hidden></footer>
+  <footer class="site-links"><a href="privacy.html">Privacy, corrections &amp; security</a></footer>
 </main>
 
 

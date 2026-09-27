@@ -1,0 +1,21 @@
+# Weekly update PRs for the pinned Python packages (requirements.txt, compiled from
+# requirements.in) and the SHA-pinned GitHub Actions. Security fixes arrive as soon as an
+# advisory is published, once "Dependabot security updates" is on in the repo settings.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
