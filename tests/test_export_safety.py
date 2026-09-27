@@ -2,8 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 
-from thecornerfc.export import ExportValidationError, _publish_export
+from thecornerfc.export import ExportValidationError, _publish_export, export_player_seasons
 from thecornerfc.workflow_inputs import parse_int_list
 
 
@@ -37,13 +38,51 @@ def write_valid_export(root, marker):
     write_json(root / "player_seasons.json", {
         "generated_at": "test",
         "fields": ["id"],
-        "players": [[i] for i in range(100)],
+        "players": {str(i): {"2026": [[1, 90, 50, 7, 0, 0]]} for i in range(100)},
     })
     for dirname in ("players", "clubs", "leagues"):
         write_json(root / dirname / "1.json", {"marker": marker})
 
 
 class ExportSafetyTests(unittest.TestCase):
+    def test_real_player_seasons_writer_passes_publication_validation(self):
+        conn = Mock()
+        conn.execute.side_effect = [
+            [(i,) for i in range(100)],
+            Mock(fetchall=lambda: [(i, 2026, 1, 90, 50, 7, 0, 0) for i in range(100)]),
+            Mock(fetchall=lambda: []), Mock(fetchall=lambda: []),
+            [], [], [], [(1, "Club")], [],
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            live = Path(tmp) / "data"
+
+            def build(staged):
+                write_valid_export(staged, "new")
+                export_player_seasons(conn, staged)
+
+            _publish_export(build, live)
+            players = json.loads((live / "player_seasons.json").read_text())["players"]
+            self.assertEqual(len(players), 100)
+            self.assertEqual(players["0"]["2026"], [[1, 90, 50, 7, 0, 0]])
+
+    def test_invalid_or_depleted_player_seasons_preserves_old_output(self):
+        for players, message in (([], "does not contain a dict"),
+                                 ({}, "expected at least 50"),
+                                 ({str(i): {} for i in range(60)}, "collapsed from 200 to 60")):
+            with self.subTest(message=message), tempfile.TemporaryDirectory() as tmp:
+                live = Path(tmp) / "data"
+                write_valid_export(live, "old")
+                write_json(live / "player_seasons.json",
+                           {"players": {str(i): {} for i in range(200)}})
+
+                def build(staged):
+                    write_valid_export(staged, "new")
+                    write_json(staged / "player_seasons.json", {"players": players})
+
+                with self.assertRaisesRegex(ExportValidationError, message):
+                    _publish_export(build, live)
+                self.assertEqual(json.loads((live / "rankings.json").read_text())["marker"], "old")
+
     def test_export_failure_preserves_old_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             live = Path(tmp) / "data"
