@@ -1088,11 +1088,16 @@ by JavaScript and was not retrievable for review. Consequences here:
 - Reachable endpoints are not treated as a right to use them, commercially or otherwise.
   Storing this evidence is itself the kind of database those terms restrict.
 - Capture is **off** unless `FPL_CAPTURE_ENABLED=true`, and it also obeys the local-safety
-  guards (`THECORNERFC_NO_API` blocks it; local runs need the override token). No workflow
-  enables it. Turning it on is the owner's decision, ideally after reading the FPL terms or
-  obtaining permission or a licensed feed.
-- Only the fields needed for fantasy validation are stored, not whole responses. Nothing is
-  exported to `docs/data` or shown on the public site.
+  guards (`THECORNERFC_NO_API` blocks it; local runs need the override token).
+- **Owner's decision (2026-09-27):** the owner chose to turn capture on and show FPL data
+  publicly, accepting the risk from the terms above.
+  - The nightly workflow sets `FPL_CAPTURE_ENABLED=true` for its "Capture FPL state" step
+    (`fpl capture` then `fpl results`). That step may fail without stopping the export.
+  - The FPL tab shows each player's FPL position, price and status, and FPL's gameweeks,
+    through `docs/data/fpl_predictions.json`.
+  - Changing this is again the owner's decision. To stop, remove that workflow step. The
+    export then falls back to our own positions and rounds, with no price.
+- Only the fields needed for fantasy validation and the FPL tab are stored, not whole responses.
 - Parsing is separate from `FplClient`, and the tables do not depend on FPL's response shape,
   so a licensed provider can replace the client without migrating the evidence.
 

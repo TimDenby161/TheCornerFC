@@ -153,5 +153,38 @@ class FplTabExportTests(unittest.TestCase):
         conn.rollback.assert_called_once()
 
 
+class PredictionPayloadTests(unittest.TestCase):
+    def pred(self, pid, position, **kw):
+        mins = fm.minutes_expectation(0.9, 0.5, 85, 0.9, 20, 0.0)
+        return dict(player_id=pid, position=position, **fm.expected_points(position, mins, kw.get('g', 0.3), 0.1, 1.2))
+
+    def test_fpl_position_rescoring_doubles_and_order(self):
+        k = KICKOFF
+        fixtures = {1: (6, 10, 20, k), 2: (7, 30, 10, k + timedelta(days=7)), 3: (7, 10, 40, k + timedelta(days=9))}
+        teams_out = [(fid, 10, k, [self.pred(7, 'F'), self.pred(8, 'M', g=0.05)], {'availability': {'8': fm.DOUBTFUL}})
+                     for fid in (1, 2, 3)]
+        doc = fs.load_params()
+        out = export.fantasy_prediction_payload(fixtures, teams_out, doc, {7: ('M', 85, 'a', None)}, {7: 'Striker', 8: 'Mid'},
+                                                {10: ['Home FC', 'HOM']}, source='fpl')
+        self.assertEqual([g['id'] for g in out['gameweeks']], [6, 7])
+        players = [dict(zip(out['fields'], r)) for r in out['players']]
+        self.assertEqual([p['player'] for p in players], [7, 8])      # most total points first
+        self.assertEqual((players[0]['fpl_position'], players[0]['price']), ('M', 85))
+        self.assertEqual(players[1]['availability'], fm.DOUBTFUL)
+        cells = [dict(zip(out['cell_fields'], c)) for c in out['cells'][0]]
+        self.assertEqual([c['gw'] for c in cells], [0, 1, 1])         # a double gameweek keeps both matches
+        self.assertEqual([c['opponent'] for c in cells], [20, 30, 40])
+        # scored as FPL's MID: 5 per goal, 1 per clean sheet, not FWD's 4 and 0
+        self.assertAlmostEqual(cells[0]['xp'], round(self.pred(7, 'M')['expected_points'], 2), places=2)
+        self.assertGreater(cells[0]['xp'], round(self.pred(7, 'F')['expected_points'], 2))
+
+    def test_prediction_export_failure_is_skipped(self):
+        conn = MagicMock()
+        conn.execute.side_effect = RuntimeError('db down')
+        with tempfile.TemporaryDirectory() as out, self.assertLogs(export.log, 'ERROR'):
+            export.export_fantasy_predictions(conn, out)
+            self.assertFalse((Path(out) / 'fpl_predictions.json').exists())
+
+
 if __name__ == '__main__':
     unittest.main()
