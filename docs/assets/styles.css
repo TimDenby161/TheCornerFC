@@ -526,6 +526,8 @@
   .fpl-player { text-align: left !important; }
   .fpl-table th:nth-child(2), .fpl-table th:nth-child(3), .fpl-table td:nth-child(3) { text-align: left; }
   .fpl-match { color: var(--text-muted); font-size: 11px; margin-top: 1px; }
+  .fpl-who { display: flex; align-items: center; gap: 8px; }
+  .fpl-who .club-logo { width: 22px; height: 22px; flex: none; cursor: pointer; }
   .fpl-sort { appearance: none; background: none; border: 0; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
   .fpl-sort.on { color: var(--series-blue); }
   .tips-bank { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 12px; align-items: end; margin-bottom: 10px !important;
