@@ -53,6 +53,17 @@ jobs:
       - name: Sync API-Football into Supabase
         run: python -m thecornerfc nightly
 
+      # FPL prices, positions and gameweeks for the FPL tab, and last gameweek's points. Enabled by
+      # the owner on 2026-09-27 (README: Fantasy Premier League evidence). Not critical: a failure
+      # here never stops the export.
+      - name: Capture FPL state
+        continue-on-error: true
+        env:
+          FPL_CAPTURE_ENABLED: "true"
+        run: |
+          python -m thecornerfc fpl capture
+          python -m thecornerfc fpl results
+
       # Publication only happens after a fully successful critical pipeline run.
       # If nightly fails, the workflow stays red and the last committed docs/data remains live.
       - name: Export website data

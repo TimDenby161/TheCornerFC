@@ -4308,7 +4308,7 @@ function renderFpl() {
     <div class="stats-card">
       <div class="stats-label">What this doesn't show yet</div>
       <ul class="fpl-list">
-        <li>No comparison with FPL's own expected points or player prices: we don't collect any official FPL data.</li>
+        <li>No comparison with FPL's own expected points yet. FPL prices, positions and points are collected nightly from 28 Sept 2026, so this becomes possible from here on.</li>
         <li>Points are rebuilt from match stats with FPL's scoring rules, without bonus points, own goals, penalty misses or defensive-contribution points.</li>
         <li>Positions are from match data (GK/DEF/MID/FWD), which can differ from FPL's listing for some players.</li>
         <li>The match predictions used for past seasons were rebuilt afterwards, not made before kickoff.</li>
@@ -4318,60 +4318,112 @@ function renderFpl() {
   renderFplNext();
 }
 
-// Next round: every player's predicted points, filterable by position, searchable, sortable
-const FPL_COLS = [["xp", "Pts"], ["minutes", "Mins"], ["p_start", "Start"], ["goals", "Goals"], ["assists", "Assists"], ["p_clean_sheet", "CS"]];
+// Predictions: each player's expected points by gameweek (fpl_predictions.json, loaded when the
+// FPL tab first opens). One gameweek at a time (◀ ▶) or totals over the next 2 / 5 / 10.
+const FPL_STATUS = { i: "Injured", s: "Suspended", u: "Unavailable", n: "Not in squad" };
 const FPL_SHOWN = 30;
+function loadFplPredictions() {
+  if (state.fplPred !== undefined) return;
+  state.fplPred = null;
+  getJsonOrNull("data/fpl_predictions.json").then((d) => { state.fplPred = d || false; renderFplNext(); });
+}
+function fplRows() {
+  const d = state.fplPred;
+  if (d.rows) return d.rows;
+  return d.rows = d.players.map((r, i) => {
+    const p = Object.fromEntries(d.fields.map((k, j) => [k, r[j]]));
+    p.name = decodeEntities(p.name);
+    p.pos = p.fpl_position || p.position;
+    p.cells = d.cells[i].map((c) => Object.fromEntries(d.cell_fields.map((k, j) => [k, c[j]])));
+    return p;
+  });
+}
 function renderFplNext() {
   const el = $("#fpl-next");
-  const nr = state.fpl?.next_round;
   if (!el) return;
-  if (!nr || !nr.players.length) {
-    el.innerHTML = `<div class="stats-label">Next round predictions</div><div class="stats-note">No upcoming Premier League round yet.</div>`;
-    return;
-  }
-  const fp = state.fplView ||= { pos: "all", q: "", sort: "xp", all: false };
-  const rows = nr.players.map((r) => Object.fromEntries(nr.fields.map((k, i) => [k, r[i]])));
+  const d = state.fplPred;
+  if (d == null) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">Loading…</div>`; return; }
+  if (!d || !d.players.length) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">No upcoming Premier League gameweeks yet.</div>`; return; }
+  const fp = state.fplView ||= { pos: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0 };
+  const gws = d.gameweeks, n = fp.mode === "gw" ? 1 : Math.min(+fp.mode, gws.length);
+  fp.gw = Math.max(0, Math.min(fp.gw, gws.length - 1));
+  const span = fp.mode === "gw" ? [fp.gw] : gws.slice(0, n).map((_, i) => i);
+  const team = (id) => d.teams[id]?.[0] || teamName(id), code = (id) => d.teams[id]?.[1] || team(id).slice(0, 3).toUpperCase();
+  const gwLabel = (g) => d.source === "fpl" ? `GW${g.id}` : `Round ${g.id}`;
+  const price = (p) => p.price == null ? null : p.price / 10;
   const q = fp.q.trim().toLowerCase();
-  const club = (id) => nr.teams[id] || teamName(id);
-  const shown = rows.filter((r) => (fp.pos === "all" || r.position === fp.pos)
-      && (!q || decodeEntities(r.name).toLowerCase().includes(q) || club(r.team).toLowerCase().includes(q)))
+  const rows = fplRows().map((p) => {
+    const cells = p.cells.filter((c) => span.includes(c.gw));
+    const sum = (k) => cells.reduce((a, c) => a + c[k], 0);
+    const xp = sum("xp");
+    return { p, cells, xp, minutes: sum("minutes"), goals: sum("goals"), assists: sum("assists"),
+      p_start: cells[0]?.p_start ?? 0, p_clean_sheet: cells[0]?.p_clean_sheet ?? 0,
+      price: price(p) ?? -1, value: price(p) ? xp / price(p) : -1 };
+  }).filter((r) => (fp.pos === "all" || r.p.pos === fp.pos)
+      && (!q || r.p.name.toLowerCase().includes(q) || team(r.p.team).toLowerCase().includes(q)))
     .sort((a, b) => b[fp.sort] - a[fp.sort] || b.xp - a.xp);
-  const list = fp.all ? shown : shown.slice(0, FPL_SHOWN);
-  const first = new Date(nr.first_kickoff).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-  const flag = (a) => !a ? "" : ` <span class="bet-tag warn" title="On the injury list">${a === "Missing Fixture" ? "Out" : "Doubtful"}</span>`;
-  const fmt = { xp: (x) => x.toFixed(1), minutes: (x) => x, p_start: (x) => pct(x, 0), goals: (x) => x.toFixed(2),
-    assists: (x) => x.toFixed(2), p_clean_sheet: (x) => pct(x, 0) };
+  const list = fp.all ? rows : rows.slice(0, FPL_SHOWN);
+  const day = (iso) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const tag = (p) => {
+    const t = p.fpl_status && p.fpl_status !== "a" ? (p.fpl_status === "d" ? `${p.fpl_chance ?? 50}%` : FPL_STATUS[p.fpl_status] || "Doubtful")
+      : p.availability ? (p.availability === "Missing Fixture" ? "Out" : "Doubtful") : "";
+    return t ? ` <span class="bet-tag warn" title="${p.fpl_status && p.fpl_status !== "a" ? "FPL status" : "On the injury list"}">${t}</span>` : "";
+  };
+  const opp = (c) => c.home ? code(c.opponent) : code(c.opponent).toLowerCase();
+  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><img class="club-logo" data-club="${r.p.team}" src="${teamLogo(r.p.team)}" alt="${escapeHtml(team(r.p.team))}" title="${escapeHtml(team(r.p.team))}" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div>${playerById(r.p.player) ? playerLink(r.p.player, r.p.name) : escapeHtml(r.p.name)}${tag(r.p)}
+      <div class="fpl-match">${fp.mode === "gw" ? (r.cells.length ? r.cells.map((c) => `${c.home ? "v" : "at"} ${escapeHtml(team(c.opponent))}`).join(" · ") : "No match (blank)") : escapeHtml(team(r.p.team))}</div></div></div></td>`;
+  const posCell = (p) => `<td>${FPL_POS[p.pos]}${p.fpl_position ? "" : '<span class="dim-text" title="Not matched to FPL yet: our position">*</span>'}</td>`;
+  const priceCell = (r) => `<td>${r.price > 0 ? `£${r.price.toFixed(1)}m` : "–"}</td>`;
+  const sortTh = (k, label) => `<th><button type="button" class="fpl-sort${fp.sort === k ? " on" : ""}" data-fpl-sort="${k}" aria-pressed="${fp.sort === k}">${label}</button></th>`;
+  let head, body;
+  if (fp.mode === "gw") {
+    head = `<th>#</th><th>Player</th><th>Pos</th>${sortTh("price", "Price")}${sortTh("xp", "Pts")}${sortTh("minutes", "Mins")}${sortTh("p_start", "Start")}${sortTh("goals", "Goals")}${sortTh("assists", "Assists")}${sortTh("p_clean_sheet", "CS")}`;
+    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}${posCell(r.p)}${priceCell(r)}<td><b>${r.xp.toFixed(1)}</b></td><td>${r.minutes}</td>
+      <td>${pct(r.p_start, 0)}</td><td>${r.goals.toFixed(2)}</td><td>${r.assists.toFixed(2)}</td><td>${pct(r.p_clean_sheet, 0)}</td></tr>`).join("");
+  } else {
+    head = `<th>#</th><th>Player</th><th>Pos</th>${sortTh("price", "Price")}${sortTh("xp", "Total")}${sortTh("value", "Pts/£m")}`
+      + span.map((i) => `<th title="${day(gws[i].first_kickoff)}">${gwLabel(gws[i])}</th>`).join("");
+    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}${posCell(r.p)}${priceCell(r)}<td><b>${r.xp.toFixed(1)}</b></td>
+      <td>${r.value > 0 ? r.value.toFixed(2) : "–"}</td>${span.map((g) => {
+        const cs = r.cells.filter((c) => c.gw === g);
+        return !cs.length ? `<td class="fpl-gw dim-text">–</td>` : `<td class="fpl-gw${cs.length > 1 ? " double" : ""}">${cs.reduce((a, c) => a + c.xp, 0).toFixed(1)}<span>${cs.map(opp).join(" ")}</span></td>`;
+      }).join("")}</tr>`).join("");
+  }
+  const modes = [["gw", "Gameweek"], ["2", "Next 2"], ["5", "Next 5"], ["10", "Next 10"]].map(([k, label]) =>
+    `<button type="button" class="filter-chip" data-fpl-mode="${k}" aria-pressed="${fp.mode === k}">${label}</button>`).join("");
+  const g = gws[fp.gw];
+  const pager = fp.mode !== "gw" ? `<span class="fpl-span">${gwLabel(gws[0])}–${gwLabel(gws[n - 1]).replace(/^\D+/, "")}</span>`
+    : `<span class="fpl-pager"><button type="button" class="filter-chip" data-fpl-step="-1" aria-label="Previous gameweek" ${fp.gw === 0 ? "disabled" : ""}>◀</button>
+       <span class="fpl-span">${gwLabel(g)} · ${day(g.first_kickoff)}</span>
+       <button type="button" class="filter-chip" data-fpl-step="1" aria-label="Next gameweek" ${fp.gw === gws.length - 1 ? "disabled" : ""}>▶</button></span>`;
   const chips = [["all", "All"], ["G", "GK"], ["D", "DEF"], ["M", "MID"], ["F", "FWD"]].map(([k, label]) =>
     `<button type="button" class="filter-chip" data-fpl-pos="${k}" aria-pressed="${fp.pos === k}">${label}</button>`).join("");
-  const head = FPL_COLS.map(([k, label]) =>
-    `<th><button type="button" class="fpl-sort${fp.sort === k ? " on" : ""}" data-fpl-sort="${k}" aria-pressed="${fp.sort === k}">${label}</button></th>`).join("");
-  const body = list.map((r, i) => {
-    const name = decodeEntities(r.name);
-    return `<tr><td>${i + 1}</td>
-      <td class="fpl-player"><div class="fpl-who"><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="${escapeHtml(club(r.team))}" title="${escapeHtml(club(r.team))}" loading="lazy" onerror="this.style.visibility='hidden'">
-        <div>${playerById(r.player) ? playerLink(r.player, name) : escapeHtml(name)}${flag(r.availability)}
-        <div class="fpl-match">${escapeHtml(club(r.team))} ${r.home ? "v" : "at"} ${escapeHtml(club(r.opponent))}</div></div></div></td>
-      <td>${FPL_POS[r.position]}</td>${FPL_COLS.map(([k]) => `<td>${fmt[k](r[k])}</td>`).join("")}</tr>`;
-  }).join("");
+  const cols = (fp.mode === "gw" ? 10 : 6 + span.length);
   el.innerHTML = `
-    <div class="stats-label">Next round predictions · ${escapeHtml(nr.round.replace("Regular Season - ", "Round "))} · from ${first}</div>
-    <div class="filter-row fpl-filters">${chips}
+    <div class="stats-label">Predicted points</div>
+    <div class="fpl-filters">${modes}${pager}</div>
+    <div class="fpl-filters">${chips}
       <input type="search" class="table-search fpl-search" id="fpl-q" placeholder="Search players or clubs" aria-label="Search players or clubs" value="${escapeHtml(fp.q)}"></div>
-    <div class="fpl-scroll"><table class="calib-table fpl-table">
-      <thead><tr><th>#</th><th>Player</th><th>Pos</th>${head}</tr></thead>
-      <tbody>${body || `<tr><td colspan="9">No players match.</td></tr>`}</tbody></table></div>
-    ${shown.length > FPL_SHOWN ? `<button type="button" class="show-all" id="fpl-more">${fp.all ? "Show fewer" : `Show all ${shown.length}`}</button>` : ""}
-    <div class="stats-note">Predicted fantasy points for each player's next match with FPL's scoring rules: appearance, goals, assists, clean sheets,
+    <div class="fpl-scroll"><table class="calib-table fpl-table${fp.mode === "gw" ? "" : " multi"}">
+      <thead><tr>${head}</tr></thead>
+      <tbody>${body || `<tr><td colspan="${cols}">No players match.</td></tr>`}</tbody></table></div>
+    ${rows.length > FPL_SHOWN ? `<button type="button" class="show-all" id="fpl-more">${fp.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}
+    <div class="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, assists, clean sheets,
       goals conceded and saves. <b>Bonus points, cards and own goals aren't included</b>, so the best players come out a point or so below FPL's own figures.
-      Start = chance of starting; Goals and Assists = expected number; CS = chance of a clean sheet with 60+ minutes.
-      This is ${escapeHtml(nr.model)}, which is still being tested (see below), so treat it as a guide, not a pick list. Updated nightly.</div>`;
+      ${d.source === "fpl" ? "Positions, prices, status and gameweeks come from FPL (updated nightly); * = not yet matched to FPL, our position shown." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
+      In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
+      This is ${escapeHtml(d.model)}, still being tested (see below): a guide, not a pick list.</div>`;
 }
 $("#fpl-body").addEventListener("click", (e) => {
-  const pos = e.target.closest("[data-fpl-pos]"), sort = e.target.closest("[data-fpl-sort]");
-  if (!pos && !sort && e.target.id !== "fpl-more") return;
+  const t = (sel) => e.target.closest(sel);
+  const pos = t("[data-fpl-pos]"), sort = t("[data-fpl-sort]"), mode = t("[data-fpl-mode]"), step = t("[data-fpl-step]");
+  if (!pos && !sort && !mode && !step && e.target.id !== "fpl-more") return;
   const fp = state.fplView;
   if (pos) { fp.pos = pos.dataset.fplPos; fp.all = false; }
   if (sort) fp.sort = sort.dataset.fplSort;
+  if (mode) { fp.mode = mode.dataset.fplMode; fp.all = false; if (fp.mode !== "gw" && (fp.sort === "minutes" || fp.sort === "goals" || fp.sort === "assists" || fp.sort === "p_start" || fp.sort === "p_clean_sheet")) fp.sort = "xp"; }
+  if (step) fp.gw += +step.dataset.fplStep;
   if (e.target.id === "fpl-more") fp.all = !fp.all;
   renderFplNext();
 });
@@ -4387,6 +4439,7 @@ $("#fpl-body").addEventListener("input", (e) => {
 // ------------------------------------------------------------------ wiring
 function showTab(tab) {
   state.tab = tab;
+  if (tab === "fpl") loadFplPredictions();
   document.body.dataset.tab = tab;
   document.querySelectorAll(".panel").forEach((p) => p.dataset.active = String(p.dataset.tab === tab));
   syncMenu();
