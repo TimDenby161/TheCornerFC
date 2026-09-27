@@ -153,8 +153,15 @@ function countryLeague(id) {
   return ` <span class="club-meta">${flagLink(c.country)} ${leagueLink(id)}</span>`;
 }
 const teamName = (id) => state.data.teams[id] || state.players?.teams?.[id] || `Team ${id}`;
-const teamLogo = (id) => `https://media.api-sports.io/football/teams/${id}.png`;
-const playerPhoto = (id) => `https://media.api-sports.io/football/players/${id}.png`;
+// Third-party images: API-Football's media host (badges, photos, competition logos) and flagcdn
+// (flags). Every URL is built from a numeric id or checked against that host, never taken as-is
+// from the data; a broken or refused image is hidden by the error listener below
+const MEDIA = "https://media.api-sports.io/football";
+const mediaUrl = (kind, id) => /^\d+$/.test(String(id)) ? `${MEDIA}/${kind}/${id}.png` : "";
+const MEDIA_URL = /^https:\/\/media\.api-sports\.io\/football\/[a-z]+\/\d+\.(?:png|jpg|svg)$/;
+const safeMediaUrl = (url) => typeof url === "string" && MEDIA_URL.test(url) ? url : "";
+const teamLogo = (id) => mediaUrl("teams", id);
+const playerPhoto = (id) => mediaUrl("players", id);
 const clubHref = (id) => `#/club/${id}`;
 const clubLink = (id, text = teamName(id)) => `<a class="team-link" href="${clubHref(id)}">${escapeHtml(text)}</a>`;
 // a player's club, or a note when he has left his last club and his new one isn't known
@@ -162,7 +169,7 @@ const playerClub = (p) => p.team ? clubLink(p.team) : `<span class="dim-text">cl
 const playerLink = (id, text) => `<a class="player-link" href="#/player/${id}">${escapeHtml(text)}</a>`;
 // Flag for a nationality (API-Football's country names -> ISO codes; flagcdn has the home nations too)
 const FLAG_CODES = {"Afghanistan": "af", "Albania": "al", "Andorra": "ad", "Bosnia": "ba", "Gibraltar": "gi", "Algeria": "dz", "Angola": "ao", "Antigua and Barbuda": "ag", "Argentina": "ar", "Armenia": "am", "Australia": "au", "Austria": "at", "Azerbaijan": "az", "Barbados": "bb", "Belgium": "be", "Benin": "bj", "Bermuda": "bm", "Bolivia": "bo", "Bosnia and Herzegovina": "ba", "Brazil": "br", "Bulgaria": "bg", "Burkina Faso": "bf", "Burundi": "bi", "Cameroon": "cm", "Canada": "ca", "Cape Verde": "cv", "Central African Republic": "cf", "Chad": "td", "Chile": "cl", "Colombia": "co", "Comoros": "km", "Congo": "cg", "Congo DR": "cd", "Costa Rica": "cr", "Croatia": "hr", "Cuba": "cu", "Curaçao": "cw", "Cyprus": "cy", "Czech Republic": "cz", "Czechia": "cz", "Côte d'Ivoire": "ci", "Denmark": "dk", "Dominican Republic": "do", "Ecuador": "ec", "Egypt": "eg", "El Salvador": "sv", "England": "gb-eng", "Equatorial Guinea": "gq", "Estonia": "ee", "Faroe Islands": "fo", "Finland": "fi", "France": "fr", "French Guiana": "gf", "Gabon": "ga", "Gambia": "gm", "Georgia": "ge", "Germany": "de", "Ghana": "gh", "Great Britain": "gb", "Greece": "gr", "Grenada": "gd", "Guadeloupe": "gp", "Guatemala": "gt", "Guinea": "gn", "Guinea-Bissau": "gw", "Guyana": "gy", "Haiti": "ht", "Honduras": "hn", "Hungary": "hu", "Iceland": "is", "Indonesia": "id", "Iran": "ir", "Iraq": "iq", "Israel": "il", "Italy": "it", "Ivory Coast": "ci", "Jamaica": "jm", "Japan": "jp", "Jordan": "jo", "Kazakhstan": "kz", "Kenya": "ke", "Korea Republic": "kr", "Kosovo": "xk", "Latvia": "lv", "Lebanon": "lb", "Liberia": "lr", "Libya": "ly", "Lithuania": "lt", "Luxembourg": "lu", "Madagascar": "mg", "Malawi": "mw", "Mali": "ml", "Malta": "mt", "Mexico": "mx", "Montenegro": "me", "Montserrat": "ms", "Morocco": "ma", "Mozambique": "mz", "Namibia": "na", "Netherlands": "nl", "New Zealand": "nz", "Niger": "ne", "Nigeria": "ng", "North Macedonia": "mk", "Northern Ireland": "gb-nir", "Norway": "no", "Panama": "pa", "Paraguay": "py", "Peru": "pe", "Poland": "pl", "Portugal": "pt", "Republic of Ireland": "ie", "Romania": "ro", "Russia": "ru", "Rwanda": "rw", "Saudi Arabia": "sa", "Scotland": "gb-sct", "Senegal": "sn", "Serbia": "rs", "Sierra Leone": "sl", "Slovakia": "sk", "Slovenia": "si", "South Africa": "za", "Spain": "es", "Sri Lanka": "lk", "St. Kitts and Nevis": "kn", "St. Lucia": "lc", "Suriname": "sr", "Sweden": "se", "Switzerland": "ch", "Tanzania": "tz", "Thailand": "th", "Togo": "tg", "Trinidad and Tobago": "tt", "Tunisia": "tn", "Turkey": "tr", "Türkiye": "tr", "USA": "us", "Uganda": "ug", "Ukraine": "ua", "Uruguay": "uy", "Uzbekistan": "uz", "Venezuela": "ve", "Wales": "gb-wls", "Zambia": "zm", "Zimbabwe": "zw"};
-const flagImg = (nat) => FLAG_CODES[nat] ? `<img class="flag" src="https://flagcdn.com/${FLAG_CODES[nat]}.svg" alt="" loading="lazy" onerror="this.remove()">` : "";
+const flagImg = (nat) => FLAG_CODES[nat] ? `<img class="flag" src="https://flagcdn.com/${FLAG_CODES[nat]}.svg" alt="" loading="lazy" data-broken="remove">` : "";
 // country and competition pages
 const countryDisplay = (c) => c === "World" ? "International" : (c || "").replace(/-/g, " ");
 const countryHref = (c) => `#/country/${encodeURIComponent(c)}`;
@@ -177,7 +184,15 @@ document.addEventListener("click", (e) => {
   e.stopPropagation();
   location.hash = img.dataset.club ? clubHref(img.dataset.club) : leagueHref(img.dataset.league);
 }, true);
-const leagueLogo = (lid) => `https://media.api-sports.io/football/leagues/${lid}.png`;
+const leagueLogo = (lid) => mediaUrl("leagues", lid);
+// A broken image is hidden (keeping its space), or removed where tagged data-broken="remove". One
+// capturing listener instead of inline onerror attributes, so the Content-Security-Policy in
+// index.html can refuse all inline script
+document.addEventListener("error", (e) => {
+  const img = e.target;
+  if (img.tagName !== "IMG") return;
+  if (img.dataset.broken === "remove") img.remove(); else img.style.visibility = "hidden";
+}, true);
 const countryLink = (c) => `<a class="nat-link" href="${countryHref(c)}">${escapeHtml(countryDisplay(c))}</a>`;
 const leagueLink = (lid) => `<a class="nat-link" href="${leagueHref(lid)}">${escapeHtml(SHORT_NAMES[lid] || state.data.competitions[lid]?.name || compLabel(lid))}</a>`;
 // His flag, linking to the national team's page (the country's name where there's no flag)
@@ -472,7 +487,7 @@ function onePerPick(bets) {
 }
 // The badge of the team a bet backs, or both teams' for a draw or goals bet
 function betBadges(b) {
-  const img = (id) => id ? `<img class="club-logo" data-club="${id}" src="${teamLogo(id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : "";
+  const img = (id) => id ? `<img class="club-logo" data-club="${id}" src="${teamLogo(id)}" alt="" loading="lazy">` : "";
   const ids = b.market === "1X2" && b.selection !== "Draw" ? [b.selection === "Home" ? b.home_id : b.away_id] : [b.home_id, b.away_id];
   return `<span class="tip-badges">${ids.map(img).join("")}</span>`;
 }
@@ -779,12 +794,12 @@ function matchHead(m, right = "") {
       </div>
       <div class="match-teams">
         <div class="match-team">
-          <div class="mt-name"><img class="club-logo" data-club="${m.home}" src="${teamLogo(m.home)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">${clubLink(m.home, m.home_name)}<span class="team-squad-badges" data-squad-team="home"></span></div>
+          <div class="mt-name"><img class="club-logo" data-club="${m.home}" src="${teamLogo(m.home)}" alt="" loading="lazy">${clubLink(m.home, m.home_name)}<span class="team-squad-badges" data-squad-team="home"></span></div>
           <div class="score-badges">${rankChip(hRank, rankTitle)}<span data-squad-overall="home"></span></div>
         </div>
         ${scoreCentre(m)}
         <div class="match-team away">
-          <div class="mt-name"><img class="club-logo" data-club="${m.away}" src="${teamLogo(m.away)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">${clubLink(m.away, m.away_name)}<span class="team-squad-badges" data-squad-team="away"></span></div>
+          <div class="mt-name"><img class="club-logo" data-club="${m.away}" src="${teamLogo(m.away)}" alt="" loading="lazy">${clubLink(m.away, m.away_name)}<span class="team-squad-badges" data-squad-team="away"></span></div>
           <div class="score-badges"><span data-squad-overall="away"></span>${rankChip(aRank, rankTitle)}</div>
         </div>
       </div>`;
@@ -1175,10 +1190,10 @@ function playerRow(p, i, seasons, groups = selectedGroups(), future = []) {
   return `
         <tr${p.team ? ` data-team="${p.team}"` : ""} data-player="${p.id}">
           <td>${i + 1}</td>
-          <td><div class="pl-cell">${p.team ? `<a class="pl-badge-link" href="${clubHref(p.team)}" title="${escapeHtml(teamName(p.team))}" aria-label="${escapeHtml(teamName(p.team))}"><img class="club-logo pl-badge" src="${teamLogo(p.team)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></a>` : `<span class="club-logo pl-badge" title="Club not known"></span>`}<img class="player-photo" src="${playerPhoto(p.id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+          <td><div class="pl-cell">${p.team ? `<a class="pl-badge-link" href="${clubHref(p.team)}" title="${escapeHtml(teamName(p.team))}" aria-label="${escapeHtml(teamName(p.team))}"><img class="club-logo pl-badge" src="${teamLogo(p.team)}" alt="" loading="lazy"></a>` : `<span class="club-logo pl-badge" title="Club not known"></span>`}<img class="player-photo" src="${playerPhoto(p.id)}" alt="" loading="lazy">
             <div class="pl-text"><div class="pl-name">${playerLink(p.id, p.name)}${playerFlag(p.nationality)}</div>
               <div class="pl-club">${p.team ? escapeHtml(teamName(p.team)) : "Club not known"}${p.league != null && leagueShort(p.league) ? ` · ${escapeHtml(leagueShort(p.league))}` : ""}</div></div></div></td>
-          <td class="num">${POS_LABEL[p.position] || p.position || ""}</td>
+          <td class="num">${POS_LABEL[p.position] || escapeHtml(p.position || "")}</td>
           <td class="num col-age">${p.age ?? `<span class="dim">–</span>`}</td>
           <td class="num col-wrank">${place?.world.toLocaleString() ?? `<span class="dim">–</span>`}</td>
           <td class="num col-lrank"${place?.lg ? ` title="${ordinal(place.lg)} of ${place.lgOf} in the ${escapeHtml(leagueShort(p.league))}"` : ""}>${place?.lg ?? `<span class="dim">–</span>`}</td>
@@ -1461,7 +1476,7 @@ function renderTable() {
       <tbody>${rows.map((r, i) => `
         <tr data-team="${r.team}">
           <td>${i + 1}</td>
-          <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></td>
+          <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy"></td>
           <td>${clubLink(r.team)}${q || all ? countryLeague(r.league) : ""}</td>
           <td class="num">${places.get(r.team)?.world.toLocaleString() ?? ""}</td>
           <td class="num col-dom" style="color:var(--text-muted)"${places.get(r.team)?.dom ? ` title="${ordinal(places.get(r.team).dom)} of ${places.get(r.team).domOf} in the ${escapeHtml(leagueShort(r.league))} by Baseline Strength"` : ""}>${places.get(r.team)?.dom ?? ""}</td>
@@ -1552,7 +1567,7 @@ function renderWhoFilter() {
   state.nats ||= new Set();
   $("#who-chips").innerHTML =
     [...state.clubs].map((t) => `<button type="button" class="who-chip" data-club="${t}" title="Remove">
-       <img class="club-logo" src="${teamLogo(t)}" alt="" loading="lazy" onerror="this.remove()">${escapeHtml(byId.get(t)?.name || teamName(t))}<span class="x" aria-hidden="true">×</span></button>`).join("")
+       <img class="club-logo" src="${teamLogo(t)}" alt="" loading="lazy" data-broken="remove">${escapeHtml(byId.get(t)?.name || teamName(t))}<span class="x" aria-hidden="true">×</span></button>`).join("")
     + [...state.nats].map((n) => `<button type="button" class="who-chip" data-nat="${escapeHtml(n)}" title="Remove">
        ${flagImg(n) || `<span class="kind">Nat</span>`}${escapeHtml(n)}<span class="x" aria-hidden="true">×</span></button>`).join("");
   box.querySelector("[data-who-clear]").hidden = !state.clubs.size && !state.nats.size;
@@ -1578,7 +1593,7 @@ function renderWhoMenu(input) {
   const opt = (attrs, on, inner) => `<button type="button" class="who-opt" role="option" tabindex="-1" ${attrs}
     aria-selected="${on}"><span class="tick" aria-hidden="true">${on ? "✓" : ""}</span>${inner}</button>`;
   const clubOpt = (c, sub) => opt(`data-club="${c.id}"`, state.clubs.has(c.id),
-    `<img class="club-logo" src="${teamLogo(c.id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span class="nm">${escapeHtml(c.name)}</span>${sub ? `<span class="sub">${escapeHtml(sub)}</span>` : ""}`);
+    `<img class="club-logo" src="${teamLogo(c.id)}" alt="" loading="lazy"><span class="nm">${escapeHtml(c.name)}</span>${sub ? `<span class="sub">${escapeHtml(sub)}</span>` : ""}`);
   const natOpt = (n) => opt(`data-nat="${escapeHtml(n.name)}"`, state.nats.has(n.name),
     `${flagImg(n.name)}<span class="nm">${escapeHtml(n.name)}</span>`);
   const lgName = new Map(leagues.map((l) => [l.id, l.name]));
@@ -2250,7 +2265,7 @@ function renderClubPage() {
   const tab = state.clubTab || "overview";
   $("#club-body").innerHTML = `
     <div class="pl-hero">
-      <img class="club-logo-lg" src="${teamLogo(id)}" alt="" onerror="this.style.visibility='hidden'">
+      <img class="club-logo-lg" src="${teamLogo(id)}" alt="">
       <div class="pl-hero-main">
         <h2>${escapeHtml(teamName(id))}</h2>
         ${comp ? `<div class="pl-hero-club">${flagLink(comp.country)}<span class="pl-league">${leagueLink(r.league)}</span></div>` : ""}
@@ -2283,9 +2298,9 @@ function clubOverviewTab() {
       <div class="form-row form-hdr"><span></span><span></span><span></span><span></span><span>xG</span><span title="How far each result moved Current Strength">Elo ±</span></div>
       ${form.map(({ m, move }) => `<div class="form-row" title="${escapeHtml(`${fmtShortDate(m.date)} ${m.home ? "v" : "@"} ${clubOpp(m.opponent)}${m.home === 2 ? " (neutral)" : ""} · ${compLabel(m.league)}`)}">
         <span class="rel-chip rel-${m.gf > m.ga ? 4 : m.gf === m.ga ? 3 : 1}">${m.gf}–${m.ga}</span>
-        <img class="club-logo" data-club="${m.opponent}" src="${teamLogo(m.opponent)}" alt="${escapeHtml(clubOpp(m.opponent))}" loading="lazy" onerror="this.style.visibility='hidden'">
+        <img class="club-logo" data-club="${m.opponent}" src="${teamLogo(m.opponent)}" alt="${escapeHtml(clubOpp(m.opponent))}" loading="lazy">
         <span class="form-ha">${m.home === 2 ? "N" : m.home ? "H" : "A"}</span>
-        <img class="next5-comp" data-league="${m.league}" src="https://media.api-sports.io/football/leagues/${m.league}.png" alt="${escapeHtml(compLabel(m.league))}" title="${escapeHtml(compLabel(m.league))}" loading="lazy" onerror="this.style.visibility='hidden'">
+        <img class="next5-comp" data-league="${m.league}" src="${leagueLogo(m.league)}" alt="${escapeHtml(compLabel(m.league))}" title="${escapeHtml(compLabel(m.league))}" loading="lazy">
         <span class="form-xg${m.xg_est ? " est" : ""}" title="${m.xg_est ? "Estimated from shots (API-Football has no xG for this match): for – against" : "Expected goals: for – against"}">${
           m.xgf != null && m.xga != null ? `${m.xg_est ? "≈" : ""}${m.xgf.toFixed(1)}–${m.xga.toFixed(1)}` : "–"}</span>
         <span class="form-move">${moveHtml(move)}</span></div>`).join("")}
@@ -2303,9 +2318,9 @@ function clubOverviewTab() {
         const comp = SHORT_NAMES[m.league] || state.data.competitions[m.league]?.name || "";
         return `<div class="next5-row" title="${escapeHtml(`${fmtDay(m.kickoff)} ${fmtTime(m.kickoff)} · ${home ? "v" : "@"} ${teamName(opp)} · ${compLabel(m.league)}`)}">
           <span class="next5-date">${escapeHtml(fmtShortDate(m.kickoff))}</span>
-          <img class="club-logo" data-club="${opp}" src="${teamLogo(opp)}" alt="${escapeHtml(teamName(opp))}" loading="lazy" onerror="this.style.visibility='hidden'">
+          <img class="club-logo" data-club="${opp}" src="${teamLogo(opp)}" alt="${escapeHtml(teamName(opp))}" loading="lazy">
           <span class="form-ha">${home ? "H" : "A"}</span>
-          <img class="next5-comp" data-league="${m.league}" src="https://media.api-sports.io/football/leagues/${m.league}.png" alt="${escapeHtml(comp)}" title="${escapeHtml(comp)}" loading="lazy" onerror="this.style.visibility='hidden'">
+          <img class="next5-comp" data-league="${m.league}" src="${leagueLogo(m.league)}" alt="${escapeHtml(comp)}" title="${escapeHtml(comp)}" loading="lazy">
           <span class="next5-num">${gf != null ? gf.toFixed(1) : ""}</span>
           <span class="next5-num">${cs != null ? `${cs}%` : ""}</span>
           <span class="next5-num strong">${win != null ? `${win}%` : ""}</span></div>`;
@@ -2360,7 +2375,7 @@ function clubNextCard() {
   return `<div class="next-card">
     <div class="next-top"><span class="next-label">${LIVE.has(m.status) ? "Live now" : "Next match"}</span>
       <span>${escapeHtml(fmtDay(m.kickoff))} · ${escapeHtml(fmtTime(m.kickoff))}</span></div>
-    <div class="next-opp"><img class="club-logo" data-club="${opp}" src="${teamLogo(opp)}" alt="" onerror="this.style.visibility='hidden'">
+    <div class="next-opp"><img class="club-logo" data-club="${opp}" src="${teamLogo(opp)}" alt="">
       <span class="next-opp-name">${home ? "v" : "@"} ${clubLink(opp)}</span></div>
     <div class="next-meta"><span>${escapeHtml(compLabel(m.league))}</span>${win != null ? `<span>${win}% win</span>` : ""}${proj ? `<span>projected ${proj}</span>` : ""}
       ${xiRating != null ? `<span>XI rating ${Math.round(xiRating)}</span>` : ""}</div>
@@ -2849,11 +2864,12 @@ function depthPitch(teamId) {
 }
 // The club's home kit colours (club file) for its pitches: stripes in the shirt colour, lines in
 // the number colour; clubs without them keep the plain dark pitch
-const kitColors = (data = state.club?.data) => data?.colors?.[0] ? data.colors : null;
+const HEX = /^[0-9a-f]{6}$/i;
+const kitColors = (data = state.club?.data) => HEX.test(data?.colors?.[0] ?? "") ? data.colors : null;
 const kitClass = (data = state.club?.data) => kitColors(data) ? " kit" : "";
 const kitStyle = (data = state.club?.data) => {
   const c = kitColors(data);
-  return c ? ` style="--kit:#${escapeHtml(c[0])};--kit2:#${escapeHtml(c[1] || "ffffff")}"` : "";
+  return c ? ` style="--kit:#${c[0]};--kit2:#${HEX.test(c[1] ?? "") ? c[1] : "ffffff"}"` : "";
 };
 // Surname for tight spaces, keeping lower-case particles ("M. de Ligt" -> "de Ligt"), or the
 // name a player is known by where that isn't his surname
@@ -2980,7 +2996,7 @@ function clubFormationsTab() {
   const same = sinceRows.length === seasonRows.length && sinceRows[0] === seasonRows[0];
   return `
     ${coach ? `<div class="next-card coach-card">
-      <img class="coach-photo" src="${escapeHtml(coach.photo || "")}" alt="" onerror="this.style.visibility='hidden'">
+      <img class="coach-photo" src="${safeMediaUrl(coach.photo)}" alt="">
       <div><div class="next-label">Manager</div><div class="coach-name">${escapeHtml(coach.name || "")}</div>
         <div class="next-meta">${coach.since ? `<span>Since ${escapeHtml(fmtDate(coach.since))}</span>` : ""}${sinceRows.length ? `<span>${sinceRows.length} matches · ${record(sinceRows)}</span>` : ""}</div></div>
     </div>` : ""}
@@ -3249,10 +3265,10 @@ function renderPlayerPage() {
   $("#club-body").innerHTML = `
     ${backButton()}
     <div class="pl-hero">
-      <img class="player-photo-lg" src="${playerPhoto(p.id)}" alt="" onerror="this.style.visibility='hidden'">
+      <img class="player-photo-lg" src="${playerPhoto(p.id)}" alt="">
       <div class="pl-hero-main">
         <h2>${escapeHtml(p.name)}</h2>
-        <div class="pl-hero-club">${p.team ? `<img class="club-logo" data-club="${p.team}" src="${teamLogo(p.team)}" alt="" onerror="this.style.visibility='hidden'">` : ""}
+        <div class="pl-hero-club">${p.team ? `<img class="club-logo" data-club="${p.team}" src="${teamLogo(p.team)}" alt="">` : ""}
           <span>${playerClub(p)}${league ? `<span class="dim-sep"> · </span><a class="pl-league team-link" href="#" data-league="${p.league}" title="Open the ${escapeHtml(league)} table">${escapeHtml(league)}</a>` : ""}</span></div>
         <div class="pl-hero-club pl-hero-nat">${p.nationality ? `${flagImg(p.nationality)}<span>${natLink(p.nationality)}</span><span class="dim-sep">·</span>` : ""}
           <span class="pl-meta">${escapeHtml(p.position || "")}</span>${p.age != null ? `<span class="dim-sep">·</span>
@@ -3489,7 +3505,7 @@ function nextMatchCard() {
   return `<div class="next-card">
     <div class="next-top"><span class="next-label">${LIVE.has(m.status) ? "Live now" : "Next match"}</span>
       <span>${escapeHtml(fmtDay(m.kickoff))} · ${escapeHtml(fmtTime(m.kickoff))}</span></div>
-    <div class="next-opp"><img class="club-logo" data-club="${opp}" src="${teamLogo(opp)}" alt="" onerror="this.style.visibility='hidden'">
+    <div class="next-opp"><img class="club-logo" data-club="${opp}" src="${teamLogo(opp)}" alt="">
       <span class="next-opp-name">${home ? "v" : "@"} ${clubLink(opp)}</span></div>
     <div class="next-meta"><span>${escapeHtml(compLabel(m.league))}</span>${win != null ? `<span>${win}% win</span>` : ""}${proj ? `<span>projected ${proj}</span>` : ""}</div>
     ${status ? `<div class="next-status ${status[0]}">${escapeHtml(status[1])}</div>` : ""}
@@ -3609,7 +3625,7 @@ function playerStatsTab() {
       <div class="seg">${[["0", "Totals"], ["1", "Per 90"]].map(([k, l]) =>
         `<button type="button" data-per90="${k}" aria-pressed="${String(per90) === (k === "1" ? "true" : "false")}">${l}</button>`).join("")}</div>
     </div>
-    <div class="season-clubs">${rows.map((r) => `<div class="season-club"><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+    <div class="season-clubs">${rows.map((r) => `<div class="season-club"><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy">
       ${clubLink(r.team, pageTeamName(r.team))}<span class="dim"> · ${escapeHtml(compLabel(r.league))} · ${r.apps} apps · ${r.minutes.toLocaleString()}′</span></div>`).join("")}</div>
     <div class="team-stats compact">
       ${tile("Apps", s.apps, s.starts != null && !partial ? `${s.starts} started` : "")}
@@ -3638,7 +3654,7 @@ function playerMatchesTab() {
     ].filter(Boolean);
     return `<div class="match-row">
       <div class="mr-date">${escapeHtml(fmtShortDate(m.date))}</div>
-      <div class="mr-opp"><img class="club-logo" data-club="${m.opponent}" src="${teamLogo(m.opponent)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div class="mr-opp"><img class="club-logo" data-club="${m.opponent}" src="${teamLogo(m.opponent)}" alt="" loading="lazy">
         <span>${m.home ? "v" : "@"} ${clubLink(m.opponent, pageTeamName(m.opponent))}</span></div>
       <div class="mr-res ${resClass(m)}">${m.gf}–${m.ga}</div>
       <div class="mr-rating">${ratingChip(m.rating)}</div>
@@ -3830,7 +3846,7 @@ function renderLeaguePage() {
   const teams = data ? new Set([...data.tableRows.map((r) => r.team), ...data.fixtureRows.flatMap((f) => [f.home, f.away])]).size : 0;
   $("#club-body").innerHTML = `
     <div class="pl-hero">
-      <img class="club-logo-lg" src="${leagueLogo(id)}" alt="" onerror="this.style.visibility='hidden'">
+      <img class="club-logo-lg" src="${leagueLogo(id)}" alt="">
       <div class="pl-hero-main">
         <h2>${escapeHtml(comp.name)}</h2>
         <div class="pl-hero-club">${flagImg(countryDisplay(comp.country))}<span>${countryLink(comp.country)}${data ? `<span class="dim-sep"> · </span><span class="pl-league">${seasonLabel(data)}</span>` : ""}</span></div>
@@ -3938,7 +3954,7 @@ function leagueTableTab() {
       <tbody>${rows.filter((r) => r.group === g).map((r) => {
         const rk = state.rankByTeam.get(r.team);
         return `<tr><td class="lt-pos" style="border-left-color:${zones.get(r.description) || "transparent"}">${r.rank}</td>
-          <td class="lt-badge"><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></td>
+          <td class="lt-badge"><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy"></td>
           <td class="lt-club">${clubLink(r.team, data.teams[r.team] || teamName(r.team))}</td>
           <td>${r.played ?? ""}</td><td class="lt-wdl">${r.win ?? ""}</td><td class="lt-wdl">${r.draw ?? ""}</td><td class="lt-wdl">${r.lose ?? ""}</td>
           <td class="lt-wide">${r.gf ?? ""}–${r.ga ?? ""}</td><td>${r.gd > 0 ? "+" : ""}${r.gd ?? ""}</td><td><b>${r.points ?? ""}</b></td>
@@ -4031,7 +4047,7 @@ function leagueProjectedTab() {
         <th title="Projected goal difference">GD</th><th title="Projected points: points so far plus the average over the simulated seasons">Pts</th>
         <th title="Chance of finishing top">1st</th>${cols.map(([d, c]) => `<th title="${escapeHtml(d)}"><i class="lt-zone" style="background:${c}"></i></th>`).join("")}</tr></thead>
       <tbody>${list.map((x, i) => `<tr><td class="lt-pos" style="border-left-color:${zones.get(byRank.get(i + 1)) || "transparent"}">${i + 1}</td>
-          <td class="lt-badge"><img class="club-logo" data-club="${x.r.team}" src="${teamLogo(x.r.team)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></td>
+          <td class="lt-badge"><img class="club-logo" data-club="${x.r.team}" src="${teamLogo(x.r.team)}" alt="" loading="lazy"></td>
           <td class="lt-club">${clubLink(x.r.team, data.teams[x.r.team] || teamName(x.r.team))}</td>
           <td class="lt-wide">${x.left}</td><td class="lt-wdl">${Math.round(x.w)}</td><td class="lt-wdl">${Math.round(x.d)}</td><td class="lt-wdl">${Math.round(x.l)}</td>
           <td>${x.gd >= 0.5 ? "+" : ""}${Math.round(x.gd)}</td><td><b>${Math.round(x.pts)}</b></td>
@@ -4061,7 +4077,7 @@ function leagueMatchesTab() {
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day).push(f);
   }
-  const logo = (t) => `<img class="club-logo" data-club="${t}" src="${teamLogo(t)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`;
+  const logo = (t) => `<img class="club-logo" data-club="${t}" src="${teamLogo(t)}" alt="" loading="lazy">`;
   const row = (f) => {
     const done = f.hg != null && (FINISHED.has(f.status) || LIVE.has(f.status));
     const p = preds.get(f.id);
@@ -4104,7 +4120,7 @@ function clubRatingTable(rows, pos, names = {}, meta = null) {
       <th class="num" title="Baseline Strength: long-term Elo">${BASELINE_TH}</th><th class="num" title="Current minus Baseline">Gap</th><th class="num" title="Current Strength: Elo now">Current</th><th class="num col-recent" title="Elo change over the last 6 matches">Last 6</th></tr></thead>
     <tbody>${rows.map((r, i) => `<tr>
       <td>${i + 1}</td>
-      <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></td>
+      <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy"></td>
       <td>${clubLink(r.team, names[r.team] || teamName(r.team))}${meta ? meta(r) : ""}</td>
       <td class="num" style="color:var(--text-muted)">${pos ? pos(r) : r.played}</td>
       <td class="num">${eloChip(r.lt)}</td>
@@ -4150,7 +4166,7 @@ function openCountryPage(country) {
   const clubs = leagues.flatMap((c) => c.clubs).sort((a, b) => b.lt - a.lt);
   const avg = avgRating(clubs.slice(0, 15));   // the country's level: its 15 best clubs
   const card = (c) => `<a class="lg-card" href="${leagueHref(c.lid)}">
-      <img class="club-logo" src="${leagueLogo(c.lid)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <img class="club-logo" src="${leagueLogo(c.lid)}" alt="" loading="lazy">
       <span class="lg-main"><span class="lg-name">${escapeHtml(c.name)}</span>
         ${c.clubs?.length ? `<span class="lg-sub">${c.clubs.length} clubs · top rated ${escapeHtml(teamName(c.clubs[0].team))}</span>` : ""}</span>
       ${c.avg != null ? `<span class="rel-chip rel-${ratingTierOf(c.avg)}" title="Average Baseline Strength of its clubs">${Math.round(c.avg)}</span>` : ""}</a>`;
@@ -4159,7 +4175,7 @@ function openCountryPage(country) {
   const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   body.innerHTML = `
     <div class="pl-hero">
-      ${FLAG_CODES[name] ? `<img class="country-flag-lg" src="https://flagcdn.com/${FLAG_CODES[name]}.svg" alt="" onerror="this.style.visibility='hidden'">` : "<span></span>"}
+      ${FLAG_CODES[name] ? `<img class="country-flag-lg" src="https://flagcdn.com/${FLAG_CODES[name]}.svg" alt="">` : "<span></span>"}
       <div class="pl-hero-main">
         <h2>${escapeHtml(name)}</h2>
         <div class="pl-hero-club"><span class="pl-meta">${[leagues.length && count(leagues.length, "league"), cups.length && count(cups.length, "cup"),
@@ -4365,12 +4381,12 @@ function renderFplNext() {
   const list = fp.all ? rows : rows.slice(0, FPL_SHOWN);
   const day = (iso) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
   const tag = (p) => {
-    const t = p.fpl_status && p.fpl_status !== "a" ? (p.fpl_status === "d" ? `${p.fpl_chance ?? 50}%` : FPL_STATUS[p.fpl_status] || "Doubtful")
+    const t = p.fpl_status && p.fpl_status !== "a" ? (p.fpl_status === "d" ? `${Math.round(Number(p.fpl_chance ?? 50)) || 0}%` : FPL_STATUS[p.fpl_status] || "Doubtful")
       : p.availability ? (p.availability === "Missing Fixture" ? "Out" : "Doubtful") : "";
     return t ? ` <span class="bet-tag warn" title="${p.fpl_status && p.fpl_status !== "a" ? "FPL status" : "On the injury list"}">${t}</span>` : "";
   };
   const opp = (c) => c.home ? code(c.opponent) : code(c.opponent).toLowerCase();
-  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><img class="club-logo" data-club="${r.p.team}" src="${teamLogo(r.p.team)}" alt="${escapeHtml(team(r.p.team))}" title="${escapeHtml(team(r.p.team))}" loading="lazy" onerror="this.style.visibility='hidden'">
+  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><img class="club-logo" data-club="${r.p.team}" src="${teamLogo(r.p.team)}" alt="${escapeHtml(team(r.p.team))}" title="${escapeHtml(team(r.p.team))}" loading="lazy">
       <div>${playerById(r.p.player) ? playerLink(r.p.player, r.p.name) : escapeHtml(r.p.name)}${tag(r.p)}
       <div class="fpl-match">${fp.mode === "gw" ? (r.cells.length ? r.cells.map((c) => `${c.home ? "v" : "at"} ${escapeHtml(team(c.opponent))}`).join(" · ") : "No match (blank)") : escapeHtml(team(r.p.team))}</div></div></div></td>`;
   const posCell = (p) => `<td>${FPL_POS[p.pos]}${p.fpl_position ? "" : '<span class="dim-text" title="Not matched to FPL yet: our position">*</span>'}</td>`;

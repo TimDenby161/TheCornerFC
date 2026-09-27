@@ -7,3 +7,4 @@ venv/
 logs/
 .cache/
 .api-usage/
+.DS_Store

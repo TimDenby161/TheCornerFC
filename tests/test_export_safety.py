@@ -4,7 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-from thecornerfc.export import ExportValidationError, _publish_export, export_player_seasons
+from thecornerfc.export import (ExportValidationError, _kit_colors, _media_url, _publish_export,
+                                export_player_seasons)
 from thecornerfc.workflow_inputs import parse_int_list
 
 
@@ -133,6 +134,27 @@ class WorkflowInputTests(unittest.TestCase):
     def test_parse_int_list_rejects_empty_input(self):
         with self.assertRaises(ValueError):
             parse_int_list("   ", "seasons")
+
+
+class MarkupValueTests(unittest.TestCase):
+    """API values that the site writes into style attributes and image sources."""
+
+    def test_kit_colours_must_be_six_digit_hex(self):
+        self.assertEqual(_kit_colors("FF0000", "ffffff"), ["ff0000", "ffffff"])
+        self.assertEqual(_kit_colors("ffffffffff", "000000"), None)      # seen in real API data
+        self.assertEqual(_kit_colors("f00;background:url(x)", "fff"), None)
+        self.assertEqual(_kit_colors(None, None), None)
+
+    def test_bad_number_colour_is_dropped_but_shirt_kept(self):
+        self.assertEqual(_kit_colors("123abc", "red"), ["123abc", None])
+
+    def test_media_urls_only_from_api_football_host(self):
+        ok = "https://media.api-sports.io/football/coachs/1234.png"
+        self.assertEqual(_media_url(ok), ok)
+        for bad in ("javascript:alert(1)", "http://media.api-sports.io/football/coachs/1.png",
+                    "https://media.api-sports.io.evil.test/football/coachs/1.png",
+                    'https://media.api-sports.io/football/coachs/1.png" onerror="x', "", None, 5):
+            self.assertIsNone(_media_url(bad), bad)
 
 
 if __name__ == "__main__":

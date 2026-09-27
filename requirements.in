@@ -1,0 +1,5 @@
+# Direct dependencies. requirements.txt is compiled from this with exact versions and hashes;
+# see SECURITY.md (Dependencies) for the command.
+requests>=2.31
+psycopg[binary]>=3.2
+python-dotenv>=1.0
