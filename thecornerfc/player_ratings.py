@@ -1023,6 +1023,13 @@ def compute_player_ratings(conn):
         score, club = s
         ref = cdf.get(pos) or pooled
         return round(final_rank(stretched_pct(score, ref), club, pos), 1)
+
+    def components_of(s, pos):
+        """(stat percentile, window club rank, club-scaled rating, club-neutral rating): the same
+        formula with club strength fixed at 1000. Captured for evaluation only; never used here."""
+        score, club = s
+        pct = stretched_pct(score, cdf.get(pos) or pooled)
+        return pct, club, round(final_rank(pct, club, pos), 1), round(final_rank(pct, 1000, pos), 1)
     log.info("Player ratings: %d appearances, %d team-fixtures, regulars per position %s, %d retired",
              len(appearance_scores), len(team_rows), {p: len(v) for p, v in cdf.items()}, len(retired))
 
@@ -1048,22 +1055,25 @@ def compute_player_ratings(conn):
     season_rows = _season_ranks(conn, norms, appearances, offsets, team_rank, retired, position_ranks, projections)
     this_season = max(y for _, y, _, _, _ in season_rows)
     now_rank = {p: r for p, y, r, _, _ in season_rows if y == this_season}
-    current = []
+    current, components = [], {}
     for player in list(windows):
         if player in retired:            # off the players list
             continue
         s, pos, minutes = raw_score(player, fixtures[-1][1] if fixtures else None)
         if s is not None:
             current.append((player, now_rank.get(player, to_rank(s, pos)), windows[player].label(), int(minutes)))
+            components[player] = components_of(s, pos)
 
     for evidence in selection_inputs.values():
         for candidate in evidence['scored_candidates']:
             candidate['player_rating'] = to_rank(candidate['raw_score'], candidate['position'])
     lineup_snapshots.capture_predictions(conn, fixtures, lineups, selection_inputs, live_availability)
-    _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_rows, position_ranks, projections)
+    _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_rows, position_ranks, projections,
+           components)
 
 
-def _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_rows, position_ranks, projections):
+def _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_rows, position_ranks, projections,
+           components=None):
     with conn.cursor() as cur:
         # Rebuilt with truncate + copy rather than updating fixture_players, so the big table
         # isn't rewritten (and bloated with dead rows) on every run
@@ -1103,7 +1113,7 @@ def _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_
         cur.execute("truncate player_projected_ranks")
         with cur.copy("copy player_projected_ranks (player_id, season, projected_rank) from stdin") as cp:
             cp.write("".join(f"{p}\t{y}\t{r}\n" for p, ys in projections.items() for y, r in ys.items()))
-    player_history.capture(conn, current, season_rows)
+    player_history.capture(conn, current, season_rows, components)
     conn.commit()
     log.info("Player ratings written: %d current player ranks, %d predicted-lineup rows, %d player-seasons",
              len(current), len(lineups), len(season_rows))

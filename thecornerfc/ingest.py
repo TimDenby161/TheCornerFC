@@ -7,7 +7,7 @@ from psycopg.types.json import Jsonb
 from .lineup_snapshots import capture_official
 from .paper_evidence import record_odds
 from .health import monitored, CURRENT
-from . import betting, config, positions
+from . import betting, config, positions, squad_evidence
 from .api import QuotaExhausted
 from .db import upsert
 from .player_ratings import compute_player_ratings
@@ -466,6 +466,7 @@ def sync_nightly(api, conn, league_ids):
     step("rankings", lambda api, conn: update_rankings(conn))
     step("retirement checks", check_retired)
     step("squads", sync_squads)
+    step("transfers", lambda api, conn: squad_evidence.sync_transfers(api, conn, _current_player_league_teams(conn)))
     step("line-up coaches", sync_lineup_coaches)
     step("coaches", sync_coaches)
     step("kit colours", sync_team_colors)
@@ -524,12 +525,15 @@ def sync_squads(api, conn):
             """select p.name, max(p.player_id) from fixture_players fp join fixtures f using (fixture_id)
                join players p using (player_id)
                where fp.team_id = %s and f.kickoff > now() - interval '365 days' group by 1""", [team]).fetchall())
-        ids = set()
+        ids, mapped = set(), {}
         for item in items:
             for pl in item.get("players") or []:
                 pid = pl.get("id") if pl.get("id") in known else by_name.get(pl.get("name"))
                 if pid:
                     ids.add(pid)
+                    mapped[pl.get("id")] = pid
+        # Dated history of the list (evaluation only; team_squads above stays the live copy)
+        squad_evidence.capture_squad(conn, team, squad_evidence.squad_players(items, mapped))
         conn.execute("delete from team_squads where team_id = %s", [team])
         if ids:
             conn.execute("insert into team_squads (team_id, player_id) select %s, unnest(%s::int[])", [team, list(ids)])
