@@ -326,6 +326,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     export_clubs(conn, out_dir)
     export_leagues(conn, out_dir)
     export_player_pages(conn, out_dir)
+    export_fantasy(conn, out_dir)
 
 
 def _records_sum(side):
@@ -1333,3 +1334,73 @@ def export_leagues(conn, out_dir=OUT_DIR):
                    "teams": {t: names.get(t) for t in teams}}
         (league_dir / f"{lid}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     log.info("Exported %d league pages", len(seasons))
+
+
+FANTASY_RESULTS = Path(__file__).resolve().parent.parent / "experiments" / "fantasy_v1" / "results.json"
+
+
+def _fantasy_progress(conn):
+    """Accrual of the prospective fantasy test (P8): finished fixtures with a snapshot before kickoff."""
+    if conn.execute("select to_regclass('public.fantasy_fixture_snapshots')").fetchone()[0] is None:
+        return {"state": "not_started"}
+    first, rows, fixtures, rounds = conn.execute(
+        """select min(s.captured_at), count(*), count(distinct s.fixture_id), count(distinct (f.season, f.round))
+                  filter (where f.status_short = 'FT')
+           from fantasy_fixture_snapshots s join fixtures f using (fixture_id)
+           where s.source = 'prospective'""").fetchone()
+    done = conn.execute(
+        """select count(distinct s.fixture_id) from fantasy_fixture_snapshots s join fixtures f using (fixture_id)
+           where s.source = 'prospective' and f.status_short = 'FT'""").fetchone()[0]
+    return {"state": "capturing" if first else "waiting", "first_capture": first.isoformat() if first else None,
+            "snapshots": rows, "fixtures": fixtures, "finished_fixtures": done, "finished_rounds": rounds}
+
+
+def export_fantasy(conn, out_dir=OUT_DIR):
+    """fpl.json: the fantasy model's validation findings (experiments/fantasy_v1/results.json) and
+    the prospective test's progress. Uses no FPL data. Not critical: any problem skips the file."""
+    try:
+        r = json.loads(FANTASY_RESULTS.read_text(encoding="utf-8"))
+        t = r["test"]
+        pick = lambda m: {k: m[k] for k in ("n", "mae", "rmse", "pearson", "spearman", "mean_pred", "mean_actual", "bias_pct")}
+        names = ("model", "recent5", "ppg", "flat_team_goals", "v1_1")
+        seg = lambda name, keys=None: {g: {k: pick(v[k]) for k in ("model", "recent5", "ppg")}
+                                       for g, v in t["segments"][name].items() if keys is None or g in keys}
+        calib = lambda c: {"ece": c["ece"], "n": c["n"], "mean_p": c["mean_p"], "rate": c["rate"],
+                           "bins": [[b["n"], b["mean_p"], b["rate"]] for b in c["bins"]]}
+        s = r["success"]
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "test": {"rows": r["rows"]["test"], "train_rows": r["rows"]["train"],
+                     "validation_rows": r["rows"]["validation"], "from": "2024-07-01",
+                     "rounds": t["round_wins"]["recent5"]["rounds"]},
+            "criteria": [
+                {"key": "benchmarks", "pass": s["1_beats_ppg_and_recent_on_mae_and_rmse"],
+                 "mae_vs_recent": t["vs"]["recent5"]["mae"], "mse_vs_recent": t["vs"]["recent5"]["mse"]},
+                {"key": "bias", "pass": s["2_bias_within_limits"], **s["2_detail"]},
+                {"key": "calibration", "pass": s["3_calibration"], **s["3_detail"]},
+                {"key": "match_model", "pass": s["4_beats_flat_team_goals"], "mae_vs_flat": t["vs"]["flat_team_goals"]["mae"]}],
+            "overall": {k: pick(t["overall"][k]) for k in names},
+            "top_n": {k: t["top_n"][k] for k in names},
+            "round_wins": t["round_wins"]["recent5"],
+            "vs_regulars": {k: t["vs_regulars"][k]["mae"] for k in ("recent5", "ppg")},
+            "segments": {"regular": seg("regular"), "position": seg("position"),
+                         "round_bucket": seg("round_bucket"), "ability_band": seg("ability_band", ("80+", "70-80", "60-70")),
+                         "season": seg("season")},
+            "minutes": {k: t["minutes"][k] for k in ("mae", "recent5_mae", "rmse", "recent5_rmse", "mean_pred", "mean_actual")},
+            "availability_minutes_mae": t["availability_variant_detail"]["minutes_mae"],
+            "start_calibration": calib(t["start_calibration"]),
+            "clean_sheet_calibration": calib(r["test_team_checks"]["team_clean_sheet"]),
+            "validation_clean_sheet_ece": r["validation_team_checks"]["team_clean_sheet"]["ece"],
+            "components": {k: {"pred": v["mean_pred"], "actual": v["mean_actual"]} for k, v in t["components"].items()},
+            "saves": {"validation_terciles": r["validation_team_checks"]["saves_terciles"],
+                      "posthoc_gk_bias": r["posthoc_with_saves"]["position_v1_bias_pct"]["G"]},
+            "v1_1_gk_bias": t["segments"]["position"]["G"]["v1_1"]["bias_pct"],
+            "coverage_outside_share": r["coverage"]["outside_share"],
+            "fpl_rows_available": sum(r["fpl_audit"].values()),
+            "prospective": dict(_fantasy_progress(conn), target_rounds=10, target_rows=3000),
+        }
+        _write_json_file(Path(out_dir) / "fpl.json", payload)
+    except Exception:
+        conn.rollback()         # a failed query must not leave the export's connection aborted
+        log.exception("Fantasy findings export skipped")
+
