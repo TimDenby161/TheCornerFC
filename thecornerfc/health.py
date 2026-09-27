@@ -142,9 +142,10 @@ def monitored(dataset, conn_index=0):
                     save_dataset(dataset, 'HEALTHY', len(payload['rankings']), payload.get('generated_at'), 'INFO: JSON and publication checks passed')
                 else:
                     conn = args[conn_index] if len(args)>conn_index else kwargs['conn']
+                    failures_before_check = CURRENT.get()['failed'].count(dataset)
                     inspect_dataset(dataset, conn, start)
-                if dataset in CURRENT.get()['failed']:
-                    raise HealthFailure(f'{dataset} sanity check failed')
+                    if CURRENT.get()['failed'].count(dataset) > failures_before_check:
+                        raise HealthFailure(f'{dataset} sanity check failed')
                 return result
             except HealthFailure:
                 raise

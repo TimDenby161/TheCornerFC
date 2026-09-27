@@ -280,11 +280,21 @@ def sync_standings(api, conn, league_ids, seasons):
         for season in seasons:
             resp = api.get("standings", league=league_id, season=season)
             rows = []
+            teams = []
+            skipped = 0
             for item in resp:
                 for group in item["league"]["standings"]:
-                    rows.extend(_standing_row(league_id, season, s) for s in group)
-            teams = [{"team_id": r["team"]["id"], "name": r["team"]["name"], "logo": r["team"].get("logo")}
-                     for item in resp for g in item["league"]["standings"] for r in g]
+                    for standing in group:
+                        team = standing.get("team") or {}
+                        if team.get("id") is None:
+                            skipped += 1
+                            continue
+                        rows.append(_standing_row(league_id, season, standing))
+                        teams.append({"team_id": team["id"], "name": team["name"],
+                                      "logo": team.get("logo")})
+            if skipped:
+                log.warning("Standings league=%s season=%s: skipped %d entries without team IDs",
+                            league_id, season, skipped)
             upsert(conn, "teams", _dedupe(teams, "team_id"), ["team_id"], update_cols=[])
             key = ("league_id", "season", "group_name", "team_id")
             upsert(conn, "standings", _dedupe(rows, key), list(key))

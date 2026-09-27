@@ -60,6 +60,27 @@ class HealthTests(unittest.TestCase):
         with health.store() as db:
             self.assertEqual(db.execute("SELECT status FROM dataset_status WHERE dataset='fixtures'").fetchone()[0],'HEALTHY')
 
+    def test_successful_league_does_not_repeat_earlier_failure(self):
+        conn = Mock()
+        conn.execute.side_effect = [Mock(fetchone=Mock(return_value=(100, None))),
+                                   Mock(fetchall=Mock(return_value=[]))]
+
+        @health.monitored('standings')
+        def stage(conn, fail=False):
+            if fail:
+                raise ValueError('Invalid standings')
+
+        with health.pipeline('nightly'):
+            with self.assertRaises(ValueError):
+                stage(conn, fail=True)
+            stage(conn)
+
+        with health.store() as db:
+            self.assertEqual(db.execute('SELECT status FROM pipeline_runs').fetchone()[0], 'FAIL')
+            status, message = db.execute('SELECT status,message FROM dataset_status').fetchone()
+            self.assertEqual(status, 'FAIL')
+            self.assertIn('ValueError', message)
+
     def test_zero_injuries_warns_without_failing(self):
         conn = Mock()
         conn.execute.return_value.fetchone.return_value = (1000,None)
