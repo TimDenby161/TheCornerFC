@@ -29,6 +29,7 @@ Sample-size basis (`power.py` → `power.json`): two-sided α = 0.05, 80% power,
 | P5 | Goalkeeper information | **Blocked**: needs a keeper-specific rating | — | — | — | — |
 | P6 | Model vs timestamped pre-kickoff market | **Ready** | Model minus market log loss | Estimation (see P6) | 2,000 (re-estimate at 500) | 79 |
 | P7 | Year-ahead Current weight | **Ready** | Selected weight minus 0.2 on the confirmation half | 0.002 | 6,500 confirmation fixtures | 0 |
+| P8 | Fantasy v1.1 expected points (Amendment 2) | **Capturing** once the snapshot migration is applied | v1.1 minus stored recent-average / PPG benchmarks, points MAE and MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 
 Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual; it is blinded.
 
@@ -80,6 +81,25 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
 - **Primary.** Confirmation-half mean paired log loss, selected minus 0.2. If 0.2 is selected, the result is "production confirmed".
 - **Decision relevance.** An improvement of at least 0.002 with the interval excluding zero and supporting Brier would justify proposing a change as a separately reviewed production change.
 
+## P8: Fantasy v1.1 expected points
+
+- **Question.** Does fantasy v1.1 hold up on gameweeks it has never seen? v1 (`experiments/fantasy_v1/REPORT.md`) beat the benchmarks on a 2024–26 backtest but failed its bias criterion. v1.1 (v1 plus goalkeeper saves plus injury-list availability) was **chosen after seeing that test**, so only prospective evidence can validate it.
+- **Evidence.** `fantasy_fixture_snapshots` rows with `source = 'prospective'`, with `captured_at` and `created_at` before kickoff, written by `thecornerfc.fantasy_snapshots` on each nightly and match-day run. Availability is the injury lists and manual absences as observed at capture time.
+- **Views.**
+  - Primary: the latest snapshot before kickoff for each team-fixture.
+  - Secondary: the latest snapshot before a round-level deadline, 90 minutes before the round's first kickoff. That is the view an FPL manager would have.
+- **Outcomes.** `status_short = 'FT'` Premier League fixtures. Points are reconstructed with `fantasy.actual_points`, using the position stored in the snapshot; this is the same target as the backtest. Players who played but were left out of a snapshot are counted as coverage, not scored.
+- **Benchmarks.** Recent 5-match average and points per game, stored in each snapshot's `inputs` at capture time. Official FPL expected points and price are **not** part of P8: they need FPL capture, which awaits the licensing decision.
+- **Criteria** (the backtest's, minus the flat-goals ablation, which cannot be rebuilt from stored outputs):
+  1. MAE and MSE lower than both benchmarks, 95% round-cluster bootstrap interval excluding zero.
+  2. Bias within ±5% overall and ±10% per position, against the v1-scope target.
+  3. Start ECE ≤ 0.03 and team clean-sheet ECE ≤ 0.03.
+- **Secondary.** Minutes MAE and RMSE against the stored recent 5-match minutes, top-10 and top-25 hit rates, and appearances by players outside the snapshot.
+- **Target.** 10 rounds and at least 3,000 player rows, analysed once. At the 2026/27 schedule that is expected around December 2026. Evaluator: `python3 experiments/prospective/fantasy_p8.py` (blinded), then `--unblind` at target.
+- **Decision relevance.**
+  - All three pass: v1.1 may be *proposed* as the base for fantasy features, still without claims against official FPL xP.
+  - Otherwise, fix the failing component first, and don't build major fantasy UI.
+
 ## P1: Club-neutral squad strength after large verified squad changes (blocked)
 
 - **Question.** Does a club-neutral squad component improve 10-match forecasts after large *verified* squad changes? Stage E found a hypothesis-grade signal using a noisy, appearance-based turnover proxy.
@@ -127,3 +147,9 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
   - The residual variant is derived at analysis time, from a club-expectation fit on data before the evaluation window.
 - **Remains unchanged:** P1/P2 targets and evaluators are still to be registered in a further amendment before any of their outcomes is examined. The P1 primary metric, P2 minutes endpoint and thresholds above stand.
 - **Migration:** `db/migrations/20260927_squad_transfer_capture.sql`, applied 2026-09-27.
+
+**Amendment 2 (2026-09-27): P8, fantasy v1.1.** Registered before any P8 outcome existed: 0 snapshots were stored, and the next Premier League round kicks off 2026-10-10.
+
+- Capture: `fantasy_snapshots.capture_safely` runs after predictions in the nightly job (fixtures in the next 8 days) and in the match-day job (fixtures within 3 hours). It is evidence only: a failure is logged and never fails either run, and nothing reads the table.
+- Parameters are frozen in `thecornerfc/fantasy_params.json` (fitted 2021-07 to 2024-06). Any refit is a new model version, and its snapshots accrue separately.
+- **Migration:** `db/migrations/20260927_fantasy_fixture_snapshots.sql`, **not yet applied**. Until it is, the capture logs a warning and skips.

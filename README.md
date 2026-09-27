@@ -44,6 +44,7 @@ Command safety:
 | `python -m thecornerfc rank` | Blocked | Yes | No |
 | `python -m thecornerfc predict` | Blocked | Yes | No |
 | `python -m thecornerfc player-ratings` | Blocked | Yes | No |
+| `python -m thecornerfc fantasy` | Blocked | Yes | No |
 
 Intentional local writes or API calls require all relevant safety flags to be turned off and `THECORNERFC_LOCAL_OVERRIDE=I_UNDERSTAND_THIS_CAN_WRITE_PRODUCTION_DATA_AND_USE_API_QUOTA`. GitHub Actions sets production mode explicitly, so the scheduled production pipelines continue to use the production Supabase credential and API-Football key.
 
@@ -1140,6 +1141,32 @@ report. It reports MAE, RMSE and bias of expected versus actual points per playe
 version, gameweek and horizon, and counts snapshots without final points and predicted players
 missing from the results. It deliberately stores no ownership, transfers or FPL's own `ep_next`.
 Add those, with their own licensing check, if a later model or benchmark needs them.
+
+### Fantasy expected points (v1.1, evidence only)
+
+`thecornerfc/fantasy.py` gives each Premier League player's expected FPL points per fixture from:
+- expected minutes (P(start), P(sub), minutes as starter and as sub)
+- the match model's team goals, shared out by shots on target and key passes (not by overall rank)
+- clean sheets and goals conceded from the same Poisson rates
+- goalkeeper saves
+
+Bonus, cards, own goals and penalties are not modelled. The backtest and its limits are in
+`experiments/fantasy_v1/REPORT.md`. It could not be compared with official FPL expected points or
+price, because no FPL data is captured.
+
+The parameters are frozen in `thecornerfc/fantasy_params.json`. After predictions,
+`fantasy_snapshots.capture_safely` stores every component for every player in upcoming fixtures in
+`fantasy_fixture_snapshots`. The nightly run covers the next 8 days; the match-day run covers kickoffs
+within 3 hours. Each row also stores the timed availability and the recent-average and PPG
+benchmark values used by protocol P8 (`experiments/prospective/`).
+
+- It is keyed by API-Football ids, so it needs no FPL data.
+- It is append-only, and a repeated identical state is not stored again.
+- A capture failure is logged and never fails the run. Nothing reads the table.
+- `python -m thecornerfc fantasy` captures by hand.
+
+Apply `db/migrations/20260927_fantasy_fixture_snapshots.sql` after the model-registry migration.
+Until then the capture logs a warning and skips.
 
 ### Chronological evaluation
 

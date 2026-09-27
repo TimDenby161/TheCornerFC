@@ -7,7 +7,7 @@ from psycopg.types.json import Jsonb
 from .lineup_snapshots import capture_official
 from .paper_evidence import record_odds
 from .health import monitored, CURRENT
-from . import betting, config, positions, squad_evidence
+from . import betting, config, fantasy_snapshots, positions, squad_evidence
 from .api import QuotaExhausted
 from .db import upsert
 from .player_ratings import compute_player_ratings
@@ -473,6 +473,7 @@ def sync_nightly(api, conn, league_ids):
     step("player ratings", lambda api, conn: compute_player_ratings(conn))
     step("player careers", sync_player_careers)
     step("predictions", lambda api, conn: update_predictions(conn))
+    fantasy_snapshots.capture_safely(conn)       # evidence only: never counts as a failure
     step("prediction backfill", lambda api, conn: backfill_predictions(conn))
     step("prediction ratings", lambda api, conn: rate_fixtures(conn))
     step("settle paper bets", lambda api, conn: betting.settle_bets(conn))

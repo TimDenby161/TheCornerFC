@@ -8,7 +8,7 @@ published shortly before kickoff are recorded as evidence only; projections do n
 import logging
 from datetime import datetime, timedelta, timezone
 
-from . import betting, config, predictions
+from . import betting, config, fantasy_snapshots, predictions
 from .ingest import _store_fixtures, sync_injuries_fixtures, sync_odds_fixtures
 from .lineup_snapshots import capture_official
 
@@ -52,6 +52,7 @@ def run_matchday(api, conn):
         sync_injuries_fixtures(api, conn, injury_fixtures)
     if upcoming:
         predictions.update_predictions(conn, [f for f, _ in upcoming])
+        fantasy_snapshots.capture_safely(conn, [f for f, _ in upcoming])   # evidence only
         betting.place_late(conn)
     betting.settle_bets(conn)
 
