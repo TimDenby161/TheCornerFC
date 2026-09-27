@@ -11,6 +11,8 @@
     python -m thecornerfc predict        # projected scores / W-D-L for upcoming fixtures
     python -m thecornerfc export         # JSON for the website in docs/data
     python -m thecornerfc matchday       # pre-kickoff odds/injuries, late paper bets, settle
+    python -m thecornerfc fpl capture    # pre-deadline FPL state (needs FPL_CAPTURE_ENABLED)
+    python -m thecornerfc fpl results    # actual FPL points for finished gameweeks
 """
 import argparse
 import logging
@@ -23,7 +25,7 @@ from .api import ApiFootball, QuotaExhausted
 
 TARGETS = ["leagues", "teams", "fixtures", "standings", "stats", "odds", "players", "injuries",
            "player_minutes", "player_careers", "retired", "squads", "coaches", "lineup_coaches", "colors", "cup_lineups"]
-DB_WRITE_COMMANDS = {"init-db", "rank", "predict", "player-ratings", "matchday", "nightly", "sync"}
+DB_WRITE_COMMANDS = {"init-db", "rank", "predict", "player-ratings", "matchday", "nightly", "sync", "fpl"}
 API_COMMANDS = {"status", "preflight", "matchday", "nightly", "sync"}
 
 
@@ -32,6 +34,8 @@ def _guard_command(args):
         config.require_api_access(args.command)
     if args.command in DB_WRITE_COMMANDS:
         config.require_db_write(args.command)
+    if args.command == "fpl":
+        config.require_fpl_access(f"fpl {args.action}")
 
 
 def main(argv=None):
@@ -55,6 +59,10 @@ def main(argv=None):
     sub.add_parser("player-ratings", help="Recalculate player ranks and team XI ratings (backdated)")
     sub.add_parser("matchday", help="Pre-kickoff odds and injuries, late paper bets, settle bets")
 
+    fpl = sub.add_parser("fpl", help="Fantasy Premier League evidence (off unless FPL_CAPTURE_ENABLED)")
+    fpl.add_argument("action", choices=["capture", "results"])
+    fpl.add_argument("--events", type=int, nargs="+", help="results: re-fetch these gameweeks")
+
     sync = sub.add_parser("sync", help="Pull data from API-Football")
     sync.add_argument("target", choices=TARGETS + ["all"])
     sync.add_argument("--leagues", type=int, nargs="+", default=list(config.LEAGUES))
@@ -63,7 +71,8 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    os.environ["API_PROCESS_LABEL"] = args.command + (f" {args.target}" if args.command == "sync" else "")
+    os.environ["API_PROCESS_LABEL"] = args.command + (
+        f" {args.target}" if args.command == "sync" else f" {args.action}" if args.command == "fpl" else "")
     _guard_command(args)
 
     if args.command == "evaluate":
@@ -130,6 +139,15 @@ def _execute(args):
             return 0
         if args.command == "export":
             export.export_site_data(conn)
+            return 0
+        if args.command == "fpl":
+            from . import fpl
+            client = fpl.FplClient()
+            if args.action == "capture":
+                fpl.capture(client, conn)
+            else:
+                fpl.capture_results(client, conn, args.events)
+            logging.info("FPL requests this run: %d", client.calls_made)
             return 0
 
         api = ApiFootball()

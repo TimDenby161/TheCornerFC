@@ -140,10 +140,50 @@ def goal_lines(home_xg, away_xg):
     return out
 
 
-def _shrunk(records, idx, league_avg):
-    """Mean of records[*][idx], pulled toward league_avg by SHRINK_GAMES pseudo-matches."""
-    total = sum(r[idx] for r in records)
-    return (total + league_avg * SHRINK_GAMES) / (len(records) + SHRINK_GAMES)
+def _shrunk(total, n, league_avg):
+    """Mean of n values summing to total, pulled toward league_avg by SHRINK_GAMES pseudo-matches."""
+    return (total + league_avg * SHRINK_GAMES) / (n + SHRINK_GAMES)
+
+
+def record_totals(records):
+    """(sum scored, sum conceded, matches) of (scored, conceded) records: all _base_goals needs."""
+    return sum(r[0] for r in records), sum(r[1] for r in records), len(records)
+
+
+def margin_terms(h_rank, a_rank, league_id=None, home_missing=0.0, away_missing=0.0,
+                 sides=None, lines=None):
+    """The expected home margin (exp_diff) as ordered (name, goals) terms; predict_match adds
+    them up in this order, so the explanation on the site is the margin the model used.
+
+    "ranks" is the match-rank gap plus the flat HOME_ADVANTAGE_POINTS, kept as one term so the
+    sum is unchanged; explain() splits it for display."""
+    terms = [("ranks", (h_rank - a_rank + HOME_ADVANTAGE_POINTS) / 100)]
+    if league_id in EUROPE_COMPS:
+        terms.append(("europe_home", EUROPE_HOME_BONUS))
+    terms.append(("absences", INJURY_BETA * (away_missing - home_missing)))
+    if sides:
+        terms.append(("home_edges", HOME_EDGE_WEIGHT * (sides[2] + sides[3]) / 100))
+    if lines and all(v is not None for side in lines for v in side):
+        terms.append(("lineups", sum(w * (h - a) for w, h, a in zip(XI_LINE_WEIGHTS, *lines))))
+    return terms
+
+
+def _base_goals(home_totals, away_totals, lg_home, lg_away, sides, tendencies=True):
+    """(base_home, base_away) before the margin is applied. home_totals / away_totals:
+    record_totals of the home side's home games and the away side's away games.
+    tendencies=False leaves out the attack/defence splits (for explain() only)."""
+    (h_for, h_against, h_n), (a_for, a_against, a_n) = home_totals, away_totals
+    base_home = (_shrunk(h_for, h_n, lg_home) + _shrunk(a_against, a_n, lg_home)) / 2
+    base_away = (_shrunk(a_for, a_n, lg_away) + _shrunk(h_against, h_n, lg_away)) / 2
+    if sides:
+        # how open a game between these two is, from the attack/defence model: both sides'
+        # expected goals at level ranks (the margin comes from exp_diff)
+        level = (sides[0] + sides[1]) / 100 if tendencies else 0.0
+        ad_total = max(0.2, sides[4] + level) + max(0.2, sides[5] + level)
+        total = base_home + base_away
+        scale = ((1 - AD_GOALS_WEIGHT) * total + AD_GOALS_WEIGHT * ad_total) / total
+        base_home, base_away = base_home * scale, base_away * scale
+    return base_home, base_away
 
 
 def predict_match(h_rank, a_rank, home_records, away_records, lg_home, lg_away, league_id=None,
@@ -156,27 +196,63 @@ def predict_match(h_rank, a_rank, home_records, away_records, lg_home, lg_away, 
     away) going into the match, or None; lines: (home, away) predicted XI average rank by line
     [GK, DEF, MID, FWD], or None.
     """
-    exp_diff = (h_rank - a_rank + HOME_ADVANTAGE_POINTS) / 100
-    if league_id in EUROPE_COMPS:
-        exp_diff += EUROPE_HOME_BONUS
-    exp_diff += INJURY_BETA * (away_missing - home_missing)
-    if sides:
-        exp_diff += HOME_EDGE_WEIGHT * (sides[2] + sides[3]) / 100
-    if lines and all(v is not None for side in lines for v in side):
-        exp_diff += sum(w * (h - a) for w, h, a in zip(XI_LINE_WEIGHTS, *lines))
-    base_home = (_shrunk(home_records, 0, lg_home) + _shrunk(away_records, 1, lg_home)) / 2
-    base_away = (_shrunk(away_records, 0, lg_away) + _shrunk(home_records, 1, lg_away)) / 2
-    if sides:
-        # how open a game between these two is, from the attack/defence model: both sides'
-        # expected goals at level ranks (the margin comes from exp_diff)
-        level = (sides[0] + sides[1]) / 100
-        ad_total = max(0.2, sides[4] + level) + max(0.2, sides[5] + level)
-        total = base_home + base_away
-        scale = ((1 - AD_GOALS_WEIGHT) * total + AD_GOALS_WEIGHT * ad_total) / total
-        base_home, base_away = base_home * scale, base_away * scale
+    exp_diff = sum(v for _, v in margin_terms(h_rank, a_rank, league_id, home_missing,
+                                              away_missing, sides, lines))
+    base_home, base_away = _base_goals(record_totals(home_records), record_totals(away_records),
+                                       lg_home, lg_away, sides)
     home_xg, away_xg = project(base_home, base_away, exp_diff)
     return (exp_diff, home_xg, away_xg, *outcome_probabilities(home_xg, away_xg),
             *goal_markets(home_xg, away_xg))
+
+
+EXPLAIN_TOLERANCE = 1e-6      # rebuilt margin and goals must match the stored ones this closely
+REASON_MIN_GOALS = 0.05       # smaller effects are not offered as key reasons
+MAX_REASONS = 3
+
+
+def explain(inputs, league_id, home_totals, away_totals, stored):
+    """The parts of one stored prediction, rebuilt from its snapshot inputs with the same
+    functions predict_match uses, or None if they don't give back the stored prediction (older
+    model settings, or inputs that weren't captured). Nothing here is re-estimated.
+
+    inputs: match_prediction_snapshots.inputs (records may be left out: their sums come in
+    home_totals / away_totals); stored: (exp_diff, home_xg, away_xg) of that prediction.
+
+    Returns goals of expected home margin per term ("margin"; + favours the home side), what
+    the attack/defence tendencies add to the expected total ("tendencies"), and the
+    largest effects as key reasons [(name, goals)] ordered by size."""
+    h_rank, a_rank = inputs.get("home_match_rank"), inputs.get("away_match_rank")
+    if h_rank is None or a_rank is None:
+        return None
+    sides = inputs.get("sides")
+    sides = tuple(sides) if sides and None not in sides else None
+    lines = inputs.get("predicted_lines")
+    h_miss, a_miss = inputs.get("home_missing") or 0.0, inputs.get("away_missing") or 0.0
+    terms = margin_terms(h_rank, a_rank, league_id, h_miss, a_miss, sides, lines)
+    exp_diff = sum(v for _, v in terms)
+    lg_home, lg_away = inputs.get("league_home_goals"), inputs.get("league_away_goals")
+    if lg_home is None or lg_away is None:
+        return None
+    base = _base_goals(home_totals, away_totals, lg_home, lg_away, sides)
+    home_xg, away_xg = project(*base, exp_diff)
+    if any(abs(x - y) > EXPLAIN_TOLERANCE for x, y in zip((exp_diff, home_xg, away_xg), stored)):
+        return None
+
+    margin = {"strength": (h_rank - a_rank) / 100, "home_advantage": HOME_ADVANTAGE_POINTS / 100}
+    margin.update((k, v) for k, v in terms if k != "ranks")
+    tendencies = None
+    if sides:
+        flat = project(*_base_goals(home_totals, away_totals, lg_home, lg_away, sides,
+                                    tendencies=False), exp_diff)
+        tendencies = home_xg + away_xg - sum(flat)
+    effects = [(k, v) for k, v in margin.items() if k != "home_advantage"]
+    effects.append(("home_advantage", margin["home_advantage"]))    # ties: specific first
+    if tendencies is not None:
+        effects.append(("tendencies", tendencies))
+    reasons = sorted((e for e in effects if abs(e[1]) >= REASON_MIN_GOALS),
+                     key=lambda e: -abs(e[1]))[:MAX_REASONS]
+    return {"margin": margin, "exp_diff": exp_diff, "tendencies": tendencies,
+            "league_goals": lg_home + lg_away, "reasons": reasons}
 
 
 def _predicted_lines(conn, fixture_ids):

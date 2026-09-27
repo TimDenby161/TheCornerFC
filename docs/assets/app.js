@@ -37,7 +37,7 @@ const state = {
   tableSort: "lt", tableSearch: "", collapsed: new Set(),
   stats: null, statsRange: "30d", statsFilter: "all",
   bets: null, betStrategy: "all", betMarket: "all", betView: "all", betFilter: "all", tipsCollapsed: new Set(),
-  players: null, tableView: "clubs", playerSort: null, playerYears: storedFlag("playerYears"), ageMin: null, ageMax: null,
+  players: null, tableView: "clubs", playerSort: null, ranges: {}, playerYears: storedFlag("playerYears"), ageMin: null, ageMax: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -58,16 +58,27 @@ function rowsToObjects(fields, rows) {
   return rows.map((r) => Object.fromEntries(fields.map((f, i) => [f, r[i]])));
 }
 
+// Every data file: revalidated with the server each time ("no-cache": a 304 when it hasn't
+// changed, so the data is always current without downloading it again), and a file already on
+// its way is shared rather than fetched twice
+const inflight = new Map();
+function getJson(path) {
+  if (!inflight.has(path)) inflight.set(path, fetch(path, { cache: "no-cache" })
+    .then((r) => { if (!r.ok) throw new Error(`${path}: ${r.status}`); return r.json(); })
+    .finally(() => inflight.delete(path)));
+  return inflight.get(path);
+}
+const getJsonOrNull = (path) => getJson(path).catch(() => null);
+
 async function loadData() {
   try {
-    const [m, r, st] = await Promise.all([
-      fetch("data/matches.json", { cache: "no-store" }).then((res) => res.json()),
-      fetch("data/rankings.json", { cache: "no-store" }).then((res) => res.json()),
-      fetch("data/stats.json", { cache: "no-store" }).then((res) => res.json()).catch(() => null),
+    // all at once: the players file is the largest, so it isn't left waiting behind the rest
+    const [m, r, st, bets, pj] = await Promise.all([
+      getJson("data/matches.json"), getJson("data/rankings.json"), getJsonOrNull("data/stats.json"),
+      getJsonOrNull("data/bets.json"), getJsonOrNull("data/players.json"),
     ]);
     state.stats = st;
-    state.bets = await fetch("data/bets.json", { cache: "no-store" }).then((res) => res.json()).catch(() => null);
-    const pj = await fetch("data/players.json", { cache: "no-store" }).then((res) => res.json()).catch(() => null);
+    state.bets = bets;
     if (pj) {        // API-Football sends some names HTML-encoded ("O&apos;Reilly")
       for (const r of pj.players) r[1] = decodeEntities(r[1]);
       for (const xi of Object.values(pj.next_xi || {})) for (const r of xi.players) r[1] = decodeEntities(r[1]);
@@ -96,6 +107,7 @@ async function loadData() {
     renderBets();
     renderTips();
     route();
+    loadExplanations();
   } catch (err) {
     console.error(err);
     $("#matches-list").innerHTML = `<div class="empty-state">Couldn't load match data.</div>`;
@@ -273,8 +285,8 @@ function cupTeamsLeft(lg) {
 function loadEuroCups() {
   if (state.euroLoading) return state.euroLoading;
   const ids = [...EURO_CUPS, ...DOMESTIC_CUPS];
-  state.euroLoading = Promise.all(ids.map((lid) =>
-    fetch(`data/leagues/${lid}.json`, { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null)))
+  // through loadLeague, so a cup's page opened later reuses the file
+  state.euroLoading = Promise.all(ids.map(loadLeague))
     .then((files) => {
       state.euro = new Map(ids.map((lid, i) => {
         const lg = files[i];
@@ -492,10 +504,11 @@ function renderMatchFilters() {
 // shows how many are on
 function renderMoreFilters() {
   const btn = $("#more-filters");
-  btn.hidden = state.tableView !== "players" || !state.players;
+  const players = state.tableView === "players";
+  btn.hidden = !state.rankings || (players && !state.players);
   if (btn.hidden) return;
-  const n = (state.ageMin != null || state.ageMax != null ? 1 : 0) + (state.positions?.size || 0)
-    + (state.clubs?.size || 0) + (state.nats?.size || 0);
+  const n = rangesOn() + (!players ? 0 : (state.ageMin != null || state.ageMax != null ? 1 : 0) + (state.positions?.size || 0)
+    + (state.clubs?.size || 0) + (state.nats?.size || 0));
   btn.innerHTML = `Filters${n ? `<span class="n">${n}</span>` : ""}<span class="caret" aria-hidden="true">▾</span>`;
   btn.setAttribute("aria-expanded", String($("#table-side").classList.contains("filters-open")));
 }
@@ -583,13 +596,143 @@ function probBar(m, key = "p", labelled = false) {
       </div>
     </div>`;
 }
-// Both bars and the difference between them where the market's prices are known, else the model's bar
-function probBars(m) {
-  if (m.m_home == null || m.p_home == null) return probBar(m);
+// Model minus market fair, in whole points of the shown percentages
+function marketDiff(m) {
   const model = shownProbs(m, "p"), market = shownProbs(m, "m");
-  const diff = model.map((v, i) => { const x = v - market[i]; return `<b>${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x)}</b>`; });
+  return model.map((v, i) => { const x = v - market[i]; return `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x)}`; });
+}
+const DIFF_TIP = "Model probability minus market fair probability, in percentage points. A difference is a disagreement with the market, not a betting edge or proof of value.";
+// Both bars where the market's prices are known, else the model's bar; diff adds the gap line
+function probBars(m, diff = true) {
+  if (m.m_home == null || m.p_home == null) return probBar(m);
+  const d = marketDiff(m).map((x) => `<b>${x}</b>`);
   return probBar(m, "p", true) + probBar(m, "m", true)
-    + `<div class="market-line" title="Model probability minus market fair probability, in percentage points. A difference is a disagreement with the market, not proof of value.">Difference (model − market) H ${diff[0]} · D ${diff[1]} · A ${diff[2]}</div>`;
+    + (diff ? `<div class="market-line" title="${DIFF_TIP}">Difference (model − market) H ${d[0]} · D ${d[1]} · A ${d[2]}</div>` : "");
+}
+
+// ---- Why the model says what it says. Everything below formats predictions.explain() output
+// from data/explanations.json (loaded after the matches); none of it is worked out here.
+function loadExplanations() {
+  state.explainLoading ||= getJsonOrNull("data/explanations.json")
+    .then((j) => { state.explain = j?.matches || {}; state.explainModels = j?.models || {}; fillReasons(); });
+  return state.explainLoading;
+}
+const explainOf = (m) => state.explain?.[String(m.id)] || null;
+// Goals to one decimal, never "0.0" for something the model did count
+const goalsText = (v) => { const a = Math.abs(v); return a === 0 ? "0" : a < 0.05 ? "<0.1" : a.toFixed(1); };
+const signedGoals = (v) => v !== 0 && Math.abs(v) < 0.05 ? "≈0" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${goalsText(v)}`;
+const MARGIN_LABELS = {
+  strength: ["Strength gap", "Home minus away match strength (the blend of Current and Baseline Strength), 100 points = 1 goal"],
+  home_advantage: ["Home advantage", "The same for every club: 0.3 goals"],
+  europe_home: ["European tie", "Extra home margin in UEFA club competitions"],
+  home_edges: ["Clubs' home/away record", "The home side's own home edge plus the away side's own away weakness, from past results"],
+  absences: ["Known absences", "Players listed injured, suspended or doubtful, weighted by their recent minutes"],
+  lineups: ["Predicted line-ups", "Predicted XI ratings by line (defence, midfield, attack)"],
+};
+// One key reason as a phrase and its size; + favours the home side (or, for tendencies, more goals)
+function reasonHtml(m, [key, v]) {
+  const fav = teamName(v >= 0 ? m.home : m.away), other = teamName(v >= 0 ? m.away : m.home);
+  const text = {
+    strength: `${fav} rated the stronger side`,
+    home_advantage: `Home advantage for ${fav}`,
+    europe_home: `Extra home advantage in European ties for ${fav}`,
+    home_edges: `Clubs' home/away records lean to ${fav}`,
+    absences: `More of ${other}'s regulars listed as missing`,
+    lineups: `Predicted line-up rated higher for ${fav}`,
+    tendencies: v >= 0 ? "Both sides' games tend to be open" : "Both sides' games tend to be tight",
+  }[key];
+  if (!text) return "";
+  const size = key === "tendencies" ? `${signedGoals(v)} total goals` : `${goalsText(v)} goals`;
+  return `<li><span>${escapeHtml(text)}</span><b>${size}</b></li>`;
+}
+const REASONS_TIP = "The model inputs that moved this projection most, in goals of expected margin (or total goals). They describe how the model arrived at its numbers, not what will decide the match.";
+function reasonsHtml(m) {
+  const x = explainOf(m);
+  if (!x?.reasons?.length) return "";
+  return `<div class="why-hd" title="${REASONS_TIP}">Key reasons</div><ul class="why-list">${x.reasons.map((r) => reasonHtml(m, r)).join("")}</ul>`;
+}
+// Fill the key-reason slots of cards drawn before the file arrived
+function fillReasons() {
+  document.querySelectorAll(".why[data-why]:empty").forEach((el) => {
+    const m = state.data.matches.find((x) => x.id === Number(el.dataset.why));
+    if (m) el.innerHTML = reasonsHtml(m);
+  });
+}
+const whenText = (iso) => `${fmtShortDate(iso)} ${fmtTime(iso)}`;
+const SOURCE_TEXT = {
+  prospective: "captured before kickoff",
+  late_observation: "captured after kickoff",
+  reconstruction: "reconstructed afterwards from pre-match data",
+};
+function detailRow(label, value, tip = "") {
+  return value == null || value === "" ? "" : `<div class="why-row"${tip ? ` title="${escapeHtml(tip)}"` : ""}><span>${label}</span><b>${value}</b></div>`;
+}
+const pairText = (h, a, f = (v) => Math.round(v).toLocaleString()) => h == null && a == null ? null
+  : `${h == null ? "–" : f(h)} · ${a == null ? "–" : f(a)}`;
+function whyDetailHtml(m) {
+  const x = explainOf(m);
+  const finished = FINISHED.has(m.status) && m.hg != null;
+  const sections = [];
+  const section = (title, rows, note = "") => { if (rows.trim()) sections.push(`<div class="why-sec"><div class="why-sec-hd">${title}</div>${rows}${note}</div>`); };
+  const hName = escapeHtml(teamName(m.home)), aName = escapeHtml(teamName(m.away));
+  const teamsRow = `<div class="why-row why-teams"><span></span><b>${hName} · ${aName}</b></div>`;
+
+  if (x) {
+    const fb = x.fallback?.some(Boolean)
+      ? `<div class="why-note">No rating history yet for ${escapeHtml(x.fallback.map((f, i) => f ? teamName(i ? m.away : m.home) : null).filter(Boolean).join(" or "))}: the competition's starting strength was used.</div>` : "";
+    section("Strength", teamsRow
+      + detailRow("Current Strength", pairText(...x.current), "Elo rating now, from recent results")
+      + detailRow("Baseline Strength", pairText(...x.baseline), "Long-term level (LT ALGO)")
+      + detailRow("Used for this match", pairText(...x.match), "A blend of Current and Baseline Strength; matches further away lean more on Baseline"), fb);
+    const margin = Object.entries(x.margin).map(([k, v]) => {
+      const [label, tip] = MARGIN_LABELS[k] || [k, ""];
+      return detailRow(label, signedGoals(v), tip);
+    }).join("");
+    section("Expected margin <span class=\"why-unit\">goals, + favours home</span>", margin
+      + detailRow("Total", signedGoals(x.exp_diff), "The model's expected home minus away goals"));
+  }
+
+  const goals = [
+    x ? detailRow("Competition average", `${x.league_goals.toFixed(1)} a game`, "Average goals per game in this competition over the last 12 months") : "",
+    x?.tendencies != null ? detailRow("Attack/defence tendencies", `${signedGoals(x.tendencies)} total`, "How much both clubs' attacking and defensive styles move the expected total, against level sides") : "",
+    m.home_xg != null ? detailRow("Projected total", (m.home_xg + m.away_xg).toFixed(1)) : "",
+    m.p_over25 != null ? detailRow("Over 2.5 · both score", `${Math.round(m.p_over25 * 100)}% · ${Math.round(m.p_btts * 100)}%`) : "",
+  ].join("");
+  section("Goals", goals);
+
+  const missH = x ? x.missing[0] : m.home_missing, missA = x ? x.missing[1] : m.away_missing;
+  section("Known absences", detailRow("Missing players", pairText(missH, missA, (v) => v.toFixed(1)),
+    "Players listed injured, suspended or doubtful, weighted by their share of recent minutes (1.0 = one ever-present player). – = no injury list"));
+
+  const lines = x?.lines;
+  const xi = m.home_xi != null && m.away_xi != null;
+  section(`${finished ? "Line-ups" : "Predicted line-ups"}`,
+    (xi ? detailRow(`${finished ? "Starting" : "Predicted"} XI rating`, `${Math.round(m.home_xi)} · ${Math.round(m.away_xi)}`, "Average player rank (0–100)") : "")
+    + (xi && m.home_recent_xi != null && m.away_recent_xi != null ? detailRow("Last 5 XIs", `${Math.round(m.home_recent_xi)} · ${Math.round(m.away_recent_xi)}`) : "")
+    + (lines ? ["DEF", "MID", "FWD"].map((k, j) => detailRow(`Model input, ${k}`, pairText(lines[0][j + 1], lines[1][j + 1]),
+      "The predicted XI's average rank in this line, as the model used it")).join("") : ""));
+
+  if (m.m_home != null && m.p_home != null) {
+    const [ph, pd, pa] = shownProbs(m, "p"), [mh, md, ma] = shownProbs(m, "m"), d = marketDiff(m);
+    section("Model vs market <span class=\"why-unit\">H · D · A</span>",
+      detailRow("Model", `${ph} · ${pd} · ${pa}%`)
+      + detailRow("Market fair", `${mh} · ${md} · ${ma}%`, "The average across bookmakers with their margin removed")
+      + detailRow("Difference", `${d.join(" · ")} pts`, DIFF_TIP),
+      `<div class="why-note">A disagreement with the market, not a betting edge.</div>`);
+  }
+
+  if (x) {
+    const v = state.explainModels?.[x.model];
+    const model = v?.name ? `${escapeHtml(v.name)}${v.code ? ` · ${escapeHtml(v.code)}` : ""}` : null;
+    section("Data", detailRow("Model inputs", `${escapeHtml(whenText(x.captured_at))}`, `Inputs ${SOURCE_TEXT[x.source] || x.source}`)
+      + (x.source !== "prospective" ? detailRow("Captured", escapeHtml(SOURCE_TEXT[x.source] || x.source)) : "")
+      + detailRow("Injury list seen", x.injuries_at ? escapeHtml(whenText(x.injuries_at)) : null)
+      + detailRow("Odds seen", x.odds_at ? escapeHtml(whenText(x.odds_at)) : null)
+      + detailRow("Model version", model, x.model ? `Version id ${x.model.slice(0, 11)}` : ""));
+  } else if (m.p_home != null) {
+    sections.push(`<div class="why-note">No breakdown for this prediction: its captured model inputs aren't available.</div>`);
+  }
+  return `${sections.join("")}<div class="why-note">These are the model's inputs and how much each moved its numbers, not a statement of what will decide the match.</div>`;
 }
 
 function outcome(h, a) { return h > a ? 0 : h === a ? 1 : 2; }
@@ -605,8 +748,8 @@ function scoreCentre(m) {
   }
   if (m.home_xg == null) return `<div class="match-score"><div class="score-row"><span class="vs-text">vs</span></div></div>`;
   return `<div class="match-score">
-      <div class="score-row"><span class="proj-box">${m.home_xg.toFixed(1)}</span><span class="vs-text">vs</span><span class="proj-box">${m.away_xg.toFixed(1)}</span></div>
-      ${m.likely ? `<div class="score-sub" title="Most likely score">${escapeHtml(m.likely)}</div>` : ""}
+      <div class="score-row" title="Projected goals (the model's expected goals)"><span class="proj-box">${m.home_xg.toFixed(1)}</span><span class="vs-text">xG</span><span class="proj-box">${m.away_xg.toFixed(1)}</span></div>
+      ${m.likely ? `<div class="score-sub" title="The single most likely score; most matches end some other way">Likely ${escapeHtml(m.likely)}</div>` : ""}
     </div>`;
 }
 
@@ -656,14 +799,16 @@ function matchCard(m) {
       <div class="factor"><span class="factor-name">Overall</span><span class="factor-score">${m.rating}/5 ${RATING_LABELS[m.rating]}</span></div>
       ${FACTORS.map(([k, label, w]) => `<div class="factor"><span class="factor-name">${label} <span class="factor-weight">${w}</span></span><span class="factor-score">${m[k]}/5</span></div>`).join("")}
     </div>` : "";
+  // Up front: projected goals and likely score (in the head), model and market chances, key
+  // reasons; everything else behind "Model detail"
+  const upcoming = !finished && !LIVE.has(m.status);
   return `
     <div class="match-card${cls}" data-fixture="${m.id}">
       ${matchHead(m, `${badge}${statusTag(m)}`)}
-      ${probBars(m)}
-      ${m.p_over25 != null && !(FINISHED.has(m.status) && m.hg != null) ? `<div class="market-line">Over 2.5 goals <b>${Math.round(m.p_over25 * 100)}%</b> · Both teams score <b>${Math.round(m.p_btts * 100)}%</b></div>` : ""}
-      ${m.home_xi != null && m.away_xi != null ? `<div class="market-line" title="Average player rank (0-100) of the ${FINISHED.has(m.status) ? "starting" : "predicted"} XI; brackets = average of each side's last 5 starting XIs${m.home_lines && m.away_lines ? `. By line: ${escapeHtml(teamName(m.home))} ${linesText(m.home_lines)}; ${escapeHtml(teamName(m.away))} ${linesText(m.away_lines)}` : ""}">${FINISHED.has(m.status) ? "Starting" : "Predicted"} XI rating <b>${Math.round(m.home_xi)}</b>${m.home_recent_xi != null ? ` (${Math.round(m.home_recent_xi)})` : ""} · <b>${Math.round(m.away_xi)}</b>${m.away_recent_xi != null ? ` (${Math.round(m.away_recent_xi)})` : ""}</div>` : ""}
-      ${!FINISHED.has(m.status) && !LIVE.has(m.status) ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
-      ${m.home_missing != null || m.away_missing != null ? `<div class="market-line" title="Players listed injured, suspended or doubtful, weighted by their share of their team's recent minutes (1.0 = one ever-present player)">Missing players <b>${(m.home_missing ?? 0).toFixed(1)}</b> · <b>${(m.away_missing ?? 0).toFixed(1)}</b></div>` : ""}
+      ${probBars(m, false)}
+      ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${reasonsHtml(m)}</div>` : ""}
+      ${upcoming ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
+      ${m.p_home != null ? `<button type="button" class="why-toggle" aria-expanded="false">${finished ? "Pre-match model detail" : "Model detail"}</button><div class="why-detail" hidden></div>` : ""}
       ${detail}
     </div>`;
 }
@@ -748,7 +893,7 @@ const squadObserver = "IntersectionObserver" in window ? new IntersectionObserve
 async function fillSquadLine(el) {
   const m = state.data.matches.find((x) => x.id === Number(el.dataset.fixture));
   if (!m || !state.players) return;
-  state.injuries ||= await fetch("data/injuries.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null);
+  state.injuries ||= await getJsonOrNull("data/injuries.json");
   const [h, a] = await Promise.all([loadClub(m.home), loadClub(m.away)]);
   const sh = h && squadStrength(m.home, h, m), sa = a && squadStrength(m.away, a, m);
   if (!sh || !sa) return;
@@ -921,8 +1066,7 @@ function fitYearsBox(wrap) {
 
 function loadPlayerSeasons() {
   if (state.playerSeasons || state.playerSeasonsLoading) return;
-  state.playerSeasonsLoading = fetch("data/player_seasons.json", { cache: "no-store" })
-    .then((res) => res.json()).then((d) => { state.playerSeasons = d; }).catch(() => {});
+  state.playerSeasonsLoading = getJson("data/player_seasons.json").then((d) => { state.playerSeasons = d; }).catch(() => {});
 }
 // Hover text for a season cell: his age that season (his age now for the current season, one
 // less for each season before), then per club "Team – club rank" and
@@ -985,6 +1129,7 @@ function renderPlayers() {
   const nowHead = (text) => `<span class="now-head">${text}${yearsBtn}</span>`;
   const posTh = groups.length ? th("pos", nowHead(groups.length === 1 ? `As ${groups[0]}` : "In pos"), `How good he is now as ${groups.map((g) => GROUP_SINGLE[g]).join(" / ")}: his recent stats scored as that position against its players, with up to 6 points off for a position he hasn't played much (none once it's 40% of his starts). Only positions he has started in get a number. With several positions picked, his best of them.`, " col-posrank") : "";
   if (!rows.length) { wrap.innerHTML = `<div class="empty-state">No players match these filters.</div>`; return; }
+  playerPlaces();
   wrap.innerHTML = `
     <div class="table-scroll"><table class="leaderboard players${open ? " years" : ""}">
       <thead><tr>
@@ -992,6 +1137,9 @@ function renderPlayers() {
         <th data-tip="Player, with his club's badge (click it for the club's page) and his country's flag (click it for the national team).">Player</th>
         <th class="num" data-tip="Position: the role he has started in most over his last 20 appearances.">Pos</th>
         ${th("age", "Age", "Age today (sorts youngest first).", " col-age")}
+        <th class="num col-wrank" data-tip="World rank: his place among every listed player by Ability, whatever this list is filtered or sorted by.">World</th>
+        <th class="num col-lrank" data-tip="League rank: his place by Ability among the listed players in his club's league.">Lg</th>
+        ${th("minutes", "Mins", "Minutes over his last 20 appearances: the evidence behind his Ability. Under 450 (greyed), his Ability rests more on earlier seasons and his age curve.", " col-mins")}
         ${shown.map((y, i) => [y, i]).reverse().map(([y, i]) => i === 0 && groups.length ? posTh : th(`s${y}`, i === 0 ? nowHead("Ability") : `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `${i === 0 ? "Underlying Ability: the model's estimate of how good he is now (not his recent match ratings or this season's totals, which are on his page). " : ""}Rank for the ${seasonName(y)} season (the ${y} season in calendar-year leagues such as MLS and Norway${i === 0 ? "; so far" : ""}): his club's level that season, moved by how his stats compare with other players in his position (elite seasons earn extra, and positions are weighted). Squad players who play little are marked down. Every player follows the typical age curve for his position from a level of his own, and only moves off it as far as his minutes that season justify, so a thin season (an injury year, the start of a season) stays close to his curve. A season with no minutes in these leagues is estimated from his other seasons and his age, and shown outlined.`, ` col-season col-s${i}${i === 0 ? " col-now" : ""}`)).join("")}
         ${open ? future.map((y, j) => th(`f${y}`, `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `Projected for ${seasonName(y)}: his Ability moved along the typical age curve for his position, from his age now to his age that season (young players rise, from 31 (33 for keepers) they decline, faster each year). A guide, not a forecast of his form.`, ` col-season col-future col-f${j}`)).join("") : ""}
       </tr></thead>
@@ -1021,13 +1169,18 @@ function renderPlayers() {
 
 const FIRST_ROWS = 100, BATCH_ROWS = 100;
 function playerRow(p, i, seasons, groups = selectedGroups(), future = []) {
+  const place = state.playerPlaces?.get(p.id);
   return `
         <tr${p.team ? ` data-team="${p.team}"` : ""} data-player="${p.id}">
           <td>${i + 1}</td>
           <td><div class="pl-cell">${p.team ? `<a class="pl-badge-link" href="${clubHref(p.team)}" title="${escapeHtml(teamName(p.team))}" aria-label="${escapeHtml(teamName(p.team))}"><img class="club-logo pl-badge" src="${teamLogo(p.team)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></a>` : `<span class="club-logo pl-badge" title="Club not known"></span>`}<img class="player-photo" src="${playerPhoto(p.id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-            <div class="pl-name">${playerLink(p.id, p.name)}${playerFlag(p.nationality)}</div></div></td>
+            <div class="pl-text"><div class="pl-name">${playerLink(p.id, p.name)}${playerFlag(p.nationality)}</div>
+              <div class="pl-club">${p.team ? escapeHtml(teamName(p.team)) : "Club not known"}${p.league != null && leagueShort(p.league) ? ` · ${escapeHtml(leagueShort(p.league))}` : ""}</div></div></div></td>
           <td class="num">${POS_LABEL[p.position] || p.position || ""}</td>
           <td class="num col-age">${p.age ?? `<span class="dim">–</span>`}</td>
+          <td class="num col-wrank">${place?.world.toLocaleString() ?? `<span class="dim">–</span>`}</td>
+          <td class="num col-lrank"${place?.lg ? ` title="${ordinal(place.lg)} of ${place.lgOf} in the ${escapeHtml(leagueShort(p.league))}"` : ""}>${place?.lg ?? `<span class="dim">–</span>`}</td>
+          <td class="num col-mins${(p.minutes ?? 0) < 450 ? " thin" : ""}">${p.minutes != null ? p.minutes.toLocaleString() : `<span class="dim">–</span>`}</td>
           ${seasons.map((y, k) => [y, k]).reverse().map(([y, k]) => k === 0 && groups.length ? `<td class="num col-posrank">${posRank(p, groups) == null ? `<span class="dim">–</span>` : rankChipSmall(posRank(p, groups))}</td>` : `<td class="num col-season col-s${k}${k === 0 ? " col-now" : ""} tip-cell" data-key="${y}">${p.seasons?.[k] == null ? `<span class="dim">–</span>` : p.estimated?.includes(k) ? `<span class="est">${rankChipSmall(p.seasons[k])}</span>` : rankChipSmall(p.seasons[k])}</td>`).join("")}
           ${future.map((y, j) => `<td class="num col-season col-future col-f${j}">${p.future?.[j] == null ? `<span class="dim">–</span>` : rankChipSmall(p.future[j])}</td>`).join("")}
         </tr>`;
@@ -1115,7 +1268,158 @@ function clubSearchRows(q) {
   });
 }
 
+// ---- World and league places, worked out once. Clubs: by Baseline Strength among every ranked
+// club (as on the club page), and among the clubs playing in the same league this season.
+// Players: by Ability (this season's rank) among every listed player, and within his league.
+// A tie shares the higher place.
+function placeIn(sorted, v) {        // sorted highest first
+  let lo = 0, hi = sorted.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m] > v) lo = m + 1; else hi = m; }
+  return lo + 1;
+}
+function sortedGroups(items, value, group) {
+  const all = [], by = new Map();
+  for (const x of items) {
+    const v = value(x);
+    if (v == null) continue;
+    all.push(v);
+    const g = group(x);
+    if (g != null) (by.get(g) || by.set(g, []).get(g)).push(v);
+  }
+  const desc = (a, b) => b - a;
+  all.sort(desc);
+  for (const l of by.values()) l.sort(desc);
+  return { all, by };
+}
+function clubPlaces() {
+  if (!state.clubPlaces) {
+    const { all, by } = sortedGroups(state.rankings, (r) => r.lt, (r) => r.in_league ? r.league : null);
+    state.clubPlaces = new Map(state.rankings.map((r) => {
+      const lg = r.in_league ? by.get(r.league) : null;
+      return [r.team, { world: placeIn(all, r.lt), dom: lg ? placeIn(lg, r.lt) : null, domOf: lg?.length ?? null }];
+    }));
+  }
+  return state.clubPlaces;
+}
+const clubWorld = (team) => team == null ? null : clubPlaces().get(team)?.world ?? null;
+const abilityOf = (p) => p.seasons?.[0] ?? null;
+function playerPlaces() {
+  if (!state.playerPlaces) {
+    const list = state.players.list;
+    const { all, by } = sortedGroups(list, abilityOf, (p) => p.league);
+    state.playerPlaces = new Map(list.filter((p) => abilityOf(p) != null).map((p) => [p.id, {
+      world: placeIn(all, abilityOf(p)), lg: p.league != null ? placeIn(by.get(p.league), abilityOf(p)) : null,
+      lgOf: p.league != null ? by.get(p.league).length : null }]));
+  }
+  return state.playerPlaces;
+}
+const leagueShort = (lid) => SHORT_NAMES[lid] || state.data.competitions[lid]?.name || "";
+
+// ---- Range filters on the Rankings: each [min, max], null = open. They combine with the
+// competition menu, search and (Players) the age, position, club and nationality filters
+const RANGES = {
+  rank: { view: "clubs", label: "World rank", tip: "Place among every ranked club by Baseline Strength (1 = strongest), as the World column" },
+  cur: { view: "clubs", label: "Current Strength", tip: "Current Strength: the Elo rating after the latest match" },
+  ab: { view: "players", label: "Ability", tip: "Underlying Ability, 0-100: the model's estimate of his level now" },
+  crank: { view: "players", label: "Club world rank", tip: "His club's place among every ranked club by Baseline Strength (1 = strongest). Players without a ranked club drop out while this is set" },
+  mins: { view: "players", label: "Minutes", tip: "Minutes over his last 20 appearances, the evidence behind his Ability", minOnly: true },
+};
+const rangeOf = (k) => state.ranges[k] || [null, null];
+function inRange(k, v) {
+  const [lo, hi] = rangeOf(k);
+  if (lo == null && hi == null) return true;
+  return v != null && (lo == null || v >= lo) && (hi == null || v <= hi);
+}
+const rangeKeys = (view = state.tableView) => Object.keys(RANGES).filter((k) => RANGES[k].view === view);
+const rangesOn = (view = state.tableView) => rangeKeys(view).filter((k) => rangeOf(k).some((v) => v != null)).length;
+const clubInRanges = (r) => inRange("rank", clubWorld(r.team)) && inRange("cur", r.current);
+const playerInRanges = (p) => inRange("ab", abilityOf(p)) && inRange("crank", clubWorld(p.team)) && inRange("mins", p.minutes);
+function renderRangeFilter() {
+  const box = $("#range-filter");
+  box.hidden = !state.rankings || (state.tableView === "players" && !state.players);
+  if (box.hidden) return;
+  const input = (k, end, v, ph, label) => `<input type="number" inputmode="numeric" min="0" class="rng-in" data-rng="${k}" data-end="${end}"
+      value="${v ?? ""}" placeholder="${ph}" aria-label="${escapeHtml(label)}">`;
+  box.innerHTML = `<div class="pos-head"><span>Ranges</span>
+      <button type="button" class="pos-clear" data-range-clear${rangesOn() ? "" : " hidden"}>Clear</button></div>
+    ${rangeKeys().map((k) => {
+      const d = RANGES[k], [lo, hi] = rangeOf(k);
+      return `<div class="rng-row" title="${escapeHtml(d.tip)}"><span class="rng-label">${d.label}</span>
+        ${d.minOnly ? `<span class="rng-pre">at least</span>${input(k, 0, lo, "any", `${d.label}: at least`)}`
+          : `${input(k, 0, lo, "min", `${d.label}: from`)}<span class="rng-sep">–</span>${input(k, 1, hi, "max", `${d.label}: to`)}`}</div>`;
+    }).join("")}`;
+}
+// Typing redraws the list (and the menu's counts) after a short pause; the boxes aren't redrawn,
+// so the cursor stays where it is
+$("#range-filter").addEventListener("input", (e) => {
+  const el = e.target.closest("[data-rng]");
+  if (!el) return;
+  const v = el.value.trim() === "" ? null : Number(el.value);
+  const r = [...rangeOf(el.dataset.rng)];
+  r[Number(el.dataset.end)] = Number.isFinite(v) ? v : null;
+  state.ranges[el.dataset.rng] = r;
+  $("#range-filter [data-range-clear]").hidden = !rangesOn();
+  clearTimeout(state.rangeTimer);
+  state.rangeTimer = setTimeout(() => { renderTable(); renderTableFilters(); }, 200);
+});
+$("#range-filter").addEventListener("click", (e) => {
+  if (!e.target.closest("[data-range-clear]")) return;
+  for (const k of rangeKeys()) state.ranges[k] = [null, null];
+  renderRangeFilter();
+  renderTable();
+  renderTableFilters();
+});
+
+// ---- Shareable Rankings: #/clubs?… and #/players?… carry the competition, search, sort and
+// every filter, so a view can be bookmarked or sent. Rewritten in place as filters change (no
+// history entry for each click) and read back by route() when the page opens on one.
+const CLUB_SORTS = new Set(["lt", "trend", "current", "form"]);
+const rangeText = ([lo, hi]) => lo == null && hi == null ? null : `${lo ?? ""}-${hi ?? ""}`;
+function tableHash() {
+  const p = new URLSearchParams(), players = state.tableView === "players";
+  if (state.tableFilter !== "all") p.set("c", state.tableFilter);
+  if (state.tableSearch.trim()) p.set("q", state.tableSearch.trim());
+  if (players ? state.playerSort : state.tableSort !== "lt") p.set("sort", players ? state.playerSort : state.tableSort);
+  for (const k of rangeKeys()) { const t = rangeText(rangeOf(k)); if (t) p.set(k, t); }
+  if (players) {
+    const age = rangeText([state.ageMin, state.ageMax]);
+    if (age) p.set("age", age);
+    if (state.positions?.size) p.set("pos", [...state.positions].join(","));
+    if (state.clubs?.size) p.set("club", [...state.clubs].join(","));
+    if (state.nats?.size) p.set("nat", [...state.nats].join("|"));
+  }
+  const s = p.toString();
+  return `#/${state.tableView}${s ? `?${s}` : ""}`;
+}
+function syncTableUrl() {
+  if (state.tab !== "table" || !state.data) return;
+  const h = tableHash();
+  if (location.hash !== h) history.replaceState(null, "", h);
+}
+function openTableView(view, query) {
+  const p = new URLSearchParams(query || "");
+  const range = (k) => {
+    const m = (p.get(k) || "").match(/^(\d*(?:\.\d+)?)-(\d*(?:\.\d+)?)$/);
+    return m ? [m[1] === "" ? null : Number(m[1]), m[2] === "" ? null : Number(m[2])] : [null, null];
+  };
+  state.tableFilter = p.get("c") || "all";
+  state.tableSearch = p.get("q") || "";
+  $("#table-search").value = state.tableSearch;
+  const sort = p.get("sort");
+  for (const k of rangeKeys(view)) state.ranges[k] = range(k);
+  if (view === "players") {
+    state.playerSort = sort && /^(age|pos|minutes|[sf]\d{4})$/.test(sort) ? sort : null;
+    [state.ageMin, state.ageMax] = range("age");
+    state.positions = new Set((p.get("pos") || "").split(",").filter((x) => PITCH_SPOTS.some(([s]) => s === x)));
+    state.clubs = new Set((p.get("club") || "").split(",").map(Number).filter((n) => n > 0));
+    state.nats = new Set((p.get("nat") || "").split("|").filter(Boolean));
+  } else state.tableSort = CLUB_SORTS.has(sort) ? sort : "lt";
+  showTab("table");
+  setTableView(view);
+}
+
 function renderTable() {
+  syncTableUrl();
   if (state.tableView === "players") return renderPlayers();
   const wrap = $("#table-wrap");
   const ids = tableLeagueIds();
@@ -1132,9 +1436,11 @@ function renderTable() {
     rows = state.rankings.filter((r) => teams.has(r.team));
   }
   if (q) rows = clubSearchRows(q);
+  rows = rows.filter(clubInRanges);
+  const places = clubPlaces();
   const key = state.tableSort;
   rows = rows.slice().sort((a, b) => (b[key] ?? -1e9) - (a[key] ?? -1e9));
-  if (!rows.length) { wrap.innerHTML = `<div class="empty-state">No clubs found.</div>`; return; }
+  if (!rows.length) { wrap.innerHTML = `<div class="empty-state">No clubs ${rangesOn() ? "match these filters" : "found"}.</div>`; return; }
   const th = (k, label, tip, cls = "") =>
     `<th class="num sortable${key === k ? " active" : ""}${cls}" data-sort="${k}" data-tip="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   wrap.innerHTML = `
@@ -1143,7 +1449,8 @@ function renderTable() {
         <th data-tip="Position in this list, in the current sort order.">#</th>
         <th data-tip="Club badge."></th>
         <th data-tip="Club name, with its country and league. Click a club to open its page.">Club</th>
-        ${th("played", "Pl", "Played: matches counted in the Elo rating since 2020, including cups and European games.")}
+        <th class="num" data-tip="World rank: place among every ranked club by Baseline Strength, whatever this list is filtered or sorted by.">World</th>
+        <th class="num col-dom" data-tip="In league: place by Baseline Strength among the clubs in its league this season. TheCornerFC's ranking, not the league table (that's on the competition's page).">In lg</th>
         ${th("lt", BASELINE_TH, "Baseline Strength: the long-term Elo rating (LT ALGO), a smoothed rating weighted mostly to the average over the last 100 matches. Slow to move, and the better guide for matches months away.")}
         ${th("trend", "Gap", "Gap: Current Strength minus Baseline Strength. Green: rated above its long-term level; red: below it. A difference in level, not recent movement (see Last 6).")}
         ${th("current", "Current", "Current Strength: the Elo rating after the latest match. 100 points is worth a goal a game. It rises when a club does better than expected against that opponent, and falls when it does worse. Colour: green is the top 5% of all clubs, amber the top 20%, orange the top half, red the rest.")}
@@ -1154,7 +1461,8 @@ function renderTable() {
           <td>${i + 1}</td>
           <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></td>
           <td>${clubLink(r.team)}${q || all ? countryLeague(r.league) : ""}</td>
-          <td class="num" style="color:var(--text-muted)">${r.played}</td>
+          <td class="num">${places.get(r.team)?.world.toLocaleString() ?? ""}</td>
+          <td class="num col-dom" style="color:var(--text-muted)"${places.get(r.team)?.dom ? ` title="${ordinal(places.get(r.team).dom)} of ${places.get(r.team).domOf} in the ${escapeHtml(leagueShort(r.league))} by Baseline Strength"` : ""}>${places.get(r.team)?.dom ?? ""}</td>
           <td class="num">${eloChip(r.lt)}</td>
           <td class="num">${formHtml(r.trend)}</td>
           <td class="num">${formChip(r.current)}</td>
@@ -1198,7 +1506,7 @@ function posRank(p, groups) {     // null if he has never played any of them
 function playerVisible(p) {
   return inAgeRange(p) && (!state.positions?.size || [...playsAt(p)].some((r) => state.positions.has(r)))
     && (!state.clubs?.size || state.clubs.has(p.team))
-    && (!state.nats?.size || state.nats.has(p.nationality));
+    && (!state.nats?.size || state.nats.has(p.nationality)) && playerInRanges(p);
 }
 // ---- Club and nationality (Players view): pick one or more of each; they combine with the
 // other filters, and a club pick shows that club's players whatever league is selected
@@ -1762,7 +2070,7 @@ async function renderMatchLineups(m, panel) {
   const exact = (finished ? state.players?.actualXi : state.players?.fixtureXi)?.[String(m.id)] || {};
   const [homeData, awayData] = await Promise.all([loadClub(m.home), loadClub(m.away)]);
   if (!finished && (!exact[String(m.home)] || !exact[String(m.away)])) {
-    state.injuries ||= await fetch("data/injuries.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null);
+    state.injuries ||= await getJsonOrNull("data/injuries.json");
     if (!state.playerSeasons) { loadPlayerSeasons(); await state.playerSeasonsLoading; }
   }
   const side = (teamId, data, home) => {
@@ -1802,8 +2110,10 @@ async function openClubPage(id) {
   showPage();
   const body = $("#club-body");
   body.innerHTML = `<div class="empty-state">Loading ${escapeHtml(teamName(id))}…</div>`;
-  const club = await loadClub(id);
-  state.injuries ||= await fetch("data/injuries.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null);
+  const r = state.rankByTeam.get(id);
+  // its league's file too, for the domestic table position
+  const [club] = await Promise.all([loadClub(id), r?.in_league ? loadLeague(r.league) : null]);
+  state.injuries ||=await getJsonOrNull("data/injuries.json");
   state.club = { id, data: club, range: state.club?.range || "1y" };
   renderClubPage();
   if (!state.playerSeasons) {        // position minutes for the overview pitch: redraw once loaded
@@ -1827,18 +2137,114 @@ function clubMove(rows, i, start) {
 }
 const moveHtml = (v) => v == null ? "" : `<span class="${v > 0 ? "form-up" : v < 0 ? "form-down" : ""}">${v > 0 ? "+" : ""}${v.toFixed(1)}</span>`;
 
+// ---- Key figures at the top of club and player pages. Everything is an exported value, a place
+// counted among the exported values, or a difference between two of them: nothing new is modelled
+const ordinal = (n) => { const s = ["th", "st", "nd", "rd"], v = n % 100; return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`; };
+const signedInt = (v) => `${Math.round(v) > 0 ? "+" : Math.round(v) < 0 ? "−" : ""}${Math.abs(Math.round(v))}`;
+const signedHtml = (v) => `<span class="${Math.round(v) > 0 ? "form-up" : Math.round(v) < 0 ? "form-down" : ""}">${signedInt(v)}</span>`;
+const fmtLongDate = (iso) => parseDateInput(iso.slice(0, 10)).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+const daysSince = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
+// a club's place among every ranked club on one measure, and its badge colour (top 5% green ...)
+const clubPlace = (key, v) => state.rankings.filter((x) => x[key] != null && x[key] > v).length + 1;
+const placeTier = (place, of) => { const s = place / of; return s <= 0.05 ? 4 : s <= 0.2 ? 3 : s <= 0.5 ? 2 : 1; };
+function kfTile(label, value, sub = "", tip = "", tier = null) {
+  return `<div class="kf-tile${tier ? ` kf-t${tier}` : ""}"${tip ? ` title="${escapeHtml(tip)}"` : ""}>
+    <div class="kf-label">${label}</div><div class="kf-value">${value}</div>${sub ? `<div class="kf-sub">${sub}</div>` : ""}</div>`;
+}
+const kfGroup = (title, tiles, note = "") => tiles.trim()
+  ? `<div class="kf-group"><div class="kf-title">${title}</div><div class="kf-tiles">${tiles}</div>${note ? `<div class="kf-note">${note}</div>` : ""}</div>` : "";
+
+// The club's row in its league's table (the first group it's in), if the league file has one
+function domesticRow(id, lid) {
+  const lg = leagueCache.get(lid);
+  return lg?.tableRows?.find((t) => t.team === id) || null;
+}
+// The Elo change over a date window, from the club file: its rating after its latest match less
+// its rating after its last match before the window (the file's start if there's none)
+function clubWindowMove(rows, start, days) {
+  const cutoff = localDateStr(new Date(Date.now() - days * 864e5));
+  const inWindow = rows.filter((m) => m.date >= cutoff).length;
+  if (!inWindow || !rows.length) return { move: null, games: 0 };
+  const before = rows.filter((m) => m.date < cutoff).pop();
+  const base = before ? before.rank : start;
+  return { move: base != null ? rows[rows.length - 1].rank - base : null, games: inWindow };
+}
+
+function clubKeyFigures(id) {
+  const r = state.rankByTeam.get(id);
+  if (!r) return "";
+  const rows = state.club?.data?.rows || [];
+  const n = state.rankings.length;
+  const worldPlace = clubPlace("lt", r.lt), currentPlace = clubPlace("current", r.current);
+  const league = r.in_league ? SHORT_NAMES[r.league] || state.data.competitions[r.league]?.name || "" : "";
+  const dom = r.in_league ? domesticRow(id, r.league) : null;
+  const peers = r.in_league ? leagueClubs(r.league) : [];
+  const domStrength = peers.findIndex((x) => x.team === id) + 1;
+
+  const standing = kfTile("World rank", `<a class="kf-link" href="#" data-rank-team="${id}">#${worldPlace.toLocaleString()}</a>`,
+      `of ${n.toLocaleString()} clubs`, "Place among every ranked club by Baseline Strength, as the Rankings are ordered. Opens the Rankings at this club", placeTier(worldPlace, n))
+    + (dom ? kfTile("League table", ordinal(dom.rank),
+      `${dom.group && dom.group !== state.data.competitions[r.league]?.name ? `${escapeHtml(dom.group)} · ` : ""}${dom.points} pts from ${dom.played}`,
+      `Position in the ${league} table (the competition's own standings)`) : "")
+    + (domStrength ? kfTile("League strength", ordinal(domStrength), `of ${peers.length} in ${escapeHtml(league)}`,
+      `Place by Baseline Strength among the clubs playing in the ${league} this season`) : "");
+
+  const strength = kfTile("Current Strength", Math.round(r.current), `#${currentPlace.toLocaleString()} now`,
+      "Elo rating after the latest match, from recent results", placeTier(currentPlace, n))
+    + kfTile("Baseline Strength", Math.round(r.lt), `#${worldPlace.toLocaleString()}`,
+      "Long-term level (LT ALGO), from every match since 2020", placeTier(worldPlace, n))
+    + kfTile("Current vs Baseline", signedHtml(r.trend), r.trend > 0 ? "above long-term level" : r.trend < 0 ? "below long-term level" : "at long-term level",
+      "Current Strength minus Baseline Strength: a gap in level, not recent movement (see Recent movement)");
+
+  // genuine movement: how far the rating has actually moved over recent matches and days
+  const since6 = rows.length >= 7 ? rows[rows.length - 7].date : rows[0]?.date;
+  const d30 = clubWindowMove(rows, state.club?.data?.start, 30);
+  const idle = r.last_match ? daysSince(r.last_match) : null;
+  const movement = (r.form != null ? kfTile("Last 6 matches", signedHtml(r.form), since6 ? `since ${escapeHtml(fmtShortDate(since6))}` : "",
+      "Change in Current Strength over the club's last 6 matches, in all competitions") : "")
+    + kfTile("Last 30 days", d30.move != null ? signedHtml(d30.move) : "–",
+      d30.games ? `${d30.games} match${d30.games === 1 ? "" : "es"}` : "no matches", "Change in Current Strength over matches in the last 30 days")
+    + (r.last_match ? kfTile("Last match", escapeHtml(fmtShortDate(r.last_match)), idle > 0 ? `${idle} day${idle === 1 ? "" : "s"} ago` : "today") : "");
+
+  // Attack and defence average to Current Strength, as do home and away: each pair's lean is half
+  // their difference (ranking.py side_ratings)
+  let style = "";
+  if (r.attack != null && r.defence != null) {
+    const lean = (r.attack - r.defence) / 2, atk = clubPlace("attack", r.attack), def = clubPlace("defence", r.defence);
+    style += kfTile("Attack", Math.round(r.attack), `#${atk.toLocaleString()}`,
+        "Scoring side of Current Strength, on the same scale: higher = more goals for", placeTier(atk, n))
+      + kfTile("Defence", Math.round(r.defence), `#${def.toLocaleString()}`,
+        "Defending side of Current Strength, on the same scale: higher = fewer goals against", placeTier(def, n))
+      + kfTile("Style", Math.round(lean) === 0 ? "Balanced" : lean > 0 ? "Attack" : "Defence",
+        Math.round(lean) === 0 ? "attack = defence" : `leans ${signedInt(Math.abs(lean))}`,
+        "Attack and Defence average to Current Strength; the lean is half their difference. Clubs in high-scoring games drift towards attack, low-scoring ones towards defence");
+  }
+  if (r.home != null && r.away != null) {
+    const edge = (r.home - r.away) / 2;
+    const tip = "Current Strength plus or minus the club's own home edge from past results, on top of the standard home advantage every club gets. Most clubs' edges are within a few points";
+    style += kfTile("Home", Math.round(r.home), Math.round(edge) === 0 ? "no own edge" : `own edge ${signedInt(edge)}`, tip)
+      + kfTile("Away", Math.round(r.away), "", tip);
+  }
+
+  const evidence = r.reliability != null ? kfTile("Reliability", `${Math.round(r.reliability)}<span class="kf-unit">/100</span>`,
+    "how settled the rating is",
+    "How settled the rating is: rises with matches played (66 after 38, 89 after 76) and falls when results swing a lot",
+    r.reliability >= 90 ? 4 : r.reliability >= 70 ? 3 : r.reliability >= 40 ? 2 : 1) : "";
+  const played = kfTile("Matches rated", r.played.toLocaleString(), "since 2020", "Matches behind the rating, all competitions");
+
+  return `<div class="key-figures">
+    ${kfGroup("Standing", standing)}
+    ${kfGroup("Strength", strength)}
+    ${kfGroup("Recent movement", movement, idle != null && idle > 45 ? `No match for ${idle} days: this movement isn't recent.` : "")}
+    ${kfGroup("Attack, defence, home & away", style)}
+    ${kfGroup("Evidence", evidence + played)}
+  </div>`;
+}
+
 function renderClubPage() {
   const { id } = state.club;
   const r = state.rankByTeam.get(id);
   const comp = r ? state.data.competitions[r.league] : null;
-  const country = comp ? (comp.country === "World" ? "International" : comp.country.replace(/-/g, " ")) : "";
-  const league = comp ? SHORT_NAMES[r.league] || comp.name : "";
-  // where it stands among every ranked club by Baseline Strength; the badge colour follows that (top 5% green ...)
-  const place = r ? state.rankings.filter((x) => x.lt > r.lt).length + 1 : null;
-  const share = place ? place / state.rankings.length : 1;
-  const tier = share <= 0.05 ? 4 : share <= 0.2 ? 3 : share <= 0.5 ? 2 : 1;
-  const formShare = r ? (state.rankings.filter((x) => x.current > r.current).length + 1) / state.rankings.length : 1;
-  const formTier = formShare <= 0.05 ? 4 : formShare <= 0.2 ? 3 : formShare <= 0.5 ? 2 : 1;
   const tab = state.clubTab || "overview";
   $("#club-body").innerHTML = `
     <div class="pl-hero">
@@ -1846,16 +2252,10 @@ function renderClubPage() {
       <div class="pl-hero-main">
         <h2>${escapeHtml(teamName(id))}</h2>
         ${comp ? `<div class="pl-hero-club">${flagLink(comp.country)}<span class="pl-league">${leagueLink(r.league)}</span></div>` : ""}
-        ${r ? `<div class="pl-hero-club pl-hero-nat"><a class="pl-meta nat-link" href="#" data-rank-team="${id}" title="#${place.toLocaleString()} of ${state.rankings.length.toLocaleString()} clubs · open the Rankings at this club">#${place.toLocaleString()}</a>
-          <span class="dim-sep">·</span><span class="pl-meta">${r.played} matches</span></div>` : ""}
+        ${state.club.data?.coach?.name ? `<div class="pl-hero-club pl-hero-nat"><span class="pl-meta">${escapeHtml(state.club.data.coach.name)}</span></div>` : ""}
       </div>
-      ${r ? `<div class="hero-ranks">
-        <div class="pl-hero-rank rel-${tier}" title="Baseline Strength: the long-term Elo rating (LT ALGO), its long-term level, from every match since 2020">
-          <span class="val">${Math.round(r.lt)}</span><span class="lbl">Baseline</span></div>
-        <div class="pl-hero-rank rel-${formTier}" title="Current Strength: the Elo rating now, after the latest match${r.form != null ? ` (${r.form > 0 ? "+" : ""}${Math.round(r.form)} over its last 6 matches)` : ""}">
-          <span class="val">${Math.round(r.current)}</span><span class="lbl">Current</span></div>
-      </div>` : ""}
     </div>
+    ${clubKeyFigures(id)}
     <div class="page-tabs" role="tablist">${CLUB_TABS.map(([k, label]) =>
       `<button type="button" role="tab" data-ctab="${k}" aria-selected="${k === tab}">${label}</button>`).join("")}</div>
     <div id="club-tab"></div>`;
@@ -1867,6 +2267,7 @@ function renderClubTab() {
   document.querySelectorAll("#club-body [data-ctab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.ctab === tab)));
   $("#club-tab").innerHTML = tab === "xi" ? clubXiTab() : tab === "formations" ? clubFormationsTab() : tab === "matches" ? clubMatchesTab()
     : tab === "history" ? clubHistoryTab() : clubOverviewTab();
+  if (tab === "history") drawRankChart();
 }
 
 // ---- Overview: injured and suspended players and recent form (newest first) beside the squad by
@@ -1876,8 +2277,8 @@ function clubOverviewTab() {
   const rows = data?.rows || [];
   const form = rows.slice(-10).map((m, k, arr) => ({ m, move: clubMove(rows, rows.length - arr.length + k, data.start) })).reverse();
   const formCard = form.length ? `<div class="next-card form-card">
-      <div class="next-top"><span class="next-label">Recent form</span></div>
-      <div class="form-row form-hdr"><span></span><span></span><span></span><span></span><span>xG</span><span>Elo</span></div>
+      <div class="next-top"><span class="next-label">Recent results</span></div>
+      <div class="form-row form-hdr"><span></span><span></span><span></span><span></span><span>xG</span><span title="How far each result moved Current Strength">Elo ±</span></div>
       ${form.map(({ m, move }) => `<div class="form-row" title="${escapeHtml(`${fmtShortDate(m.date)} ${m.home ? "v" : "@"} ${clubOpp(m.opponent)}${m.home === 2 ? " (neutral)" : ""} · ${compLabel(m.league)}`)}">
         <span class="rel-chip rel-${m.gf > m.ga ? 4 : m.gf === m.ga ? 3 : 1}">${m.gf}–${m.ga}</span>
         <img class="club-logo" data-club="${m.opponent}" src="${teamLogo(m.opponent)}" alt="${escapeHtml(clubOpp(m.opponent))}" loading="lazy" onerror="this.style.visibility='hidden'">
@@ -1889,7 +2290,7 @@ function clubOverviewTab() {
     </div>` : "";
   const upcoming = clubUpcoming(id).slice(0, 5);
   const nextCard = upcoming.length ? `<div class="next-card form-card">
-      <div class="next-top"><span class="next-label">Next games</span></div>
+      <div class="next-top"><span class="next-label">Fixtures</span></div>
       <div class="next5-row next5-hdr"><span></span><span></span><span></span><span></span><span title="Projected goals">Goals</span><span title="Clean sheet chance">CS</span><span title="Win chance">Win</span></div>
       ${upcoming.map((m) => {
         const home = m.home === id, opp = home ? m.away : m.home;
@@ -1908,9 +2309,19 @@ function clubOverviewTab() {
           <span class="next5-num strong">${win != null ? `${win}%` : ""}</span></div>`;
       }).join("")}
     </div>` : "";
-  const side = injuredCard(id) + nextCard + formCard, pitch = depthPitch(id);   // the next match is on the Predicted XI tab
+  // next match and availability beside the squad, then the fixtures after it and recent results
+  const side = clubNextCard() + (injuredCard(id) || availabilityNote(id)), pitch = depthPitch(id);
+  const lower = nextCard + formCard;
   return `
-    ${side && pitch ? `<div class="ov-top"><div class="ov-side">${side}</div>${pitch}</div>` : side + pitch}`;
+    ${side && pitch ? `<div class="ov-top"><div class="ov-side">${side}</div>${pitch}</div>` : side + pitch}
+    ${lower ? `<div class="ov-row">${lower}</div>` : ""}
+    <div class="page-note">Longer-term rating history is on the History tab.</div>`;
+}
+// With no one listed: say whether that's a clean list or no list at all
+function availabilityNote(id) {
+  const inj = clubInjuries(id);
+  return `<div class="next-card inj-card"><div class="next-top"><span class="next-label">Injured &amp; Suspended</span></div>
+    <div class="next-meta"><span>${inj ? "No one listed" : "No injury list for this club"}</span></div></div>`;
 }
 
 const BAN_REASONS = new Set(["Red Card", "Yellow Cards", "Suspended"]);
@@ -1982,7 +2393,7 @@ function squadStrength(teamId, data, match) {
 // A club's file (cached), for club pages and match cards
 async function loadClub(id) {
   if (clubCache.has(id)) return clubCache.get(id);
-  const club = await fetch(`data/clubs/${id}.json`, { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null);
+  const club = await getJsonOrNull(`data/clubs/${id}.json`);
   if (club) club.rows = rowsToObjects(club.fields, club.matches);
   clubCache.set(id, club);
   return club;
@@ -2616,6 +3027,10 @@ function clubHistoryTab() {
     return { y, list, w, d, l: list.length - w - d, gf, ga, start, end, peak, lg };
   });
   return `
+    <div class="chart-card"><div class="chart-head"><span class="chart-title">Current Strength over time</span>
+      <div class="chart-ranges" id="chart-ranges">${CHART_RANGES.map(([k, label]) =>
+        `<button type="button" class="filter-chip" data-range="${k}" aria-pressed="${k === state.club.range}">${label}</button>`).join("")}</div></div>
+      <div class="chart-wrap" id="chart-wrap"></div><div class="chart-summary" id="chart-summary"></div></div>
     <div class="chart-card"><div class="chart-head"><span class="chart-title">Elo at the end of each season</span></div>
       <div class="season-bars">${seasons.slice().reverse().map((s) => {
         const lo = Math.min(...seasons.map((x) => x.end)) - 20, hi = Math.max(...seasons.map((x) => x.end));
@@ -2787,7 +3202,7 @@ async function openPlayerPage(id) {
   body.innerHTML = `${backButton()}<div class="empty-state">Loading ${escapeHtml(p.name)}…</div>`;
   loadPlayerSeasons();
   if (!playerPages.has(id)) {
-    const d = await fetch(`data/players/${id}.json`, { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null);
+    const d = await getJsonOrNull(`data/players/${id}.json`);
     if (d) playerPages.set(id, { ...d, seasonRows: rowsToObjects(d.season_fields, d.seasons), matchRows: rowsToObjects(d.match_fields, d.matches) });
   }
   await state.playerSeasonsLoading;
@@ -2841,13 +3256,82 @@ function renderPlayerPage() {
           <span class="pl-meta">${escapeHtml(p.position || "")}</span>${p.age != null ? `<span class="dim-sep">·</span>
           <span class="pl-meta"${born ? ` title="Born ${escapeHtml(parseDateInput(born).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }))}"` : ""}>${p.age}</span>` : ""}</div>
       </div>
-      <div class="pl-hero-rank rel-${rankTier(p.rank)}" title="Underlying Ability (0-100): the model's estimate of his level this season, from his clubs' strength, his stats against players in his position and his age curve. Recent Performance and Current Season are shown separately below">
+      <div class="pl-hero-rank rel-${rankTier(p.rank)}" title="${escapeHtml(ABILITY_TIP)}">
         <span class="val">${Math.round(p.rank)}</span><span class="lbl">Ability</span></div>
     </div>
+    ${playerKeyFigures(p)}
     <div class="page-tabs" role="tablist">${PLAYER_TABS.map(([k, label]) =>
       `<button type="button" role="tab" data-ptab="${k}" aria-selected="${k === tab}">${label}</button>`).join("")}</div>
     <div id="pl-tab"></div>`;
   renderPlayerTab();
+}
+
+const ABILITY_TIP = "Underlying Ability (0-100): the model's estimate of his level, from his clubs' strength, his stats against players in his position and his age curve. It carries over from earlier seasons, so it isn't a measure of current form: Current Season and Recent Performance are shown separately";
+
+// His league minutes and stats this season (all his clubs), from his page file, else the
+// Players view's season detail (minutes, rating, goals and assists only)
+function playerSeasonNow(p, page) {
+  const y = state.players.seasons?.[0];
+  if (y == null) return null;
+  if (page?.seasonRows) {
+    const s = sumSeason(page.seasonRows.filter((r) => r.season === y));
+    return s ? { ...s, full: true } : { minutes: 0, full: true };
+  }
+  const sp = state.playerSeasons?.players?.[String(p.id)]?.[String(y)];
+  if (!sp) return null;
+  const minutes = sp.reduce((a, x) => a + (x[1] || 0), 0);
+  const rated = sp.filter((x) => x[3] != null && x[1]);
+  return { minutes, goals: sp.reduce((a, x) => a + (x[4] || 0), 0), assists: sp.reduce((a, x) => a + (x[5] || 0), 0),
+    rating: rated.length ? rated.reduce((a, x) => a + x[3] * x[1], 0) / rated.reduce((a, x) => a + x[1], 0) : null, full: false };
+}
+// How much this season's own evidence there is behind what the page shows: a count of minutes,
+// not a model output. 900 minutes = ten full matches
+function evidenceLevel(now) {
+  const mins = now?.minutes || 0;
+  return mins >= 900 ? ["Current", "good"] : mins > 0 ? ["Limited", "warn"] : ["Past seasons", "bad"];
+}
+// His latest league appearance in the page file, and whether it falls in this season's window
+function lastAppearance(page) {
+  const m = page?.matchRows?.[0];
+  return m ? { m, days: daysSince(m.date) } : null;
+}
+
+function playerKeyFigures(p) {
+  const list = state.players.list;
+  const worldPlace = list.filter((x) => x.rank > p.rank).length + 1;
+  const inLeague = p.team && p.league ? list.filter((x) => x.team && x.league === p.league) : [];
+  const leaguePlace = inLeague.filter((x) => x.rank > p.rank).length + 1;
+  const group = GROUP_OF[p.position];
+  const inGroup = group ? list.filter((x) => GROUP_OF[x.position] === group) : [];
+  const groupPlace = inGroup.filter((x) => x.rank > p.rank).length + 1;
+  const league = p.league ? SHORT_NAMES[p.league] || state.data.competitions[p.league]?.name || "" : "";
+  const page = state.player?.page;
+  const now = playerSeasonNow(p, page);
+  const [level, cls] = evidenceLevel(now);
+  const y = state.players.seasons?.[0];
+  const dataSeasons = (p.seasons || []).filter((v, k) => v != null && !p.estimated?.includes(k)).length;
+  const tier = (place, of) => { const s = place / Math.max(1, of); return s <= 0.02 ? 4 : s <= 0.1 ? 3 : s <= 0.35 ? 2 : 1; };
+
+  const ranks = kfTile("World rank", `#${worldPlace.toLocaleString()}`, `of ${list.length.toLocaleString()} players`,
+      "Place by Ability among every ranked player in the leagues with player data", tier(worldPlace, list.length))
+    + (inLeague.length ? kfTile("League rank", `#${leaguePlace.toLocaleString()}`, `of ${inLeague.length.toLocaleString()} in ${escapeHtml(league)}`,
+      `Place by Ability among ranked players at ${league} clubs`, tier(leaguePlace, inLeague.length)) : "")
+    + (inGroup.length ? kfTile("Position rank", `#${groupPlace.toLocaleString()}`, `of ${inGroup.length.toLocaleString()} ${GROUP_NAME[group]}`,
+      `Place by Ability among ranked ${GROUP_NAME[group]}`, tier(groupPlace, inGroup.length)) : "");
+
+  const season = kfTile(`${y != null ? seasonShort(y) : "Season"} minutes`, now ? now.minutes.toLocaleString() : "–",
+      now?.apps != null ? `${now.apps} apps${now.starts != null ? ` · ${now.starts} started` : ""}` : "league matches",
+      "League minutes this season, all his clubs")
+    + (now?.minutes ? (GROUP_OF[p.position] === "GK"
+      ? kfTile("Saves", now.saves ?? "–", now.conceded != null ? `${now.conceded} conceded` : "")
+      : kfTile("Goals · Assists", `${now.goals ?? "–"} · ${now.assists ?? "–"}`, now.minutes >= 90 && now.goals != null
+        ? `${((now.goals + (now.assists || 0)) * 90 / now.minutes).toFixed(2)} per 90` : "")) : "")
+    + (now?.minutes ? kfTile("Match rating", now.rating != null ? now.rating.toFixed(2) : "–", "season average", "API-Football's match rating, averaged over his minutes") : "")
+    + kfTile("Evidence", `<span class="kf-ev ${cls}">${level}</span>`,
+      `${dataSeasons} season${dataSeasons === 1 ? "" : "s"} of data`,
+      `How much this season's own play is behind the numbers: Current = 900+ league minutes this season, Limited = fewer, Past seasons = none yet, so Ability rests on earlier seasons and his age curve. His last 20 appearances: ${(p.minutes || 0).toLocaleString()} minutes.${p.estimated?.length ? ` ${p.estimated.length} season${p.estimated.length === 1 ? "" : "s"} estimated from his other seasons and age.` : ""}`);
+
+  return `<div class="key-figures">${kfGroup("Ranks by Ability", ranks)}${kfGroup("This season", season)}</div>`;
 }
 
 function renderPlayerTab() {
@@ -2859,38 +3343,94 @@ function renderPlayerTab() {
   if (tab === "overview" || tab === "career") drawPlayerChart();
 }
 
-// ---- Overview: next match, positions pitch, then Recent Performance (rank chart, match ratings)
-// and Current Season (totals so far), kept apart from Underlying Ability in the header
+// ---- Overview: next match beside his positions, then three separate sections: Underlying
+// Ability (the model's level, carried over from earlier seasons), Current Season (this season's
+// league play) and Recent Performance (his latest appearances, dated so old ones aren't read as form)
+const MOVE_LABELS = { "7d": "7 days", "30d": "30 days", "90d": "90 days", season: "This season" };
+const RECENT_DAYS = 45;        // latest appearance older than this: not shown as recent form
 function playerOverviewTab() {
   const { p, page } = state.player;
   const seasons = state.players.seasons || [];
+  const y = seasons[0];
   const tile = (label, value, sub = "") => `<div class="team-stat"><div class="team-stat-label">${label}</div><div class="team-stat-value">${value}</div>${sub ? `<div class="team-stat-sub">${sub}</div>` : ""}</div>`;
+  const section = (title, body, note = "") => `<div class="club-section pl-block"><div class="modal-section">${title}</div>${body}${note ? `<div class="page-note">${note}</div>` : ""}</div>`;
   const hasMatchRanks = page?.matchRows?.some((m) => m.rank != null);
   state.player.chart = "matches";
-  const now = page ? sumSeason(page.seasonRows.filter((r) => r.season === seasons[0])) : null;
-  const form = (page?.matchRows || []).slice(0, 10).reverse();
+  const now = playerSeasonNow(p, page);
+  const last = lastAppearance(page);
+  const stale = !last || last.days > RECENT_DAYS;
+  const injury = page?.injury;
+  const gk = GROUP_OF[p.position] === "GK";
+
+  // Underlying Ability: his level, season ranks either side, and genuine movement from the daily
+  // rating snapshots once there are any (not the gap between two different measures)
+  const prev = p.seasons?.[1];
+  const moveRows = page?.movement ? rowsToObjects(page.movement.fields, page.movement.rows) : [];
+  const moves = ["7d", "30d", "90d", "season"].map((h) => moveRows.find((m) => m.horizon === h)).filter(Boolean);
+  const ability = section("Underlying Ability",
+    `<div class="team-stats compact">
+      ${tile("Ability", p.rank.toFixed(1), y != null ? seasonShort(y) : "")}
+      ${prev != null ? tile("Last season", prev.toFixed(1), `${seasonShort(seasons[1])}${p.estimated?.includes(1) ? " · estimated" : ""}`) : ""}
+      ${moves.map((m) => tile(MOVE_LABELS[m.horizon], signedHtmlDec(m.rating_change),
+        m.rank_movement ? `${m.rank_movement > 0 ? "up" : "down"} ${Math.abs(m.rank_movement).toLocaleString()} place${Math.abs(m.rank_movement) === 1 ? "" : "s"}` : "same place")).join("")}
+    </div>`,
+    "The model's estimate of his level, from his clubs' strength, his stats against players in his position and his age curve. It carries over from earlier seasons. "
+    + (moves.length ? `Movement compares his stored daily ratings (latest ${escapeHtml(fmtShortDate(page.movement.captured_at))}), same model version only.`
+      : "Rating movement will show here once his daily rating snapshots cover a week or more."));
+
+  // Current Season: this season's league play, or plainly none
+  let seasonBody;
+  if (now?.minutes) {
+    seasonBody = `<div class="team-stats compact">
+        ${tile("Minutes", now.minutes.toLocaleString(), now.apps != null ? `${now.apps} apps${now.starts != null ? ` · ${now.starts} started` : ""}` : "")}
+        ${gk ? tile("Saves", now.saves ?? "–") : tile("Goals", now.goals ?? "–")}
+        ${gk ? tile("Conceded", now.conceded ?? "–") : tile("Assists", now.assists ?? "–")}
+        ${tile("Match rating", now.rating != null ? now.rating.toFixed(2) : "–")}
+      </div>`;
+  } else {
+    seasonBody = `<div class="pl-callout">No league minutes in ${y != null ? seasonName(y) : "this season"} yet${
+      injury ? ` · listed ${injury[1] === "Questionable" ? "doubtful" : "out"}${injury[2] ? ` (${escapeHtml(injury[2])})` : ""}` : ""}.
+      His Ability of ${Math.round(p.rank)} comes from earlier seasons and his age curve, not from current form.</div>`;
+  }
+  const seasonNote = now?.minutes && now.minutes < 900
+    ? `Only ${now.minutes.toLocaleString()} minutes so far: this season moves his Ability only a little until he plays more.`
+    : now && !now.full ? "Season totals only: this league has no match-by-match player data." : "";
+  const current = section(`Current Season · ${y != null ? seasonName(y) : ""}`, seasonBody, seasonNote);
+
+  // Recent Performance: his latest appearances, dated; not called form when they're old
+  const apps = (page?.matchRows || []).slice(0, 10);
+  let recent = "";
+  if (apps.length) {
+    const rated = apps.filter((m) => m.rating != null);
+    const avg = rated.length ? rated.reduce((a, m) => a + m.rating * m.minutes, 0) / Math.max(1, rated.reduce((a, m) => a + m.minutes, 0)) : null;
+    const mins = apps.reduce((a, m) => a + m.minutes, 0), starts = apps.filter((m) => m.started).length;
+    const ga = apps.reduce((a, m) => a + (m.goals || 0) + (m.assists || 0), 0);
+    const span = `${fmtShortDate(apps[apps.length - 1].date)} – ${fmtShortDate(apps[0].date)}${apps[apps.length - 1].date.slice(0, 4) !== apps[0].date.slice(0, 4) ? ` ${apps[0].date.slice(0, 4)}` : ""}`;
+    recent = section(stale ? `Most recent appearances · last played ${escapeHtml(fmtLongDate(last.m.date))}` : `Recent Performance · last ${apps.length} league appearances`,
+      `${stale ? `<div class="pl-callout">No league appearance for ${last.days} days, so these are not current form.</div>` : ""}
+      <div class="team-stats compact">
+        ${tile("Match rating", avg != null ? avg.toFixed(2) : "–", "minutes-weighted")}
+        ${tile("Started", `${starts}/${apps.length}`, `${mins.toLocaleString()}′`)}
+        ${gk ? tile("Saves", apps.reduce((a, m) => a + (m.saves || 0), 0)) : tile("Goals + assists", ga)}
+      </div>
+      <div class="form-strip">${apps.slice().reverse().map((m) => `<div class="form-cell" title="${escapeHtml(`${fmtShortDate(m.date)} ${m.home ? "v" : "@"} ${pageTeamName(m.opponent)} ${m.gf}–${m.ga} · ${m.minutes}′`)}">
+        ${ratingChip(m.rating)}<span class="form-res ${resClass(m)}">${m.gf}–${m.ga}</span></div>`).join("")}</div>
+      ${hasMatchRanks ? `<div class="chart-card pl-rank-chart">
+        <div class="chart-head"><span class="chart-title">Rating from his last 20 appearances, going into each match</span></div>
+        <div class="chart-wrap" id="pl-chart"></div></div>` : ""}`,
+      `${escapeHtml(span)}. Match rating: API-Football's. The chart's rating is built from his most recent 20 appearances before each match, a different measure from Ability.`);
+  } else {
+    recent = section("Recent Performance", `<div class="pl-callout">No match-by-match data for him: only the leagues with per-match player stats have it.</div>`);
+  }
+
   return `
     ${(() => {       // next match beside the pitch (stacked on phones)
       const next = nextMatchCard(), pitch = positionPitch(p);
       return next && pitch ? `<div class="ov-top">${next}${pitch}</div>` : next + pitch;
     })()}
-    ${hasMatchRanks ? `<div class="chart-card">
-      <div class="chart-head"><span class="chart-title">Recent Performance · rank going into each match</span></div>
-      <div class="chart-wrap" id="pl-chart"></div>
-      <div class="chart-summary">His last ${page.matchRows.filter((m) => m.rank != null).length} league matches, and his rank now.</div>
-    </div>` : ""}
-    ${form.length ? `<div class="club-section"><div class="modal-section">Recent Performance · last ${form.length} match ratings</div>
-      <div class="form-strip">${form.map((m) => `<div class="form-cell" title="${escapeHtml(`${fmtShortDate(m.date)} ${m.home ? "v" : "@"} ${pageTeamName(m.opponent)} ${m.gf}–${m.ga} · ${m.minutes}′`)}">
-        ${ratingChip(m.rating)}<span class="form-res ${resClass(m)}">${m.gf}–${m.ga}</span></div>`).join("")}</div></div>` : ""}
-    ${now?.minutes ? `<div class="club-section"><div class="modal-section">Current Season · ${seasonName(seasons[0])} so far</div>
-      <div class="team-stats compact">
-        ${tile("Apps", now.apps, now.starts != null ? `${now.starts} started` : "")}
-        ${tile("Goals", now.goals ?? "–")}${tile("Assists", now.assists ?? "–")}
-        ${tile("Match rating", now.rating != null ? now.rating.toFixed(2) : "–")}
-        ${tile("Minutes", now.minutes.toLocaleString())}
-      </div></div>` : ""}
-    `;
+    ${ability}${current}${recent}`;
 }
+const signedHtmlDec = (v) => v == null ? "–" : `<span class="${v > 0 ? "form-up" : v < 0 ? "form-down" : ""}">${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}</span>`;
 const resClass = (m) => m.gf > m.ga ? "res-w" : m.gf === m.ga ? "res-d" : "res-l";
 
 // His positions on a pitch (the spots of the position filter): in every position he can play,
@@ -2965,8 +3505,7 @@ function drawPlayerChart() {
     pts = page.matchRows.filter((m) => m.rank != null).reverse().map((m) => ({
       label: fmtShortDate(m.date), v: m.rank,
       tip: `${escapeHtml(fmtShortDate(m.date))} · ${m.home ? "v" : "@"} ${escapeHtml(pageTeamName(m.opponent))}<br>
-        Rank going in <b>${m.rank.toFixed(1)}</b><br><span class="${resClass(m)}">${m.gf}–${m.ga}</span> · ${m.minutes}′ · rating ${m.rating != null ? m.rating.toFixed(1) : "–"}` }));
-    pts.push({ label: "Now", v: p.rank, now: true, tip: `Now<br>Rank <b>${p.rank.toFixed(1)}</b>` });
+        Rating going in <b>${m.rank.toFixed(1)}</b><br><span class="${resClass(m)}">${m.gf}–${m.ga}</span> · ${m.minutes}′ · rating ${m.rating != null ? m.rating.toFixed(1) : "–"}` }));
   } else {
     pts = seasons.map((y, k) => ({ y, v: p.seasons?.[k], est: p.estimated?.includes(k) })).filter((d) => d.v != null).reverse()
       .map((d) => ({ label: seasonShort(d.y), v: d.v, est: d.est, tip: `${seasonName(d.y)}<br>Rank <b>${d.v.toFixed(1)}</b>${d.est ? "<br>estimated" : ""}` }));
@@ -2978,7 +3517,7 @@ function drawPlayerChart() {
   const x = (i) => L + IN + (pts.length === 1 ? 0.5 : i / (pts.length - 1)) * (W - L - R - 2 * IN);
   const y = (v) => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B);
   const every = Math.max(1, Math.ceil(pts.length * 46 / (W - L - R)));     // x labels that fit
-  const showLabel = (i) => i === pts.length - 1 || (i % every === 0 && pts.length - 1 - i >= every / 2);
+  const showLabel = (i) => i === pts.length - 1 || (i % every === 0 && pts.length - 1 - i >= every);
   const few = pts.length <= 8;
   wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="${escapeHtml(p.name)} rank, ${Math.round(pts[0].v)} to ${Math.round(pts[pts.length - 1].v)}">
       <g class="chart-grid">${niceTicks(lo, hi, 4).map((v) => `<line x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>`).join("")}</g>
@@ -3166,6 +3705,7 @@ $("#club-body").addEventListener("click", (e) => {
   showTab("table");
   state.tableFilter = "all";
   state.tableSort = "lt";
+  for (const k of rangeKeys("clubs")) state.ranges[k] = [null, null];
   state.tableSearch = state.rankByTeam.get(team)?.in_league ? "" : teamName(team);
   $("#table-search").value = state.tableSearch;
   if (state.tableView !== "clubs") setTableView("clubs");
@@ -3233,7 +3773,20 @@ function openNationPage(nat) {
 
 // ------------------------------------------------------------------ league and country pages
 const leagueCache = new Map();
-const LEAGUE_TABS = [["table", "Table"], ["projected", "Projected"], ["matches", "Matches"], ["clubs", "Clubs"]];
+// A league's file (cached), for league pages and the domestic position on club pages
+async function loadLeague(lid) {
+  if (leagueCache.has(lid)) return leagueCache.get(lid);
+  const lg = await getJsonOrNull(`data/leagues/${lid}.json`);
+  if (lg) {
+    lg.tableRows = rowsToObjects(lg.table_fields, lg.table);
+    lg.fixtureRows = rowsToObjects(lg.fixture_fields, lg.fixtures);
+    leagueCache.set(lid, lg);
+  }
+  return lg;
+}
+// Actual standings, TheCornerFC's strength ranking and the projected table are kept on separate
+// tabs, each saying which it is: a club's league position and its model ranking are different things
+const LEAGUE_TABS = [["table", "Standings"], ["clubs", "Strength ranking"], ["projected", "Projected table"], ["matches", "Matches"]];
 const roundLabel = (r) => (r || "").replace(/^Regular Season - (\d+)$/, "Round $1");
 const OFF = new Set(["CANC", "PST", "ABD"]);
 // clubs playing their league football in this competition this season, best rated first
@@ -3251,24 +3804,20 @@ function seasonLabel(lg) {
   return month >= 6 ? `${lg.season}/${String(lg.season + 1).slice(2)}` : String(lg.season);
 }
 
-async function openLeaguePage(lid) {
+async function openLeaguePage(lid, want = null) {
   showPage();
   state.club = null;
   const comp = state.data.competitions[lid];
   $("#club-body").innerHTML = `<div class="empty-state">Loading ${escapeHtml(comp?.name || "competition")}…</div>`;
-  let lg = leagueCache.get(lid);
-  if (!lg) {
-    lg = await fetch(`data/leagues/${lid}.json`, { cache: "no-store" }).then((r) => r.ok ? r.json() : null).catch(() => null);
-    if (lg) {
-      lg.tableRows = rowsToObjects(lg.table_fields, lg.table);
-      lg.fixtureRows = rowsToObjects(lg.fixture_fields, lg.fixtures);
-      leagueCache.set(lid, lg);
-    }
-  }
-  if (location.hash !== leagueHref(lid)) return;      // moved on while loading
+  const lg = await loadLeague(lid);
+  if (Number(location.hash.match(/^#\/league\/(\d+)/)?.[1]) !== lid) return;      // moved on while loading
   const tabs = LEAGUE_TABS.filter(([k]) => (k !== "table" && k !== "projected") || lg?.tableRows.length);
-  const keep = state.league?.id === lid && tabs.some(([k]) => k === state.league.tab);
-  state.league = { id: lid, data: lg, tabs, tab: keep ? state.league.tab : tabs[0][0], round: keep ? state.league.round : null };
+  const has = (k) => tabs.some(([t]) => t === k);
+  const keep = state.league?.id === lid && has(state.league.tab);
+  // the tab in the link (#/league/39/clubs), else the one open before, else the standings (a cup
+  // without a table: its matches)
+  const tab = has(want) ? want : keep ? state.league.tab : has("table") ? "table" : "matches";
+  state.league = { id: lid, data: lg, tabs, tab, round: keep ? state.league.round : null };
   renderLeaguePage();
 }
 
@@ -3288,10 +3837,64 @@ function renderLeaguePage() {
       ${avg != null ? `<div class="pl-hero-rank rel-${ratingTierOf(avg)}" title="Average Baseline Strength (long-term Elo) of the clubs playing in this league">
         <span class="val">${Math.round(avg)}</span></div>` : ""}
     </div>
+    ${data ? leagueSummary(id, data) : ""}
     ${data ? `<div class="page-tabs" role="tablist">${state.league.tabs.map(([k, label]) =>
       `<button type="button" role="tab" data-ltab="${k}" aria-selected="${k === state.league.tab}">${label}</button>`).join("")}</div>
     <div id="league-tab"></div>` : `<div class="empty-state">No data for this competition this season.</div>`}`;
   if (data) renderLeagueTab();
+}
+
+// The clubs in a competition that have a rating: this season's league members plus anyone in its
+// table (or, with no table yet, its fixtures), strongest first by Baseline Strength
+function leagueRanked(id, data) {
+  const ids = new Set([...data.tableRows.map((r) => r.team), ...leagueClubs(id).map((r) => r.team)]);
+  if (!data.tableRows.length) data.fixtureRows.forEach((f) => { ids.add(f.home); ids.add(f.away); });
+  return [...ids].map((t) => state.rankByTeam.get(t)).filter(Boolean).sort((a, b) => b.lt - a.lt);
+}
+// Every league's average Baseline Strength, strongest first (the hero badge's number)
+function leagueLevels() {
+  return state.leagueLevels ||= Object.entries(state.data.competitions).filter(([, c]) => c.type === "League")
+    .map(([lid]) => [Number(lid), avgRating(leagueClubs(Number(lid)))]).filter(([, v]) => v != null)
+    .sort((a, b) => b[1] - a[1]);
+}
+// Key figures above the tabs, in two groups that never mix: what has actually happened (from the
+// competition's own table) and what TheCornerFC's ratings say
+function leagueSummary(id, data) {
+  const name = (t) => data.teams[t] || teamName(t);
+  const club = (t) => `<a class="kf-link kf-club" href="${clubHref(t)}">${escapeHtml(name(t))}</a>`;
+  const played = data.tableRows.filter((r) => r.played);
+  let actual = "";
+  if (played.length) {
+    const best = (f) => played.reduce((a, r) => f(r) > f(a) ? r : a);
+    const leaders = played.filter((r) => r.rank === 1), lead = leaders.length ? leaders.reduce((a, r) => r.points > a.points ? r : a) : null;
+    const goals = best((r) => r.gf), tight = best((r) => -r.ga);
+    const groups = new Set(data.tableRows.map((r) => r.group)).size;
+    actual = (lead ? kfTile("Leader", club(lead.team), `${lead.points} pts from ${lead.played}${groups > 1 ? ` · ${escapeHtml(lead.group)}` : ""}`,
+        groups > 1 ? "Top of the competition's own table (the group with the most points)" : "Top of the competition's own table") : "")
+      + kfTile("Most goals", club(goals.team), `${goals.gf} scored in ${goals.played}`, "Most goals scored so far, from the table")
+      + kfTile("Fewest conceded", club(tight.team), `${tight.ga} conceded in ${tight.played}`, "Fewest goals conceded so far, from the table");
+  }
+  const ranked = leagueRanked(id, data);
+  let model = "";
+  if (ranked.length) {
+    const n = state.rankings.length;
+    const top = (key) => ranked.reduce((a, r) => (r[key] ?? -Infinity) > (a[key] ?? -Infinity) ? r : a);
+    const base = top("lt"), now = top("current"), atk = top("attack"), def = top("defence");
+    const levels = leagueLevels(), place = levels.findIndex(([lid]) => lid === id) + 1;
+    const avg = place ? levels[place - 1][1] : avgRating(ranked);
+    model = kfTile("Strongest", club(base.team), `Baseline ${Math.round(base.lt)} · #${clubPlace("lt", base.lt).toLocaleString()} in world`,
+        "Highest Baseline Strength (long-term Elo) in this competition. TheCornerFC's rating, not a league position", placeTier(clubPlace("lt", base.lt), n))
+      + kfTile("Strongest now", club(now.team), `Current ${Math.round(now.current)}`,
+        "Highest Current Strength (Elo after the latest match) in this competition", placeTier(clubPlace("current", now.current), n))
+      + kfTile("League strength", Math.round(avg), place ? `#${place} of ${levels.length} leagues` : "average Baseline",
+        place ? "Average Baseline Strength of the clubs playing in this league, and its place among every covered league" : "Average Baseline Strength of the rated clubs in this competition", ratingTierOf(avg))
+      + (atk.attack != null ? kfTile("Best attack", club(atk.team), `Attack ${Math.round(atk.attack)}`,
+        "Highest attack rating (the scoring side of Current Strength): the model's view, not goals scored") : "")
+      + (def.defence != null ? kfTile("Best defence", club(def.team), `Defence ${Math.round(def.defence)}`,
+        "Highest defence rating (the defending side of Current Strength): the model's view, not goals conceded") : "");
+  }
+  if (!actual && !model) return "";
+  return `<div class="key-figures league-summary">${kfGroup("Actual standings", actual)}${kfGroup("TheCornerFC model", model)}</div>`;
 }
 
 function renderLeagueTab() {
@@ -3301,7 +3904,7 @@ function renderLeagueTab() {
     : tab === "matches" ? leagueMatchesTab() : leagueClubsTab();
 }
 
-// ---- Table: this season's standings, one table per group, zones coloured from API-Football's notes
+// ---- Standings: this season's actual table, one table per group, zones coloured from API-Football's notes
 const ZONE_COLOURS = ["var(--series-blue)", "var(--series-aqua)", "var(--status-good)", "var(--status-warning)", "var(--text-muted)"];
 function leagueZones(rows) {
   const zones = new Map();
@@ -3339,7 +3942,8 @@ function leagueTableTab() {
           <td class="lt-wide">${r.gf ?? ""}–${r.ga ?? ""}</td><td>${r.gd > 0 ? "+" : ""}${r.gd ?? ""}</td><td><b>${r.points ?? ""}</b></td>
           <td>${formChips(r.form)}</td><td class="lt-elo">${rk ? Math.round(rk.current) : ""}</td></tr>`;
       }).join("")}</tbody></table></div>`;
-  return groups.map(table).join("") + zoneLegend(zones);
+  return `<div class="frame-note"><b>Actual standings</b>: the competition's own table. Current is TheCornerFC's Current Strength, for reference; it plays no part in the order.</div>`
+    + groups.map(table).join("") + zoneLegend(zones);
 }
 
 // ---- Projected: the rest of the season played out SIMS times from the model's predictions. Each
@@ -3480,22 +4084,21 @@ function leagueMatchesTab() {
     <div class="page-note">Under upcoming matches: the model's home · draw · away chances, where it has them.</div>`;
 }
 
-// ---- Clubs: the league's clubs by Baseline Strength, with their table position
+// ---- Strength ranking: the league's clubs by Baseline Strength, with their actual table position
 function leagueClubsTab() {
   const { id, data } = state.league;
   const pos = new Map(data.tableRows.map((r) => [r.team, r.rank]));
-  const ids = new Set([...data.tableRows.map((r) => r.team), ...leagueClubs(id).map((r) => r.team)]);
-  if (!data.tableRows.length) data.fixtureRows.forEach((f) => { ids.add(f.home); ids.add(f.away); });
-  const rows = [...ids].map((t) => state.rankByTeam.get(t)).filter(Boolean).sort((a, b) => b.lt - a.lt);
+  const rows = leagueRanked(id, data);
   if (!rows.length) return `<div class="empty-state">No ranked clubs.</div>`;
-  return clubRatingTable(rows, data.tableRows.length ? (r) => pos.get(r.team) ?? "" : null, data.teams)
+  return `<div class="frame-note"><b>TheCornerFC strength ranking</b>: the clubs ordered by Baseline Strength, the model's long-term rating.${data.tableRows.length ? " Table is their actual league position, for comparison." : ""}</div>`
+    + clubRatingTable(rows, data.tableRows.length ? (r) => pos.get(r.team) ?? "" : null, data.teams)
     + `<div class="page-note">Baseline: Baseline Strength, the long-term Elo rating. Current: Current Strength, the Elo rating now. Gap: Current minus Baseline. Last 6: the change in Elo over the club's last 6 matches.</div>`;
 }
 
 // clubs table for the league and country pages; pos = the table position column (Pl when null)
 function clubRatingTable(rows, pos, names = {}, meta = null) {
   return `<div class="table-scroll"><table class="leaderboard clubs">
-    <thead><tr><th>#</th><th></th><th>Club</th><th class="num">${pos ? "Pos" : "Pl"}</th>
+    <thead><tr><th>#</th><th></th><th>Club</th>${pos ? `<th class="num" title="Actual position in the competition's table">Table</th>` : `<th class="num" title="Matches rated">Pl</th>`}
       <th class="num" title="Baseline Strength: long-term Elo">${BASELINE_TH}</th><th class="num" title="Current minus Baseline">Gap</th><th class="num" title="Current Strength: Elo now">Current</th><th class="num col-recent" title="Elo change over the last 6 matches">Last 6</th></tr></thead>
     <tbody>${rows.map((r, i) => `<tr>
       <td>${i + 1}</td>
@@ -3511,7 +4114,11 @@ function clubRatingTable(rows, pos, names = {}, meta = null) {
 $("#club-body").addEventListener("click", (e) => {
   if (!state.league || !$("#league-tab")) return;
   const t = e.target.closest("[data-ltab]");
-  if (t) { state.league.tab = t.dataset.ltab; return renderLeagueTab(); }
+  if (t) {
+    state.league.tab = t.dataset.ltab;
+    history.replaceState(null, "", `${leagueHref(state.league.id)}/${state.league.tab}`);   // shareable, no history entry
+    return renderLeagueTab();
+  }
   const step = e.target.closest("[data-round-step]");
   if (step) {
     const rounds = [...new Set(state.league.data.fixtureRows.map((f) => f.round))];
@@ -3591,6 +4198,7 @@ document.querySelectorAll("nav.tabs button").forEach((btn) => btn.addEventListen
   if (location.hash.startsWith("#/")) history.pushState(null, "", location.pathname + location.search);
   showTab(btn.dataset.tab);
   if (btn.dataset.view && btn.dataset.view !== state.tableView) setTableView(btn.dataset.view);
+  else if (btn.dataset.tab === "table") syncTableUrl();
   setMenu(false);
 }));
 // Phones: the menu slides in from the left behind the menu button
@@ -3607,15 +4215,17 @@ function route() {
   const player = location.hash.match(/^#\/player\/(\d+)/);
   const nation = location.hash.match(/^#\/nation\/(.+)/);
   const country = location.hash.match(/^#\/country\/(.+)/);
-  const league = location.hash.match(/^#\/league\/(\d+)/);
+  const league = location.hash.match(/^#\/league\/(\d+)(?:\/(\w+))?/);
+  const tableView = location.hash.match(/^#\/(clubs|players)(?:\?(.*))?$/);
   if (!state.data) return;
-  if (club || player || nation || country || league) $("#team-modal").hidden = true;
+  if (club || player || nation || country || league || tableView) $("#team-modal").hidden = true;
   if (!league) state.league = null;
   if (club) openClubPage(Number(club[1]));
   else if (player) openPlayerPage(Number(player[1]));
   else if (nation) openNationPage(decodeURIComponent(nation[1]));
   else if (country) openCountryPage(decodeURIComponent(country[1]));
-  else if (league) openLeaguePage(Number(league[1]));
+  else if (league) openLeaguePage(Number(league[1]), league[2]);
+  else if (tableView) openTableView(tableView[1], tableView[2]);
   else showTab(state.tab || "table");
 }
 window.addEventListener("hashchange", route);
@@ -3740,6 +4350,7 @@ for (const id of ["#age-min", "#age-max"]) {
 // Clubs or Players, picked from the menu
 function setTableView(view) {
   state.tableView = view;
+  renderRangeFilter();
   renderAgeFilter();
   renderPosFilter();
   renderWhoFilter();
@@ -3749,9 +4360,21 @@ function setTableView(view) {
   renderTable();
 }
 
+// "Model detail" on any match card (Matches tab and club pages): drawn when first opened
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".why-toggle");
+  if (!btn) return;
+  const card = btn.closest(".match-card"), panel = card?.querySelector(".why-detail");
+  const m = card && state.data.matches.find((x) => x.id === Number(card.dataset.fixture));
+  if (!panel || !m) return;
+  const open = panel.hidden;
+  panel.hidden = !open;
+  btn.setAttribute("aria-expanded", String(open));
+  if (open) { await loadExplanations(); panel.innerHTML = whyDetailHtml(m); }
+});
 $("#matches-list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
-  if (e.target.closest(".fixture-lineup-panel")) return;
+  if (e.target.closest(".fixture-lineup-panel, .why-toggle, .why-detail")) return;
   const ratingBadge = e.target.closest(".rating-badge");
   if (ratingBadge) {
     const d = ratingBadge.closest(".match-card")?.querySelector(".rating-detail");

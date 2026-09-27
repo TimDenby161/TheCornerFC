@@ -1,0 +1,5 @@
+{
+  "_comment": "Manual FPL -> API-Football ids, keyed by FPL code (stable across seasons). Used only where automatic name matching is unmatched or ambiguous.",
+  "teams": {},
+  "players": {}
+}

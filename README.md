@@ -193,12 +193,12 @@ Line-up roles are stored in `fixture_players.role` and `fixture_players.grid`, a
 2. the club the weekly current-club check found this season, which is often outside our leagues;
 3. his last appearance, if neither of those is known.
 
-So a player who has left drops off his old club's list, even before he plays for his new one. A nationality can be corrected by hand in `player_overrides`, for example Elliot Anderson as England. The nightly sync would overwrite a change made on `players` itself. Clicking his name opens a **player page** (`#/player/<id>`). A header shows his club, league, position, age, nationality and current rank, and four tabs sit under it:
+So a player who has left drops off his old club's list, even before he plays for his new one. A nationality can be corrected by hand in `player_overrides`, for example Elliot Anderson as England. The nightly sync would overwrite a change made on `players` itself. Clicking his name opens a **player page** (`#/player/<id>`). A header shows his club, league, position, age, nationality and Ability (his current rank). Under it are key figures: world, league and position rank by Ability (among ranked players in the leagues with player data), this season's league minutes, goals and assists (saves for keepers) and match rating, and an **evidence level**. The evidence level counts this season's minutes: Current is 900+, Limited is fewer, and Past seasons means none yet, so his Ability rests on earlier seasons and his age curve. Four tabs sit under it:
 - **Overview:**
   - his club's next match, with the win chance, the projected score, and whether he's in the predicted XI, doubtful or out (with the injury reason);
   - a chart of his rank going into each of his last 20 league matches;
   - **a pitch of his positions** (the spots of the position filter): in every position he can play, his rank there and his share of starting minutes in that spot, over the last 12 months or ever (our data runs from 2020/21). Ranks are per role group, so LB and RB share his full-back rank. Positions he hasn't started in (0%) are left blank; hovering over one still shows his rank there if he has one. Starting minutes are the role he started in, from the line-up and formation; minutes off the bench have no position and aren't counted;
-  - his match ratings over the last 10 matches, and this season so far.
+  - three separate sections. **Underlying Ability** shows his rank and last season's, plus his rating movement over 7, 30 and 90 days and the season. That movement comes from the stored daily rating captures (`player_rating_movement`, exported as `movement` in his page file), using baselines from the same player model version only, and appears once captures exist. **Current Season** shows this season's league minutes and stats. With none, it says so and that his Ability doesn't come from current form. **Recent Performance** shows his last 10 league appearances (average match rating, starts, goals and assists, and the rating going into each match), dated. If he hasn't played for 45 days, they're titled "most recent appearances" and marked as not current form.
 - **Stats:** one season's league stats, as totals or per 90 minutes: attacking, passing, defending and discipline (goalkeeping for keepers), added up across his clubs that season.
 - **Matches:** his last 20 league appearances, with the result, minutes, position, key stats, cards, match rating and his rank going into the match.
 - **Career:** a chart of his season ranks (estimated seasons hollow), a season-by-season table (club, club rank, minutes, rating, goals and assists, positions, and which position group the season was rated as), and the clubs his current rank is built on.
@@ -441,20 +441,30 @@ A line-up adjustment (the strength of the starting XI against normal) was backte
 `docs/index.html` is a single-page site in the same style as MatchLab. It has two tabs:
 - **Matches:** projected scores, win/draw/loss chances and results. Filter by competition and day.
 - **Rankings:** club rankings with rating, form and trend, sorted by rating (reliability is kept in the data but not shown). Tap a club to see its fixtures.
+  - Clubs show a **World** rank (place by Baseline Strength among every ranked club, whatever the list is filtered by) and **In lg** (place by Baseline Strength among the clubs in its league; TheCornerFC's ranking, not the league table). Players show World and League rank by Ability, **Mins** (minutes over the last 20 appearances, the evidence behind Ability; greyed under 450) and their club and league under the name.
+  - Filters combine: the competition / country menu, search, and range boxes (clubs: world rank and Current Strength; players: Ability, club world rank and minimum minutes), plus age, position, club and nationality for players.
+  - The URL carries the view, so it can be bookmarked or shared: `#/clubs?c=39&rank=1-50&cur=1000-` or `#/players?c=140&age=18-23&pos=RW,LW&ab=70-&crank=1-50&mins=900&sort=minutes`. `c` is the menu filter (a league id, `c:<country>`, `r:<region>`, `e:<cup>` or `k:<cup>`), ranges are `min-max` with either end left open, `club` is team ids and `nat` is nationalities separated by `|`. It is rewritten in place as filters change, so the back button leaves the Rankings rather than stepping through each filter.
 
 The site labels the club rank as an **Elo rating** (**Rating** = LT ALGO, **Form** = current rank, **Trend** = Form minus Rating, how far a club is playing above or below its long-term level). The numbers are the same as the club rank below, and on that scale 100 points is worth one goal a game.
 
-**Club pages.** Club names link to `#/club/<team_id>`. The page has tabs:
-- **Overview:** injured and suspended players, the next 5 games and recent form beside the whole squad on a pitch: each player in the positions he plays, with his chance of starting the next match and expected minutes there (from this season's line-ups in every competition, weighted to the next match's kind of competition, with injured players' starts passed to whoever replaced them and a pull towards the best XI by rating)
+**Club pages.** Club names link to `#/club/<team_id>`. Under the name, key figures come straight from `rankings.json`, the club file and its league's table, with nothing new modelled:
+- **Standing:** world rank (place by Baseline Strength, as the Rankings are ordered), league table position, and place by strength among the league's clubs.
+- **Strength:** Current Strength, Baseline Strength and Current vs Baseline. The last is a gap in level, not movement.
+- **Recent movement:** the Elo change over the last 6 matches (the export's `form`, with the date it runs from, since six matches can reach back into last season), over the last 30 days, and the last match date. The movement is flagged as not recent after 45 days without a match.
+- **Attack, defence, home & away:** each with its place among all clubs. Attack and defence average to Current Strength, so the lean is half their difference; home minus away gives the club's own home edge.
+- **Evidence:** reliability and matches rated.
+
+The page has tabs:
+- **Overview:** the next match and injured and suspended players beside the whole squad on a pitch, then the next 5 fixtures and recent results. The squad pitch shows each player in the positions he plays, with his chance of starting the next match and expected minutes there (from this season's line-ups in every competition, weighted to the next match's kind of competition, with injured players' starts passed to whoever replaced them and a pull towards the best XI by rating)
 - **Predicted XI:** the XI from those start chances, with the squad's attack, defence and strength (also on the match cards)
 - **Formations:** the manager, and the formations used this season and since he took over
 - **Matches:** fixtures with projections, and every result with its rank change
-- **History:** Elo at the end of each season and season-by-season ranks
+- **History:** Current Strength over time (6 months to all), Elo at the end of each season and season-by-season ranks
 
 Each club's history comes from `docs/data/clubs/<team_id>.json`, which is written by `export_clubs` for clubs active in the last 400 days and loaded only when the page opens. Each match carries the formation from its line-up (`fixture_formations`; only the leagues with match-by-match player data have line-ups).
 
 **League and country pages.** Wherever a club shows "Country · League" (the club page header, and Rankings rows when searching or showing all leagues), both parts are links:
-- `#/league/<league_id>` has tabs: **Table** (this season's standings from `standings`, with each group, the zones API-Football describes, last-five form and each club's Rating), **Matches** (one round at a time, opening on the round with the next fixture, with the model's chances for upcoming games) and **Clubs** (the league's clubs by Rating, with their table position). Cups have no Table tab. The badge is the average Rating of the clubs playing in the league.
+- `#/league/<league_id>` opens with key figures in two groups that are kept apart. **Actual standings** (from the table) shows the leader, most goals scored and fewest conceded. **TheCornerFC model** shows the strongest club by Baseline and by Current Strength, league strength (average Baseline Strength and its place among the covered leagues) and the best attack and defence ratings. The tabs are **Standings** (this season's actual table from `standings`, with each group, the zones API-Football describes, last-five form and each club's Current Strength for reference), **Strength ranking** (the clubs by Baseline Strength, with their actual table position alongside), **Projected table** (the rest of the season simulated from the model's predictions) and **Matches** (one round at a time, opening on the round with the next fixture, with the model's chances for upcoming games). Each tab opens with a line saying which kind of table it is. A tab can be linked directly (`#/league/39/clubs`, `/projected`, `/matches`, `/table`). Cups have no Standings or Projected tab and open on Matches. The badge is the average Baseline Strength of the clubs playing in the league.
 - `#/country/<country>` lists the country's leagues, strongest first by the average Rating of their clubs, then its cups, then all its league clubs by Rating. UEFA and FIFA competitions are under International (`#/country/World`).
 
 Each competition's current season comes from `docs/data/leagues/<league_id>.json`, written by `export_leagues` and loaded only when the page opens (about 2 MB for all 70). A season starting from June onwards is labelled 2026/27, and a calendar-year one 2026, because API-Football's end dates only reach the last fixture it has scheduled.
@@ -466,6 +476,15 @@ Each competition's current season comes from `docs/data/leagues/<league_id>.json
 **Kit colours.** The club page pitches are drawn in the club's home kit: the shirt and number colours from its latest home line-up (`team_colors`). New line-ups update them as they're fetched, and `python -m thecornerfc sync colors` fills in clubs that have none (it also runs nightly).
 
 The site reads `docs/data/matches.json` (the last 21 days and the next 60) and `docs/data/rankings.json`. These are written by `python -m thecornerfc export`, and the nightly workflow commits them, so the site never needs database credentials. To view it on this PC, run `python -m http.server` in `docs/` and open http://localhost:8000.
+
+**Match explanations.** A match card leads with the projected goals, the likely score, and the model's and the market's home/draw/away chances. Below those it lists up to three **Key reasons**: the model inputs that moved the expected margin (or the expected total) most, at 0.05 goals or more. **Model detail** opens the rest:
+- Current, Baseline and match strength.
+- Every term of the expected margin: strength gap, home advantage, European tie, the clubs' own home/away records, known absences and predicted line-ups.
+- What the attack/defence tendencies add to the expected total.
+- The model − market difference, labelled as a disagreement and not a betting edge.
+- When the inputs, injury list and odds were captured, and the model version.
+
+None of this is worked out in the browser. `export_explanations` writes `docs/data/explanations.json`, which the site loads after the matches. For each shown prediction it picks the `match_prediction_snapshots` row that produced it, then rebuilds the parts with `predictions.explain`. That uses the same `margin_terms` and base-goal functions `predict_match` sums. A match is left out unless the rebuild gives back the stored margin and projected goals to 1e-6. So a prediction made under different settings, or before snapshots existed, shows no breakdown rather than a wrong one. The snapshots' 12-month record lists are summed in the database, so they never leave it.
 
 **Recording projections.** Predictions for a fixture stop updating at kickoff, so the last nightly projection before the match is kept. `fixture_predictions.source` shows where each projection came from:
 - `live`: recorded before kickoff.
@@ -715,8 +734,8 @@ rewrite an old snapshot: a new observation gets a new row/event time.
 Use separate domain tables when snapshot writers are introduced, for example
 `club_rating_snapshots`, `player_rating_snapshots`, `lineup_snapshots`,
 `match_prediction_snapshots`, `paper_strategy_snapshots`, and eventually
-`fantasy_prediction_snapshots`. Only `match_prediction_snapshots` is implemented below; the other names are future
-design conventions, not tables created now.
+`fantasy_prediction_snapshots`. Match, lineup, paper and fantasy snapshot tables are implemented below;
+the club and paper-strategy names are future design conventions, not tables created now.
 Each should have domain/entity keys, typed output columns, an FK to
 `model_versions(model_version_id)` with restricted deletion, the three timestamps,
 and explicit live/backfill/source provenance. Validate the referenced model type
@@ -1048,6 +1067,80 @@ SELECT pg_size_pretty(pg_total_relation_size('player_rating_history')) AS histor
        pg_size_pretty(pg_total_relation_size('player_rating_captures')) AS captures_with_indexes;
 ```
 
+### Fantasy Premier League evidence
+
+Evidence for validating a future FPL model: no fantasy model exists yet and nothing here
+changes another model, export or the website. Fantasy EFL is out of scope. Apply
+`db/migrations/20260927_fpl_evidence.sql` after the model-registry migration (it is also
+in `db/schema.sql`); it has **not** been applied automatically.
+
+**Source and licensing (checked 2026-09-27).** FPL data comes from the JSON endpoints behind
+fantasy.premierleague.com (`bootstrap-static/`, `fixtures/`, `event/{id}/live/`). They are
+undocumented browser endpoints with no published API, licence, service level or stability
+promise. The [Premier League Terms of Use](https://www.premierleague.com/en/terms-and-conditions)
+say the sites "must not be used ... for commercial purposes" and that you may not "reproduce,
+re-utilise or redistribute it (including ... creating a database ... that includes material
+downloaded or otherwise obtained from the Website or App)", and they reserve copyright and
+database rights. The FPL-specific terms page (fantasy.premierleague.com/help/terms) is rendered
+by JavaScript and was not retrievable for review. Consequences here:
+
+- Reachable endpoints are not treated as a right to use them, commercially or otherwise.
+  Storing this evidence is itself the kind of database those terms restrict.
+- Capture is **off** unless `FPL_CAPTURE_ENABLED=true`, and it also obeys the local-safety
+  guards (`THECORNERFC_NO_API` blocks it; local runs need the override token). No workflow
+  enables it. Turning it on is the owner's decision, ideally after reading the FPL terms or
+  obtaining permission or a licensed feed.
+- Only the fields needed for fantasy validation are stored, not whole responses. Nothing is
+  exported to `docs/data` or shown on the public site.
+- Parsing is separate from `FplClient`, and the tables do not depend on FPL's response shape,
+  so a licensed provider can replace the client without migrating the evidence.
+
+```bash
+FPL_CAPTURE_ENABLED=true python -m thecornerfc fpl capture   # schedule before each deadline, e.g. daily and deadline day
+FPL_CAPTURE_ENABLED=true python -m thecornerfc fpl results   # after gameweeks; re-fetches until FPL marks points final
+python -m thecornerfc fpl results --events 5 6                # force a re-check (corrections append)
+```
+
+Tables (seasons keyed by start year as API-Football; FPL player/team/fixture ids are per season,
+FPL `code` is stable across seasons):
+
+| Table | Holds |
+| --- | --- |
+| `fpl_gameweeks` | Each gameweek's deadline as observed. A moved deadline appends a row; view `fpl_gameweek_deadlines` gives the latest. |
+| `fpl_captures` + `fpl_player_states` | Pre-deadline source state for the **next** gameweek: every player's price (`price_tenths`, 55 = 5.5m), FPL position/element type, club, status code, chance of playing this/next round, news text and time. The header keeps the known fixture schedule (no scores; `event_id` null = unscheduled) and the deadline as `effective_at`. |
+| `fpl_id_map` | FPL club/player → API-Football id, with method and FPL names. View `fpl_id_map_current`. |
+| `fpl_result_captures` + `fpl_player_results` | Actual points per player per gameweek, minutes, FPL's stat object and per-fixture `explain` (double gameweeks), with FPL's `finished`/`data_checked` flags. |
+| `fantasy_prediction_snapshots` | Future fantasy model output: `model_version_id` (a `fantasy` registry version), the `input_capture_id` it read, deadline, per-player `predictions` (`expected_points` required; other numeric fields optional) and `inputs`. |
+
+Timing follows the shared snapshot conventions. `captured_at` is taken straight after the FPL
+reads, before mapping work. A capture is `prospective` only when both observed and inserted
+before the deadline; a trigger downgrades a late insert to `late_observation`. A new capture is
+stored only when that gameweek's content (players, fixtures, deadline) differs from its latest
+capture, so repeated runs make a history of distinct states, and A → B → A keeps all three.
+All tables block UPDATE, DELETE and TRUNCATE. Points corrections and mapping changes append.
+
+Mapping is conservative. Clubs match on name (with a few FPL short-name aliases) and then short
+code, against that season's Premier League clubs. Players match only within their mapped club
+(current squad plus this season's league players), by these rules in order: full name, initial
+plus surname, web name, then provider-name words all present in the FPL names. When a rule finds
+two or more players, the result is `ambiguous` with the candidates listed, never a guess. Manual
+fixes go in `thecornerfc/fpl_overrides.json`, keyed by FPL code. FPL fixtures join API-Football
+fixtures through the mapped clubs (league 39, season, home, away).
+
+Fantasy prediction snapshots enforce more in the database: the version must be `fantasy`, the
+input capture must be for the same gameweek and observed no later than the prediction, and
+`prospective` requires an input capture. A future model should read inputs with
+`fpl.state_as_of(conn, season, event_id, as_of)` and write with `make_prediction_snapshot` /
+`append_prediction_snapshots` inside its own transaction.
+
+`evaluate fantasy` scores the latest prospective snapshot per gameweek and model version made at
+least `--hours-before` the currently known deadline. Labels are the latest points observation
+marked `data_checked` and captured by `--as-of`, so later corrections do not leak into an earlier
+report. It reports MAE, RMSE and bias of expected versus actual points per player, by model
+version, gameweek and horizon, and counts snapshots without final points and predicted players
+missing from the results. It deliberately stores no ownership, transfers or FPL's own `ep_next`.
+Add those, with their own licensing check, if a later model or benchmark needs them.
+
 ### Chronological evaluation
 
 The evaluation CLI reads immutable evidence without API calls, production writes,
@@ -1066,7 +1159,7 @@ Reports are JSON on stdout and optionally in `--output`. `--include-records` inc
 selected snapshot rows, IDs, observed inputs and evaluation labels for downstream
 experiments; omit it for aggregate-only reports. The SQL transaction is explicitly
 read-only and repeatable-read. Local NO_API mode works; configure the usual read-only
-DB connection. Fantasy currently returns `not_implemented`, n=0 without connecting.
+DB connection. Fantasy reads the FPL evidence tables below and reports n=0 until a fantasy model writes snapshots.
 Missing migrations or database failures fail visibly; no current-table fallback is used.
 
 Selection rules are part of every report:

@@ -200,13 +200,65 @@ def load_betting(conn,args):
         ORDER BY d.captured_at,d.decision_id''',[args.as_of,args.as_of,args.start,args.end,args.as_of,args.as_of])
 
 
+def load_fantasy(conn,args):
+    """Latest prospective snapshot per gameweek/model version before the deadline (at the current
+    known deadline), scored per player against the latest FPL-final (data_checked) points by as_of."""
+    snaps=query(conn,'''SELECT DISTINCT ON(s.season,s.event_id,s.model_version_id) s.snapshot_id,s.season,s.event_id,
+            s.model_version_id,s.input_capture_id,s.captured_at,s.effective_at,s.seconds_to_deadline,s.predictions,
+            r.result_capture_id,r.captured_at AS result_captured_at
+        FROM fantasy_prediction_snapshots s
+        LEFT JOIN LATERAL (SELECT * FROM fpl_result_captures r WHERE r.season=s.season AND r.event_id=s.event_id
+            AND r.data_checked AND r.captured_at<=%s AND r.created_at<=%s
+            ORDER BY r.captured_at DESC,r.result_capture_id DESC LIMIT 1) r ON true
+        WHERE s.source='prospective' AND s.effective_at >= %s AND s.effective_at < %s
+          AND s.captured_at<=%s AND s.created_at<=%s AND s.created_at<s.effective_at
+          AND s.captured_at<=s.effective_at-make_interval(secs=>%s)
+          AND s.created_at<=s.effective_at-make_interval(secs=>%s)
+          AND s.effective_at=(SELECT g.deadline FROM fpl_gameweeks g WHERE g.season=s.season AND g.event_id=s.event_id
+              ORDER BY g.first_captured_at DESC,g.deadline DESC LIMIT 1)
+        ORDER BY s.season,s.event_id,s.model_version_id,s.captured_at DESC,s.snapshot_id DESC''',
+        [args.as_of,args.as_of,args.start,args.end,args.as_of,args.as_of,args.hours_before*3600,args.hours_before*3600])
+    labelled=[s for s in snaps if s['result_capture_id'] is not None]
+    points={}
+    if labelled:
+        for rid,pid,total in conn.execute('''SELECT result_capture_id,fpl_player_id,total_points FROM fpl_player_results
+                                           WHERE result_capture_id=ANY(%s)''',[[s['result_capture_id'] for s in labelled]]).fetchall():
+            points[rid,pid]=total
+    rows=[];missing=0
+    for s in labelled:
+        for p in s['predictions']:
+            actual=points.get((s['result_capture_id'],p['fpl_player_id']))
+            if actual is None:
+                missing+=1
+                continue
+            rows.append({k:s[k] for k in ('snapshot_id','season','event_id','model_version_id','input_capture_id','captured_at',
+                         'effective_at','seconds_to_deadline','result_capture_id','result_captured_at')}
+                        |{'fpl_player_id':p['fpl_player_id'],'player_id':p['fpl_player_id'],
+                          'expected_points':float(p['expected_points']),'actual_points':actual})
+    return rows,{'selected_snapshots':len(snaps),'snapshots_without_final_points':len(snaps)-len(labelled),
+                 'predictions_without_player_result':missing}
+
+
+def fantasy_metrics(rows):
+    errors=[r['expected_points']-r['actual_points'] for r in rows]
+    return {'n':len(rows),'snapshots':len({r['snapshot_id'] for r in rows}),
+            'mae':average(abs(e) for e in errors),
+            'rmse':math.sqrt(average(e*e for e in errors)) if errors else None,
+            'bias':average(errors),
+            'mean_expected':average(r['expected_points'] for r in rows),
+            'mean_actual':average(r['actual_points'] for r in rows)}
+
+
 def evaluate(conn,args):
     provenance={'source':args.source,'as_of':args.as_of.isoformat(),'start':args.start.isoformat(),'end':args.end.isoformat(),
                 'hours_before':args.hours_before,'selection':'latest eligible snapshot per fixture/team; no current-state reconstruction',
-                'period_basis':'decision capture time' if args.domain=='betting' else 'rating capture time' if args.domain=='players' else 'known kickoff',
+                'period_basis':'decision capture time' if args.domain=='betting' else 'rating capture time' if args.domain=='players'
+                    else 'known FPL deadline' if args.domain=='fantasy' else 'known kickoff',
                 'official_policy':'latest official XI as of report cutoff; predictions must precede first observed official XI',
                 'metric_conventions':'multiclass Brier sums classes; binary Brier is (p-y)^2; log probabilities clipped at 1e-15',
                 'labels':'Match results are current database regulation-time results at evaluation, not immutable as-of result observations.'}
+    if args.domain=='fantasy':
+        provenance['labels']='Latest FPL points observation marked final (data_checked) and captured by as_of; corrections append.'
     coverage={}
     if args.domain in ('matches','clubs'):
         rows,coverage=load_matches(conn,args)
@@ -233,7 +285,10 @@ def evaluate(conn,args):
                  'status':'experiment_evidence_only','description':'Observed rating trajectories; movement is not itself predictive validation.',
                  'by_model_version':group_metrics(rows,lambda r:r['model_version_id'],lambda v:{'n':len(v)})}
     else:
-        rows=[];metrics={'n':0,'status':'not_implemented','description':'No fantasy snapshot model exists yet.'}
+        rows,coverage=load_fantasy(conn,args)
+        metrics={'overall':fantasy_metrics(rows),'by_model_version':group_metrics(rows,lambda r:r['model_version_id'],fantasy_metrics),
+                 'by_gameweek':group_metrics(rows,lambda r:f"{r['season']}-GW{r['event_id']:02d}",fantasy_metrics),
+                 'by_hours_before':group_metrics(rows,lambda r:horizon_bucket(r['seconds_to_deadline']/3600),fantasy_metrics)}
     rows.sort(key=lambda r:(r.get('captured_at',args.as_of),r.get('fixture_id',r.get('player_id',0))))
     result={'evaluation_code_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             'generated_at':datetime.now(timezone.utc).isoformat(),'domain':args.domain,'n':len(rows),'provenance':provenance,'coverage':coverage,'metrics':metrics}
@@ -243,10 +298,7 @@ def evaluate(conn,args):
 
 
 def run(args):
-    if args.domain=='fantasy':
-        result=evaluate(None,args)
-    else:
-        result=_read(args)
+    result=_read(args)
     text=json.dumps(result,default=json_value,allow_nan=False,indent=2)
     if args.output:
         Path(args.output).write_text(text+'\n',encoding='utf-8')
