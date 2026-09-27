@@ -171,7 +171,7 @@ def append_snapshots(conn, rows):
             ON CONFLICT (fixture_id,team_id,model_version_id,source,content_hash) DO NOTHING''', rows)
 
 
-def build(conn, fixture_ids=None, now=None, doc=None):
+def build(conn, fixture_ids=None, now=None, doc=None, horizon=HORIZON):
     """(params doc, [(fixture_id, team_id, kickoff, predictions, inputs)]) for every upcoming Premier
     League fixture within HORIZON (or only fixture_ids). SELECT only."""
     now = now or datetime.now(timezone.utc)
@@ -183,7 +183,7 @@ def build(conn, fixture_ids=None, now=None, doc=None):
            where f.league_id = %s and f.status_short in ('NS', 'TBD') and f.kickoff > %s and f.kickoff <= %s
              and p.home_xg is not null and p.away_xg is not null
              and (%s::int[] is null or f.fixture_id = any(%s::int[])) order by f.kickoff""",
-        [PL, now, now + HORIZON, fixture_ids, fixture_ids]).fetchall()
+        [PL, now, now + horizon, fixture_ids, fixture_ids]).fetchall()
     if not upcoming:
         return doc, []
     history = History(_pl_lines(conn))
