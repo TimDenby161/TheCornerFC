@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Scripts: only assets/methodology.js, which reads data/methodology.json. No inline script or style. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>How the models work · The Corner FC</title>
+<meta name="description" content="How The Corner FC's club and player ratings, match probabilities and predicted line-ups work, and how well they have done so far.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="assets/page.css">
+</head>
+<body>
+<p class="back"><a href="./">‹ The Corner FC</a></p>
+<h1>How the models work</h1>
+<p class="updated">Page last updated 27 September 2026. Live figures below update with the site's data.</p>
+
+<div class="callout">
+  <p><strong>Before you read the numbers</strong></p>
+  <ul>
+    <li><strong>Predictions are probabilities, not guarantees.</strong> A 60% chance means the other thing
+      happens about four times in ten.</li>
+    <li><strong>Disagreeing with the bookmakers is not proof of value.</strong> So far the bookmakers have
+      been more accurate than our model (see below).</li>
+    <li><strong>Predicted line-ups are guesses.</strong> Managers rotate, and late injuries and illness
+      aren't always reported.</li>
+    <li><strong>Data can be incomplete or out of date.</strong> Injury lists are missing for some
+      leagues, and results, odds and news arrive with a delay.</li>
+    <li><strong>Past performance doesn't guarantee future performance.</strong></li>
+  </ul>
+  <p>Nothing on this site is betting advice. The Paper Simulation uses no real money.</p>
+</div>
+
+<h2 id="freshness">How fresh is the data?</h2>
+<div id="fresh-live" class="live" aria-live="polite"><p class="muted">Loading…</p></div>
+<ul>
+  <li><strong>Every night</strong> (about 03:00 UK time in winter, 04:00 in summer): results,
+    fixtures, match statistics, injury lists and odds are refreshed, then the ratings and
+    predictions are rebuilt.</li>
+  <li><strong>On match days, every 30 minutes:</strong> for matches starting within 3 hours, odds and
+    injury lists are refreshed and those matches are re-predicted.</li>
+  <li><strong>Fantasy Premier League data</strong> is refreshed three times a day.</li>
+</ul>
+<p>Our data comes from API-Football and the Fantasy Premier League game. If they're late, wrong or
+missing something, so are we. Known gaps: injury lists only feed the predictions in 10 leagues, and
+many lower-league clubs have none at all. xG only exists for about a third to a half of matches,
+mostly in the bigger leagues. Odds only appear about two weeks before a match. If a scheduled update
+fails, the site keeps showing the last good data rather than half-updated data, so a date above that
+looks old means an update is overdue.</p>
+
+<h2 id="terms">What the numbers mean</h2>
+
+<h3>Club Current Strength</h3>
+<p>A club's level right now, on an Elo-style scale where <strong>100 points is worth about one goal
+a game</strong>. After every match, both clubs move by how much better or worse they did than
+expected. When a match has xG, the "result" is mostly xG (70%) with a bit of the actual score (30%),
+because xG is less affected by luck. Big wins are capped so one freak score can't swing a rating.</p>
+
+<h3>Club Baseline Strength</h3>
+<p>A club's long-term level: an average of its Current Strength over roughly its last 100 matches,
+leaning a little towards the more recent ones. It moves slowly, and it's what the club rankings are sorted by. <strong>Current vs Baseline</strong>
+shows whether a club is playing above or below its usual level.</p>
+
+<h3>Recent Movement</h3>
+<p>How much a club's Current Strength has changed over its last 6 matches, and over the last 30
+days. It describes what has happened, not what will happen. It's flagged when a club hasn't played
+for over 45 days.</p>
+
+<h3>Player Ability</h3>
+<p>A 0–100 estimate of a player's level, where an average Premier League regular is about 75.
+It starts from the strength of the clubs he has been a regular for, then moves up or down by up to
+about 15 points depending on how his stats compare with other players in the same position:
+tackles and duels for defenders, passing and chance creation for midfielders, shots and goals for
+forwards, and so on. The stats used are the ones that repeat from season to season rather than
+luck. Players with few minutes are pulled down until they've played more.</p>
+<p>It only covers leagues with match-by-match player data, and it can't see things the data
+doesn't record, like off-the-ball work or a player carrying an injury.</p>
+
+<h3>Match probabilities</h3>
+<p>For each match the model works out how many goals each side is likely to score, from:</p>
+<ul>
+  <li>the two clubs' strength (Current and Baseline, leaning more on Current for matches close to
+    kick-off)</li>
+  <li>home advantage, and each club's own home and away record</li>
+  <li>their attacking and defensive tendencies over the last 12 months, using xG where it exists</li>
+  <li>known injuries and suspensions (in the 10 leagues with reliable injury history)</li>
+  <li>the predicted line-ups (a small effect)</li>
+</ul>
+<p>Those expected goals are turned into win, draw and loss chances, with a small boost to the draw in
+close games. The model doesn't use bookmakers' odds.</p>
+
+<h3>Projected xG</h3>
+<p>The number of goals the model expects each side to score, such as 1.6–0.9. It's an average over
+many possible games, not a score prediction: a side projected 1.6 often scores 0, 1 or 3.</p>
+
+<h3>Predicted line-ups</h3>
+<p>Predicted line-ups are built from who has been starting and playing minutes recently, with
+players we know to be injured or suspended left out. It's a guess made before the team sheet is
+out, and it can be wrong when a manager rotates, a player is ill or news breaks late. Our injury
+lists only include what's been reported.</p>
+
+<h3>Model vs Market</h3>
+<p>We compare the model's chances with the bookmakers' chances: their odds with the bookmaker's
+margin taken out, averaged across bookmakers. A big difference is a <em>disagreement</em>, not an
+edge. The bookmakers see team news, sharp bettors' money and information we don't have, and so far
+they've been right more often when we disagreed (see <a href="#market">below</a>).</p>
+
+<h2 id="evidence">Two kinds of evidence</h2>
+<p>We keep these strictly apart, and every figure on this page is labelled with one of them:</p>
+<dl class="kinds">
+  <dt><span class="badge live-badge">Live record</span></dt>
+  <dd>Predictions saved <strong>before kick-off</strong>, in a store that can't be edited afterwards.
+    This is the only honest test of how the model does on matches it hasn't seen. We only started
+    saving these on 26 September 2026, so the sample is still small.</dd>
+  <dt><span class="badge hist-badge">Historical test</span></dt>
+  <dd>The model re-run on past matches, using only what was known before each one. It's useful for
+    choosing settings, but it isn't proof: the model was built by people who had already seen those
+    seasons, and some past inputs have been rebuilt with today's data. Treat it as an upper bound on
+    what to expect.</dd>
+</dl>
+
+<h2 id="matches">How accurate are the match probabilities?</h2>
+
+<h3><span class="badge live-badge">Live record</span> Since saving began</h3>
+<div id="matches-live" class="live" aria-live="polite"><p class="muted">Loading…</p></div>
+
+<h3><span class="badge hist-badge">Historical test</span> July 2024 to September 2026</h3>
+<!-- Source: experiments/strength_weight/results.json, test["0.6"] (the production weight), generated
+     2026-09-27; test_start 2024-07-01. Calibration pools the home/draw/away classes. -->
+<p>43,658 matches in the leagues we cover, predicted with settings chosen on the previous season
+(July 2023 to June 2024) and then scored on these later matches.</p>
+<div class="stats">
+  <div class="stat"><span class="stat-v">51.5%</span><span class="stat-l">Most likely result was right</span></div>
+  <div class="stat"><span class="stat-v">0.994</span><span class="stat-l">Log loss (lower is better)</span></div>
+  <div class="stat"><span class="stat-v">0.593</span><span class="stat-l">Brier score (lower is better)</span></div>
+</div>
+<p>For comparison, giving every result a one-in-three chance would score 1.099 and 0.667. The
+2024/25 season alone scored 0.992 and 2025 onwards 0.996, so the level held across both periods.</p>
+<p><strong>Calibration</strong>: when the model gave something a certain chance, how often did it
+happen?</p>
+<table class="calib">
+  <thead><tr><th>Model said</th><th>Average</th><th>It happened</th><th>Predictions</th></tr></thead>
+  <tbody>
+    <tr><td>0–10%</td><td>8%</td><td>5%</td><td>2,155</td></tr>
+    <tr><td>10–20%</td><td>16%</td><td>15%</td><td>14,535</td></tr>
+    <tr><td>20–30%</td><td>26%</td><td>25%</td><td>54,423</td></tr>
+    <tr><td>30–40%</td><td>34%</td><td>35%</td><td>24,617</td></tr>
+    <tr><td>40–50%</td><td>45%</td><td>45%</td><td>16,662</td></tr>
+    <tr><td>50–60%</td><td>55%</td><td>57%</td><td>10,303</td></tr>
+    <tr><td>60–70%</td><td>64%</td><td>66%</td><td>5,228</td></tr>
+    <tr><td>70–80%</td><td>74%</td><td>79%</td><td>2,370</td></tr>
+    <tr><td>80–90%</td><td>84%</td><td>89%</td><td>616</td></tr>
+    <tr><td>90–100%</td><td>92%</td><td>97%</td><td>65</td></tr>
+  </tbody>
+</table>
+<p>Each match gives three predictions (home, draw, away). The model is well calibrated in the middle
+and slightly too cautious about strong favourites: they won a little more often than it said.</p>
+
+<h2 id="market">Model vs bookmakers</h2>
+
+<h3><span class="badge live-badge">Live record</span> Sealed until 2,000 matches</h3>
+<p>We're comparing the live predictions with the odds that were available <em>before</em> each
+prediction was made. To stop ourselves reading too much into an early lucky or unlucky run, this
+result is sealed: it will be worked out and published once, when 2,000 matches have been recorded
+(the rules were written down on 27 September 2026, before any results were seen). Until then we
+don't publish or look at it. The Stats tab's model-vs-bookmaker figures are a different, rougher
+check: they use closing odds and mix live predictions with recomputed ones.</p>
+
+<h3><span class="badge hist-badge">Historical test</span> 506 matches, 16–24 September 2026</h3>
+<!-- Source: README "Match predictions", blending bookmaker odds; model recomputed pre-match, closing odds. -->
+<p>The model's predictions were recomputed afterwards, as it would have stood before each match, and
+compared with the bookmakers' closing odds.</p>
+<table class="cmp">
+  <thead><tr><th></th><th>Log loss</th><th>Brier score</th><th>Favourite won</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Bookmakers</th><td>0.974</td><td>0.580</td><td>52.4%</td></tr>
+    <tr><th scope="row">Our model</th><td>0.987</td><td>0.590</td><td>52.0%</td></tr>
+  </tbody>
+</table>
+<p><strong>The bookmakers were more accurate.</strong> The gap is small and the sample is short, so it
+can't rule out the model being as good, but there's no evidence it's better. In the 82 matches where
+the model and the bookmakers differed by 10 points or more on a result, the model gave its side a
+42% chance on average, the bookmakers 30%, and it happened 29% of the time. Every individual
+bookmaker we checked was also more accurate than the model. That's why a disagreement on the
+Model vs Market tab is not a tip.</p>
+
+<h2 id="lineups">How accurate are the predicted line-ups?</h2>
+<h3><span class="badge live-badge">Live record</span> Since saving began</h3>
+<div id="lineups-live" class="live" aria-live="polite"><p class="muted">Loading…</p></div>
+<h3><span class="badge hist-badge">Historical test</span> What line-ups are worth</h3>
+<!-- Source: experiments/STAGE_E_DECISION.md, experiment 14 (9,601 test fixtures from July 2024). -->
+<p>Across 9,601 past matches from July 2024 on, using our predicted XIs made the match probabilities
+a little more accurate than ignoring line-ups. Swapping in the actual team sheets improved them only
+slightly more. For match results, knowing the exact XI matters less than you might think, partly
+because much of what a line-up tells you is already in the club's rating.</p>
+
+<h2 id="player-club">How the club and player ratings were checked</h2>
+<p><span class="badge hist-badge">Historical test</span> These ratings don't predict a single
+outcome we can score each week, so they're checked through what they're used for:</p>
+<ul>
+  <li><strong>Club strength</strong> is what drives the match probabilities above. The Current /
+    Baseline mix used for matches (60/40 near kick-off) scored best of the mixes tried, in both
+    2024/25 and 2025 onwards.</li>
+  <li><strong>Player Ability</strong> repeats from one season to the next better than the earlier
+    version did (rank correlation 0.54, and 0.44 for players who changed club). Versions of the
+    ratings with club strength taken out did no better at predicting players' later performances,
+    and did worse at predicting match results.</li>
+</ul>
+<p>We only change a model when a test shows a clear improvement on matches it wasn't tuned on. In
+September 2026 four proposed changes were tested on past seasons this way. None cleared the bar,
+so none were made.</p>
+
+<h2 id="version">Model version</h2>
+<div id="version-live" class="live" aria-live="polite"><p class="muted">Loading…</p></div>
+<p>Every saved prediction records the model version that made it. When the model changes, the new
+version's live record builds up alongside the old one's rather than being mixed in silently.</p>
+
+<h2 id="glossary">The measures, in plain words</h2>
+<dl class="glossary">
+  <dt>Most likely result was right</dt>
+  <dd>How often the result the model rated most likely actually happened. Easy to read, but it ignores
+    how confident the model was, and about half is typical for football.</dd>
+  <dt>Log loss</dt>
+  <dd>Punishes the model for being confident and wrong. Lower is better. Giving every result a
+    one-in-three chance scores 1.099. Football is hard to predict, so even the bookmakers score
+    well above 0.9.</dd>
+  <dt>Brier score</dt>
+  <dd>The average squared gap between the chances given and what happened (here summed over home, draw
+    and away, so it runs from 0 to 2). Lower is better. One-in-three for everything scores 0.667.</dd>
+  <dt>Calibration</dt>
+  <dd>Whether "30%" really means 30%: of all the things the model gave about a 30% chance, roughly 30%
+    should happen.</dd>
+  <dt>Sample size</dt>
+  <dd>How many matches a figure is based on. A few hundred matches can swing a lot through luck alone.
+    Thousands are needed before small differences mean much.</dd>
+</dl>
+
+<h2 id="more">More</h2>
+<p>The full technical detail, including every test and its limits, is in the project's
+<a href="https://github.com/TimDenby161/TheCornerFC">source repository</a>. To report a data error,
+see <a href="privacy.html#corrections">corrections</a>.</p>
+
+<script src="assets/methodology.js"></script>
+</body>
+</html>

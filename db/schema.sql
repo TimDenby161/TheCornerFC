@@ -1118,9 +1118,12 @@ BEGIN
         RETURN NEW;
     END IF;
     NEW.created_at := clock_timestamp();
-    IF TG_TABLE_NAME = 'fpl_captures' AND NEW.source = 'prospective'
-       AND (NEW.captured_at >= NEW.effective_at OR NEW.created_at >= NEW.effective_at) THEN
-        NEW.source := 'late_observation';
+    -- Nested: PL/pgSQL does not short-circuit AND, and only some guarded tables have source.
+    IF TG_TABLE_NAME = 'fpl_captures' THEN
+        IF NEW.source = 'prospective'
+           AND (NEW.captured_at >= NEW.effective_at OR NEW.created_at >= NEW.effective_at) THEN
+            NEW.source := 'late_observation';
+        END IF;
     END IF;
     IF TG_TABLE_NAME = 'fantasy_prediction_snapshots' THEN
         IF NOT EXISTS (SELECT 1 FROM model_versions WHERE model_version_id=NEW.model_version_id AND model_type='fantasy') THEN

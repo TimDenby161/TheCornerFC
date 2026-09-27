@@ -1073,7 +1073,9 @@ SELECT pg_size_pretty(pg_total_relation_size('player_rating_history')) AS histor
 Evidence for validating a future FPL model: no fantasy model exists yet and nothing here
 changes another model, export or the website. Fantasy EFL is out of scope. Apply
 `db/migrations/20260927_fpl_evidence.sql` after the model-registry migration (it is also
-in `db/schema.sql`); it has **not** been applied automatically.
+in `db/schema.sql`); it has **not** been applied automatically. Databases that already have it
+also need `db/migrations/20260927_fpl_evidence_guard_fix.sql`, which fixes the evidence trigger
+rejecting `fpl_gameweeks`, `fpl_id_map` and `fpl_result_captures` inserts.
 
 **Source and licensing (checked 2026-09-27).** FPL data comes from the JSON endpoints behind
 fantasy.premierleague.com (`bootstrap-static/`, `fixtures/`, `event/{id}/live/`). They are

@@ -1,4 +1,4 @@
-/* Plain text pages (privacy.html): the site's colours without the app layout */
+/* Plain text pages (privacy.html, methodology.html): the site's colours without the app layout */
 :root {
   color-scheme: light;
   --page-plane: #f9f9f7;
@@ -6,6 +6,10 @@
   --text-secondary: #52514e;
   --border: rgba(11,11,11,0.10);
   --link: #2a78d6;
+  --surface: #ffffff;
+  --live: #1f7a4d;
+  --hist: #8a5a00;
+  --warn-bg: #fff6e0;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -15,6 +19,10 @@
     --text-secondary: #c3c2b7;
     --border: rgba(255,255,255,0.10);
     --link: #3987e5;
+    --surface: #181817;
+    --live: #5cc08c;
+    --hist: #e0b050;
+    --warn-bg: #2a2412;
   }
 }
 html, body { margin: 0; background: var(--page-plane); color: var(--text-primary); }
@@ -32,3 +40,27 @@ ul { padding-left: 20px; }
 code { font-size: 13px; overflow-wrap: anywhere; }
 .back { font-size: 14px; }
 .updated { font-size: 13px; color: var(--text-secondary); margin: 0; }
+
+/* methodology.html */
+h3 { font-size: 15px; margin: 22px 0 4px; }
+strong { color: var(--text-primary); }
+.callout { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px 16px; margin: 20px 0 8px; }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
+  border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; margin-right: 6px; vertical-align: 2px; }
+.live-badge { color: var(--live); }
+.hist-badge { color: var(--hist); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 8px; margin: 12px 0; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.stat-v { display: block; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-l { display: block; font-size: 13px; color: var(--text-secondary); line-height: 1.35; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+th:first-child, td:first-child { text-align: left; }
+th { font-weight: 600; font-size: 13px; }
+td { color: var(--text-secondary); }
+.muted { font-size: 13px; }
+.warn { background: var(--warn-bg); border-radius: 8px; padding: 8px 12px; color: var(--text-primary); font-size: 14px; }
+.fresh { list-style: none; padding: 0; margin: 8px 0; }
+dl { margin: 8px 0; }
+dt { font-weight: 600; margin-top: 12px; }
+dd { margin: 2px 0 0; color: var(--text-secondary); }

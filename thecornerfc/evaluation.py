@@ -136,7 +136,8 @@ def query(conn,sql,params=()):
     return [dict(zip(names,row)) for row in cur.fetchall()]
 
 
-def load_matches(conn,args):
+def load_matches(conn,args,market=True):
+    """market=False skips the per-fixture odds lookups; every row's market is then None."""
     rows=query(conn,'''SELECT DISTINCT ON(s.fixture_id) s.*,f.ft_home,f.ft_away,f.status_short,
         f.home_goals,f.away_goals FROM match_prediction_snapshots s JOIN fixtures f USING(fixture_id)
         WHERE s.source=%s AND s.effective_at >= %s AND s.effective_at < %s
@@ -157,6 +158,9 @@ def load_matches(conn,args):
             continue # Never substitute extra-time totals for unknown regulation scores.
         r.update(probabilities=[r['p_home'],r['p_draw'],r['p_away']],outcome=0 if h>a else 1 if h==a else 2,
                  actual_score=f'{h}-{a}',market=None)
+        if not market:
+            valid.append(r)
+            continue
         cutoff=min(r['captured_at'],r['effective_at'])
         quotes=latest_quotes(conn,r['fixture_id'],1,cutoff,strict=True)
         books={}
