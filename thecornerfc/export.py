@@ -1399,8 +1399,55 @@ def export_fantasy(conn, out_dir=OUT_DIR):
             "fpl_rows_available": sum(r["fpl_audit"].values()),
             "prospective": dict(_fantasy_progress(conn), target_rounds=10, target_rows=3000),
         }
+        try:
+            payload["next_round"] = _fantasy_next_round(conn)
+        except Exception:
+            conn.rollback()
+            log.exception("Fantasy next-round predictions skipped")
         _write_json_file(Path(out_dir) / "fpl.json", payload)
     except Exception:
         conn.rollback()         # a failed query must not leave the export's connection aborted
         log.exception("Fantasy findings export skipped")
+
+
+NEXT_ROUND_SPAN = timedelta(days=14)   # a round's fixtures after this are rearranged, not part of it
+
+
+def _fantasy_next_round(conn):
+    """Every player's expected points for the next Premier League round, from the same code and
+    frozen parameters as the fantasy snapshots (fantasy_snapshots.build). None if nothing is due."""
+    from . import fantasy_snapshots
+    nxt = conn.execute(
+        """select season, round, min(kickoff) from fixtures
+           where league_id = %s and status_short = any(%s) and kickoff > now()
+           group by 1, 2 order by 3 limit 1""", [fantasy_snapshots.PL, list(UPCOMING_STATUSES)]).fetchone()
+    if not nxt:
+        return None
+    season, name, first = nxt
+    ids = [f for (f,) in conn.execute(
+        """select fixture_id from fixtures where league_id = %s and season = %s and round = %s
+           and status_short = any(%s) and kickoff > now() and kickoff < %s""",
+        [fantasy_snapshots.PL, season, name, list(UPCOMING_STATUSES), first + NEXT_ROUND_SPAN])]
+    doc, teams = fantasy_snapshots.build(conn, ids, horizon=NEXT_ROUND_SPAN + (first - datetime.now(timezone.utc)))
+    fixtures = {fid: (home, away, kickoff) for fid, home, away, kickoff in conn.execute(
+        "select fixture_id, home_team_id, away_team_id, kickoff from fixtures where fixture_id = any(%s)", [ids])}
+    pids = sorted({p["player_id"] for *_, preds, _ in teams for p in preds})
+    names = dict(conn.execute("select player_id, name from players where player_id = any(%s)", [pids]).fetchall())
+    team_ids = sorted({t for f in fixtures.values() for t in f[:2]})
+    team_names = dict(conn.execute("select team_id, name from teams where team_id = any(%s)", [team_ids]).fetchall())
+    rows = []
+    for fid, team, kickoff, preds, inputs in teams:
+        home, away, _ = fixtures[fid]
+        for p in preds:
+            rows.append([p["player_id"], names.get(p["player_id"], str(p["player_id"])), team, away if team == home else home,
+                         team == home, p["position"], _r(p["expected_points"]), round(p["exp_minutes"]), _r(p["p_start"]),
+                         _r(p["exp_goals"]), _r(p["exp_assists"]), _r(p["p_clean_sheet"]),
+                         inputs["availability"].get(str(p["player_id"])), fid])
+    rows.sort(key=lambda r: -r[6])
+    return {"season": season, "round": name, "first_kickoff": first.isoformat(),
+            "kickoffs": {str(f): v[2].isoformat() for f, v in fixtures.items()},
+            "model": doc["version_name"], "teams": {str(t): n for t, n in team_names.items()},
+            "fields": ["player", "name", "team", "opponent", "home", "position", "xp", "minutes", "p_start",
+                       "goals", "assists", "p_clean_sheet", "availability", "fixture"],
+            "players": rows}
 
