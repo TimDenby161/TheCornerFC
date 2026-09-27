@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-09-27T12:50:55.836075+00:00",
+  "extracted_at": "2026-09-27 12:50:49.986196+00:00",
+  "evaluator_sha256": "a08e3bd4bebd0fe7af175deeb3f9c283d71a5c9ab06e98ad69d647c77b3c6d7d",
+  "accrual": {
+    "P3": {
+      "accrued": 12,
+      "target": 600,
+      "weeks": 1,
+      "reached": false,
+      "official_XI_recorded_before_kickoff": 0
+    },
+    "P4": {
+      "accrued": 13,
+      "target": 6500,
+      "weeks": 1,
+      "reached": false
+    },
+    "P6": {
+      "accrued": 79,
+      "target": 2000,
+      "weeks": 1,
+      "reached": false
+    },
+    "P7": {
+      "accrued": 0,
+      "target": 6500,
+      "weeks": 0,
+      "reached": false
+    }
+  },
+  "exclusions": {
+    "P3": {
+      "no_complete_predicted_lines": 97,
+      "no_aligned_official_XI": 9
+    },
+    "P4": {
+      "not_injury_model_competition": 105
+    },
+    "P6": {
+      "no_complete_prior_market": 39
+    },
+    "P7": {}
+  },
+  "blinded": true
+}
