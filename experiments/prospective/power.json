@@ -1,0 +1,18 @@
+{
+  "method": "normal approximation, two-sided alpha 0.05, power 0.8, week-cluster design effect from 2024-07 onward historical lineup rows",
+  "P3_official_vs_predicted_XI": {
+    "n_sample": 9601,
+    "sd": 0.01751922085906509,
+    "design_effect": 1.0,
+    "delta": 0.002,
+    "fixtures_required": 603
+  },
+  "P4_P7_small_component_ablation": {
+    "n_sample": 9601,
+    "sd": 0.057649727833359775,
+    "design_effect": 1.0,
+    "delta": 0.002,
+    "fixtures_required": 6522
+  },
+  "P6_market": "No historical timestamped odds. Target fixed at 2,000 fixtures, re-estimated once from blinded variance at 500 fixtures (see PROTOCOLS.md)."
+}
