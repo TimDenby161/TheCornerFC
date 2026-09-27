@@ -343,6 +343,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     export_stats(conn, out_dir)
     export_bets(conn, out_dir)
     export_explanations(conn, out_dir, now)
+    export_methodology(conn, out_dir, now)
     export_injuries(conn, out_dir)
     export_players(conn, out_dir)
     export_player_seasons(conn, out_dir)
@@ -612,6 +613,65 @@ def export_stats(conn, out_dir=OUT_DIR):
     (out_dir / "stats.json").write_text(json.dumps(
         {"generated_at": now.isoformat(), "ranges": stats}, separators=(",", ":")), encoding="utf-8")
     log.info("Exported prediction stats for %d finished fixtures", len(rows))
+
+
+def _table_exists(conn, name):
+    (found,) = conn.execute("select to_regclass(%s)", [f"public.{name}"]).fetchone()
+    return found is not None
+
+
+def _period(rows):
+    kickoffs = [r["effective_at"] for r in rows]
+    return {"from": min(kickoffs).isoformat(), "to": max(kickoffs).isoformat()} if kickoffs else None
+
+
+def _versions(conn, rows):
+    """[{name, n}] for the model versions behind rows, most used first; unregistered ids by id."""
+    counts = defaultdict(int)
+    for r in rows:
+        counts[r["model_version_id"]] += 1
+    names = dict(conn.execute("select model_version_id, version_name from model_versions where model_version_id = any(%s)",
+                              [list(counts)]).fetchall()) if counts else {}
+    return [{"name": names.get(v, v), "n": n} for v, n in sorted(counts.items(), key=lambda x: -x[1])]
+
+
+def export_methodology(conn, out_dir=OUT_DIR, now=None):
+    """docs/data/methodology.json: the live record for the Methodology page. Only prospective
+    snapshots (captured and stored before kickoff) are scored, through evaluation.py's selection
+    and metrics; reconstructed predictions never enter it. Model vs market is left out on purpose:
+    that comparison is protocol P6, blinded until its registered sample is reached."""
+    from . import evaluation
+    from types import SimpleNamespace
+    now = now or datetime.now(timezone.utc)
+    args = SimpleNamespace(source="prospective", start=datetime(2000, 1, 1, tzinfo=timezone.utc),
+                           end=now, as_of=now, hours_before=0)
+    out = {"generated_at": now.isoformat(), "freshness": site_freshness(conn), "matches": None, "lineups": None}
+    if _table_exists(conn, "match_prediction_snapshots"):
+        rows, coverage = evaluation.load_matches(conn, args, market=False)
+        if rows:
+            m = evaluation.match_metrics(rows)
+            probs = [p for r in rows for p in r["probabilities"]]
+            hits = [int(k == r["outcome"]) for r in rows for k in range(3)]
+            out["matches"] = {
+                "n": m["n"], "period": _period(rows), "versions": _versions(conn, rows),
+                "accuracy": _r(m["accuracy"], 4), "log_loss": _r(m["log_loss"], 4), "brier": _r(m["brier"], 4),
+                "exact_score": {"n": m["exact_score"]["n"], "accuracy": _r(m["exact_score"]["accuracy"], 4)},
+                # every home/draw/away probability pooled into tenths: [bin, n, mean predicted, observed rate]
+                "calibration": [[b, v["n"], _r(v["mean_probability"], 3), _r(v["observed_rate"], 3)]
+                                for b, v in evaluation.calibration(probs, hits).items()],
+                "excluded_no_regulation_score": coverage["missing_regulation_score"]}
+    if _table_exists(conn, "lineup_prediction_snapshots") and _table_exists(conn, "official_lineup_snapshots"):
+        rows, coverage = evaluation.load_lineups(conn, args)
+        if rows:
+            m = evaluation.lineup_metrics(rows)
+            out["lineups"] = {
+                "n": m["n"], "period": _period(rows), "versions": _versions(conn, rows),
+                "correct_starters_mean": _r(m["correct_starters_mean"], 2),
+                "role_accuracy": {"n": m["role_accuracy"]["n"], "accuracy": _r(m["role_accuracy"]["accuracy"], 4)},
+                "excluded_no_official_xi": coverage["missing_or_incomplete_official_xi"]}
+    _write_json_file(out_dir / "methodology.json", out)
+    log.info("Exported the methodology live record (%s matches, %s lineups)",
+             (out["matches"] or {}).get("n", 0), (out["lineups"] or {}).get("n", 0))
 
 
 # Paper money shown on the Bets tab: a flat stake per bet out of a starting bank
