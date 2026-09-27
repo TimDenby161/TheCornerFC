@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .health import monitored
-from . import config, positions, availability
+from . import config, positions, availability, predictions
 from .cache import WEEK, cached_rows, finished_fixtures, rank_history
 from .betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_cautious
 from .predictions import GOAL_LINES, UPCOMING_STATUSES, goal_lines
@@ -319,12 +319,86 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     log.info("Exported %d matches and %d rankings to %s", len(matches), len(rankings), out_dir)
     export_stats(conn, out_dir)
     export_bets(conn, out_dir)
+    export_explanations(conn, out_dir, now)
     export_injuries(conn, out_dir)
     export_players(conn, out_dir)
     export_player_seasons(conn, out_dir)
     export_clubs(conn, out_dir)
     export_leagues(conn, out_dir)
     export_player_pages(conn, out_dir)
+
+
+def _records_sum(side):
+    """SQL for record_totals() of a snapshot's home_records / away_records, so the record lists
+    (most of a snapshot's size) never leave the database."""
+    return f"""cross join lateral (
+        select coalesce(sum((r->>0)::float8), 0), coalesce(sum((r->>1)::float8), 0), count(*)
+        from jsonb_array_elements(coalesce(s.inputs->'{side}_records', '[]'::jsonb)) r) {side[0]}r"""
+
+
+def explanation(inputs, league_id, home_totals, away_totals, stored, meta):
+    """One match's entry in explanations.json: predictions.explain() on the snapshot behind the
+    stored prediction, plus the inputs it was built from, rounded for display. None if the
+    snapshot doesn't reproduce the stored prediction."""
+    parts = predictions.explain(inputs, league_id, home_totals, away_totals, stored)
+    if parts is None:
+        return None
+    pair = lambda k, n=0: [_r(inputs.get(f"home_{k}"), n), _r(inputs.get(f"away_{k}"), n)]
+    lines = inputs.get("predicted_lines")
+    out = {
+        "current": pair("current_rank"), "baseline": pair("lt_algo"), "match": pair("match_rank"),
+        "margin": {k: _r(v) for k, v in parts["margin"].items()},
+        "exp_diff": _r(parts["exp_diff"]),
+        "tendencies": _r(parts["tendencies"]), "league_goals": _r(parts["league_goals"]),
+        "missing": pair("missing", 1),
+        "lines": [[_r(v, 0) for v in side] for side in lines] if lines else None,
+        "reasons": [[k, _r(v)] for k, v in parts["reasons"]],
+        **meta,
+    }
+    fallback = [bool(inputs.get("home_rank_fallback")), bool(inputs.get("away_rank_fallback"))]
+    if any(fallback):
+        out["fallback"] = fallback
+    return out
+
+
+def export_explanations(conn, out_dir=OUT_DIR, now=None):
+    """docs/data/explanations.json: for every match on the site whose prediction has a snapshot,
+    the parts of that prediction (see predictions.explain), when its inputs were captured and
+    the model version that made it (details once each, under "models"). The site loads it after the matches, so it doesn't slow the first page."""
+    now = now or datetime.now(timezone.utc)
+    out, models = {}, {}
+    (registry,) = conn.execute("select to_regclass('public.match_prediction_snapshots')").fetchone()
+    if registry is not None:
+        # The latest snapshot whose outputs are the stored prediction's: the one it came from
+        rows = conn.execute(
+            f"""select distinct on (f.fixture_id) f.fixture_id, f.league_id,
+                       s.inputs - 'home_records' - 'away_records',
+                       hr.*, ar.*, p.exp_diff, p.home_xg, p.away_xg,
+                       s.source, s.captured_at, s.model_version_id, v.version_name, v.code_sha
+                from fixtures f join fixture_predictions p using (fixture_id)
+                join match_prediction_snapshots s on s.fixture_id = f.fixture_id
+                  and s.home_xg = p.home_xg and s.away_xg = p.away_xg and s.p_home = p.p_home
+                left join model_versions v on v.model_version_id = s.model_version_id
+                {_records_sum("home")} {_records_sum("away")}
+                where f.kickoff between %s and %s
+                order by f.fixture_id, s.captured_at desc""",
+            [now - timedelta(days=PAST_DAYS), now + timedelta(days=FUTURE_DAYS)]).fetchall()
+        ids = [r[0] for r in rows]
+        seen = {}
+        for key, sql in (("odds_at", "select fixture_id, max(updated_at) from odds where bet_id = 1 and fixture_id = any(%s) group by fixture_id"),
+                         ("injuries_at", "select fixture_id, max(updated_at) from injuries where fixture_id = any(%s) group by fixture_id")):
+            seen[key] = dict(conn.execute(sql, [ids]).fetchall()) if ids else {}
+        for (fid, lid, inputs, hs, hc, hn, as_, ac, an, exp_diff, hxg, axg,
+             source, captured, version_id, version_name, code_sha) in rows:
+            meta = {"source": source, "captured_at": captured.isoformat(), "model": version_id}
+            meta.update((k, v[fid].isoformat()) for k, v in seen.items() if fid in v)
+            entry = explanation(inputs, lid, (hs, hc, hn), (as_, ac, an), (exp_diff, hxg, axg), meta)
+            if entry:
+                out[str(fid)] = entry
+                models[version_id] = {"name": version_name, "code": code_sha[:7] if code_sha else None}
+    _write_json_file(out_dir / "explanations.json",
+                     {"generated_at": now.isoformat(), "models": models, "matches": out})
+    log.info("Exported explanations for %d matches", len(out))
 
 
 STAT_RANGES = {"7d": 7, "30d": 30, "90d": 90, "365d": 365}
@@ -976,6 +1050,28 @@ def build_player_pages(ids, apps, fixtures, other_seasons):
     return out
 
 
+MOVEMENT_FIELDS = ["horizon", "rating_change", "rank_movement", "baseline_at"]
+
+
+def _player_movement(conn, ids):
+    """Each player's stored rating movement (player_rating_movement: his latest daily rating
+    capture against an earlier one), for his page's genuine movement. Only horizons with a stored
+    baseline from the same player model version: a change across model versions is the model
+    changing, not the player. Empty until the captures exist (or before the migration)."""
+    (view,) = conn.execute("select to_regclass('public.player_rating_movement')").fetchone()
+    if view is None or not ids:
+        return {}
+    out = {}
+    for pid, captured, horizon, change, move, base_at in conn.execute(
+            """select player_id, captured_at, horizon, rating_change, rank_movement, baseline_at
+               from player_rating_movement
+               where player_id = any(%s) and baseline_at is not null and not model_changed
+               order by player_id, horizon""", [ids]):
+        entry = out.setdefault(pid, {"captured_at": captured.isoformat(), "fields": MOVEMENT_FIELDS, "rows": []})
+        entry["rows"].append([horizon, _r(change, 1), move, base_at.isoformat()])
+    return out
+
+
 def export_player_pages(conn, out_dir=OUT_DIR):
     """One small file per listed player for his page: docs/data/players/<player_id>.json, with his
     stats per season and club, his last PLAYER_MATCHES appearances (with his rank going into each)
@@ -998,10 +1094,13 @@ def export_player_pages(conn, out_dir=OUT_DIR):
             for player,state in resolved[(fid,team)].items():
                 item = state['evidence'][-1]
                 injuries.setdefault(player,[fid,'Suspended' if state['state']=='suspended' else item.get('type'),item.get('reason')])
+    movement = _player_movement(conn, ids)
     for pid, page in pages.items():
         for m in page["matches"]:
             m[12] = _r(ranks.get((m[0], pid)), 1)
         page["injury"] = injuries.get(pid)
+        if pid in movement:
+            page["movement"] = movement[pid]
     team_ids = {x for p in pages.values() for x in [s[1] for s in p["seasons"]] + [m[4] for m in p["matches"]]}
     names = dict(conn.execute("select team_id, name from teams where team_id = any(%s)", [list(team_ids)]))
     player_dir = out_dir / "players"

@@ -60,6 +60,28 @@ def require_api_access(action):
             f"THECORNERFC_LOCAL_OVERRIDE={LOCAL_OVERRIDE_TOKEN!r}."
         )
 
+# Fantasy Premier League endpoints are undocumented browser endpoints with no published licence,
+# and the Premier League's terms restrict building databases from its sites. Off until the owner
+# decides the use is acceptable (README: Fantasy Premier League evidence).
+FPL_CAPTURE_ENABLED = _bool_env("FPL_CAPTURE_ENABLED", False)
+
+
+def require_fpl_access(action):
+    if not FPL_CAPTURE_ENABLED:
+        raise SafetyError(
+            f"{action} reads Fantasy Premier League endpoints, which have no published licence. "
+            "Set FPL_CAPTURE_ENABLED=true only after deciding that use is acceptable "
+            "(README: Fantasy Premier League evidence)."
+        )
+    if NO_API:
+        raise SafetyError(f"{action} is an external data request, but THECORNERFC_NO_API is enabled.")
+    if not GITHUB_ACTIONS and not _local_override_allowed():
+        raise SafetyError(
+            f"{action} writes production evidence. Local runs require "
+            f"THECORNERFC_LOCAL_OVERRIDE={LOCAL_OVERRIDE_TOKEN!r}."
+        )
+
+
 # API-Football league ids. Play-offs are included in each league's fixtures.
 LEAGUES = {
     # England
