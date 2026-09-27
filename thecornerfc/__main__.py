@@ -25,7 +25,7 @@ from .api import ApiFootball, QuotaExhausted
 
 TARGETS = ["leagues", "teams", "fixtures", "standings", "stats", "odds", "players", "injuries",
            "player_minutes", "player_careers", "retired", "squads", "coaches", "lineup_coaches", "colors", "cup_lineups"]
-DB_WRITE_COMMANDS = {"init-db", "rank", "predict", "player-ratings", "matchday", "nightly", "sync", "fpl"}
+DB_WRITE_COMMANDS = {"init-db", "rank", "predict", "player-ratings", "matchday", "nightly", "sync", "fpl", "fantasy"}
 API_COMMANDS = {"status", "preflight", "matchday", "nightly", "sync"}
 
 
@@ -58,6 +58,7 @@ def main(argv=None):
     sub.add_parser("export", help="Write JSON for the website to docs/data")
     sub.add_parser("player-ratings", help="Recalculate player ranks and team XI ratings (backdated)")
     sub.add_parser("matchday", help="Pre-kickoff odds and injuries, late paper bets, settle bets")
+    sub.add_parser("fantasy", help="Snapshot fantasy v1.1 expected points for upcoming Premier League fixtures")
 
     fpl = sub.add_parser("fpl", help="Fantasy Premier League evidence (off unless FPL_CAPTURE_ENABLED)")
     fpl.add_argument("action", choices=["capture", "results"])
@@ -139,6 +140,10 @@ def _execute(args):
             return 0
         if args.command == "export":
             export.export_site_data(conn)
+            return 0
+        if args.command == "fantasy":
+            from . import fantasy_snapshots
+            fantasy_snapshots.capture(conn)
             return 0
         if args.command == "fpl":
             from . import fpl
