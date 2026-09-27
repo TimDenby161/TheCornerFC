@@ -78,10 +78,13 @@ async function loadData() {
       actualXi: pj.actual_xi || {}, seasons: pj.seasons || [], futureSeasons: pj.future_seasons || [], teams: pj.teams || {} } : null;
     state.data = { ...m, matches: rowsToObjects(m.fields, m.matches) };
     state.rankings = rowsToObjects(r.fields, r.rankings);
-    // Trend: Form less Rating (as shown, so the sum adds up), how far a club is playing above or below its long-term level
+    // Gap: Current Strength less Baseline Strength (as shown, so the sum adds up), how far a club's
+    // rating now sits from its long-term level. Not recent movement: that is x.form, the export's
+    // Elo change over the club's last 6 matches
     for (const x of state.rankings) x.trend = Math.round(x.current) - Math.round(x.lt);
     state.rankByTeam = new Map(state.rankings.map((x) => [x.team, x]));
     buildCompetitionLabels();
+    renderFreshness();
     if (!state.date) state.date = defaultDate();
     renderTableFilters();
     renderStatsFilters();
@@ -98,6 +101,25 @@ async function loadData() {
     $("#matches-list").innerHTML = `<div class="empty-state">Couldn't load match data.</div>`;
     $("#table-wrap").innerHTML = `<div class="empty-state">Couldn't load the rankings. Try reloading the page.</div>`;
   }
+}
+
+// When the data behind the site last changed: the export time and whatever freshness the export
+// sends (latest predictions, injuries, odds fetched, match model version); nothing else is shown
+function renderFreshness() {
+  const f = state.data.freshness || {};
+  const when = (iso) => `${fmtShortDate(iso)} ${fmtTime(iso)}`;
+  const item = (label, iso, tip) => iso ? `<span title="${escapeHtml(tip)}">${label} ${escapeHtml(when(iso))}</span>` : "";
+  const model = f.model ? `<span title="${escapeHtml(`Latest registered match model version${f.model.registered ? `, registered ${when(f.model.registered)}` : ""}`)}">Model ${escapeHtml(f.model.name)}${f.model.code ? ` · ${escapeHtml(f.model.code)}` : ""}</span>` : "";
+  const parts = [
+    item("Data updated", state.data.generated_at, "When this site's data was last exported"),
+    item("Predictions updated", f.predictions, "Latest match prediction written"),
+    item("Injuries updated", f.injuries, "Latest injury and suspension list fetched"),
+    item("Odds last seen", f.odds, "Latest bookmaker prices fetched"),
+    model,
+  ].filter(Boolean);
+  const el = $("#freshness");
+  el.innerHTML = parts.join("");
+  el.hidden = !parts.length;
 }
 
 function buildCompetitionLabels() {
@@ -526,19 +548,29 @@ function syncFilterMenu(wrap, f) {
 // ------------------------------------------------------------------ matches
 // Average XI rank by line [GK, DEF, MID, FWD] as "GK 70 · DEF 71 · MID 74 · FWD 73"
 const linesText = (l) => ["GK", "DEF", "MID", "FWD"].map((k, i) => `${k} ${l[i] == null ? "–" : Math.round(l[i])}`).join(" · ");
-const SIDES_NOTE = "Attack and Defence average to Form: 200 points of attack over the other side's defence is about one goal. Home and Away are Form plus or minus the club's own home edge.";
+const SIDES_NOTE = "Attack and Defence average to Current Strength: 200 points of attack over the other side's defence is about one goal. Home and Away are Current Strength plus or minus the club's own home edge.";
 
-function rankChip(rank) {
-  return Number.isFinite(rank) ? `<span class="club-score" title="Elo rating">${Math.round(rank).toLocaleString()}</span>` : "";
+function rankChip(rank, title = "Current Strength (Elo)") {
+  return Number.isFinite(rank) ? `<span class="club-score" title="${title}">${Math.round(rank).toLocaleString()}</span>` : "";
 }
 
-// The win-chance bar: the model's by default, or the bookmakers' (key "m", margin removed).
-// A label puts a name to the left, so a model and a bookmakers bar line up one above the other.
-function probBar(m, key = "p", label = "") {
+// Home, draw and away as whole percentages that add up to 100, as the bars show them
+function shownProbs(m, key) {
+  const h = Math.round(m[`${key}_home`] * 100), d = Math.round(m[`${key}_draw`] * 100);
+  return [h, d, 100 - h - d];
+}
+const PROB_NAMES = {
+  p: ["Model", "Model probability: the model's home, draw and away chances"],
+  m: ["Market fair", "Market fair probability: the average across bookmakers with their margin removed"],
+};
+// The win-chance bar: the model's by default, or the market's (key "m", margin removed).
+// labelled puts a name to the left, so a model and a market bar line up one above the other.
+function probBar(m, key = "p", labelled = false) {
   if (m[`${key}_home`] == null) return "";
-  const h = Math.round(m[`${key}_home`] * 100), d = Math.round(m[`${key}_draw`] * 100), a = 100 - h - d;
+  const [h, d, a] = shownProbs(m, key);
+  const [label, tip] = PROB_NAMES[key];
   return `
-    <div class="match-probs${label ? " labelled" : ""}">${label ? `<span class="prob-name">${label}</span>` : ""}
+    <div class="match-probs${labelled ? " labelled" : ""}">${labelled ? `<span class="prob-name" title="${tip}">${label}</span>` : ""}
       <div class="prob-bar">
         <span class="prob-home" style="width:${h}%"></span>
         <span class="prob-draw" style="width:${d}%"></span>
@@ -550,6 +582,14 @@ function probBar(m, key = "p", label = "") {
         <span class="prob-away" style="left:${h + d}%; width:${a}%">${a}%</span>
       </div>
     </div>`;
+}
+// Both bars and the difference between them where the market's prices are known, else the model's bar
+function probBars(m) {
+  if (m.m_home == null || m.p_home == null) return probBar(m);
+  const model = shownProbs(m, "p"), market = shownProbs(m, "m");
+  const diff = model.map((v, i) => { const x = v - market[i]; return `<b>${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x)}</b>`; });
+  return probBar(m, "p", true) + probBar(m, "m", true)
+    + `<div class="market-line" title="Model probability minus market fair probability, in percentage points. A difference is a disagreement with the market, not proof of value.">Difference (model − market) H ${diff[0]} · D ${diff[1]} · A ${diff[2]}</div>`;
 }
 
 function outcome(h, a) { return h > a ? 0 : h === a ? 1 : 2; }
@@ -579,13 +619,14 @@ function statusTag(m) {
 }
 
 // A match row's top: time and round, both clubs with badge and rank, and the score (or the
-// projected goals and likely score); right = what goes top right. Shared by Matches and Tips.
+// projected goals and likely score); right = what goes top right. Shared by Matches and Model vs Market.
 function matchHead(m, right = "") {
   const finished = FINISHED.has(m.status) && m.hg != null;
   const meta = escapeHtml(m.meta || fmtTime(m.kickoff));
   const round = !m.meta && m.round ? ` · ${escapeHtml(m.round.replace(/^Regular Season - /, "Round "))}` : "";
   const hRank = finished ? m.home_rank : state.rankByTeam.get(m.home)?.current ?? m.home_rank;
   const aRank = finished ? m.away_rank : state.rankByTeam.get(m.away)?.current ?? m.away_rank;
+  const rankTitle = finished ? "Strength going into this match (Elo)" : "Current Strength (Elo)";
   return `
       <div class="match-card-top">
         <span class="match-meta">${meta}${round}</span>
@@ -594,12 +635,12 @@ function matchHead(m, right = "") {
       <div class="match-teams">
         <div class="match-team">
           <div class="mt-name"><img class="club-logo" data-club="${m.home}" src="${teamLogo(m.home)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">${clubLink(m.home, m.home_name)}<span class="team-squad-badges" data-squad-team="home"></span></div>
-          <div class="score-badges">${rankChip(hRank)}<span data-squad-overall="home"></span></div>
+          <div class="score-badges">${rankChip(hRank, rankTitle)}<span data-squad-overall="home"></span></div>
         </div>
         ${scoreCentre(m)}
         <div class="match-team away">
           <div class="mt-name"><img class="club-logo" data-club="${m.away}" src="${teamLogo(m.away)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">${clubLink(m.away, m.away_name)}<span class="team-squad-badges" data-squad-team="away"></span></div>
-          <div class="score-badges"><span data-squad-overall="away"></span>${rankChip(aRank)}</div>
+          <div class="score-badges"><span data-squad-overall="away"></span>${rankChip(aRank, rankTitle)}</div>
         </div>
       </div>`;
 }
@@ -618,7 +659,7 @@ function matchCard(m) {
   return `
     <div class="match-card${cls}" data-fixture="${m.id}">
       ${matchHead(m, `${badge}${statusTag(m)}`)}
-      ${m.m_home != null ? probBar(m, "p", "Model") + probBar(m, "m", "Bookmakers") : probBar(m)}
+      ${probBars(m)}
       ${m.p_over25 != null && !(FINISHED.has(m.status) && m.hg != null) ? `<div class="market-line">Over 2.5 goals <b>${Math.round(m.p_over25 * 100)}%</b> · Both teams score <b>${Math.round(m.p_btts * 100)}%</b></div>` : ""}
       ${m.home_xi != null && m.away_xi != null ? `<div class="market-line" title="Average player rank (0-100) of the ${FINISHED.has(m.status) ? "starting" : "predicted"} XI; brackets = average of each side's last 5 starting XIs${m.home_lines && m.away_lines ? `. By line: ${escapeHtml(teamName(m.home))} ${linesText(m.home_lines)}; ${escapeHtml(teamName(m.away))} ${linesText(m.away_lines)}` : ""}">${FINISHED.has(m.status) ? "Starting" : "Predicted"} XI rating <b>${Math.round(m.home_xi)}</b>${m.home_recent_xi != null ? ` (${Math.round(m.home_recent_xi)})` : ""} · <b>${Math.round(m.away_xi)}</b>${m.away_recent_xi != null ? ` (${Math.round(m.away_recent_xi)})` : ""}</div>` : ""}
       ${!FINISHED.has(m.status) && !LIVE.has(m.status) ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
@@ -713,8 +754,10 @@ async function fillSquadLine(el) {
   if (!sh || !sa) return;
   const badge = (icon, value, label, cls = "") => `<span class="squad-badge${cls ? ` ${cls}` : ""}" title="${label}: ${Math.round(value)}"><span class="ico">${icon}</span>${Math.round(value)}</span>`;
   const trend = (value, normal) => normal == null ? "" : Math.round(value) > Math.round(normal) ? "good" : Math.round(value) < Math.round(normal) ? "bad" : "same";
-  const nameHtml = (s) => badge("🛡️", s.defence, "Defence") + badge("⚔️", s.attack, "Attack");
-  const overallHtml = (s, normal) => badge("⚽", s.strength, normal == null ? "Overall squad rating" : `Overall squad rating; normal ${Math.round(normal)}`, trend(s.strength, normal));
+  // worked out here from the club files' expected minutes, so labelled as not being model inputs
+  const est = " (estimated on this page from expected minutes; not a model input)";
+  const nameHtml = (s) => badge("🛡️", s.defence, `Defence${est}`) + badge("⚔️", s.attack, `Attack${est}`);
+  const overallHtml = (s, normal) => badge("⚽", s.strength, `Overall squad rating${est}${normal == null ? "" : `; recent starting XIs ${Math.round(normal)}`}`, trend(s.strength, normal));
   const card = el.closest(".match-card");
   card.querySelector('[data-squad-team="home"]').innerHTML = nameHtml(sh);
   card.querySelector('[data-squad-team="away"]').innerHTML = nameHtml(sa);
@@ -812,7 +855,8 @@ function stepDate(delta) {
 }
 
 // ------------------------------------------------------------------ rankings table
-// a value's place among every ranked club on that measure (Form = current, Rating = lt), as the
+// a value's place among every ranked club on that measure (Current Strength = current, Baseline
+// Strength = lt), as the
 // badge colours: top 5% green, top 20% amber, top half orange, the rest red
 const sortedBy = {};
 function clubTier(key, v) {
@@ -822,6 +866,8 @@ function clubTier(key, v) {
   const share = (lo + 1) / s.length;
   return share <= 0.05 ? 4 : share <= 0.2 ? 3 : share <= 0.5 ? 2 : 1;
 }
+// the Baseline column's heading, shortened on phones where the full word doesn't fit
+const BASELINE_TH = `<span class="th-full">Baseline</span><span class="th-short">Base</span>`;
 const formChip = (v) => `<span class="rel-chip rel-${clubTier("current", v)}">${Math.round(v)}</span>`;
 const eloChip = (v) => `<span class="rel-chip rel-${clubTier("lt", v)}">${Math.round(v)}</span>`;
 function relTier(r) { return r >= 90 ? 4 : r >= 70 ? 3 : r >= 40 ? 2 : 1; }
@@ -946,7 +992,7 @@ function renderPlayers() {
         <th data-tip="Player, with his club's badge (click it for the club's page) and his country's flag (click it for the national team).">Player</th>
         <th class="num" data-tip="Position: the role he has started in most over his last 20 appearances.">Pos</th>
         ${th("age", "Age", "Age today (sorts youngest first).", " col-age")}
-        ${shown.map((y, i) => [y, i]).reverse().map(([y, i]) => i === 0 && groups.length ? posTh : th(`s${y}`, i === 0 ? nowHead("Ability") : `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `${i === 0 ? "Ability: how good he is now. " : ""}Rank for the ${seasonName(y)} season (the ${y} season in calendar-year leagues such as MLS and Norway${i === 0 ? "; so far" : ""}): his club's level that season, moved by how his stats compare with other players in his position (elite seasons earn extra, and positions are weighted). Squad players who play little are marked down. Every player follows the typical age curve for his position from a level of his own, and only moves off it as far as his minutes that season justify, so a thin season (an injury year, the start of a season) stays close to his curve. A season with no minutes in these leagues is estimated from his other seasons and his age, and shown outlined.`, ` col-season col-s${i}${i === 0 ? " col-now" : ""}`)).join("")}
+        ${shown.map((y, i) => [y, i]).reverse().map(([y, i]) => i === 0 && groups.length ? posTh : th(`s${y}`, i === 0 ? nowHead("Ability") : `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `${i === 0 ? "Underlying Ability: the model's estimate of how good he is now (not his recent match ratings or this season's totals, which are on his page). " : ""}Rank for the ${seasonName(y)} season (the ${y} season in calendar-year leagues such as MLS and Norway${i === 0 ? "; so far" : ""}): his club's level that season, moved by how his stats compare with other players in his position (elite seasons earn extra, and positions are weighted). Squad players who play little are marked down. Every player follows the typical age curve for his position from a level of his own, and only moves off it as far as his minutes that season justify, so a thin season (an injury year, the start of a season) stays close to his curve. A season with no minutes in these leagues is estimated from his other seasons and his age, and shown outlined.`, ` col-season col-s${i}${i === 0 ? " col-now" : ""}`)).join("")}
         ${open ? future.map((y, j) => th(`f${y}`, `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `Projected for ${seasonName(y)}: his Ability moved along the typical age curve for his position, from his age now to his age that season (young players rise, from 31 (33 for keepers) they decline, faster each year). A guide, not a forecast of his form.`, ` col-season col-future col-f${j}`)).join("") : ""}
       </tr></thead>
       <tbody>${rows.slice(0, FIRST_ROWS).map((p, i) => playerRow(p, i, shown, groups, open ? future : [])).join("")}</tbody>
@@ -1089,8 +1135,8 @@ function renderTable() {
   const key = state.tableSort;
   rows = rows.slice().sort((a, b) => (b[key] ?? -1e9) - (a[key] ?? -1e9));
   if (!rows.length) { wrap.innerHTML = `<div class="empty-state">No clubs found.</div>`; return; }
-  const th = (k, label, tip) =>
-    `<th class="num sortable${key === k ? " active" : ""}" data-sort="${k}" data-tip="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
+  const th = (k, label, tip, cls = "") =>
+    `<th class="num sortable${key === k ? " active" : ""}${cls}" data-sort="${k}" data-tip="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   wrap.innerHTML = `
     <div class="table-scroll"><table class="leaderboard clubs">
       <thead><tr>
@@ -1098,9 +1144,10 @@ function renderTable() {
         <th data-tip="Club badge."></th>
         <th data-tip="Club name, with its country and league. Click a club to open its page.">Club</th>
         ${th("played", "Pl", "Played: matches counted in the Elo rating since 2020, including cups and European games.")}
-        ${th("lt", "Rating", "Rating: the long-term Elo rating (LT ALGO), a smoothed rating weighted mostly to the average over the last 100 matches. Slow to move, and the better guide for matches months away.")}
-        ${th("trend", "Trend", "Trend: Form minus Rating. Green: playing above its long-term level; red: below it.")}
-        ${th("current", "Form", "Form: the current Elo rating, after the latest match. 100 points is worth a goal a game. It rises when a club does better than expected against that opponent, and falls when it does worse. Colour: green is the top 5% of all clubs, amber the top 20%, orange the top half, red the rest.")}
+        ${th("lt", BASELINE_TH, "Baseline Strength: the long-term Elo rating (LT ALGO), a smoothed rating weighted mostly to the average over the last 100 matches. Slow to move, and the better guide for matches months away.")}
+        ${th("trend", "Gap", "Gap: Current Strength minus Baseline Strength. Green: rated above its long-term level; red: below it. A difference in level, not recent movement (see Last 6).")}
+        ${th("current", "Current", "Current Strength: the Elo rating after the latest match. 100 points is worth a goal a game. It rises when a club does better than expected against that opponent, and falls when it does worse. Colour: green is the top 5% of all clubs, amber the top 20%, orange the top half, red the rest.")}
+        ${th("form", "Last 6", "Recent movement: how much the club's Elo rating has changed over its last 6 matches.", " col-recent")}
       </tr></thead>
       <tbody>${rows.map((r, i) => `
         <tr data-team="${r.team}">
@@ -1111,6 +1158,7 @@ function renderTable() {
           <td class="num">${eloChip(r.lt)}</td>
           <td class="num">${formHtml(r.trend)}</td>
           <td class="num">${formChip(r.current)}</td>
+          <td class="num col-recent">${formHtml(r.form)}</td>
         </tr>`).join("")}
       </tbody>
     </table></div>
@@ -1420,14 +1468,14 @@ function renderStats() {
   const cmp = (a, b, lowerBetter) => (lowerBetter ? a < b : a > b) ? " better" : "";
   const marketBlock = mk ? `
     <div class="stats-card" style="margin-bottom:12px">
-      <div class="stats-label">Model vs bookmakers (${mk.n.toLocaleString()} matches with odds)</div>
+      <div class="stats-label">Model vs Market (${mk.n.toLocaleString()} matches with odds)</div>
       <div class="vs-market">
-        <span></span><span class="hd">Model</span><span class="hd">Bookmakers</span>
+        <span></span><span class="hd">Model</span><span class="hd">Market fair</span>
         <span>Right result</span><span class="num${cmp(mk.model_correct, mk.market_correct)}">${pct(mk.model_correct)}</span><span class="num${cmp(mk.market_correct, mk.model_correct)}">${pct(mk.market_correct)}</span>
         <span>Log loss</span><span class="num${cmp(mk.model_ll, mk.market_ll, true)}">${mk.model_ll.toFixed(3)}</span><span class="num${cmp(mk.market_ll, mk.model_ll, true)}">${mk.market_ll.toFixed(3)}</span>
       </div>
-      <div class="stats-note">Bookmakers' chances are the average across bookmakers with their margin removed, from the last odds before kickoff. Only matches with odds are compared${mk.n < 1000 ? "; the sample is still small, so treat this as a rough guide" : ""}.</div>
-    </div>${marketsTable(s.markets)}` : `<div class="stats-card" style="margin-bottom:12px"><div class="stats-label">Model vs bookmakers</div><div class="stats-note">No finished matches with bookmaker odds in this range yet. Odds are collected nightly for upcoming matches.</div></div>`;
+      <div class="stats-note">Market fair probability: the average across bookmakers with their margin removed, from the last odds before kickoff. Only matches with odds are compared${mk.n < 1000 ? "; the sample is still small, so treat this as a rough guide" : ""}.</div>
+    </div>${marketsTable(s.markets)}` : `<div class="stats-card" style="margin-bottom:12px"><div class="stats-label">Model vs Market</div><div class="stats-note">No finished matches with bookmaker odds in this range yet. Odds are collected nightly for upcoming matches.</div></div>`;
   body.innerHTML = `
     <div class="stats-grid">
       ${card("Matches", s.n.toLocaleString(), liveNote)}
@@ -1447,7 +1495,7 @@ function renderStats() {
     </div>` + ratingBlock;
 }
 
-// Model vs bookmakers in every market: log loss on the same matches against the closing
+// Model vs Market in every bet market: log loss on the same matches against the closing
 // prices, and against opening prices where the odds were first seen before kickoff
 function marketsTable(ms) {
   if (!ms) return "";
@@ -1460,9 +1508,9 @@ function marketsTable(ms) {
     <td>${m.model_ll.toFixed(3)}</td><td>${m.close_ll.toFixed(3)}</td><td>${gap(m.model_ll, m.close_ll)}</td>
     <td>${m.open_n ? `${gap(m.model_open_ll, m.open_ll)} <span class="dim">(${m.open_n.toLocaleString()})</span>` : `<span class="dim">–</span>`}</td></tr>`; }).join("");
   return `<div class="stats-card" style="margin-bottom:12px">
-      <div class="stats-label">Every market: model vs bookmakers</div>
-      <table class="calib-table"><thead><tr><th>Market</th><th>Matches</th><th>Model</th><th>Bookmakers</th><th>Gap</th><th>Gap at opening</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="stats-note">Log loss, lower is better, on the same matches. Gap = model minus bookmakers: green means the model was more accurate. "At opening" compares with the first prices seen, only for matches whose odds were collected before kickoff (count in brackets). Beating the opening price is where an early edge would show first. The goal lines come from the model's projected goals.</div>
+      <div class="stats-label">Every bet market: Model vs Market</div>
+      <table class="calib-table"><thead><tr><th>Market</th><th>Matches</th><th>Model</th><th>Market fair</th><th>Gap</th><th>Gap at opening</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="stats-note">Log loss, lower is better, on the same matches. Gap = model minus market: green means the model was more accurate. "At opening" compares with the first prices seen, only for matches whose odds were collected before kickoff (count in brackets). Beating the opening price over many matches would be the first sign the model adds something the market lacks; a small or short-lived gap proves nothing. The goal lines come from the model's projected goals.</div>
     </div>`;
 }
 
@@ -1495,6 +1543,14 @@ function summarise(bets) {
   };
 }
 
+// A paper bet's model probability, market fair probability and the difference, in whole points,
+// as they were when it was taken (the match card's bars show the latest prices)
+function betProbs(b) {
+  const model = Math.round(100 * b.model_prob), fair = b.fair_prob != null ? Math.round(100 * b.fair_prob) : null;
+  const diff = fair == null ? "" : ` · difference ${model >= fair ? "+" : "−"}${Math.abs(model - fair)} pts`;
+  return `When taken: model ${model}% · market fair ${fair == null ? "–" : `${fair}%`}${diff}`;
+}
+
 function signed(x, d = 1, suffix = "") {
   if (x == null) return "–";
   const cls = x > 0 ? "pos" : x < 0 ? "neg" : "";
@@ -1503,7 +1559,7 @@ function signed(x, d = 1, suffix = "") {
 
 function renderBets() {
   const body = $("#bets-body");
-  if (!state.bets) { body.innerHTML = `<div class="empty-state">No paper bets yet.</div>`; return; }
+  if (!state.bets) { body.innerHTML = `<div class="empty-state">No simulated paper bets yet.</div>`; return; }
   const stake = betStake(), bank = betBank();
   const scope = betScope();
   const ids = filterLeagueIds(state.betFilter, betCountries());
@@ -1541,15 +1597,16 @@ function renderBets() {
       <div class="bet-top"><span>${escapeHtml(fmtDay(b.kickoff))} ${escapeHtml(fmtTime(b.kickoff))} · ${escapeHtml(compLabel(b.league))}</span><span>${b.strategy === "early" ? "Night before" : "Pre-kickoff"}</span></div>
       <div class="bet-match">${escapeHtml(b.home)} v ${escapeHtml(b.away)}${b.score ? ` <span style="color:var(--text-muted)">(${escapeHtml(b.score)})</span>` : ""}</div>
       <div class="bet-pick"><span>${betBadges(b)}${gbp(stake)} on ${escapeHtml(SEL_LABELS[b.selection] || b.selection)} @ <b>${b.odds.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:11px">${escapeHtml(b.bookmaker || "")}</span></span><span>${res}</span></div>
-      <div class="bet-sub">Model ${Math.round(100 * b.model_prob)}% · bookmakers ${b.fair_prob != null ? Math.round(100 * b.fair_prob) + "%" : "–"}${b.closing_odds != null ? ` · closed ${b.closing_odds.toFixed(2)}` : ""}${bankAfter[b.id] != null ? ` · bank ${gbp(bankAfter[b.id])}` : ""}</div>
+      <div class="bet-sub">${betProbs(b)}${b.closing_odds != null ? ` · closed ${b.closing_odds.toFixed(2)}` : ""}${bankAfter[b.id] != null ? ` · simulated bank ${gbp(bankAfter[b.id])}` : ""}</div>
     </div>`;
   };
   body.innerHTML = `
+    <div class="sim-banner">Simulated: paper bets only, no real money staked. Every figure here is a simulation at recorded prices.</div>
     <div class="stats-grid">
-      ${card("Bank", gbp(bank + s.profit), `Started with ${gbp(bank)}${s.pending ? ` · ${gbp(s.atRisk)} on ${s.pending} pending` : ""}`)}
-      ${card("Profit", s.settled ? gbp(s.profit, true) : "–", s.staked ? `${gbp(s.staked)} staked · return ${(s.roi > 0 ? "+" : "") + (100 * s.roi).toFixed(1)}%` : `${gbp(stake)} on every bet`)}
+      ${card("Simulated bank", gbp(bank + s.profit), `Started with ${gbp(bank)}${s.pending ? ` · ${gbp(s.atRisk)} on ${s.pending} pending` : ""}`)}
+      ${card("Simulated profit", s.settled ? gbp(s.profit, true) : "–", s.staked ? `${gbp(s.staked)} staked · return ${(s.roi > 0 ? "+" : "") + (100 * s.roi).toFixed(1)}%` : `${gbp(stake)} on every bet`)}
       ${card("Won", s.settled ? `${s.wins}<span style="font-size:14px;color:var(--text-muted)"> of ${s.settled}</span>` : "–", s.settled ? `${pct(s.wins / s.settled)} of settled bets` : "Needs settled bets")}
-      ${card("Beat the closing price", s.beat == null ? "–" : pct(s.beat), "Took better odds than the last price before kickoff: the early sign of a real edge")}
+      ${card("Beat the closing price", s.beat == null ? "–" : pct(s.beat), "Took better odds than the last price before kickoff. Only means something over a large sample, and is not proof of value on its own")}
     </div>
     ${leagueRows ? `<div class="stats-card" style="margin-bottom:12px">
       <div class="stats-label">By league</div>
@@ -1559,21 +1616,23 @@ function renderBets() {
     ${marketRows ? `<div class="stats-card" style="margin-bottom:12px">
       <div class="stats-label">By market</div>
       <table class="calib-table">${head("Market")}<tbody>${marketRows}</tbody></table>
-      <div class="stats-note">Paper bets, no real money: ${gbp(stake)} on every bet from a ${gbp(bank)} bank. A match gets at most one bet of each kind (result, goal line, both teams score): of several, the best is kept, judged as if the true chance were halfway between the model's and the bookmakers'. If both the night-before and pre-kickoff runs bet the same kind on a match, All counts only the night-before bet. All bets are at ${escapeHtml(rules.bookmaker || "Bet365")}'s odds. A bet is placed when the model's chance × that price is at least ${Math.round(rules.min_edge * 100)}% better than even, at odds up to ${rules.max_odds}. Return = profit ÷ staked. Profit needs a few hundred settled bets before it means much.</div>
+      <div class="stats-note">Paper bets, no real money: ${gbp(stake)} on every bet from a ${gbp(bank)} bank. A match gets at most one bet of each kind (result, goal line, both teams score): of several, the best is kept, judged as if the true chance were halfway between the model's and the bookmakers'. If both the night-before and pre-kickoff runs bet the same kind on a match, All counts only the night-before bet. All bets are simulated at ${escapeHtml(rules.bookmaker || "Bet365")}'s recorded odds. A paper bet is taken when the model's probability × that price is at least ${Math.round(rules.min_edge * 100)}% better than even, at odds up to ${rules.max_odds}: a disagreement with the market, which the results below test rather than assume. Return = profit ÷ staked. Profit needs a few hundred settled bets before it means much.</div>
     </div>` : ""}
     ${settled.length ? `<div class="modal-section">Settled (${settled.length})</div><div class="bets-list">${settled.slice(0, 300).map(row).join("")}</div>` : ""}
     ${!all.length ? `<div class="empty-state">No bets match this filter yet.</div>` : ""}
-    ${s.pending ? `<div class="stats-note" style="margin-top:12px">${s.pending} bet${s.pending === 1 ? "" : "s"} still to be played: see Tips.</div>` : ""}`;
+    ${s.pending ? `<div class="stats-note" style="margin-top:12px">${s.pending} paper bet${s.pending === 1 ? "" : "s"} still to be played: see Model vs Market.</div>` : ""}`;
 }
 
-// ---- Tips: just the bets to place now, one per pick, soonest first, grouped by day
+// ---- Model vs Market: the paper simulation's open selections (where the model and the market
+// disagree enough for it to take one), one per pick, soonest first, grouped by day
 function tipLabel(b) {
   if (b.market === "1X2") return b.selection === "Draw" ? "Draw" : `${b.selection === "Home" ? b.home : b.away} to win`;
   if (b.market === "BTTS") return b.selection === "Yes" ? "Both teams to score: Yes" : "Both teams to score: No";
   return `${b.selection} goals`;
 }
-// How the model has done against the bookmakers, red where it's behind: accuracy on every market
-// with odds (Stats, last 12 months), and the settled tips' closing-price record and profit
+// How the model has done against the market, red where it's behind: accuracy on every market
+// with odds (Stats, last 12 months), and the settled paper selections' closing-price record and
+// simulated profit
 function tipsOverview() {
   // one panel of figures: a status pill (green ahead, red behind, grey no data yet), the figure,
   // then label-value rows
@@ -1588,25 +1647,25 @@ function tipsOverview() {
     const better = ms.filter((m) => m.model_ll < m.close_ll).length;
     const n = Math.max(...ms.map((m) => m.n));
     const ahead = better > ms.length / 2;
-    tiles.push(tile(ahead, ahead ? "Ahead" : "Behind", "Model v bookmakers", `${better}<small>of ${ms.length} markets</small>`,
+    tiles.push(tile(ahead, ahead ? "Ahead" : "Behind", "Model vs Market", `${better}<small>of ${ms.length} markets</small>`,
       [["Matches with odds", n.toLocaleString()],
-       ...(st.market ? [["Right result, model", pct(st.market.model_correct)], ["Right result, bookmakers", pct(st.market.market_correct)]] : [])],
-      "Markets where the model's log loss beat the closing bookmaker price, last 12 months"));
+       ...(st.market ? [["Right result, model", pct(st.market.model_correct)], ["Right result, market", pct(st.market.market_correct)]] : [])],
+      "Bet markets where the model's log loss beat the closing market fair price, last 12 months"));
   }
   const settled = onePerPick(state.bets?.bets || []).filter((b) => b.result === "win" || b.result === "loss");
   const s = summarise(settled);
-  tiles.push(tile(s.beat == null ? null : s.beat >= 0.5, s.beat == null ? "No data" : s.beat >= 0.5 ? "Edge" : "No edge",
+  tiles.push(tile(s.beat == null ? null : s.beat >= 0.5, s.beat == null ? "No data" : s.beat >= 0.5 ? "Above 50%" : "Below 50%",
     "Beat closing price", s.beat == null ? "–" : pct(s.beat),
-    [["Settled tips", s.settled || "0"], ["Target", "Over 50%"]],
-    "Share of tips taken at better odds than the last price before kickoff: the early sign of a real edge"));
-  tiles.push(tile(s.settled ? s.profit >= 0 : null, s.settled ? `${s.roi > 0 ? "+" : ""}${(100 * s.roi).toFixed(1)}% ROI` : "No data",
-    "Tips profit", s.settled ? `${s.profit >= 0 ? "+" : "−"}${gbp(Math.abs(s.profit))}` : "–",
+    [["Settled selections", s.settled || "0"], ["Target", "Over 50%"]],
+    "Share of paper selections taken at better odds than the last price before kickoff. Staying above 50% over a large sample would suggest real mispricing; it is not proof on its own"));
+  tiles.push(tile(s.settled ? s.profit >= 0 : null, s.settled ? `${s.roi > 0 ? "+" : ""}${(100 * s.roi).toFixed(1)}% return` : "No data",
+    "Simulated profit", s.settled ? `${s.profit >= 0 ? "+" : "−"}${gbp(Math.abs(s.profit))}` : "–",
     [["Won", s.settled ? `${s.wins} of ${s.settled}` : "–"], ["Strike rate", s.settled ? pct(s.wins / s.settled) : "–"]]));
   return `<div class="tips-overview">${tiles.join("")}</div>`;
 }
 
-// The stake box: the viewer's balance and stake size, kept in this browser only. With no
-// balance entered the tips show the site's flat stake.
+// The paper bank box: the viewer's simulated bank and stake size, kept in this browser only.
+// With no bank entered the selections show the simulation's flat stake.
 const readStored = (k) => { try { return localStorage.getItem(`fc.${k}`); } catch { return null; } };
 const writeStored = (k, v) => { try { v == null ? localStorage.removeItem(`fc.${k}`) : localStorage.setItem(`fc.${k}`, v); } catch { /* not stored */ } };
 function tipStake() {
@@ -1634,10 +1693,10 @@ function renderTips() {
   $("#tips-top").innerHTML = tipsOverview();
   $("#tips-stake").textContent = gbp(stake);
   const total = stake * tips.length;
-  $("#tips-total").textContent = !tips.length ? "No open tips"
-    : `${tips.length} open tip${tips.length === 1 ? "" : "s"}: ${gbp(total)} in total${bal ? ` (${Math.round(100 * total / bal)}% of balance)` : ". Enter your balance to size it"}`;
-  const intro = `<div class="stats-note" style="margin-bottom:10px">${gbp(stake)} on each at ${escapeHtml(book)}, at these odds or better. More tips can appear up to 75 minutes before kickoff, after late team news.</div>`;
-  if (!tips.length) { body.innerHTML = intro + `<div class="empty-state">No tips right now. New ones are added the night before and shortly before kickoff.</div>`; return; }
+  $("#tips-total").textContent = !tips.length ? "No open selections"
+    : `${tips.length} open selection${tips.length === 1 ? "" : "s"}: ${gbp(total)} simulated in total${bal ? ` (${Math.round(100 * total / bal)}% of paper bank)` : ". Enter a paper bank to size it"}`;
+  const intro = `<div class="sim-banner">Model probability against market fair probability for the paper simulation's open selections. A difference is a disagreement with the market, not proven value. Simulated ${gbp(stake)} stake each at ${escapeHtml(book)}'s recorded price; no real money. More can appear up to 75 minutes before kickoff, after late team news.</div>`;
+  if (!tips.length) { body.innerHTML = intro + `<div class="empty-state">No open selections right now. New ones are added the night before and shortly before kickoff.</div>`; return; }
   // by day, then competition (the Matches tab's order), then match; days and competitions fold
   const days = [];
   for (const b of tips) {
@@ -1650,16 +1709,16 @@ function renderTips() {
   const caret = (key) => `<span class="comp-group-caret">${folded.has(key) ? "&#9656;" : "&#9662;"}</span>`;
   const group = (list, key) => { const m = new Map(); for (const b of list) { const k = b[key]; if (!m.has(k)) m.set(k, []); m.get(k).push(b); } return m; };
   // the top of each card is the match as on the Matches tab (badges, ranks, projected and likely
-  // score, win chances), then the tips
+  // score, model and market probabilities), then the selections
   const byId = new Map(state.data.matches.map((m) => [m.id, m]));
   const matchCard = (bs) => {
     const m = byId.get(bs[0].fixture);
-    const count = bs.length > 1 ? `<span class="match-meta">${bs.length} bets · ${gbp(stake * bs.length)}</span>` : "";
-    const head = m ? matchHead(m, count) + (m.m_home != null ? probBar(m, "p", "Model") + probBar(m, "m", "Bookmakers") : probBar(m))
+    const count = bs.length > 1 ? `<span class="match-meta">${bs.length} selections · ${gbp(stake * bs.length)}</span>` : "";
+    const head = m ? matchHead(m, count) + probBars(m)
       : `<div class="bet-top"><span>${escapeHtml(fmtTime(bs[0].kickoff))}</span>${count}</div>
          <div class="bet-match">${escapeHtml(bs[0].home)} v ${escapeHtml(bs[0].away)}</div>`;
     return `<div class="match-card">${head}<div class="tip-picks">
-      ${bs.map((b) => `<div class="tip-pick"><span class="tip-left">${betBadges(b)}<span><span class="sel">${escapeHtml(tipLabel(b))}</span><span class="win">${gbp(stake)} to win ${gbp(stake * (b.odds - 1))}</span></span></span><span class="odds">${b.odds.toFixed(2)}</span></div>`).join("")}
+      ${bs.map((b) => `<div class="tip-pick"><span class="tip-left">${betBadges(b)}<span><span class="sel">${escapeHtml(tipLabel(b))}</span><span class="win">${betProbs(b)}</span><span class="win">Simulated ${gbp(stake)} would win ${gbp(stake * (b.odds - 1))}</span></span></span><span class="odds">${b.odds.toFixed(2)}</span></div>`).join("")}
     </div></div>`;
   };
   body.innerHTML = intro + days.map((d) => {
@@ -1774,7 +1833,7 @@ function renderClubPage() {
   const comp = r ? state.data.competitions[r.league] : null;
   const country = comp ? (comp.country === "World" ? "International" : comp.country.replace(/-/g, " ")) : "";
   const league = comp ? SHORT_NAMES[r.league] || comp.name : "";
-  // where it stands among every ranked club; the badge colour follows that (top 5% green ...)
+  // where it stands among every ranked club by Baseline Strength; the badge colour follows that (top 5% green ...)
   const place = r ? state.rankings.filter((x) => x.lt > r.lt).length + 1 : null;
   const share = place ? place / state.rankings.length : 1;
   const tier = share <= 0.05 ? 4 : share <= 0.2 ? 3 : share <= 0.5 ? 2 : 1;
@@ -1791,10 +1850,10 @@ function renderClubPage() {
           <span class="dim-sep">·</span><span class="pl-meta">${r.played} matches</span></div>` : ""}
       </div>
       ${r ? `<div class="hero-ranks">
-        <div class="pl-hero-rank rel-${tier}" title="Rating: the long-term Elo rating (LT ALGO), its long-term level, from every match since 2020">
-          <span class="val">${Math.round(r.lt)}</span><span class="lbl">Rating</span></div>
-        <div class="pl-hero-rank rel-${formTier}" title="Form: the Elo rating now, after the latest match">
-          <span class="val">${Math.round(r.current)}</span><span class="lbl">Form</span></div>
+        <div class="pl-hero-rank rel-${tier}" title="Baseline Strength: the long-term Elo rating (LT ALGO), its long-term level, from every match since 2020">
+          <span class="val">${Math.round(r.lt)}</span><span class="lbl">Baseline</span></div>
+        <div class="pl-hero-rank rel-${formTier}" title="Current Strength: the Elo rating now, after the latest match${r.form != null ? ` (${r.form > 0 ? "+" : ""}${Math.round(r.form)} over its last 6 matches)` : ""}">
+          <span class="val">${Math.round(r.current)}</span><span class="lbl">Current</span></div>
       </div>` : ""}
     </div>
     <div class="page-tabs" role="tablist">${CLUB_TABS.map(([k, label]) =>
@@ -2698,8 +2757,8 @@ function openTeam(teamId) {
 
   const stat = (label, value) => `<div class="team-stat"><div class="team-stat-label">${label}</div><div class="team-stat-value">${value}</div></div>`;
   $("#team-modal-body").innerHTML = (r ? `<div class="team-stats">
-      ${stat("Rating", Math.round(r.lt))}${stat("Form", Math.round(r.current))}
-      ${stat("Trend", formHtml(r.trend) || "–")}${stat("Played", r.played)}
+      ${stat("Baseline Strength", Math.round(r.lt))}${stat("Current Strength", Math.round(r.current))}
+      ${stat("Current − Baseline", formHtml(r.trend) || "–")}${stat("Last 6 matches", formHtml(r.form) || "–")}${stat("Played", r.played)}
       ${r.attack != null ? `${stat("Attack", Math.round(r.attack))}${stat("Defence", Math.round(r.defence))}${stat("Home", Math.round(r.home))}${stat("Away", Math.round(r.away))}` : ""}
     </div>` : "") +
     xiBlock(teamId) +
@@ -2782,8 +2841,8 @@ function renderPlayerPage() {
           <span class="pl-meta">${escapeHtml(p.position || "")}</span>${p.age != null ? `<span class="dim-sep">·</span>
           <span class="pl-meta"${born ? ` title="Born ${escapeHtml(parseDateInput(born).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }))}"` : ""}>${p.age}</span>` : ""}</div>
       </div>
-      <div class="pl-hero-rank rel-${rankTier(p.rank)}" title="His rank now (0-100), from his last 20 appearances">
-        <span class="val">${Math.round(p.rank)}</span></div>
+      <div class="pl-hero-rank rel-${rankTier(p.rank)}" title="Underlying Ability (0-100): the model's estimate of his level this season, from his clubs' strength, his stats against players in his position and his age curve. Recent Performance and Current Season are shown separately below">
+        <span class="val">${Math.round(p.rank)}</span><span class="lbl">Ability</span></div>
     </div>
     <div class="page-tabs" role="tablist">${PLAYER_TABS.map(([k, label]) =>
       `<button type="button" role="tab" data-ptab="${k}" aria-selected="${k === tab}">${label}</button>`).join("")}</div>
@@ -2800,7 +2859,8 @@ function renderPlayerTab() {
   if (tab === "overview" || tab === "career") drawPlayerChart();
 }
 
-// ---- Overview: next match, positions pitch, rank chart, recent form, this season
+// ---- Overview: next match, positions pitch, then Recent Performance (rank chart, match ratings)
+// and Current Season (totals so far), kept apart from Underlying Ability in the header
 function playerOverviewTab() {
   const { p, page } = state.player;
   const seasons = state.players.seasons || [];
@@ -2815,18 +2875,18 @@ function playerOverviewTab() {
       return next && pitch ? `<div class="ov-top">${next}${pitch}</div>` : next + pitch;
     })()}
     ${hasMatchRanks ? `<div class="chart-card">
-      <div class="chart-head"><span class="chart-title">Rank going into each match</span></div>
+      <div class="chart-head"><span class="chart-title">Recent Performance · rank going into each match</span></div>
       <div class="chart-wrap" id="pl-chart"></div>
       <div class="chart-summary">His last ${page.matchRows.filter((m) => m.rank != null).length} league matches, and his rank now.</div>
     </div>` : ""}
-    ${form.length ? `<div class="club-section"><div class="modal-section">Recent form · match rating</div>
+    ${form.length ? `<div class="club-section"><div class="modal-section">Recent Performance · last ${form.length} match ratings</div>
       <div class="form-strip">${form.map((m) => `<div class="form-cell" title="${escapeHtml(`${fmtShortDate(m.date)} ${m.home ? "v" : "@"} ${pageTeamName(m.opponent)} ${m.gf}–${m.ga} · ${m.minutes}′`)}">
         ${ratingChip(m.rating)}<span class="form-res ${resClass(m)}">${m.gf}–${m.ga}</span></div>`).join("")}</div></div>` : ""}
-    ${now?.minutes ? `<div class="club-section"><div class="modal-section">${seasonName(seasons[0])} so far</div>
+    ${now?.minutes ? `<div class="club-section"><div class="modal-section">Current Season · ${seasonName(seasons[0])} so far</div>
       <div class="team-stats compact">
         ${tile("Apps", now.apps, now.starts != null ? `${now.starts} started` : "")}
         ${tile("Goals", now.goals ?? "–")}${tile("Assists", now.assists ?? "–")}
-        ${tile("Rating", now.rating != null ? now.rating.toFixed(2) : "–")}
+        ${tile("Match rating", now.rating != null ? now.rating.toFixed(2) : "–")}
         ${tile("Minutes", now.minutes.toLocaleString())}
       </div></div>` : ""}
     `;
@@ -3013,7 +3073,7 @@ function playerStatsTab() {
     <div class="team-stats compact">
       ${tile("Apps", s.apps, s.starts != null && !partial ? `${s.starts} started` : "")}
       ${tile("Minutes", s.minutes.toLocaleString())}
-      ${tile("Rating", s.rating != null ? s.rating.toFixed(2) : "–")}
+      ${tile("Match rating", s.rating != null ? s.rating.toFixed(2) : "–")}
       ${gk ? tile("Saves", fmt("saves")) : tile("Goals", fmt("goals"))}
       ${gk ? tile("Save %", fmt("save_pct", "pct")) : tile("Assists", fmt("assists"))}
     </div>
@@ -3095,7 +3155,7 @@ $("#club-body").addEventListener("click", (e) => {
   else { renderTableFilters(); renderTable(); }
   window.scrollTo(0, 0);
 });
-// "#3 of 2,341 clubs" on a club page opens the Rankings tab by Rating (the order that place
+// "#3 of 2,341 clubs" on a club page opens the Rankings tab by Baseline Strength (the order that place
 // counts in), scrolled to the club; a club outside this season's leagues is searched for instead
 $("#club-body").addEventListener("click", (e) => {
   const a = e.target.closest("[data-rank-team]");
@@ -3225,7 +3285,7 @@ function renderLeaguePage() {
         <div class="pl-hero-club">${flagImg(countryDisplay(comp.country))}<span>${countryLink(comp.country)}${data ? `<span class="dim-sep"> · </span><span class="pl-league">${seasonLabel(data)}</span>` : ""}</span></div>
         ${teams ? `<div class="pl-hero-club pl-hero-nat"><span class="pl-meta">${teams} clubs</span>${comp.type ? `<span class="dim-sep">·</span><span class="pl-meta">${escapeHtml(comp.type)}</span>` : ""}</div>` : ""}
       </div>
-      ${avg != null ? `<div class="pl-hero-rank rel-${ratingTierOf(avg)}" title="Average Rating (long-term Elo) of the clubs playing in this league">
+      ${avg != null ? `<div class="pl-hero-rank rel-${ratingTierOf(avg)}" title="Average Baseline Strength (long-term Elo) of the clubs playing in this league">
         <span class="val">${Math.round(avg)}</span></div>` : ""}
     </div>
     ${data ? `<div class="page-tabs" role="tablist">${state.league.tabs.map(([k, label]) =>
@@ -3269,7 +3329,7 @@ function leagueTableTab() {
       <thead><tr><th class="lt-pos">#</th><th></th><th class="lt-club">Club</th>
         <th title="Played">P</th><th class="lt-wdl" title="Won">W</th><th class="lt-wdl" title="Drawn">D</th><th class="lt-wdl" title="Lost">L</th>
         <th class="lt-wide" title="Goals for and against">Goals</th><th title="Goal difference">GD</th><th title="Points">Pts</th>
-        <th title="Last five league games, oldest first: green won, grey drawn, red lost">Form</th><th title="Form: the club's current Elo rating">Form</th></tr></thead>
+        <th title="Last five league games, oldest first: green won, grey drawn, red lost">Form</th><th title="Current Strength: the club's current Elo rating">Current</th></tr></thead>
       <tbody>${rows.filter((r) => r.group === g).map((r) => {
         const rk = state.rankByTeam.get(r.team);
         return `<tr><td class="lt-pos" style="border-left-color:${zones.get(r.description) || "transparent"}">${r.rank}</td>
@@ -3371,7 +3431,8 @@ function leagueProjectedTab() {
           <td>${x.gd >= 0.5 ? "+" : ""}${Math.round(x.gd)}</td><td><b>${Math.round(x.pts)}</b></td>
           <td>${pct(x.pos[0])}</td>${cols.map(([, , places]) => `<td>${pct(places.reduce((a, k) => a + (x.pos[k] || 0), 0))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   };
-  return groups.map(table).join("") + zoneLegend(zones)
+  return `<div class="sim-banner">Simulated: the rest of the season played out ${SIMS.toLocaleString()} times from the model's probabilities. Chances, not a forecast of one outcome.</div>`
+    + groups.map(table).join("") + zoneLegend(zones)
     + `<div class="page-note">The ${upcoming.length.toLocaleString()} scheduled matches left, played out ${SIMS.toLocaleString()} times from the model's predicted scores and home · draw · away chances, on top of the current table. Level clubs are split by goal difference, then goals scored. Matches not yet scheduled (play-offs, split rounds) aren't included.</div>`;
 }
 
@@ -3419,7 +3480,7 @@ function leagueMatchesTab() {
     <div class="page-note">Under upcoming matches: the model's home · draw · away chances, where it has them.</div>`;
 }
 
-// ---- Clubs: the league's clubs by Elo rating, with their table position
+// ---- Clubs: the league's clubs by Baseline Strength, with their table position
 function leagueClubsTab() {
   const { id, data } = state.league;
   const pos = new Map(data.tableRows.map((r) => [r.team, r.rank]));
@@ -3428,14 +3489,14 @@ function leagueClubsTab() {
   const rows = [...ids].map((t) => state.rankByTeam.get(t)).filter(Boolean).sort((a, b) => b.lt - a.lt);
   if (!rows.length) return `<div class="empty-state">No ranked clubs.</div>`;
   return clubRatingTable(rows, data.tableRows.length ? (r) => pos.get(r.team) ?? "" : null, data.teams)
-    + `<div class="page-note">Rating: the long-term Elo rating. Form: the current Elo rating. Trend: Form minus Rating.</div>`;
+    + `<div class="page-note">Baseline: Baseline Strength, the long-term Elo rating. Current: Current Strength, the Elo rating now. Gap: Current minus Baseline. Last 6: the change in Elo over the club's last 6 matches.</div>`;
 }
 
 // clubs table for the league and country pages; pos = the table position column (Pl when null)
 function clubRatingTable(rows, pos, names = {}, meta = null) {
   return `<div class="table-scroll"><table class="leaderboard clubs">
     <thead><tr><th>#</th><th></th><th>Club</th><th class="num">${pos ? "Pos" : "Pl"}</th>
-      <th class="num">Rating</th><th class="num">Trend</th><th class="num">Form</th></tr></thead>
+      <th class="num" title="Baseline Strength: long-term Elo">${BASELINE_TH}</th><th class="num" title="Current minus Baseline">Gap</th><th class="num" title="Current Strength: Elo now">Current</th><th class="num col-recent" title="Elo change over the last 6 matches">Last 6</th></tr></thead>
     <tbody>${rows.map((r, i) => `<tr>
       <td>${i + 1}</td>
       <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></td>
@@ -3443,7 +3504,8 @@ function clubRatingTable(rows, pos, names = {}, meta = null) {
       <td class="num" style="color:var(--text-muted)">${pos ? pos(r) : r.played}</td>
       <td class="num">${eloChip(r.lt)}</td>
       <td class="num">${formHtml(r.trend)}</td>
-      <td class="num">${formChip(r.current)}</td></tr>`).join("")}</tbody></table></div>`;
+      <td class="num">${formChip(r.current)}</td>
+      <td class="num col-recent">${formHtml(r.form)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 $("#club-body").addEventListener("click", (e) => {
@@ -3482,7 +3544,7 @@ function openCountryPage(country) {
       <img class="club-logo" src="${leagueLogo(c.lid)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
       <span class="lg-main"><span class="lg-name">${escapeHtml(c.name)}</span>
         ${c.clubs?.length ? `<span class="lg-sub">${c.clubs.length} clubs · top rated ${escapeHtml(teamName(c.clubs[0].team))}</span>` : ""}</span>
-      ${c.avg != null ? `<span class="rel-chip rel-${ratingTierOf(c.avg)}" title="Average Rating of its clubs">${Math.round(c.avg)}</span>` : ""}</a>`;
+      ${c.avg != null ? `<span class="rel-chip rel-${ratingTierOf(c.avg)}" title="Average Baseline Strength of its clubs">${Math.round(c.avg)}</span>` : ""}</a>`;
   const LIMIT = 50;
   const meta = leagues.length > 1 ? (r) => ` <span class="club-meta">${leagueLink(r.league)}</span>` : null;
   const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -3494,14 +3556,14 @@ function openCountryPage(country) {
         <div class="pl-hero-club"><span class="pl-meta">${[leagues.length && count(leagues.length, "league"), cups.length && count(cups.length, "cup"),
           clubs.length && count(clubs.length, "club")].filter(Boolean).join(" · ")}</span></div>
       </div>
-      ${avg != null ? `<div class="pl-hero-rank rel-${ratingTierOf(avg)}" title="Average Rating (long-term Elo) of the 15 best clubs in its leagues">
+      ${avg != null ? `<div class="pl-hero-rank rel-${ratingTierOf(avg)}" title="Average Baseline Strength (long-term Elo) of the 15 best clubs in its leagues">
         <span class="val">${Math.round(avg)}</span></div>` : ""}
     </div>
     ${leagues.length ? `<div class="modal-section" style="margin-top:0">Leagues</div><div class="lg-list">${leagues.map(card).join("")}</div>
-      ${leagues.length > 1 ? `<div class="page-note">Strongest first, by the average Rating of their clubs.</div>` : ""}` : ""}
+      ${leagues.length > 1 ? `<div class="page-note">Strongest first, by the average Baseline Strength of their clubs.</div>` : ""}` : ""}
     ${cups.length ? `<div class="club-section"${leagues.length ? "" : ' style="margin-top:0"'}><div class="modal-section">${leagues.length ? "Cups" : "Competitions"}</div>
       <div class="lg-list">${cups.map(card).join("")}</div></div>` : ""}
-    ${clubs.length ? `<div class="club-section"><div class="modal-section">Clubs by rating</div><div id="country-clubs">${clubRatingTable(clubs.slice(0, LIMIT), null, {}, meta)}</div>
+    ${clubs.length ? `<div class="club-section"><div class="modal-section">Clubs by Baseline Strength</div><div id="country-clubs">${clubRatingTable(clubs.slice(0, LIMIT), null, {}, meta)}</div>
       ${clubs.length > LIMIT ? `<button type="button" class="show-all" id="country-more">Show all ${clubs.length.toLocaleString()}</button>` : ""}</div>` : ""}`;
   $("#country-more")?.addEventListener("click", (e) => {
     $("#country-clubs").innerHTML = clubRatingTable(clubs, null, {}, meta);
