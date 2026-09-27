@@ -35,6 +35,7 @@ MIN_MAJOR_ROWS = {
     "players.json": ("players", 50),
     "player_seasons.json": ("players", 50),
 }
+MAJOR_ROW_TYPES = {"player_seasons.json": dict}
 COLLAPSE_RATIO = 0.5
 
 
@@ -124,8 +125,10 @@ def validate_export(out_dir, previous_dir=None):
 
     for rel, (key, minimum) in MIN_MAJOR_ROWS.items():
         value = parsed[rel].get(key)
-        if not isinstance(value, list):
-            raise ExportValidationError(f"{rel} does not contain a list at {key!r}")
+        expected_type = MAJOR_ROW_TYPES.get(rel, list)
+        if not isinstance(value, expected_type):
+            raise ExportValidationError(
+                f"{rel} does not contain a {expected_type.__name__} at {key!r}")
         if len(value) < minimum:
             raise ExportValidationError(
                 f"{rel} has only {len(value)} {key} rows; expected at least {minimum}")
@@ -172,7 +175,8 @@ def _check_row_collapse(out_dir, previous_dir):
             continue
         old_value = _read_json(old_path).get(key)
         new_value = _read_json(new_path).get(key)
-        if not isinstance(old_value, list) or not isinstance(new_value, list) or not old_value:
+        expected_type = MAJOR_ROW_TYPES.get(rel, list)
+        if not isinstance(old_value, expected_type) or not isinstance(new_value, expected_type) or not old_value:
             continue
         if len(new_value) < len(old_value) * COLLAPSE_RATIO:
             raise ExportValidationError(
