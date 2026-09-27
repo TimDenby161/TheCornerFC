@@ -4,7 +4,9 @@ from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
 
-from thecornerfc import config, fantasy as fm, fantasy_snapshots as fs
+import tempfile
+
+from thecornerfc import config, export, fantasy as fm, fantasy_snapshots as fs
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / 'db/migrations/20260927_fantasy_fixture_snapshots.sql'
@@ -126,6 +128,29 @@ class ParamsAndMigrationTests(unittest.TestCase):
         self.assertIn("model_type='fantasy'", sql)
         self.assertIn('BEFORE TRUNCATE', sql)
         self.assertIn('UNIQUE(fixture_id,team_id,model_version_id,source,content_hash)', sql)
+
+
+class FplTabExportTests(unittest.TestCase):
+    def test_fpl_json_holds_the_findings_and_waits_for_the_snapshot_table(self):
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = (None,)
+        with tempfile.TemporaryDirectory() as out:
+            export.export_fantasy(conn, out)
+            data = json.loads((Path(out) / 'fpl.json').read_text())
+        results = json.loads(export.FANTASY_RESULTS.read_text())
+        self.assertEqual([c['pass'] for c in data['criteria']],
+                         [v for k, v in results['success'].items() if k[0].isdigit() and not k.endswith('detail')])
+        self.assertEqual(data['overall']['model']['mae'], results['test']['overall']['model']['mae'])
+        self.assertEqual(data['prospective']['state'], 'not_started')
+        self.assertEqual(data['fpl_rows_available'], 0)
+
+    def test_a_failure_skips_the_file_without_breaking_the_export(self):
+        conn = MagicMock()
+        conn.execute.side_effect = RuntimeError('db down')
+        with tempfile.TemporaryDirectory() as out, self.assertLogs(export.log, 'ERROR'):
+            export.export_fantasy(conn, out)
+            self.assertFalse((Path(out) / 'fpl.json').exists())
+        conn.rollback.assert_called_once()
 
 
 if __name__ == '__main__':

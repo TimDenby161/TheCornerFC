@@ -73,11 +73,12 @@ const getJsonOrNull = (path) => getJson(path).catch(() => null);
 async function loadData() {
   try {
     // all at once: the players file is the largest, so it isn't left waiting behind the rest
-    const [m, r, st, bets, pj] = await Promise.all([
+    const [m, r, st, bets, pj, fpl] = await Promise.all([
       getJson("data/matches.json"), getJson("data/rankings.json"), getJsonOrNull("data/stats.json"),
-      getJsonOrNull("data/bets.json"), getJsonOrNull("data/players.json"),
+      getJsonOrNull("data/bets.json"), getJsonOrNull("data/players.json"), getJsonOrNull("data/fpl.json"),
     ]);
     state.stats = st;
+    state.fpl = fpl;
     state.bets = bets;
     if (pj) {        // API-Football sends some names HTML-encoded ("O&apos;Reilly")
       for (const r of pj.players) r[1] = decodeEntities(r[1]);
@@ -106,6 +107,7 @@ async function loadData() {
     renderStats();
     renderBets();
     renderTips();
+    renderFpl();
     route();
     loadExplanations();
   } catch (err) {
@@ -4176,6 +4178,142 @@ function openCountryPage(country) {
     $("#country-clubs").innerHTML = clubRatingTable(clubs, null, {}, meta);
     e.target.remove();
   });
+}
+
+// ------------------------------------------------------------------ FPL findings
+// The fantasy expected-points model's validation (fpl.json, from experiments/fantasy_v1). No FPL
+// data is used: points are rebuilt from match stats with FPL's scoring rules.
+const FPL_POS = { G: "GK", D: "DEF", M: "MID", F: "FWD" };
+const FPL_NAMES = { model: "Our model", recent5: "Last-5 average", ppg: "Points per game",
+  flat_team_goals: "Our model, no match model", v1_1: "v1.1 (next version)" };
+function renderFpl() {
+  const body = $("#fpl-body");
+  const f = state.fpl;
+  if (!f) { body.innerHTML = `<div class="empty-state">No FPL findings yet.</div>`; return; }
+  const o = f.overall, n2 = (x) => x == null ? "–" : x.toFixed(2), n3 = (x) => x == null ? "–" : x.toFixed(3);
+  const passed = f.criteria.filter((c) => c.pass).length;
+  const byKey = Object.fromEntries(f.criteria.map((c) => [c.key, c]));
+  const card = (label, value, note = "") =>
+    `<div class="stats-card"><div class="stats-label">${label}</div><div class="stats-value">${value}</div>${note ? `<div class="stats-note">${note}</div>` : ""}</div>`;
+  const ci = (d) => `${d.diff > 0 ? "+" : "−"}${Math.abs(d.diff).toFixed(3)} (95% range ${d.lo.toFixed(3)} to ${d.hi.toFixed(3)})`;
+  const pctSigned = (x) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(Math.abs(x) < 10 ? 1 : 0)}%`;
+  const badge = (ok) => `<span class="fpl-badge ${ok ? "pass" : "fail"}">${ok ? "PASS" : "FAIL"}</span>`;
+  const b = byKey.bias, cal = byKey.calibration;
+  const checks = [
+    [byKey.benchmarks.pass, `<b>Beats the simple guesses.</b> Lower average error than both the last-5 average and points per game, and the gap is clear of noise: ${ci(byKey.benchmarks.mae_vs_recent)} points per player vs last-5 average.`],
+    [b.pass, `<b>Predicts the right amount of points.</b> Overall ${pctSigned(b.overall_bias_pct)} (limit ±5%), but goalkeepers ${pctSigned(b.position_bias_pct.G)} (limit ±10%): save points were left out after failing their own check (see below).`],
+    [cal.pass, `<b>Its probabilities are honest.</b> Start chances off by ${pct(cal.start_ece)} on average, clean-sheet chances by ${pct(cal.team_cs_ece)} (limit 3%).`],
+    [byKey.match_model.pass, `<b>The match model earns its place.</b> Using our match predictions instead of league-average goals lowers the error by ${Math.abs(byKey.match_model.mae_vs_flat.diff).toFixed(3)}.`],
+  ].map(([ok, text]) => `${badge(ok)}<span>${text}</span>`).join("");
+  const benchRows = ["model", "recent5", "ppg", "flat_team_goals", "v1_1"].map((k) =>
+    `<tr${k === "model" ? ' class="fpl-hl"' : ""}><td>${FPL_NAMES[k]}${k === "v1_1" ? " *" : ""}</td><td>${n3(o[k].mae)}</td><td>${n3(o[k].rmse)}</td>
+      <td>${n2(o[k].spearman)}</td><td>${pct(f.top_n[k].top10.hit_rate, 0)}</td><td>${n2(f.top_n[k].top10.mean_points)}</td></tr>`).join("");
+  const segTable = (seg, label, order, fmt = (g) => g) => {
+    const rows = order.filter((g) => seg[g]).map((g) => {
+      const x = seg[g], better = x.model.mae < x.recent5.mae;
+      return `<tr><td>${fmt(g)}</td><td>${x.model.n.toLocaleString()}</td><td class="${better ? "gap-ok" : "gap-off"}">${n3(x.model.mae)}</td>
+        <td>${n3(x.recent5.mae)}</td><td>${n3(x.ppg.mae)}</td><td>${n2(x.model.spearman)}</td><td>${n2(x.recent5.spearman)}</td></tr>`;
+    }).join("");
+    return `<div class="fpl-scroll"><table class="calib-table"><thead><tr><th>${label}</th><th>Rows</th><th>Model err</th><th>Last-5 err</th><th>PPG err</th><th>Model rank</th><th>Last-5 rank</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+  const posTop = ["G", "D", "M", "F"].map((p) => {
+    const key = `${p}_top${p === "G" || p === "F" ? 5 : 10}`;
+    return `<tr><td>${FPL_POS[p]} top ${p === "G" || p === "F" ? 5 : 10}</td>${["model", "recent5", "ppg", "flat_team_goals"].map((k) =>
+      `<td>${pct(f.top_n[k][key].hit_rate, 0)}</td>`).join("")}</tr>`;
+  }).join("");
+  const calibRows = (c) => c.bins.map(([count, p, rate], i) => {
+    const gap = Math.abs(rate - p);
+    return `<tr><td>${pct(p, 0)}</td><td>${count.toLocaleString()}</td><td class="${gap <= 0.03 ? "gap-ok" : gap > 0.06 ? "gap-off" : ""}">${pct(rate, 0)}</td>
+      <td style="width:70px"><span class="calib-bar" style="width:${Math.round(rate * 60)}px"></span></td></tr>`;
+  }).join("");
+  const mi = f.minutes, reg = f.segments.regular.regular, pr = f.prospective;
+  const liveText = pr.state === "not_started" ? "Not started: the snapshot table hasn't been created yet."
+    : pr.state === "waiting" ? "Ready: the first snapshots are taken before the next Premier League round."
+    : `Capturing since ${new Date(pr.first_capture).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}: ${pr.finished_fixtures} finished matches so far.`;
+  const rounds = pr.finished_rounds || 0;
+  body.innerHTML = `
+    <div class="stats-card fpl-verdict${passed === f.criteria.length ? " ok" : ""}">
+      <div class="stats-label">Fantasy expected points · verdict</div>
+      <h2>${passed === f.criteria.length ? "Validated" : "Promising, not yet validated"}: ${passed} of ${f.criteria.length} checks pass</h2>
+      <p class="fpl-text">Our model predicts each Premier League player's fantasy points per match from expected minutes, our match predictions,
+        each player's shots and chances, and clean-sheet odds. Tested on ${f.test.rows.toLocaleString()} player-matches since July 2024 that it had never seen,
+        it beats the usual shortcuts clearly and its probabilities are well calibrated. It fails one check: goalkeepers come out too low because save points were left out.
+        The next version (v1.1) adds saves and injury news, and is now being tested on upcoming gameweeks before anyone should rely on it.</p>
+    </div>
+    <div class="stats-grid">
+      ${card("Average error", `${n2(o.model.mae)} pts`, `Last-5 average: ${n2(o.recent5.mae)} · points per game: ${n2(o.ppg.mae)}`)}
+      ${card("Rounds won", `${f.round_wins.model_lower_mae} / ${f.round_wins.rounds}`, "Rounds where it beat the last-5 average")}
+      ${card("Top-10 picks that hit", pct(f.top_n.model.top10.hit_rate, 0), `Last-5 average: ${pct(f.top_n.recent5.top10.hit_rate, 0)}. Hits = reached that round's actual top 10`)}
+      ${card("Regular starters", `${n2(reg.model.mae)} pts`, `Error for players starting 3+ of the last 5. Last-5 average: ${n2(reg.recent5.mae)}`)}
+    </div>
+    <div class="stats-card">
+      <div class="stats-label">The checks, set before testing</div>
+      <div class="fpl-checks">${checks}</div>
+    </div>
+    <div class="stats-card">
+      <div class="stats-label">Against simple benchmarks</div>
+      <div class="fpl-scroll"><table class="calib-table">
+        <thead><tr><th>Predictor</th><th>Avg error</th><th>RMSE</th><th>Rank corr.</th><th>Top-10 hit</th><th>Top-10 pts</th></tr></thead>
+        <tbody>${benchRows}</tbody></table></div>
+      <div class="stats-note">Average error is points per player per match (lower is better). Rank correlation: 1 = perfect ordering.
+        Single-match fantasy points are mostly luck, so even a good model is often wrong about individual players.
+        * v1.1 was chosen after seeing these results, so its row is not evidence: only the live test below can show it works.</div>
+    </div>
+    <div class="stats-card">
+      <div class="stats-label">By position</div>
+      ${segTable(f.segments.position, "Position", ["G", "D", "M", "F"], (g) => FPL_POS[g])}
+      <div class="fpl-scroll"><table class="calib-table" style="margin-top:10px">
+        <thead><tr><th>Best picks each round</th><th>Model</th><th>Last-5</th><th>PPG</th><th>No match model</th></tr></thead>
+        <tbody>${posTop}</tbody></table></div>
+      <div class="stats-note">Green error: the model beat the last-5 average. The match model helps most for defenders and goalkeepers, whose points depend on the opponent.</div>
+    </div>
+    <div class="stats-card">
+      <div class="stats-label">Minutes: will he play?</div>
+      <div class="vs-market">
+        <span></span><span class="hd">Model</span><span class="hd">Last-5 avg</span>
+        <span>Average error (mins)</span><span class="num${mi.mae < mi.recent5_mae ? " better" : ""}">${mi.mae.toFixed(1)}</span><span class="num${mi.recent5_mae < mi.mae ? " better" : ""}">${mi.recent5_mae.toFixed(1)}</span>
+        <span>RMSE (mins)</span><span class="num${mi.rmse < mi.recent5_rmse ? " better" : ""}">${mi.rmse.toFixed(1)}</span><span class="num${mi.recent5_rmse < mi.rmse ? " better" : ""}">${mi.recent5_rmse.toFixed(1)}</span>
+      </div>
+      <div class="stats-note">An honest miss: on plain average error the simple last-5 average is slightly better, because minutes are nearly all-or-nothing and
+        a 90%-likely starter is best predicted as ~76 minutes, not 90. With injury news the model's error drops to ${f.availability_minutes_mae.toFixed(1)} minutes.</div>
+      <div class="stats-label" style="margin-top:12px">Chance of starting: said vs happened</div>
+      <table class="calib-table"><thead><tr><th>Said</th><th>Players</th><th>Started</th><th></th></tr></thead><tbody>${calibRows(f.start_calibration)}</tbody></table>
+    </div>
+    <div class="stats-card">
+      <div class="stats-label">Clean sheets: said vs happened</div>
+      <table class="calib-table"><thead><tr><th>Said</th><th>Team games</th><th>Kept one</th><th></th></tr></thead><tbody>${calibRows(f.clean_sheet_calibration)}</tbody></table>
+      <div class="stats-note">From the same goal predictions as the Matches tab. In the high-scoring 2023/24 season clean sheets were over-predicted
+        (off by ${pct(f.validation_clean_sheet_ece)}), so this inherits the match model's season-to-season swings.</div>
+    </div>
+    <div class="stats-card">
+      <div class="stats-label">Why goalkeepers fail</div>
+      <p class="fpl-text">Save points were tested on 2023/24 first and missed their ±10% limit for the busiest keepers
+        (${f.saves.validation_terciles[2].mean_pred.toFixed(2)} predicted vs ${f.saves.validation_terciles[2].mean_actual.toFixed(2)} actual saves), so, as agreed in advance, they were dropped.
+        Without them goalkeepers are ${pctSigned(b.position_bias_pct.G)}; with them they would have been ${pctSigned(f.saves.posthoc_gk_bias)}. v1.1 puts saves back and has to prove it on new matches.</p>
+    </div>
+    <div class="stats-card">
+      <div class="stats-label">Through the season</div>
+      ${segTable(f.segments.round_bucket, "Rounds", ["1-5", "6-19", "20-38"])}
+      <div class="stats-label" style="margin-top:12px">By player level (our player rank, not FPL price)</div>
+      ${segTable(f.segments.ability_band, "Rank", ["80+", "70-80", "60-70"])}
+    </div>
+    <div class="stats-card">
+      <div class="stats-label">Live test on upcoming gameweeks</div>
+      <div class="stats-value">${rounds} / ${pr.target_rounds} <span style="font-size:14px;color:var(--text-muted)">rounds</span></div>
+      <div class="dist-row"><span class="dist-bar-wrap"><span class="dist-bar" style="display:block;width:${Math.min(100, 100 * rounds / pr.target_rounds).toFixed(0)}%;background:var(--series-blue)"></span></span></div>
+      <div class="stats-note">${liveText} Every player's prediction is saved before kickoff and can't be changed afterwards. Results stay sealed until
+        ${pr.target_rounds} rounds are in, then the same checks are run once.</div>
+    </div>
+    <div class="stats-card">
+      <div class="stats-label">What this doesn't show yet</div>
+      <ul class="fpl-list">
+        <li>No comparison with FPL's own expected points or player prices: we don't collect any official FPL data.</li>
+        <li>Points are rebuilt from match stats with FPL's scoring rules, without bonus points, own goals, penalty misses or defensive-contribution points.</li>
+        <li>Positions are from match data (GK/DEF/MID/FWD), which can differ from FPL's listing for some players.</li>
+        <li>The match predictions used for past seasons were rebuilt afterwards, not made before kickoff.</li>
+      </ul>
+      <div class="stats-note">The Corner FC is not affiliated with the Premier League or Fantasy Premier League.</div>
+    </div>`;
 }
 
 // ------------------------------------------------------------------ wiring
