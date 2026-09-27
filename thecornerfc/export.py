@@ -58,6 +58,26 @@ def market_probabilities(conn):
     return {fid: tuple(sum(x[i] for x in ps) / len(ps) for i in range(3)) for fid, ps in per_fixture.items()}
 
 
+def site_freshness(conn):
+    """When the site's model inputs last changed, for the small 'updated' line on the site:
+    the latest stored prediction, injury and odds rows (odds = when we last fetched a price) and
+    the latest registered match model version. Anything with no rows is left out, never guessed."""
+    out = {}
+    for key, table in (("predictions", "fixture_predictions"), ("injuries", "injuries"), ("odds", "odds")):
+        (latest,) = conn.execute(f"select max(updated_at) from {table}").fetchone()
+        if latest is not None:
+            out[key] = latest.isoformat()
+    (registry,) = conn.execute("select to_regclass('public.model_versions')").fetchone()
+    if registry is not None:
+        row = conn.execute(
+            """select version_name, code_sha, created_at from model_versions
+               where model_type = 'match' order by created_at desc limit 1""").fetchone()
+        if row:
+            out["model"] = {"name": row[0], "code": row[1][:7] if row[1] else None,
+                            "registered": row[2].isoformat()}
+    return out
+
+
 def _r(x, n=2):
     return None if x is None else round(float(x), n)
 
@@ -279,6 +299,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     generated = now.isoformat()
     (out_dir / "matches.json").write_text(json.dumps({
         "generated_at": generated,
+        "freshness": site_freshness(conn),
         "fields": ["id", "kickoff", "league", "round", "home", "away", "status", "hg", "ag",
                    "pen_h", "pen_a", "p_home", "p_draw", "p_away", "home_xg", "away_xg",
                    "likely", "home_rank", "away_rank", "source", "rating", "r_winner",

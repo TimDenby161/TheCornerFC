@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>The Corner FC</title>
-<meta name="description" content="Club rankings, projected scores and win/draw/loss chances.">
+<meta name="description" content="Club strength ratings, projected scores and model win/draw/loss probabilities.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
@@ -28,8 +28,8 @@
     <button role="tab" data-tab="table" data-view="players" aria-selected="false">Players</button>
     <button role="tab" data-tab="matches" aria-selected="false">Matches</button>
     <button role="tab" data-tab="stats" aria-selected="false">Stats</button>
-    <button role="tab" data-tab="tips" aria-selected="false">Tips</button>
-    <button role="tab" data-tab="bets" aria-selected="false">Bets</button>
+    <button role="tab" data-tab="tips" aria-selected="false">Model vs Market</button>
+    <button role="tab" data-tab="bets" aria-selected="false">Paper Simulation</button>
   </nav>
   <div class="menu-backdrop" id="menu-backdrop" hidden></div>
 </header>
@@ -102,11 +102,11 @@
   <section class="panel" data-tab="tips">
     <div id="tips-top"></div>
     <div id="tips-bank" class="tips-bank">
-      <label class="tb-field"><span class="stats-label">Your balance</span>
+      <label class="tb-field"><span class="stats-label">Paper bank</span>
         <span class="tb-input"><span>£</span><input id="tips-balance" type="number" inputmode="decimal" min="0" step="1" placeholder="1000"></span></label>
-      <label class="tb-field"><span class="stats-label">Stake per tip</span>
-        <select id="tips-pct"><option value="0.005">0.5% of balance</option><option value="0.01" selected>1% of balance</option><option value="0.02">2% of balance</option></select></label>
-      <div class="tb-out"><span class="stats-label">Stake each</span><span id="tips-stake" class="tb-stake">–</span><span id="tips-total" class="tb-total"></span></div>
+      <label class="tb-field"><span class="stats-label">Simulated stake</span>
+        <select id="tips-pct"><option value="0.005">0.5% of bank</option><option value="0.01" selected>1% of bank</option><option value="0.02">2% of bank</option></select></label>
+      <div class="tb-out"><span class="stats-label">Simulated stake each</span><span id="tips-stake" class="tb-stake">–</span><span id="tips-total" class="tb-total"></span></div>
     </div>
     <div id="tips-body"></div>
   </section>
@@ -139,6 +139,7 @@
   <section class="panel" data-tab="club">
     <div id="club-body"></div>
   </section>
+  <footer class="freshness" id="freshness" hidden></footer>
 </main>
 
 
