@@ -2312,10 +2312,10 @@ async function renderMatchLineups(m, panel) {
   };
   const marked = finished && state.players?.prematchXi?.[String(m.id)];
   panel.innerHTML = `<div class="fixture-lineups">${side(m.home, homeData, true)}${side(m.away, awayData, false)}</div>
-    ${marked ? `<div class="page-note" style="text-align:center">Green: the model predicted him to start. Red: it didn't, and the name under his position is the player it picked instead.</div>` : ""}`;
+    ${marked ? `<div class="page-note" style="text-align:center">Green: the model predicted him to start. Red: it didn't; under his position is the player it picked instead, with that player's rank going into the match.</div>` : ""}`;
 }
 // Marks each starter of an actual XI as predicted (hit) or not, against the model's pre-match XI
-// ([id, name, role] rows). Each starter it missed is paired with a predicted player who didn't
+// ([id, name, role, rank] rows); a miss's instead is that row. Each starter it missed is paired with a predicted player who didn't
 // start: same position first, then the same position group, then the same line, then anyone.
 // Returns how many starters it got right.
 const LINE_OF_ROLE = { GK: "GK", CB: "D", LB: "D", RB: "D", LWB: "D", RWB: "D", DM: "M", CM: "M", LM: "M", RM: "M", AM: "M", LW: "F", RW: "F", ST: "F" };
@@ -2329,7 +2329,7 @@ function markPredicted(xi, predicted) {
   for (const same of tests) for (const c of missed) {
     if (c.instead) continue;
     const i = spare.findIndex(([, , role]) => same(c.b.label, role));
-    if (i !== -1) c.instead = spare.splice(i, 1)[0][1];
+    if (i !== -1) c.instead = spare.splice(i, 1)[0];
   }
   return xi.length - missed.length;
 }
@@ -2708,12 +2708,14 @@ function xiPitch(xi, data = state.club?.data, opts = {}) {
       const rankText = rank == null ? "–" : Math.round(rank);
       const meta = hasChance || hasMins ? `<span class="pp-meta">${hasChance ? `<span class="sc-${startTier(chance)}">${Math.round(chance)}%</span>` : ""}${
         hasChance && hasMins ? " · " : ""}${hasMins ? `${mins}′` : ""}</span>` : `<span class="pp-meta">${escapeHtml(b.label || "")}</span>`;
-      const verdict = !marked ? "" : predicted ? " · predicted to start" : ` · not predicted${instead ? `; the model picked ${instead}` : ""}`;
+      const [, predName, , predRank] = instead || [];
+      const verdict = !marked ? "" : predicted ? " · predicted to start" : ` · not predicted${instead ? `; the model picked ${predName} (rank ${predRank != null ? Number(predRank).toFixed(1) : "–"})` : ""}`;
       // the square in the start-chance colour, the rating in its own
       return `<a class="pp-spot xi-spot sq-${grade}" href="#/player/${p.id}" style="left:${x}%;top:${y}%"
           title="${escapeHtml(`${p.name} · ${b.label} · rank ${rank != null ? Number(rank).toFixed(1) : "–"}${hasChance ? ` · ${Math.round(chance)}% to start` : ""}${hasMins ? ` · ${mins}′ expected` : ""}${verdict}`)}">
         <span class="pp-rank rk-${rankTier(rank)}">${rankText}</span><span class="pp-name">${escapeHtml(shortName(p.name))}</span>
-        ${meta}${instead ? `<span class="pp-instead">${escapeHtml(shortName(instead))}</span>` : ""}</a>`;
+        ${meta}${instead ? `<span class="pp-instead"><span class="pp-instead-lbl">Picked</span><span class="pp-instead-name">${escapeHtml(shortName(predName))}</span>
+          <span class="pp-rank rk-${rankTier(predRank)}">${predRank == null ? "–" : Math.round(predRank)}</span></span>` : ""}</a>`;
     });
   }).join("");
   const ranks = xi.map((c) => c.rank).filter((r) => r != null);
