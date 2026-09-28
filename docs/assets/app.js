@@ -4448,14 +4448,14 @@ function renderFpl() {
     : `Capturing since ${new Date(pr.first_capture).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}: ${pr.finished_fixtures} finished matches so far.`;
   const rounds = pr.finished_rounds || 0;
   body.innerHTML = `
-    <div class="stats-card fpl-verdict${passed === f.criteria.length ? " ok" : ""}">
-      <div class="stats-label">Fantasy expected points · verdict</div>
-      <h2>${passed === f.criteria.length ? "Validated" : "Promising, not yet validated"}: ${passed} of ${f.criteria.length} checks pass</h2>
+    <details class="stats-card fpl-verdict${passed === f.criteria.length ? " ok" : ""}">
+      <summary><span class="stats-label">Model status</span>
+        <span class="fpl-verdict-line">${passed === f.criteria.length ? "Validated" : "Promising, not yet validated"} · ${passed} of ${f.criteria.length} checks pass</span></summary>
       <p class="fpl-text">Our model predicts each Premier League player's fantasy points per match from expected minutes, our match predictions,
         each player's shots and chances, and clean-sheet odds. Tested on ${f.test.rows.toLocaleString()} player-matches since July 2024 that it had never seen,
         it beats the usual shortcuts clearly and its probabilities are well calibrated. It fails one check: goalkeepers come out too low because save points were left out.
         The next version (v1.1) adds saves and injury news, and is now being tested on upcoming gameweeks before anyone should rely on it.</p>
-    </div>
+    </details>
     <div class="stats-card" id="fpl-next"></div>
     <div class="stats-grid">
       ${card("Average error", `${n2(o.model.mae)} pts`, `Last-5 average: ${n2(o.recent5.mae)} · points per game: ${n2(o.ppg.mae)}`)}
@@ -4669,8 +4669,12 @@ function syncMenu() {
   });
   $("#app-title").textContent = title;
 }
+// Each tab other than the tables has its own address, so a reload (or a shared link) stays on it
+const TAB_ROUTES = { matches: "matches", stats: "stats", tips: "model-vs-market", bets: "simulation", fpl: "fpl" };
+const ROUTE_TABS = Object.fromEntries(Object.entries(TAB_ROUTES).map(([t, r]) => [r, t]));
 document.querySelectorAll("nav.tabs button").forEach((btn) => btn.addEventListener("click", () => {
-  if (location.hash.startsWith("#/")) history.pushState(null, "", location.pathname + location.search);
+  const to = TAB_ROUTES[btn.dataset.tab] ? `#/${TAB_ROUTES[btn.dataset.tab]}` : location.pathname + location.search;
+  if (TAB_ROUTES[btn.dataset.tab] ? location.hash !== to : location.hash.startsWith("#/")) history.pushState(null, "", to);
   showTab(btn.dataset.tab);
   if (btn.dataset.view && btn.dataset.view !== state.tableView) setTableView(btn.dataset.view);
   else if (btn.dataset.tab === "table") syncTableUrl();
@@ -4692,6 +4696,7 @@ function route() {
   const country = location.hash.match(/^#\/country\/(.+)/);
   const league = location.hash.match(/^#\/league\/(\d+)(?:\/(\w+))?/);
   const tableView = location.hash.match(/^#\/(clubs|players)(?:\?(.*))?$/);
+  const tab = ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]];
   if (!state.data) return;
   if (club || player || nation || country || league || tableView) $("#team-modal").hidden = true;
   if (!league) state.league = null;
@@ -4701,6 +4706,7 @@ function route() {
   else if (country) openCountryPage(decodeURIComponent(country[1]));
   else if (league) openLeaguePage(Number(league[1]), league[2]);
   else if (tableView) openTableView(tableView[1], tableView[2]);
+  else if (tab) { showTab(tab); window.scrollTo(0, 0); }
   else showTab(state.tab || "table");
 }
 window.addEventListener("hashchange", route);
