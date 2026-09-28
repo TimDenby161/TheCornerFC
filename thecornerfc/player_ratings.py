@@ -1050,6 +1050,7 @@ def compute_player_ratings(conn):
     sample = defaultdict(list) # position -> raw scores of players with a full window of minutes
     appearance_scores = []     # (fixture, player, (stat score, club rank), position)
     team_rows = []             # (fixture, team, predicted XI [(player, pos, raw, role)], actual XI [(raw, pos, line)], upcoming)
+    history = []               # (fixture, team, [(player, role)]): the full predicted XI for each finished match
     for fid, kickoff, home, away, upcoming, _season in fixtures:
         for team in (home, away):
             # predicted XI from recent matches, excluding the injury list
@@ -1084,6 +1085,8 @@ def compute_player_ratings(conn):
                         actual.append((s, pos, line_of(a["role"], a["position"])))
             team_rows.append((fid, team, [(p, pos, s, slot or windows[p].label()) for p, pos, s, _, slot in predicted],
                               actual, upcoming))
+            if not upcoming and len(predicted) == 11:
+                history.append((fid, team, [(p, slot or windows[p].label()) for p, _, _, _, slot in predicted]))
         # after the match: update windows and team history
         for a in apps.get(fid, []):
             st = _row_stats(a)
@@ -1150,11 +1153,11 @@ def compute_player_ratings(conn):
             candidate['player_rating'] = to_rank(candidate['raw_score'], candidate['position'])
     lineup_snapshots.capture_predictions(conn, fixtures, lineups, selection_inputs, live_availability)
     _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_rows, position_ranks, projections,
-           components)
+           components, history)
 
 
 def _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_rows, position_ranks, projections,
-           components=None):
+           components=None, history=None):
     with conn.cursor() as cur:
         # Rebuilt with truncate + copy rather than updating fixture_players, so the big table
         # isn't rewritten (and bloated with dead rows) on every run
@@ -1176,6 +1179,13 @@ def _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_
         cur.execute("truncate predicted_lineups")
         cur.executemany("insert into predicted_lineups (fixture_id, team_id, player_id, position, player_rank) "
                         "values (%s, %s, %s, %s, %s)", lineups)
+        # skipped until db/migrations/20260928_reconstructed_lineups.sql is applied
+        if history is not None and cur.execute("select to_regclass('public.reconstructed_lineups')").fetchone()[0]:
+            cur.execute("truncate reconstructed_lineups")
+            array = lambda xs: "{" + ",".join("NULL" if x is None else str(x) for x in xs) + "}"
+            with cur.copy("copy reconstructed_lineups (fixture_id, team_id, players, roles) from stdin") as cp:
+                cp.write("".join(f"{fid}\t{team}\t{array(p for p, _ in xi)}\t{array(r for _, r in xi)}\n"
+                                 for fid, team, xi in history))
         cur.execute("update players set current_rank = null, rank_position = null, rank_minutes = null")
         cur.execute("create temp table tmp_cur (player_id int, r numeric(4,1), pos text, mins int) on commit drop")
         buf = io.StringIO()
@@ -1196,5 +1206,5 @@ def _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_
             cp.write("".join(f"{p}\t{y}\t{r}\n" for p, ys in projections.items() for y, r in ys.items()))
     player_history.capture(conn, current, season_rows, components)
     conn.commit()
-    log.info("Player ratings written: %d current player ranks, %d predicted-lineup rows, %d player-seasons",
-             len(current), len(lineups), len(season_rows))
+    log.info("Player ratings written: %d current player ranks, %d predicted-lineup rows, %d player-seasons, "
+             "%d reconstructed line-ups", len(current), len(lineups), len(season_rows), len(history or ()))

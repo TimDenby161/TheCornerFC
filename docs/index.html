@@ -33,6 +33,7 @@
     <button role="tab" data-tab="table" data-view="players" aria-selected="false">Players</button>
     <button role="tab" data-tab="matches" aria-selected="false">Matches</button>
     <button role="tab" data-tab="stats" aria-selected="false">Stats</button>
+    <button role="tab" data-tab="lineups" aria-selected="false">Line-up record</button>
     <button role="tab" data-tab="tips" aria-selected="false">Model vs Market</button>
     <button role="tab" data-tab="bets" aria-selected="false">Paper Simulation</button>
     <button role="tab" data-tab="fpl" aria-selected="false">FPL</button>
@@ -109,6 +110,24 @@
       <button type="button" class="filter-chip" data-range="365d" aria-pressed="false">12 months</button>
     </div>
     <div id="stats-body"></div>
+  </section>
+
+  <section class="panel" data-tab="lineups">
+    <div id="lineup-side">
+      <div class="side-stick"><div class="filters-wrap side-filters" id="lineup-filters"></div></div>
+    </div>
+    <div class="filter-row range-row" id="lineup-source">
+      <button type="button" class="filter-chip" data-source="live" aria-pressed="true" title="Predictions saved before the team sheet came out">Saved before kick-off</button>
+      <button type="button" class="filter-chip" data-source="history" aria-pressed="false" title="The model re-run on every past match">Reconstructed history</button>
+    </div>
+    <div class="filter-row range-row" id="lineup-ranges">
+      <button type="button" class="filter-chip" data-range="7" aria-pressed="false">7 days</button>
+      <button type="button" class="filter-chip" data-range="30" aria-pressed="false">30 days</button>
+      <button type="button" class="filter-chip" data-range="90" aria-pressed="false">90 days</button>
+      <button type="button" class="filter-chip" data-range="365" aria-pressed="false">12 months</button>
+      <button type="button" class="filter-chip" data-range="all" aria-pressed="true">All time</button>
+    </div>
+    <div id="lineup-body"></div>
   </section>
 
   <section class="panel" data-tab="tips">

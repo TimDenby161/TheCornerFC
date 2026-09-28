@@ -437,6 +437,15 @@ create table if not exists predicted_lineups (
     player_rank  numeric(4,1),
     primary key (fixture_id, player_id)
 );
+-- Predicted XI the replay works out for every finished match, from what it knew before kick-off
+-- (rebuilt nightly; the Line-up record tab's reconstructed history, not captured evidence)
+create table if not exists reconstructed_lineups (
+    fixture_id   int not null,
+    team_id      int not null,
+    players      int[] not null,   -- the predicted XI, in slot order
+    roles        text[] not null,  -- each one's predicted role, same order
+    primary key (fixture_id, team_id)
+);
 alter table players add column if not exists current_rank numeric(4,1);
 alter table players add column if not exists rank_position text;
 alter table players add column if not exists rank_minutes int;
@@ -611,6 +620,7 @@ alter table fixture_players    enable row level security;
 alter table paper_bets         enable row level security;
 alter table fixture_team_ratings enable row level security;
 alter table predicted_lineups  enable row level security;
+alter table reconstructed_lineups enable row level security;
 alter table fixture_formations enable row level security;
 alter table team_coaches       enable row level security;
 alter table team_colors        enable row level security;

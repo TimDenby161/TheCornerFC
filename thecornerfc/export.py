@@ -672,6 +672,121 @@ def export_methodology(conn, out_dir=OUT_DIR, now=None):
     _write_json_file(out_dir / "methodology.json", out)
     log.info("Exported the methodology live record (%s matches, %s lineups)",
              (out["matches"] or {}).get("n", 0), (out["lineups"] or {}).get("n", 0))
+    export_lineup_record(conn, out_dir, now)
+
+
+LINEUP_RECORD_FIELDS = ["fixture", "kickoff", "league", "team", "opponent", "home", "correct",
+                        "roles_right", "roles_known", "lines", "hours_before", "version", "missed", "wrong"]
+LINEUP_HISTORY_FIELDS = ["fixture", "kickoff", "league", "team", "opponent", "home", "correct",
+                         "roles_right", "roles_known", "lines", "missed", "wrong"]
+
+
+def _score_xi(predicted, actual):
+    """A predicted XI {player: role} against the XI that started {player: (role, broad position)}:
+    (starters named, of them in the right role, of them with both roles known, [starters, of them
+    named] for GK, DEF, MID and FWD by the starting role, starters missed, players picked instead)."""
+    from .player_ratings import LINES, line_of
+    shared = predicted.keys() & actual.keys()
+    roles = [predicted[p] == actual[p][0] for p in shared if predicted[p] and actual[p][0]]
+    lines = []
+    for line in LINES:
+        starters = [p for p, (role, broad) in actual.items() if line_of(role, broad) == line]
+        lines += [len(starters), sum(p in shared for p in starters)]
+    return len(shared), sum(roles), len(roles), lines, sorted(actual.keys() - shared), sorted(predicted.keys() - shared)
+
+
+def _lineup_names(conn, out, rows, team_i, league_i, missed_i):
+    """Fills out's teams, leagues and players (the missed and wrongly picked) for the rows."""
+    team_ids = list({x for row in rows for x in (row[team_i], row[team_i + 1]) if x})
+    league_ids = list({row[league_i] for row in rows if row[league_i]})
+    people = list({p for row in rows for p in row[missed_i] + row[missed_i + 1]})
+    if team_ids:
+        out["teams"] = {str(t): n for t, n in conn.execute(
+            "select team_id, name from teams where team_id = any(%s)", [team_ids]).fetchall()}
+    if league_ids:
+        out["leagues"] = {str(lid): {"name": n, "country": c} for lid, n, c in conn.execute(
+            "select league_id, name, country from leagues where league_id = any(%s)", [league_ids]).fetchall()}
+    if people:
+        out["players"] = {str(p): n for p, n in conn.execute(
+            "select player_id, name from players where player_id = any(%s)", [people]).fetchall()}
+
+
+def export_lineup_record(conn, out_dir=OUT_DIR, now=None):
+    """docs/data/lineups.json: every scored pre-match line-up for the Line-up record tab, one row
+    per team, picked by the same rule as the methodology record (evaluation.load_lineups). The tab
+    adds them up itself, so it can filter by competition. lines is [starters, of them predicted]
+    for GK, DEF, MID and FWD, by the official XI's roles; missed are starters the model left out,
+    wrong are the players it picked instead."""
+    from . import evaluation
+    from types import SimpleNamespace
+    now = now or datetime.now(timezone.utc)
+    out = {"generated_at": now.isoformat(), "fields": LINEUP_RECORD_FIELDS, "rows": [], "versions": [],
+           "leagues": {}, "teams": {}, "players": {}, "excluded_no_official_xi": 0}
+    if _table_exists(conn, "lineup_prediction_snapshots") and _table_exists(conn, "official_lineup_snapshots"):
+        args = SimpleNamespace(source="prospective", start=datetime(2000, 1, 1, tzinfo=timezone.utc),
+                               end=now, as_of=now, hours_before=0)
+        rows, coverage = evaluation.load_lineups(conn, args)
+        out["excluded_no_official_xi"] = coverage["missing_or_incomplete_official_xi"]
+        fixtures = {f: (league, home, away) for f, league, home, away in conn.execute(
+            "select fixture_id, league_id, home_team_id, away_team_id from fixtures where fixture_id = any(%s)",
+            [list({r["fixture_id"] for r in rows})]).fetchall()} if rows else {}
+        version_ids = sorted({r["model_version_id"] for r in rows})
+        registered = {v: (name, created) for v, name, created in conn.execute(
+            "select model_version_id, version_name, created_at from model_versions where model_version_id = any(%s)",
+            [version_ids]).fetchall()} if version_ids else {}
+        # oldest first, so the tab can number them v1, v2, ... even when the names repeat
+        version_ids.sort(key=lambda v: (registered.get(v, (None, None))[1] or now, v))
+        out["versions"] = [{"id": v, "name": registered.get(v, (v,))[0],
+                            "registered": registered[v][1].isoformat() if registered.get(v, (None, None))[1] else None}
+                           for v in version_ids]
+        index = {v: i for i, v in enumerate(version_ids)}
+        for r in sorted(rows, key=lambda r: (r["effective_at"], r["fixture_id"], r["team_id"])):
+            league, home, away = fixtures.get(r["fixture_id"], (None, None, None))
+            correct, right, known, lines, missed, wrong = _score_xi(
+                {p["player"]: p.get("role") for p in r["players"] if p.get("predicted_starter")},
+                {p["player"]: (p.get("role"), p.get("position")) for p in r["official"] if p.get("starter")})
+            out["rows"].append([
+                r["fixture_id"], r["effective_at"].isoformat(), league, r["team_id"],
+                away if r["team_id"] == home else home, int(r["team_id"] == home), correct, right, known, lines,
+                _r(r["seconds_to_kickoff"] / 3600, 1), index[r["model_version_id"]], missed, wrong])
+        _lineup_names(conn, out, out["rows"], 3, 2, 12)
+    _write_json_file(out_dir / "lineups.json", out)
+    log.info("Exported the line-up record (%s team line-ups)", len(out["rows"]))
+    export_lineup_history(conn, out_dir, now)
+
+
+def export_lineup_history(conn, out_dir=OUT_DIR, now=None):
+    """docs/data/lineups_history.json: the reconstructed history for the Line-up record tab. The
+    predicted XI the nightly player-ratings replay worked out for every finished match
+    (reconstructed_lineups), from what it knew before kick-off, scored against the XI that
+    started exactly as the live record is. Rebuilt with today's code, so it's kept apart from the
+    live record; loaded only when the tab switches to it. kickoff is the match date."""
+    now = now or datetime.now(timezone.utc)
+    out = {"generated_at": now.isoformat(), "fields": LINEUP_HISTORY_FIELDS, "available": False, "rows": [],
+           "leagues": {}, "teams": {}, "players": {}}
+    if _table_exists(conn, "reconstructed_lineups"):
+        out["available"] = True
+        starters = defaultdict(dict)
+        for fid, team, player, role, broad in conn.execute(
+                """select fp.fixture_id, fp.team_id, fp.player_id, fp.role, fp.position
+                   from fixture_players fp join reconstructed_lineups r using (fixture_id, team_id)
+                   where fp.started"""):
+            starters[(fid, team)][player] = (role, broad)
+        for fid, team, players, roles, kickoff, league, home, away in conn.execute(
+                """select r.fixture_id, r.team_id, r.players, r.roles, f.kickoff, f.league_id,
+                          f.home_team_id, f.away_team_id
+                   from reconstructed_lineups r join fixtures f using (fixture_id)
+                   where f.status_short = any(%s)
+                   order by f.kickoff, r.fixture_id, r.team_id""", [list(config.FINISHED_STATUSES)]):
+            actual = starters.get((fid, team), {})
+            if len(actual) != 11 or len(players) != 11:
+                continue     # no complete team sheet to check against
+            correct, right, known, lines, missed, wrong = _score_xi(dict(zip(players, roles)), actual)
+            out["rows"].append([fid, kickoff.date().isoformat(), league, team, away if team == home else home,
+                                int(team == home), correct, right, known, lines, missed, wrong])
+        _lineup_names(conn, out, out["rows"], 3, 2, 10)
+    _write_json_file(out_dir / "lineups_history.json", out, ensure_ascii=False)
+    log.info("Exported the reconstructed line-up history (%s team line-ups)", len(out["rows"]))
 
 
 # Paper money shown on the Bets tab: a flat stake per bet out of a starting bank

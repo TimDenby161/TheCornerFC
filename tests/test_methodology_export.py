@@ -3,10 +3,11 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from thecornerfc import evaluation
-from thecornerfc.export import export_methodology
+from thecornerfc import export
+from thecornerfc.export import export_lineup_history, export_lineup_record, export_methodology
 
 T1 = datetime(2026, 9, 26, 15, tzinfo=timezone.utc)
 T2 = datetime(2026, 9, 27, 15, tzinfo=timezone.utc)
@@ -35,9 +36,11 @@ class MethodologyExportTests(unittest.TestCase):
     def export(self, conn, matches=(), lineups=()):
         with tempfile.TemporaryDirectory() as d, \
                 patch.object(evaluation, "load_matches", return_value=(list(matches), {"missing_regulation_score": 2})) as lm, \
-                patch.object(evaluation, "load_lineups", return_value=(list(lineups), {"missing_or_incomplete_official_xi": 1})):
+                patch.object(evaluation, "load_lineups", return_value=(list(lineups), {"missing_or_incomplete_official_xi": 1})), \
+                patch.object(export, "export_lineup_record") as record:
             export_methodology(conn, Path(d), now=T2)
             self.load_matches = lm
+            record.assert_called_once()
             return json.loads((Path(d) / "methodology.json").read_text())
 
     def test_scores_prospective_matches_without_the_market(self):
@@ -73,6 +76,117 @@ class MethodologyExportTests(unittest.TestCase):
         self.assertIsNone(out["matches"])
         self.assertIsNone(out["lineups"])
         self.load_matches.assert_not_called()
+
+
+def record_conn(tables=True, history=(), starters=()):
+    """A connection for the line-up exports: fixture 7 is team 1 (home) against team 2, in league
+    39; history is reconstructed_lineups rows and starters fixture_players rows."""
+    def execute(sql, params=None):
+        rows = []
+        if "to_regclass(%s)" in sql:
+            return Mock(fetchone=lambda: (params[0] if tables else None,))
+        if "from reconstructed_lineups r join fixtures" in sql:
+            rows = list(history)
+        elif "from fixture_players" in sql:
+            rows = list(starters)
+        elif "from fixtures" in sql:
+            rows = [(7, 39, 1, 2)]
+        elif "from model_versions" in sql:
+            rows = [("mv_new", "recent-minutes-lineup", T2), ("mv_old", "recent-minutes-lineup", T1)]
+        elif "from teams" in sql:
+            rows = [(1, "Home FC"), (2, "Away FC")]
+        elif "from leagues" in sql:
+            rows = [(39, "Premier League", "England")]
+        elif "from players" in sql:
+            rows = [(p, f"Player {p}") for p in params[0]]
+        result = MagicMock(fetchall=lambda: rows)
+        result.__iter__.side_effect = lambda: iter(rows)
+        return result
+    conn = Mock()
+    conn.execute.side_effect = execute
+    return conn
+
+
+def lineup(team, version, predicted_ids, when=T1):
+    # official XI: 0 is the keeper, 1-4 defenders, 5-8 midfielders, 9-10 forwards
+    roles = ["GK", "CB", "CB", "LB", "RB", "CM", "CM", "LM", "RM", "ST", "ST"]
+    official = [{"player": i, "starter": True, "role": roles[i]} for i in range(11)]
+    official.append({"player": 50, "starter": False, "role": None})
+    players = [{"player": i, "predicted_starter": True, "role": "ST" if i == 5 else roles[i] if i < 11 else "CM"}
+               for i in predicted_ids]
+    return {"fixture_id": 7, "team_id": team, "players": players, "official": official, "effective_at": when,
+            "seconds_to_kickoff": 5400, "model_version_id": version}
+
+
+class LineupRecordExportTests(unittest.TestCase):
+    def export(self, conn, lineups=()):
+        with tempfile.TemporaryDirectory() as d, \
+                patch.object(evaluation, "load_lineups", return_value=(list(lineups), {"missing_or_incomplete_official_xi": 3})):
+            with patch.object(export, "export_lineup_history") as history:
+                export_lineup_record(conn, Path(d), now=T2)
+            history.assert_called_once()
+            return json.loads((Path(d) / "lineups.json").read_text())
+
+    def test_one_row_per_team_lineup(self):
+        # team 1 missed starters 9 and 10 (forwards) for 11 and 12, and put 5 up front
+        out = self.export(record_conn(), [lineup(1, "mv_old", list(range(9)) + [11, 12]),
+                                          lineup(2, "mv_new", range(11))])
+        rows = [dict(zip(out["fields"], r)) for r in out["rows"]]
+        home, away = rows
+        self.assertEqual((home["team"], home["opponent"], home["home"], home["league"]), (1, 2, 1, 39))
+        self.assertEqual((away["team"], away["opponent"], away["home"]), (2, 1, 0))
+        self.assertEqual(home["correct"], 9)
+        self.assertEqual((home["roles_right"], home["roles_known"]), (8, 9))
+        self.assertEqual(home["lines"], [1, 1, 4, 4, 4, 4, 2, 0])
+        self.assertEqual((home["missed"], home["wrong"]), ([9, 10], [11, 12]))
+        self.assertEqual(home["hours_before"], 1.5)
+        self.assertEqual(away["correct"], 11)
+        self.assertEqual((away["missed"], away["wrong"]), ([], []))
+        # versions oldest first, so the page can tell same-named versions apart
+        self.assertEqual([v["id"] for v in out["versions"]], ["mv_old", "mv_new"])
+        self.assertEqual((home["version"], away["version"]), (0, 1))
+        self.assertEqual(out["teams"], {"1": "Home FC", "2": "Away FC"})
+        self.assertEqual(out["leagues"], {"39": {"name": "Premier League", "country": "England"}})
+        self.assertEqual(set(out["players"]), {"9", "10", "11", "12"})
+        self.assertEqual(out["excluded_no_official_xi"], 3)
+
+    def test_no_tables_writes_an_empty_record(self):
+        out = self.export(record_conn(tables=False))
+        self.assertEqual(out["rows"], [])
+        self.assertEqual(out["fields"][6], "correct")
+
+
+class LineupHistoryExportTests(unittest.TestCase):
+    ROLES = ["GK", "CB", "CB", "LB", "RB", "CM", "CM", "LM", "RM", "ST", "ST"]
+
+    def export(self, conn):
+        with tempfile.TemporaryDirectory() as d:
+            export_lineup_history(conn, Path(d), now=T2)
+            return json.loads((Path(d) / "lineups_history.json").read_text(encoding="utf-8"))
+
+    def test_scored_like_the_live_record(self):
+        starters = [(7, 2, i, self.ROLES[i], None) for i in range(11)]
+        # the predicted XI: 0-8 right (8 as a striker), 11 and 12 instead of 9 and 10
+        predicted = (list(range(9)) + [11, 12], self.ROLES[:8] + ["ST", "ST", "ST"])
+        out = self.export(record_conn(history=[(7, 2, *predicted, T1, 39, 1, 2)], starters=starters))
+        self.assertTrue(out["available"])
+        row = dict(zip(out["fields"], out["rows"][0]))
+        self.assertEqual((row["fixture"], row["kickoff"], row["team"], row["opponent"], row["home"]),
+                         (7, "2026-09-26", 2, 1, 0))
+        self.assertEqual((row["correct"], row["roles_right"], row["roles_known"]), (9, 8, 9))
+        self.assertEqual(row["lines"], [1, 1, 4, 4, 4, 4, 2, 0])
+        self.assertEqual((row["missed"], row["wrong"]), ([9, 10], [11, 12]))
+        self.assertEqual(set(out["players"]), {"9", "10", "11", "12"})
+
+    def test_skips_a_match_without_a_full_team_sheet(self):
+        starters = [(7, 2, i, "CB", None) for i in range(10)]
+        out = self.export(record_conn(history=[(7, 2, list(range(11)), ["CB"] * 11, T1, 39, 1, 2)], starters=starters))
+        self.assertEqual(out["rows"], [])
+
+    def test_before_the_migration_it_says_so(self):
+        out = self.export(record_conn(tables=False))
+        self.assertFalse(out["available"])
+        self.assertEqual(out["rows"], [])
 
 
 class LoadMatchesMarketSwitchTests(unittest.TestCase):

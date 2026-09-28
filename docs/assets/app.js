@@ -36,6 +36,8 @@ const state = {
   matchFilter: "all", tableFilter: "all", date: null,
   tableSort: "current", tableSearch: "", excluded: new Set(), collapsed: new Set(),
   stats: null, statsRange: "30d", statsFilter: "all",
+  lineupRec: undefined, lineupHist: undefined, lineupSource: "live", lineupRange: "all", lineupFilter: "all", lineupShown: 50,
+  lineupCountries: {},
   bets: null, betStrategy: "all", betMarket: "all", betView: "all", betFilter: "all", tipsCollapsed: new Set(),
   players: null, tableView: "clubs", playerSort: null, ranges: {}, playerYears: storedFlag("playerYears"), ageMin: null, ageMax: null,
 };
@@ -2041,6 +2043,219 @@ function marketsTable(ms) {
       <table class="calib-table"><thead><tr><th>Market</th><th>Matches</th><th>Model</th><th>Market fair</th><th>Gap</th><th>Gap at opening</th></tr></thead><tbody>${rows}</tbody></table>
       <div class="stats-note">Log loss, lower is better, on the same matches. Gap = model minus market: green means the model was more accurate. "At opening" compares with the first prices seen, only for matches whose odds were collected before kickoff (count in brackets). Beating the opening price over many matches would be the first sign the model adds something the market lacks; a small or short-lived gap proves nothing. The goal lines come from the model's projected goals.</div>
     </div>`;
+}
+
+// ------------------------------------------------------------------ line-up record
+// Every XI the model predicted before the team sheet came out, checked against the one that
+// started (data/lineups.json, one row per team line-up), or the reconstructed history: the model
+// re-run on every past match (data/lineups_history.json, kept apart). Totalled here, so the
+// competition menu and the range re-cut everything; each file loads the first time it's shown
+const LR_LINES = ["Goalkeeper", "Defence", "Midfield", "Attack"];
+const LR_HORIZONS = [["Under 1 hour", 0, 1], ["1–6 hours", 1, 6], ["6–24 hours", 6, 24], ["24 hours or more", 24, Infinity]];
+const LR_PAGE = 50;     // line-ups listed per "Show more"
+const LR_CLUB_MIN = 3;  // line-ups a club needs for the easiest/hardest lists
+const LR_FILES = { live: ["lineupRec", "data/lineups.json"], history: ["lineupHist", "data/lineups_history.json"] };
+function loadLineupRecord() {
+  const [key, url] = LR_FILES[state.lineupSource];
+  if (state[key] !== undefined) return;
+  state[key] = null;
+  getJsonOrNull(url).then((d) => {
+    if (d) d.rows = d.rows.map((r) => {
+      const o = Object.fromEntries(d.fields.map((k, i) => [k, r[i]]));
+      o.time = Date.parse(o.kickoff.length === 10 ? `${o.kickoff}T12:00:00` : o.kickoff);   // history has the date only
+      return o;
+    });
+    state[key] = d || false;
+    renderLineupFilters();
+    renderLineupRecord();
+  });
+}
+const lineupData = () => state[LR_FILES[state.lineupSource][0]];
+const lrTeam = (id) => state.data.teams[id] || lineupData()?.teams?.[id] || `Team ${id}`;
+const lrPlayer = (id) => lineupData()?.players?.[id] || `Player ${id}`;
+function lineupCountries() {
+  return state.lineupCountries[state.lineupSource] ||= compCountries((lineupData()?.rows || []).map((r) => r.league));
+}
+// Line-ups in the chosen range, before the competition menu
+function lineupScope() {
+  const days = state.lineupRange === "all" ? null : Number(state.lineupRange);
+  const since = days ? Date.now() - days * 864e5 : -Infinity;
+  return (lineupData()?.rows || []).filter((r) => r.time >= since);
+}
+function renderLineupFilters() {
+  if (!lineupData()) { $("#lineup-filters").innerHTML = ""; return; }
+  const countries = lineupCountries(), scope = lineupScope();
+  const countOf = (value) => {
+    const ids = filterLeagueIds(value, countries);
+    return ids ? scope.filter((r) => ids.includes(r.league)).length : scope.length;
+  };
+  renderFilterMenu($("#lineup-filters"), state.lineupFilter, countries, countOf, {
+    all: "All competitions", country: (c) => `All ${c} line-ups`, region: (r) => `All line-ups in ${r}`,
+    euro: "Champions League, Europa League and Conference League line-ups", cup: (name) => `${name} line-ups`,
+  });
+}
+function lineupTotals(list) {
+  const n = list.length, correct = list.reduce((a, r) => a + r.correct, 0);
+  return {
+    n, correct, starters: 11 * n, mean: n ? correct / n : 0,
+    perfect: list.filter((r) => r.correct === 11).length,
+    rolesRight: list.reduce((a, r) => a + r.roles_right, 0), rolesKnown: list.reduce((a, r) => a + r.roles_known, 0),
+    matches: new Set(list.map((r) => r.fixture)).size,
+  };
+}
+function lineupGroups(list, key) {
+  const groups = new Map();
+  for (const r of list) {
+    const k = key(r);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  return [...groups.entries()].map(([k, g]) => [k, g, lineupTotals(g)]);
+}
+const lrOf11 = (x) => `${x.toFixed(1)} of 11`;
+const lrShare = (a, b) => b ? pct(a / b) : "–";
+const lrScore = (k) => `<span class="xi-score xi-score-${k >= 9 ? "good" : k >= 7 ? "ok" : "poor"}">${k}/11</span>`;
+const lrDate = (t, o = { day: "numeric", month: "short" }) => new Date(t).toLocaleDateString("en-GB", o);
+function lrBar(label, value, max, text, tip) {
+  return `<div class="dist-row" title="${escapeHtml(tip)}"><span class="dist-label">${label}</span>
+    <span class="dist-bar-wrap"><span class="dist-bar" style="display:block;width:${(max ? 100 * value / max : 0).toFixed(1)}%;background:var(--series-blue)"></span></span>
+    <span class="dist-pct">${text}</span></div>`;
+}
+function renderLineupRecord() {
+  const body = $("#lineup-body");
+  const d = lineupData(), live = state.lineupSource === "live";
+  if (d === null || d === undefined) { body.innerHTML = `<div class="empty-state">Loading line-ups…</div>`; return; }
+  if (!d || d.available === false) {
+    body.innerHTML = `<div class="empty-state">The ${live ? "line-up record" : "reconstructed history"} is built by the nightly data run. Check back tomorrow.</div>`;
+    return;
+  }
+  const ids = filterLeagueIds(state.lineupFilter, lineupCountries());
+  const list = lineupScope().filter((r) => !ids || ids.includes(r.league));
+  if (!list.length) {
+    body.innerHTML = `<div class="empty-state">${d.rows.length ? "No scored line-ups in this range."
+      : "No line-ups scored yet. Each needs a prediction saved before the team sheet came out, and the official XI afterwards."}</div>`;
+    return;
+  }
+  const t = lineupTotals(list);
+  const card = (label, value, note = "") =>
+    `<div class="stats-card"><div class="stats-label">${label}</div><div class="stats-value">${value}</div>${note ? `<div class="stats-note">${note}</div>` : ""}</div>`;
+  const section = (label, html, note = "") =>
+    `<div class="stats-card"><div class="stats-label">${label}</div>${html}${note ? `<div class="stats-note">${note}</div>` : ""}</div>`;
+  const table = (head, rows, cls = "") =>
+    `<table class="calib-table ${cls}"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  const sample = t.n < 200 ? `Very early: ${t.n.toLocaleString()} line-ups is too few to judge the model, so these figures will move a lot.`
+    : t.n < 1000 ? `Still a small sample (${t.n.toLocaleString()} line-ups): small differences are likely to be luck.` : "";
+
+  // how many of the 11 each line-up got
+  const counts = Array(12).fill(0);
+  for (const r of list) counts[r.correct] += 1;
+  const lo = Math.min(6, ...list.map((r) => r.correct)), top = Math.max(...counts);
+  const spread = [];
+  for (let k = 11; k >= lo; k--) spread.push(lrBar(`${k} of 11`, counts[k], top, `${counts[k]} · ${lrShare(counts[k], t.n)}`,
+    `${k} of 11 right: ${counts[k]} line-ups`));
+
+  // average per day; per week past four weeks, per month past six months
+  const span = list[list.length - 1].time - list[0].time;
+  const step = span > 183 * 864e5 ? "month" : span > 28 * 864e5 ? "week" : "day";
+  const years = new Date(list[0].time).getFullYear() !== new Date(list[list.length - 1].time).getFullYear();
+  const dateOf = (t) => lrDate(t, years ? { day: "numeric", month: "short", year: "numeric" } : undefined);
+  const dayKey = (r) => {
+    const x = new Date(r.time);
+    x.setHours(0, 0, 0, 0);
+    if (step === "week") x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    if (step === "month") x.setDate(1);
+    return x.getTime();
+  };
+  const trend = lineupGroups(list, dayKey).sort((a, b) => b[0] - a[0]).map(([k, , g]) => {
+    const label = step === "month" ? lrDate(k, { month: "short", year: "numeric" })
+      : `${step === "week" ? "w/c " : ""}${lrDate(k, { weekday: "short", day: "numeric", month: "short", ...(years ? { year: "2-digit" } : {}) })}`;
+    return lrBar(label, g.mean, 11, `${g.mean.toFixed(1)} <span class="dim">(${g.n})</span>`,
+      `${label}: ${lrOf11(g.mean)} from ${g.n} line-ups, ${g.perfect} perfect`);
+  });
+
+  const lines = LR_LINES.map((name, i) => {
+    const starters = list.reduce((a, r) => a + r.lines[2 * i], 0), hit = list.reduce((a, r) => a + r.lines[2 * i + 1], 0);
+    return `<tr><td>${name}</td><td>${starters.toLocaleString()}</td><td>${hit.toLocaleString()}</td><td>${lrShare(hit, starters)}</td>
+      <td style="width:70px"><span class="calib-bar" style="width:${Math.round((starters ? hit / starters : 0) * 60)}px"></span></td></tr>`;
+  });
+  const timing = LR_HORIZONS.map(([label, a, b]) => {
+    const g = lineupTotals(list.filter((r) => r.hours_before >= a && r.hours_before < b));
+    return `<tr><td>${label}</td><td>${g.n}</td><td>${g.n ? lrOf11(g.mean) : "–"}</td><td>${lrShare(g.perfect, g.n)}</td></tr>`;
+  });
+  const comps = lineupGroups(list, (r) => r.league).sort((a, b) => b[2].n - a[2].n || b[2].mean - a[2].mean).map(([id, , g]) =>
+    `<tr data-league="${id}"${String(id) === state.lineupFilter ? ` style="font-weight:700"` : ""}><td>${escapeHtml(compLabel(id))}</td>
+      <td>${g.n}</td><td>${lrOf11(g.mean)}</td><td>${lrShare(g.perfect, g.n)}</td><td>${lrShare(g.rolesRight, g.rolesKnown)}</td></tr>`);
+
+  const clubRow = ([id, , g]) => `<tr><td>${clubLink(id, lrTeam(id))}</td><td>${g.n}</td><td>${lrOf11(g.mean)}</td><td>${lrShare(g.perfect, g.n)}</td></tr>`;
+  const clubHead = ["Club", "Line-ups", "Named", "Perfect"];
+  const clubs = lineupGroups(list, (r) => r.team);
+  const ranked = clubs.filter(([, , g]) => g.n >= LR_CLUB_MIN).sort((a, b) => b[2].mean - a[2].mean || b[2].n - a[2].n);
+  const k = Math.min(10, Math.floor(ranked.length / 2));
+  const clubHtml = (k >= 3
+    ? `<div class="stats-label" style="margin-top:8px">Easiest to predict</div>${table(clubHead, ranked.slice(0, k).map(clubRow))}
+       <div class="stats-label" style="margin-top:12px">Hardest to predict</div>${table(clubHead, ranked.slice(-k).reverse().map(clubRow))}`
+    : `<div class="stats-note">The easiest and hardest clubs are listed once enough clubs have ${LR_CLUB_MIN} or more line-ups scored.</div>`)
+    + `<details><summary>All ${clubs.length} clubs</summary>${table(clubHead,
+      [...clubs].sort((a, b) => lrTeam(a[0]).localeCompare(lrTeam(b[0]))).map(clubRow))}</details>`;
+
+  const tally = (field) => {
+    const c = new Map();
+    for (const r of list) for (const p of r[field]) {
+      const x = c.get(p) || { n: 0, team: r.team };
+      x.n += 1;
+      c.set(p, x);
+    }
+    return [...c.entries()].filter(([, x]) => x.n >= 2)
+      .sort((a, b) => b[1].n - a[1].n || lrPlayer(a[0]).localeCompare(lrPlayer(b[0]))).slice(0, 15);
+  };
+  const playerTable = (label, items) => `<div class="stats-label" style="margin-top:10px">${label}</div>` + (items.length
+    ? table(["Player", "Club", "Times"], items.map(([p, x]) => `<tr><td>${playerLink(p, lrPlayer(p))}</td><td>${escapeHtml(lrTeam(x.team))}</td><td>${x.n}</td></tr>`))
+    : `<div class="stats-note">No player more than once yet.</div>`);
+  const missedTotal = list.reduce((a, r) => a + r.missed.length, 0);
+
+  const versions = !live ? [] : lineupGroups(list, (r) => r.version).sort((a, b) => a[0] - b[0]).map(([i, , g]) => {
+    const v = d.versions[i] || {};
+    return `<tr><td>v${i + 1} <span class="lr-sub">${escapeHtml(v.name || "unknown")}${v.registered ? ` · from ${lrDate(v.registered, { day: "numeric", month: "short", year: "numeric" })}` : ""}</span></td>
+      <td>${g.n}</td><td>${lrOf11(g.mean)}</td><td>${lrShare(g.perfect, g.n)}</td></tr>`;
+  });
+
+  const newest = [...list].reverse(), shown = newest.slice(0, state.lineupShown);
+  const every = shown.map((r) => `<tr><td>${dateOf(r.time)}</td>
+    <td>${clubLink(r.team, lrTeam(r.team))} ${r.home ? "v" : "at"} ${escapeHtml(lrTeam(r.opponent))}<span class="lr-sub">${escapeHtml(compLabel(r.league))}</span></td>
+    <td>${lrScore(r.correct)}</td><td>${r.missed.length ? r.missed.map((p) => escapeHtml(lrPlayer(p))).join(", ") : "–"}</td></tr>`);
+  const more = newest.length > shown.length
+    ? `<button type="button" class="filter-chip lr-more" data-more>Show more (${(newest.length - shown.length).toLocaleString()} left)</button>` : "";
+
+  const about = live ? "" : `<div class="stats-card" style="margin-bottom:12px"><div class="stats-note">
+    <b>Reconstructed, not a live record.</b> Today's model re-run on every past match, picking from what it knew before
+    kick-off: the last five matches' minutes and formations, and the injury list. It can't know late team news, and older
+    matches were never predicted this way at the time, so read it as how the current model does on past matches.
+    The live record (Saved before kick-off) is the one that counts.</div></div>`;
+  body.innerHTML = about + `
+    <div class="stats-grid">
+      ${card("Line-ups", t.n.toLocaleString(), `From ${t.matches.toLocaleString()} matches, ${dateOf(list[0].time)} to ${dateOf(list[list.length - 1].time)}`)}
+      ${card("Named correctly", lrOf11(t.mean), `${t.correct.toLocaleString()} of ${t.starters.toLocaleString()} starters (${lrShare(t.correct, t.starters)})`)}
+      ${card("Perfect XIs", t.perfect.toLocaleString(), `All 11 right in ${lrShare(t.perfect, t.n)} of line-ups`)}
+      ${card("Right position", lrShare(t.rolesRight, t.rolesKnown), "Correct starters also put where they played")}
+    </div>`
+    + (sample ? `<div class="stats-card" style="margin-bottom:12px"><div class="stats-note">${sample}</div></div>` : "")
+    + section("Starters named correctly, per line-up", `<div style="margin-top:6px">${spread.join("")}</div>`,
+      "Number of team line-ups, and their share, by how many of the 11 starters the predicted XI named.")
+    + section(`Over time: average named correctly each ${step}`, `<div style="margin-top:6px">${trend.join("")}</div>`,
+      "Out of 11, newest first; the number of line-ups is in brackets.")
+    + section("By position", table(["Line", "Starters", "Predicted", "Hit rate", ""], lines),
+      "Of the players who started in each part of the pitch, how many were in the predicted XI. Lines come from the team sheet.")
+    + (live ? section("How far before kick-off", table(["Saved", "Line-ups", "Named", "Perfect"], timing),
+      "The prediction scored is the last one saved before the team sheet came out.") : "")
+    + section("By competition", table(["Competition", "Line-ups", "Named", "Perfect", "Position"], comps), "Tap a competition to narrow to it.")
+    + section("By club", clubHtml, `Clubs with at least ${LR_CLUB_MIN} line-ups scored in the easiest and hardest lists.`)
+    + section("Players the model got wrong most often", playerTable("Started, but not in the predicted XI", tally("missed"))
+      + playerTable("In the predicted XI, but didn't start", tally("wrong")),
+      `${missedTotal.toLocaleString()} starters missed in all; each miss is one wrong pick in their place.`)
+    + (live ? section("By model version", table(["Version", "Line-ups", "Named", "Perfect"], versions),
+      "A new version starts whenever the line-up code changes, even if the name stays the same. Each keeps its own record.") : "")
+    + section("Every line-up", table(["Date", "Line-up", "Right", "Missed"], every, "lr-list") + more,
+      `Newest first.${live ? " A match's Line-ups on the Matches tab shows the XIs side by side for the last three weeks." : ""}${d.excluded_no_official_xi ? ` ${d.excluded_no_official_xi} line-ups aren't counted because no complete official XI was recorded.` : ""}`);
 }
 
 // ------------------------------------------------------------------ bets
@@ -4690,6 +4905,7 @@ $("#fpl-body").addEventListener("input", (e) => {
 function showTab(tab) {
   state.tab = tab;
   if (tab === "fpl") loadFplPredictions();
+  if (tab === "lineups") { loadLineupRecord(); renderLineupRecord(); }
   document.body.dataset.tab = tab;
   document.querySelectorAll(".panel").forEach((p) => p.dataset.active = String(p.dataset.tab === tab));
   syncMenu();
@@ -4704,7 +4920,7 @@ function syncMenu() {
   $("#app-title").textContent = title;
 }
 // Each tab other than the tables has its own address, so a reload (or a shared link) stays on it
-const TAB_ROUTES = { matches: "matches", stats: "stats", tips: "model-vs-market", bets: "simulation", fpl: "fpl" };
+const TAB_ROUTES = { matches: "matches", stats: "stats", lineups: "lineups", tips: "model-vs-market", bets: "simulation", fpl: "fpl" };
 const ROUTE_TABS = Object.fromEntries(Object.entries(TAB_ROUTES).map(([t, r]) => [r, t]));
 document.querySelectorAll("nav.tabs button").forEach((btn) => btn.addEventListener("click", () => {
   const to = TAB_ROUTES[btn.dataset.tab] ? `#/${TAB_ROUTES[btn.dataset.tab]}` : location.pathname + location.search;
@@ -4770,9 +4986,10 @@ $("#table-filters").addEventListener("click", (e) => {
   if (SIDE_MENU.matches) syncFilterMenu($("#table-filters"), state.tableFilter); else renderTableFilters();
   renderTable();
 });
-SIDE_MENU.addEventListener("change", () => { if (state.rankings) { renderTableFilters(); renderMatchFilters(); renderStatsFilters(); renderBetFilters(); } });
+SIDE_MENU.addEventListener("change", () => { if (state.rankings) { renderTableFilters(); renderMatchFilters(); renderStatsFilters(); renderLineupFilters(); renderBetFilters(); } });
 // Stats and Bets menus: as on Clubs, the side menu updates in place and phones rebuild
 for (const [id, key, menu, render] of [["#stats-filters", "statsFilter", renderStatsFilters, renderStats],
+                                        ["#lineup-filters", "lineupFilter", renderLineupFilters, renderLineupRecord],
                                         ["#bet-filters", "betFilter", renderBetFilters, renderBets]]) {
   $(id).addEventListener("click", (e) => {
     const btn = e.target.closest("[data-filter]");
@@ -4798,6 +5015,35 @@ $("#bets-body").addEventListener("click", (e) => {
   state.betFilter = state.betFilter === tr.dataset.league ? "all" : tr.dataset.league;
   renderBetFilters();
   renderBets();
+});
+$("#lineup-source").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-source]");
+  if (!btn || btn.dataset.source === state.lineupSource) return;
+  state.lineupSource = btn.dataset.source;
+  state.lineupShown = LR_PAGE;
+  document.querySelectorAll("#lineup-source [data-source]").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+  loadLineupRecord();
+  renderLineupFilters();
+  renderLineupRecord();
+});
+$("#lineup-ranges").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-range]");
+  if (!btn) return;
+  state.lineupRange = btn.dataset.range;
+  state.lineupShown = LR_PAGE;
+  document.querySelectorAll("#lineup-ranges [data-range]").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+  renderLineupFilters();
+  renderLineupRecord();
+});
+// a competition row narrows to it (tap again for all); "Show more" lists the next page
+$("#lineup-body").addEventListener("click", (e) => {
+  if (e.target.closest("[data-more]")) { state.lineupShown += LR_PAGE; return renderLineupRecord(); }
+  const tr = e.target.closest("[data-league]");
+  if (!tr || e.target.closest("a")) return;
+  state.lineupFilter = state.lineupFilter === tr.dataset.league ? "all" : tr.dataset.league;
+  state.lineupShown = LR_PAGE;
+  renderLineupFilters();
+  renderLineupRecord();
 });
 $("#stats-ranges").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-range]");
