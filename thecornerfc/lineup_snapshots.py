@@ -11,13 +11,14 @@ from .model_versions import ModelType, current_code_sha, register_model_version,
 def register_version(conn):
     from .player_ratings import PREDICT_MATCHES
     root = Path(__file__).parent
-    return register_model_version(conn,ModelType.LINEUP,'recent-minutes-lineup',
+    return register_model_version(conn,ModelType.LINEUP,'formation-minutes-lineup',
         code_sha=current_code_sha(),configuration={
             'recent_matches':PREDICT_MATCHES,'keepers':1,'outfield':10,
+            'slot_rule':'most-used-recent-formation, greedy minutes x role fit; minutes-only fallback',
             'availability_rule':'fixture-api-plus-active-manual',
             'source_digests':{n:hashlib.sha256((root/n).read_bytes()).hexdigest()
                               for n in ('player_ratings.py','availability.py','positions.py','lineup_snapshots.py')}},
-        notes='Binary selection by recent minutes with score eligibility. No start probability model.')
+        notes='Binary selection into the team formation by recent minutes x role fit, with score eligibility. No start probability model.')
 
 
 def _identity(value):

@@ -88,7 +88,7 @@ from . import availability, lineup_snapshots, player_history
 from .health import monitored
 from . import config
 from .cache import WEEK, cached_rows, rank_history
-from .positions import FALLBACK, group as role_group
+from .positions import FALLBACK, group as role_group, role as slot_role
 
 log = logging.getLogger(__name__)
 
@@ -905,17 +905,89 @@ def _by_line(ranked):
     return [_mean(r for r, l in ranked if l == line) for line in LINES]
 
 
-def _select_lineup(minutes, out, raw_score, kickoff):
-    """Existing selection rule, isolated so availability integration can be tested."""
+# How well a player who starts in one role group fills another (either way round); unlisted
+# pairs get OFF_ROLE_FIT, and a keeper only ever fills the keeper's slot
+GROUP_FIT = {frozenset(k): v for k, v in (
+    (("CB", "FB"), 0.5), (("CB", "DM"), 0.4), (("FB", "W"), 0.5), (("FB", "CM"), 0.3),
+    (("FB", "DM"), 0.2), (("DM", "CM"), 0.8), (("DM", "AM"), 0.4), (("CM", "AM"), 0.7),
+    (("CM", "W"), 0.4), (("AM", "W"), 0.7), (("AM", "ST"), 0.6), (("W", "ST"), 0.6))}
+SAME_GROUP_FIT = 0.85      # e.g. a right-back at right wing-back, a DM in the other DM slot
+OFF_ROLE_FIT = 0.05
+WRONG_SIDE = 0.7           # a left-sided player on the right, or the other way round
+
+
+def _side(role):
+    return role[0] if role and role[0] in "LR" else None
+
+
+def role_fit(played, slot):
+    """0-1: how well a player who started as `played` fills a `slot` role."""
+    if played == slot:
+        return 1.0
+    a, b = role_group(played) or played, role_group(slot)      # played may be a bare group ('W')
+    if "GK" in (a, b):
+        return 0.0
+    fit = SAME_GROUP_FIT if a == b else GROUP_FIT.get(frozenset((a, b)), OFF_ROLE_FIT)
+    sa, sb = _side(played), _side(slot)
+    return fit * WRONG_SIDE if sa and sb and sa != sb else fit
+
+
+def formation_slots(formation):
+    """Slot roles for a formation, back to front and left to right ('3-4-2-1' -> GK CB CB CB
+    LWB CM CM RWB AM AM ST), or None if it isn't a usable 10-outfielder shape."""
+    try:
+        lines = [int(x) for x in formation.split("-")]
+    except (AttributeError, ValueError):
+        return None
+    if sum(lines) != 10:
+        return None
+    slots = ["GK"] + [slot_role(formation, f"{row}:{col}") for row, n in enumerate(lines, 2)
+                      for col in range(1, n + 1)]
+    return slots if all(slots) else None
+
+
+def likely_formation(recent):
+    """The team's most used formation in `recent` (oldest first), the latest of any tie."""
+    counts = Counter(f for f in recent if formation_slots(f))
+    if not counts:
+        return None
+    top = max(counts.values())
+    return next(f for f in reversed(recent) if counts.get(f) == top)
+
+
+def _select_lineup(minutes, out, raw_score, kickoff, formation=None, roles_of=None):
+    """Predicted XI [(player, position group, raw score, recent minutes, role)] from the players
+    with recent minutes, less those ruled out. With the team's usual formation, each slot goes
+    to the player with the most (recent minutes x fit to that role, from the roles he has
+    started in: roles_of(player) -> Counter), so a 3-4-2-1 gets three centre-backs, a wing-back
+    each side, two central mids, two No. 10s and a striker. Without one (or if the slots can't
+    be filled), the keeper with the most minutes and the ten outfielders with the most."""
     candidates = [(p, m) for p, m in minutes.most_common() if p not in out]
     scored = []
     for p, m in candidates:
         s, pos, _ = raw_score(p, kickoff)
         if s is not None:
             scored.append((p, pos, s, m))
+    slots = formation_slots(formation) if roles_of else None
+    if slots:
+        pairs = []
+        for i, (p, pos, s, m) in enumerate(scored):
+            played = +roles_of(p) or Counter({"GK" if pos == "GK" else pos: 1})
+            total = sum(played.values())
+            for j, slot in enumerate(slots):
+                fit = sum(n * role_fit(r, slot) for r, n in played.items()) / total
+                if fit > 0:
+                    pairs.append((m * fit, fit, -i, j))
+        filled, used = {}, set()
+        for _, _, neg_i, j in sorted(pairs, reverse=True):
+            if j not in filled and -neg_i not in used:
+                filled[j] = -neg_i
+                used.add(-neg_i)
+        if len(filled) == len(slots):
+            return candidates, scored, [(*scored[filled[j]], slot) for j, slot in enumerate(slots)]
     keepers = [x for x in scored if x[1] == "GK"][:1]
     outfield = [x for x in scored if x[1] != "GK"][:10]
-    return candidates, scored, keepers + outfield
+    return candidates, scored, [(*x, None) for x in keepers + outfield]
 
 
 @monitored("player_ratings", conn_index=0)
@@ -952,6 +1024,9 @@ def compute_player_ratings(conn):
     selection_inputs = {}
     windows = defaultdict(Window)
     team_recent = defaultdict(lambda: deque(maxlen=PREDICT_MATCHES))     # team -> [{player: minutes}]
+    team_shapes = defaultdict(lambda: deque(maxlen=PREDICT_MATCHES))     # team -> [formation]
+    formations = dict(((f, t), shape) for f, t, shape in conn.execute(
+        "select fixture_id, team_id, formation from fixture_formations where formation is not null"))
 
     def raw_score(player, now):
         w = windows.get(player)
@@ -982,14 +1057,18 @@ def compute_player_ratings(conn):
             for g in team_recent[team]:
                 minutes.update(g)
             out = injured.get((fid, team), set())
-            candidates, scored, predicted = _select_lineup(minutes, out, raw_score, kickoff)
+            shape = likely_formation(list(team_shapes[team]))
+            candidates, scored, predicted = _select_lineup(minutes, out, raw_score, kickoff, shape,
+                                                           lambda p: windows[p].roles)
             if upcoming:
                 selection_inputs[(fid,team)] = {
+                    'formation': shape,
                     'recent_minutes': list(minutes.items()),
                     'excluded_players': sorted(out),
                     'scored_candidates': [{'player':p,'position':pos,'raw_score':s,'minutes':m,
                                            'predicted_starter':p in {x[0] for x in predicted}}
                                           for p,pos,s,m in scored],
+                    'slots': [{'player':x[0],'role':x[4]} for x in predicted],
                     'unscored_candidates': [p for p,m in candidates if p not in {x[0] for x in scored}],
                 }
             actual = []
@@ -1003,7 +1082,7 @@ def compute_player_ratings(conn):
                         sample[pos].append(s[0])
                     if a["started"]:
                         actual.append((s, pos, line_of(a["role"], a["position"])))
-            team_rows.append((fid, team, [(p, pos, s, windows[p].label()) for p, pos, s, _ in predicted],
+            team_rows.append((fid, team, [(p, pos, s, slot or windows[p].label()) for p, pos, s, _, slot in predicted],
                               actual, upcoming))
         # after the match: update windows and team history
         for a in apps.get(fid, []):
@@ -1014,6 +1093,8 @@ def compute_player_ratings(conn):
             played = {a["player"]: a["minutes"] for a in apps.get(fid, []) if a["team"] == team}
             if played:
                 team_recent[team].append(played)
+            if (fid, team) in formations:
+                team_shapes[team].append(formations[(fid, team)])
 
     cdf = {pos: sorted(v) for pos, v in sample.items()}
     pooled = sorted(x for v in sample.values() for x in v)
