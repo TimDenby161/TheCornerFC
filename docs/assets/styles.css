@@ -524,6 +524,20 @@
   .calib-bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--series-blue); vertical-align: middle; }
   .gap-ok { color: var(--status-good); }
   .gap-off { color: var(--status-critical); }
+  /* Line-up record: the Stats tab's cards, tables and bars */
+  #lineup-body .stats-card + .stats-card { margin-top: 12px; }
+  #lineup-body .dist-label { width: 96px; font-weight: 600; }
+  #lineup-body .dist-pct { width: 88px; }
+  #lineup-body .calib-table tr[data-league] { cursor: pointer; }
+  #lineup-body .calib-table tr[data-league]:hover td { background: var(--chip-bg); }
+  .lr-sub { display: block; font-size: 11px; color: var(--text-muted); }
+  #lineup-body .calib-table:not(.lr-list) td:not(:first-child) { white-space: nowrap; }
+  .lr-list :is(td, th) { text-align: left; vertical-align: top; }
+  .lr-list :is(td, th):nth-child(3) { text-align: center; }
+  .lr-list td:first-child { white-space: nowrap; }
+  .lr-list td:last-child { color: var(--text-secondary); }
+  .lr-more { display: block; width: 100%; margin-top: 8px; border-radius: 8px; text-align: center; }
+  #lineup-body details summary { cursor: pointer; margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--series-blue); }
 
   .bet-row { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; }
   .bet-row.win { border-left: 4px solid var(--status-good); }
@@ -1190,10 +1204,10 @@
   /* Wide screens: the panel becomes a column in the left margin, so the ranked list stays
      centred; the header drops the name row on this tab to fit a full league on one screen */
   @media (min-width: 1160px) {
-    section:is([data-tab="table"], [data-tab="matches"], [data-tab="stats"], [data-tab="bets"]) { position: relative; }
-    body:is([data-tab="table"], [data-tab="matches"], [data-tab="stats"], [data-tab="bets"]) main { max-width: 954px; padding-left: 250px; }
-    #table-side, #match-side, #stats-side, #bet-side { position: absolute; top: 0; bottom: 0; right: calc(100% + 24px); width: 210px; }
-    :is(#table-side, #match-side, #stats-side, #bet-side) .side-stick { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow-y: auto; padding-right: 4px; }
+    section:is([data-tab="table"], [data-tab="matches"], [data-tab="stats"], [data-tab="lineups"], [data-tab="bets"]) { position: relative; }
+    body:is([data-tab="table"], [data-tab="matches"], [data-tab="stats"], [data-tab="lineups"], [data-tab="bets"]) main { max-width: 954px; padding-left: 250px; }
+    #table-side, #match-side, #stats-side, #lineup-side, #bet-side { position: absolute; top: 0; bottom: 0; right: calc(100% + 24px); width: 210px; }
+    :is(#table-side, #match-side, #stats-side, #lineup-side, #bet-side) .side-stick { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow-y: auto; padding-right: 4px; }
     /* the league menu already sticks in the side column; only the date bar pins to the top */
     .match-bar { display: contents; }
     [data-tab="matches"] .secondary-filters { position: sticky; top: 0; z-index: 5; background: var(--page-plane);
@@ -1210,7 +1224,7 @@
     table.leaderboard.clubs td { padding-top: 5px; padding-bottom: 5px; }
     table.leaderboard.clubs th, table.leaderboard.players th { padding-top: 4px; padding-bottom: 4px; }
     .pl-cell .player-photo { margin: -2px 0; }      /* 24px, over the row's 20px badge line */
-    body:is([data-tab="table"], [data-tab="stats"], [data-tab="bets"]) main { padding-top: 8px; }
+    body:is([data-tab="table"], [data-tab="stats"], [data-tab="lineups"], [data-tab="bets"]) main { padding-top: 8px; }
     .club-logo { width: 20px; height: 20px; }
   }
 
