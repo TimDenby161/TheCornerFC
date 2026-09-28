@@ -934,15 +934,34 @@
   .fixture-lineups .xi-spot .pp-rank { padding: 0 4px; font-size: 16px; border-radius: 4px; }
   .fixture-lineups .xi-spot .pp-name { max-width: 46px; font-size: 9px; }
   .fixture-lineups .xi-spot .pp-meta { font-size: 8px; }
-  /* under a starter the model didn't predict: the player it picked instead */
-  .xi-spot .pp-instead { display: flex; flex-direction: column; align-items: center; gap: 1px; margin: 2px -1px 0;
-    padding: 2px 3px; border-radius: 5px; background: rgba(0,0,0,0.5); border: 1px dashed rgba(255,255,255,0.5); }
-  .xi-spot .pp-instead-lbl { font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.7); }
-  .xi-spot .pp-instead-name { max-width: 64px; font-size: 9px; font-weight: 700; color: #fff;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .xi-spot .pp-instead .pp-rank { font-size: 11px; padding: 0 3px; }
-  .fixture-lineups .xi-spot .pp-instead-name { max-width: 46px; font-size: 8px; }
-  .fixture-lineups .xi-spot .pp-instead .pp-rank { font-size: 11px; }
+  /* An actual XI marked against the model's pre-match XI: dark tiles ringed green (predicted) or
+     red (not), with a tick or cross, readable on any kit colour; a miss has the model's pick
+     hanging under it */
+  .pitch .xi-spot.xi-mark { background: rgba(12,16,22,0.78); border: 2px solid; overflow: visible; }
+  .pitch .xi-spot.xi-hit { border-color: #3ecf5a; } .pitch .xi-spot.xi-miss { border-color: #ff6b6b; }
+  .pitch a.xi-spot.xi-mark:hover { background: rgba(12,16,22,0.9); }
+  .xi-spot.xi-mark::after { position: absolute; top: -7px; right: -7px; width: 15px; height: 15px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 9px; font-weight: 900; line-height: 1; color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+  .xi-spot.xi-hit::after { content: "✓"; background: #22a045; } .xi-spot.xi-miss::after { content: "✕"; background: #e04848; }
+  .xi-spot .pp-instead { position: absolute; top: calc(100% + 3px); left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px; padding: 1px 2px 1px 6px; border-radius: 999px; white-space: nowrap;
+    background: rgba(255,255,255,0.94); box-shadow: 0 1px 4px rgba(0,0,0,0.45); }
+  .xi-spot .pp-instead-name { font-size: 9px; font-weight: 700; color: #1d2430; max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+  .xi-spot .pp-instead-rank { padding: 0 4px; border-radius: 999px; background: #1d2430; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .xi-spot .pp-instead-rank.rk-4 { color: #3ecf5a; } .xi-spot .pp-instead-rank.rk-3 { color: #f0c43a; }
+  .xi-spot .pp-instead-rank.rk-2 { color: #f08a5a; } .xi-spot .pp-instead-rank.rk-1 { color: #f07878; }
+  .xi-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .xi-score { flex-shrink: 0; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+  .xi-score-good { background: color-mix(in srgb, var(--status-good) 18%, transparent); color: var(--status-good); }
+  .xi-score-ok { background: color-mix(in srgb, var(--status-warning) 20%, transparent); color: var(--text-secondary); }
+  .xi-score-poor { background: color-mix(in srgb, var(--status-critical) 16%, transparent); color: var(--status-critical); }
+  .xi-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 10px; font-size: 11px; color: var(--text-muted); }
+  .xi-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+  .xi-key { width: 12px; height: 12px; border-radius: 3px; border: 2px solid; background: rgba(12,16,22,0.78); }
+  .xi-key.xi-hit { border-color: #3ecf5a; } .xi-key.xi-miss { border-color: #ff6b6b; }
+  .xi-key-pick { display: inline-flex; align-items: center; gap: 3px; padding: 0 2px 0 5px; border-radius: 999px; font-style: normal;
+    font-size: 9px; font-weight: 700; color: #1d2430; background: #fff; border: 1px solid var(--border); }
+  .xi-key-pick b { padding: 0 3px; border-radius: 999px; background: #1d2430; color: #3ecf5a; font-size: 9px; }
   @media (max-width: 680px) {
     .fixture-lineups { grid-template-columns: 1fr; }
     .fixture-lineups a.xi-spot { min-width: 48px; }
