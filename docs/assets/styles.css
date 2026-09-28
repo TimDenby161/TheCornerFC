@@ -382,14 +382,31 @@
   /* name, then his flag (a link to the national team) */
   .pl-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .pl-name .player-link { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pl-name .pn-short { display: none; }        /* his surname, where the table gets narrow */
   /* under the name: his club and league */
   .pl-text { min-width: 0; }
   .pl-club { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
-  /* World and league rank, and the minutes behind his Ability (greyed when thin) */
-  table.leaderboard.players :is(th, td):is(.col-wrank, .col-lrank, .col-mins) { width: 52px; text-align: center; padding-left: 3px; padding-right: 3px; }
+  /* World and league rank, and this season's goals / assists and match rating (greyed when thin) */
+  table.leaderboard.players :is(th, td):is(.col-wrank, .col-lrank, .col-rtg) { width: 52px; text-align: center; padding-left: 3px; padding-right: 3px; }
+  table.leaderboard.players :is(th, td).col-ga { width: 64px; text-align: center; padding-left: 2px; padding-right: 2px; white-space: nowrap; }
   table.leaderboard.players td:is(.col-wrank, .col-lrank) { color: var(--text-secondary); font-size: 12px; }
-  table.leaderboard.players td.col-mins { font-size: 12px; }
-  table.leaderboard.players td.col-mins.thin { color: var(--text-muted); }
+  table.leaderboard.players td:is(.col-ga, .col-rtg) { font-size: 12px; }
+  table.leaderboard.players :is(td.col-rtg, .ga-rtg).thin { color: var(--text-muted); }
+  /* the rating under goals and assists, where the Rtg column has made way */
+  table.leaderboard.players .ga-rtg { display: none; font-size: 10.5px; color: var(--text-secondary); line-height: 1.2; }
+  /* narrower tables: league rank makes way first, then world rank, then the rating (under the goals), so the
+     name, flag and position keep room (all on his page, and the + view still shows them, swiping sideways) */
+  @container (max-width: 659px) { table.leaderboard.players:not(.years) .col-lrank { display: none; } }
+  @container (max-width: 579px) { table.leaderboard.players:not(.years) .col-wrank { display: none; } }
+  @container (max-width: 499px) {
+    table.leaderboard.players:not(.years) .col-rtg { display: none; }
+    table.leaderboard.players:not(.years) .ga-rtg { display: block; }
+    table.leaderboard.players .pn-full { display: none; }
+    table.leaderboard.players .pn-short { display: inline; }
+    table.leaderboard.players .pl-club { display: none; }     /* club and league: the badge shows the club */
+  }
+  /* the smallest phones: the club badge too, so the name has room */
+  @container (max-width: 349px) { table.leaderboard.players:not(.years) .pl-cell :is(.pl-badge-link, .pl-badge) { display: none; } }
   table.leaderboard.clubs td.col-dom { font-size: 12px; }
   .pl-flag { display: inline-flex; flex: none; }
   .pl-flag:hover .flag { box-shadow: 0 0 0 1px var(--series-blue); }
@@ -418,14 +435,27 @@
      to the right into the free space (fitYearsBox, so its top-left corner stays put) and swipes
      sideways when there isn't enough, instead of squeezing the Player column */
   .table-scroll:has(table.players.years) { overflow-x: auto; }
-  table.leaderboard.players.years { min-width: 860px; }
+  table.leaderboard.players.years { width: max-content; min-width: 100%; }
+  /* ... and a slim Player column: badge, surname and flag (no photo, club or league) */
+  table.leaderboard.players.years :is(th, td):nth-child(2) { width: 150px; }
+  table.leaderboard.players.years :is(.player-photo, .pl-club, .pn-full) { display: none; }
+  table.leaderboard.players.years .pn-short { display: inline; }
+  /* ... and #, Player, Pos and Age freeze at the left, so the row's player stays in view (their
+     left edges: fitYearsBox); a line marks the edge */
+  table.leaderboard.players.years :is(th, td):nth-child(-n+4) { position: sticky; background: var(--surface-1); z-index: 1; }
+  table.leaderboard.players.years th:nth-child(-n+4) { z-index: 3; }
+  table.leaderboard.players.years :is(th, td):nth-child(1) { left: var(--fz1, 0); }
+  table.leaderboard.players.years :is(th, td):nth-child(2) { left: var(--fz2, 0); }
+  table.leaderboard.players.years :is(th, td):nth-child(3) { left: var(--fz3, 0); }
+  table.leaderboard.players.years :is(th, td):nth-child(4) { left: var(--fz4, 0); box-shadow: inset -1px 0 var(--gridline); }
+  table.leaderboard.players.years tr.row-hl td:nth-child(-n+4) {
+    background: linear-gradient(color-mix(in srgb, var(--series-blue) 14%, transparent), color-mix(in srgb, var(--series-blue) 14%, transparent)) var(--surface-1); }
   table.leaderboard.players th.col-future { font-style: italic; }
   table.leaderboard.players th.col-f0, table.leaderboard.players td.col-f0 { padding-left: 8px; }
   table.leaderboard.players td.col-future .rel-chip { opacity: .7; }
   @media (max-width: 480px) {
     /* expanded years on a phone: every column, and the table swipes sideways */
-    table.leaderboard.players.years { width: max-content; min-width: 100%; }
-    table.leaderboard.players.years td:nth-child(2) { max-width: 150px; }
+    table.leaderboard.players.years :is(th, td):nth-child(2) { width: 112px; }   /* frozen: room left for the seasons */
     table.leaderboard.players th.col-s2, table.leaderboard.players td.col-s2 { padding-left: 8px; width: 42px; }
     .pl-cell { gap: 5px; }
     .pl-cell .pl-badge { width: 16px; height: 16px; margin-right: 0; }
@@ -902,6 +932,14 @@
   .flag-link { display: inline-flex; vertical-align: -1px; }
   .flag-link:hover .flag, .flag-link:focus-visible .flag { box-shadow: 0 0 0 1px var(--series-blue); }
   .club-meta .flag { width: 16px; height: 11px; }
+  /* Rankings: each club on one line, so every row is the same height: the name gives way (ending
+     in "…") and the flag and league keep their size; with no room for the league, just the flag */
+  .club-cell { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+  .club-cell > .team-link { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .club-cell > .club-meta { flex: none; display: inline-flex; align-items: center; margin-left: 6px; overflow: visible; }
+  .club-cell.flag-only > .club-meta { margin-left: 5px; }
+  .club-cell.flag-only .cm-league { display: none; }
+  .club-cell .cm-league { margin-left: 4px; }
   .season-bars { display: flex; align-items: flex-end; gap: 6px; height: 150px; margin-top: 8px; }
   .season-bar { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
   .sb-fill { width: 100%; max-width: 44px; border-radius: 5px 5px 0 0; background: var(--series-blue); }
@@ -916,17 +954,56 @@
     #club-tab .team-stats.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   }
 
-  /* Country / league filter (Rankings) */
-  .cgroups { display: flex; flex-wrap: wrap; gap: 6px; }
-  .cgroup { display: contents; }
-  .cchip { display: inline-flex; align-items: center; }
-  .cchip .caret { color: var(--text-muted); font-size: 10px; margin-left: 4px; order: 2; }
-  .cchip.has-active { border-color: color-mix(in srgb, var(--series-blue) 45%, var(--border)); color: var(--series-blue); }
-  .league-list { display: none; }
-  .cnt, .cgroups .sep { display: none; }
-  #bet-filters .cnt { display: inline; margin-left: 5px; font-weight: 500; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .league-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .league-row[hidden] { display: none; }
+  /* Country / league menu (Rankings, Matches, Stats, Bets): plain rows, counts on the right,
+     groups slide open. Wide screens: in the side column. Narrower: behind a button naming the
+     selection, dropping down over the page's flow */
+  .cgroups { display: flex; }
+  .cgroup { display: block; }
+  .cnt { display: none; }
+  /* Side menu: plain rows, counts on the right, groups slide open */
+  .side-filters .cgroups { flex-direction: column; flex-wrap: nowrap; gap: 1px; }
+  .side-filters .cgroup { display: block; }
+  .side-filters .filter-chip { width: 100%; display: flex; align-items: center; gap: 6px; text-align: left;
+    border: 0; background: transparent; border-radius: 7px; padding: 6px 10px; font-size: 13px; font-weight: 500;
+    color: var(--text-secondary); white-space: normal; transition: background-color .15s, color .15s; }
+  .side-filters .filter-chip:hover { background: var(--chip-bg); color: var(--text-primary); }
+  .side-filters .filter-chip:active { opacity: 1; }
+  .side-filters .filter-chip:focus-visible { outline: 2px solid var(--series-blue); outline-offset: -2px; }
+  .side-filters .filter-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--series-blue) 14%, transparent);
+    color: var(--series-blue); font-weight: 650; }
+  .side-filters .cchip.has-active { color: var(--series-blue); }
+  .side-filters .flabel { flex: 1; min-width: 0; }
+  .side-filters .cnt { display: inline; font-size: 11px; font-weight: 500; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .side-filters .filter-chip[aria-pressed="true"] .cnt { color: inherit; opacity: .75; }
+  .side-filters .filter-chip.none:not([aria-pressed="true"]) { opacity: .45; }
+  .side-filters .caret { order: 0; display: inline-block; width: 10px; margin: 0; text-align: center; transform: rotate(-90deg); transition: transform .2s ease; }
+  .side-filters .cgroups .sep { display: block; height: 1px; background: var(--gridline); margin: 6px 10px; }
+  .side-filters .league-list { display: grid; grid-template-rows: 0fr; opacity: 0;
+    transition: grid-template-rows .22s ease, opacity .18s ease; }
+  .side-filters .ll-inner { overflow: hidden; min-height: 0; display: flex; flex-direction: column; gap: 1px;
+    margin-left: 15px; padding-left: 6px; border-left: 1px solid var(--gridline); }
+  .side-filters .league-list .filter-chip { font-size: 12.5px; padding: 5px 10px; }
+  .side-filters .cgroup:is(.open, .hover-open, :focus-within) > .league-list { grid-template-rows: 1fr; opacity: 1; }
+  .side-filters .cgroup:is(.open, .hover-open, :focus-within) > .filter-chip .caret { transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .side-filters .league-list, .side-filters .caret, .side-filters .filter-chip { transition: none; }
+  }
+  .menu-trigger { display: none; }
+  @media (max-width: 1159px) {
+    .menu-trigger { display: flex; align-items: center; gap: 8px; width: 100%;
+      appearance: none; border: 1px solid var(--border); background: var(--chip-bg); color: var(--text-primary);
+      font-family: inherit; font-size: 14px; font-weight: 600; text-align: left; padding: 9px 12px; border-radius: 9px; cursor: pointer; }
+    .menu-trigger .mt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .menu-trigger .cnt { display: inline; font-size: 12px; font-weight: 500; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .menu-trigger .caret { color: var(--text-muted); font-size: 13px; transition: transform .2s ease; }
+    .menu-trigger[aria-expanded="true"] .caret { transform: rotate(180deg); }
+    .side-filters:not(.menu-open) .cgroups { display: none; }
+    .side-filters.menu-open .cgroups { margin-top: 6px; padding: 6px; border: 1px solid var(--border);
+      border-radius: 10px; background: var(--surface-1); max-height: min(62vh, 560px); overflow-y: auto;
+      overscroll-behavior: contain; box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+    .side-filters .filter-chip { padding: 8px 10px; font-size: 14px; }     /* finger-sized rows */
+    .side-filters .league-list .filter-chip { padding: 7px 10px; font-size: 13.5px; }
+  }
 
   /* Rankings side panel: brand, view toggle, search and league filters.
      Phones: stacked above the list (filters, toggle, search). */
@@ -1011,16 +1088,19 @@
      since the side column scrolls), picks shown as removable chips */
   #who-filter { order: 0; margin-bottom: 10px; }
   #who-filter[hidden] { display: none; }
-  /* Range filters (world rank, strength, Ability, minutes): a label, then min – max boxes */
+  /* Exclude: countries and continents to hide, as chips; a picked one is struck through */
+  #exclude-filter { order: 0; margin-bottom: 10px; }
+  #exclude-filter[hidden] { display: none; }
+  .ex-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 2px; }
+  .ex-chip { padding: 4px 9px; font-size: 11.5px; }
+  .ex-chip[aria-pressed="true"] { text-decoration: line-through; }
+  .ex-break { flex-basis: 100%; height: 2px; }      /* the continents start a new row */
+  /* Range filters (Players: Ability, club world rank, minutes): a label, then min – max boxes */
   #range-filter { order: 0; margin-bottom: 10px; }
   #range-filter[hidden] { display: none; }
-  .rng-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 2px 6px; margin: 0 2px 6px; }
-  .rng-label { grid-column: 1 / -1; font-size: 11px; color: var(--text-muted); }
-  .rng-pre { grid-column: 1 / 3; font-size: 12px; color: var(--text-secondary); }
-  .rng-sep { color: var(--text-muted); font-size: 12px; }
-  .rng-in { width: 100%; min-width: 0; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--border);
-    background: var(--surface-1); color: var(--text-primary); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; }
-  .rng-in:focus-visible { outline: 2px solid var(--series-blue); outline-offset: -1px; }
+  /* each range: a two-handled slider, as Age */
+  .rng-row { margin: 0 0 8px; }
+  .rng-val { color: var(--text-primary); font-variant-numeric: tabular-nums; }
   .who-field + .who-field { margin-top: 5px; }
   .who-input { width: 100%; margin-bottom: 0; }
   .who-chips { margin-top: 6px; }
@@ -1078,40 +1158,13 @@
     :is(#table-side, #match-side, #stats-side, #bet-side) .side-stick { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow-y: auto; padding-right: 4px; }
     #table-search { margin-bottom: 8px; padding: 7px 10px; font-size: 13px; }
     #age-filter { order: 3; margin: 0 0 12px; padding: 0 2px; }
+    .rng-row { padding: 0 2px; }            /* the ranges' sliders line up with Age's */
     #pos-filter { order: 3; margin: 0 0 10px; }
     #who-filter { order: 3; margin: 0 0 10px; }
     #range-filter { order: 3; margin: 0 0 10px; }
+    #exclude-filter { order: 3; margin: 0 0 12px; }
     .who-input { padding: 7px 10px; font-size: 13px; }
     #table-filters { order: 4; margin: 0; }
-    /* Side menu: plain rows, counts on the right, groups slide open */
-    .side-filters .cgroups { flex-direction: column; flex-wrap: nowrap; gap: 1px; }
-    .side-filters .cgroup { display: block; }
-    .side-filters .filter-chip { width: 100%; display: flex; align-items: center; gap: 6px; text-align: left;
-      border: 0; background: transparent; border-radius: 7px; padding: 6px 10px; font-size: 13px; font-weight: 500;
-      color: var(--text-secondary); white-space: normal; transition: background-color .15s, color .15s; }
-    .side-filters .filter-chip:hover { background: var(--chip-bg); color: var(--text-primary); }
-    .side-filters .filter-chip:active { opacity: 1; }
-    .side-filters .filter-chip:focus-visible { outline: 2px solid var(--series-blue); outline-offset: -2px; }
-    .side-filters .filter-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--series-blue) 14%, transparent);
-      color: var(--series-blue); font-weight: 650; }
-    .side-filters .cchip.has-active { color: var(--series-blue); }
-    .side-filters .flabel { flex: 1; min-width: 0; }
-    .side-filters .cnt { display: inline; font-size: 11px; font-weight: 500; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-    .side-filters .filter-chip[aria-pressed="true"] .cnt { color: inherit; opacity: .75; }
-    .side-filters .filter-chip.none:not([aria-pressed="true"]) { opacity: .45; }
-    .side-filters .caret { order: 0; display: inline-block; width: 10px; margin: 0; text-align: center; transform: rotate(-90deg); transition: transform .2s ease; }
-    .side-filters .cgroups .sep { display: block; height: 1px; background: var(--gridline); margin: 6px 10px; }
-    .side-filters .league-list { display: grid; grid-template-rows: 0fr; opacity: 0;
-      transition: grid-template-rows .22s ease, opacity .18s ease; }
-    .side-filters .ll-inner { overflow: hidden; min-height: 0; display: flex; flex-direction: column; gap: 1px;
-      margin-left: 15px; padding-left: 6px; border-left: 1px solid var(--gridline); }
-    .side-filters .league-list .filter-chip { font-size: 12.5px; padding: 5px 10px; }
-    .side-filters .cgroup:is(.open, .hover-open, :focus-within) > .league-list { grid-template-rows: 1fr; opacity: 1; }
-    .side-filters .cgroup:is(.open, .hover-open, :focus-within) > .filter-chip .caret { transform: none; }
-    .side-filters .league-row { display: none !important; }
-    @media (prefers-reduced-motion: reduce) {
-      .side-filters .league-list, .side-filters .caret, .side-filters .filter-chip { transition: none; }
-    }
     table.leaderboard.clubs td { padding-top: 5px; padding-bottom: 5px; }
     table.leaderboard.clubs th, table.leaderboard.players th { padding-top: 4px; padding-bottom: 4px; }
     .pl-cell .player-photo { margin: -2px 0; }      /* 24px, over the row's 20px badge line */
@@ -1145,32 +1198,33 @@
     table.leaderboard.players th:nth-child(3), table.leaderboard.players td:nth-child(3) { width: 34px; padding-left: 2px; padding-right: 2px; }
     table.leaderboard.players th.col-age, table.leaderboard.players td.col-age { width: 38px; padding-left: 2px; padding-right: 2px; }
     table.leaderboard.players th.col-now, table.leaderboard.players td.col-now,
-    table.leaderboard.players th.col-posrank, table.leaderboard.players td.col-posrank { width: 86px; padding-left: 4px; padding-right: 4px; }
+    table.leaderboard.players th.col-posrank, table.leaderboard.players td.col-posrank { width: 66px; padding-left: 2px; padding-right: 2px; }
     .now-head { gap: 4px; }
   }
-  /* Phones and small tablets, Rankings tab: the view toggle and search first, the league
-     chips in one row that swipes sideways, and the player filters behind a Filters button */
+  /* Below the side menu (phones and tablets), Rankings tab: one row with the competition button
+     and a button for the rest (Clubs: Exclude; Players: Filters, adding age, position, club, nationality, ranges),
+     each opening its panel under the row, one at a time; then the search */
   #more-filters { display: none; }
-  @media (max-width: 759px) {
-    .side-stick { flex-direction: row; flex-wrap: wrap; align-items: flex-start; column-gap: 8px; }
+  .more-panel { display: contents; }         /* wide screens: its filters sit in the side column */
+  @media (max-width: 1159px) {
+    .side-stick { flex-direction: row; flex-wrap: wrap; align-items: stretch; column-gap: 8px; }
     .side-stick > * { flex: 0 0 100%; min-width: 0; }
-    #table-search { margin-bottom: 8px; }
-    #more-filters { order: 2; flex: none; display: inline-flex; align-items: center; gap: 5px;
-      height: 40px; padding: 0 12px; border-radius: 8px; font-size: 13px; margin-bottom: 8px; }
+    #table-filters { display: contents; }
+    #table-filters .menu-trigger { order: 1; flex: 1 1 0; margin-bottom: 8px; }
+    #table-filters .cgroups { order: 3; flex: 0 0 100%; margin: 0 0 8px; }
+    #more-filters { order: 2; flex: none; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px;
+      padding: 0 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--chip-bg);
+      color: var(--text-primary); font-size: 14px; font-weight: 600; }
     #more-filters[hidden] { display: none; }
+    #more-filters[aria-expanded="true"] { border-color: color-mix(in srgb, var(--series-blue) 45%, var(--border)); }
     #more-filters .n { background: var(--series-blue); color: #fff; border-radius: 999px; min-width: 18px;
       padding: 1px 5px; font-size: 11px; text-align: center; }
-    #more-filters .caret { font-size: 10px; color: var(--text-muted); transition: transform .2s ease; }
+    #more-filters .caret { font-size: 13px; color: var(--text-muted); transition: transform .2s ease; }
     #more-filters[aria-expanded="true"] .caret { transform: rotate(180deg); }
-    #age-filter, #pos-filter, #who-filter, #range-filter { order: 3; }
-    #table-side:not(.filters-open) :is(#age-filter, #pos-filter, #who-filter, #range-filter) { display: none; }
-    .rng-row { max-width: 320px; }
-    .rng-in { font-size: 16px; }         /* no iOS zoom */
-    #table-filters { order: 4; margin-bottom: 8px; }
-    .side-filters .cgroups, .side-filters .league-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
-      -webkit-overflow-scrolling: touch; margin-left: -12px; margin-right: -12px; padding: 0 12px; }
-    .side-filters .cgroups::-webkit-scrollbar, .side-filters .league-row::-webkit-scrollbar { display: none; }
-    .side-filters .filter-chip { flex: none; }
+    .more-panel { order: 3; display: none; margin-bottom: 8px; padding: 10px 10px 2px; border: 1px solid var(--border);
+      border-radius: 10px; background: var(--surface-1); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+    #table-side.filters-open .more-panel { display: block; }
+    #table-search { margin-bottom: 8px; }
     .pitch { max-width: 200px; }
     /* iOS zooms the page into any input under 16px */
     .table-search { font-size: 16px; padding-top: 8px; padding-bottom: 8px; }
@@ -1187,13 +1241,35 @@
   .sim-banner, .frame-note { font-size: 11.5px; line-height: 1.4; color: var(--text-secondary); background: var(--surface-1);
     border: 1px dashed var(--border); border-radius: 8px; padding: 7px 10px; margin-bottom: 10px; }
   .th-short { display: none; }
+  /* Clubs, by the table's own width rather than the window's (the side menu takes 220px from
+     760px up, so a mid-sized window can leave less room than a big phone): when narrow, league
+     place and the Gap make way so the club's name keeps room (both are on its page); Last 6 stays */
+  .table-scroll { container-type: inline-size; }
+  .table-scroll:has(table.clubs) { overflow-x: hidden; }     /* its columns always fit; no stray 2px sideways scroll */
+  @container (max-width: 639px) {
+    table.leaderboard.clubs :is(.col-gap, .col-dom) { display: none; }
+    table.leaderboard.clubs th:nth-child(n+4), table.leaderboard.clubs td:nth-child(n+4) { width: 58px; }
+    table.leaderboard.clubs th { letter-spacing: 0; }
+    table.leaderboard.clubs .th-full { display: none; }
+    table.leaderboard.clubs .th-short { display: inline; }
+  }
+  /* Really narrow (the club column would be under ~70px): just the badge, no
+     name, flag or league; the badge column takes the room and the name shows on hover */
+  .th-club { display: none; }
+  @container (max-width: 309px) {
+    table.leaderboard.clubs :is(th, td):nth-child(3) { display: none; }
+    table.leaderboard.clubs .th-club { display: inline; }
+    table.leaderboard.clubs :is(th, td):nth-child(2) { width: auto; padding-left: 6px; }
+  }
   @media (max-width: 480px) {
-    /* Clubs: recent movement makes way on phones (it's on the club page); headers fit their columns */
-    table.leaderboard.clubs :is(.col-recent, .col-dom) { display: none; }
-    /* Players: world rank, league rank and minutes make way for the name (all three are on his
-       page, and the + view shows them, swiping sideways) */
-    table.leaderboard.players:not(.years) :is(.col-wrank, .col-lrank, .col-mins) { display: none; }
-    table.leaderboard.players :is(th, td):is(.col-wrank, .col-lrank, .col-mins) { width: 42px; padding-left: 1px; padding-right: 1px; }
+    /* Clubs: league place and the Gap make way on phones (both on the club page); headers fit their columns */
+    table.leaderboard.clubs :is(.col-gap, .col-dom) { display: none; }
+    /* Players: the ranks and Rtg column make way for the name (all on his page, and the + view
+       shows them, swiping sideways); goals and assists stay, with the rating under them */
+    table.leaderboard.players:not(.years) :is(.col-wrank, .col-lrank, .col-rtg) { display: none; }
+    table.leaderboard.players .pl-cell .player-photo { display: none; }      /* the name's room; the badge stays */
+    table.leaderboard.players :is(th, td):is(.col-wrank, .col-lrank, .col-rtg) { width: 42px; padding-left: 1px; padding-right: 1px; }
+    table.leaderboard.players :is(th, td).col-ga { width: 50px; padding-left: 0; padding-right: 0; letter-spacing: -.02em; }
     table.leaderboard.clubs th { letter-spacing: 0; }
     table.leaderboard.clubs th:nth-child(n+4), table.leaderboard.clubs td:nth-child(n+4) { width: 49px; }
     table.leaderboard.clubs th:nth-child(4), table.leaderboard.clubs td:nth-child(4) { width: 40px; }

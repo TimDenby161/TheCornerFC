@@ -953,6 +953,44 @@ def export_players(conn, out_dir=OUT_DIR):
     for teams in actual_xi.values():
         for xi_players in teams.values():
             xi_players.sort(key=lambda x: (order.get(x[2], 99), -(x[3] or 0)))
+    # this season so far, all his clubs: [minutes, match rating (minutes-weighted), goals, assists,
+    # his clubs' minutes]; the per-match leagues first, else the season totals where his league has
+    # them (player_seasons, no club minutes)
+    season_stats = {}
+    rating_avg = """(sum(x.rating * x.minutes) filter (where x.rating is not null)
+                     / nullif(sum(x.minutes) filter (where x.rating is not null), 0))::float8"""
+    for _, player, mins, rating, goals, assists in conn.execute(
+            f"""select 1 src, x.player_id, sum(x.minutes), {rating_avg}, sum(x.goals), sum(x.assists)
+                from player_seasons x where x.season = %s and x.player_id = any(%s) and x.minutes > 0
+                group by 2
+                union all
+                select 2, x.player_id, sum(x.minutes), {rating_avg}, sum(x.goals), sum(x.assists)
+                from fixture_players x join fixtures f using (fixture_id)
+                where f.season = %s and x.player_id = any(%s) and f.status_short = any(%s) and x.minutes > 0
+                group by 2
+                order by src""",
+            [PLAYER_SEASONS[0], [r[0] for r in players]] * 2 + [list(config.FINISHED_STATUSES)]):
+        season_stats[player] = [int(mins), round(rating, 2) if rating is not None else None,
+                                int(goals or 0), int(assists or 0), None]   # per-match rows come last and win
+    # his clubs' minutes: 90 a match for each club he's played for this season, from his first
+    # appearance for it (a new signing isn't marked down for matches before he joined), in the
+    # matches with player data (the ones his own minutes come from). The site greys his rating when
+    # he's played under a third of them (a squad player, or back from injury)
+    for player, club_mins in conn.execute(
+            """with joined as (
+                   select x.player_id, x.team_id, min(f.kickoff) since
+                   from fixture_players x join fixtures f using (fixture_id)
+                   where f.season = %s and x.player_id = any(%s) and f.status_short = any(%s) and x.minutes > 0
+                   group by 1, 2)
+               select j.player_id, 90 * count(*)
+               from joined j join fixtures f on f.season = %s and j.team_id in (f.home_team_id, f.away_team_id)
+                    and f.kickoff >= j.since and f.status_short = any(%s)
+                    and (f.league_id = any(%s) or f.players_fetched_at is not null)
+               group by 1""",
+            [PLAYER_SEASONS[0], [r[0] for r in players], list(config.FINISHED_STATUSES),
+             PLAYER_SEASONS[0], list(config.FINISHED_STATUSES), config.MATCH_PLAYER_LEAGUES]):
+        if player in season_stats:
+            season_stats[player][4] = int(club_mins)
     # his next seasons, projected along his age curve (player_ratings.py)
     future = defaultdict(dict)
     for player, season, rank in conn.execute("select player_id, season, projected_rank from player_projected_ranks"):
@@ -960,14 +998,14 @@ def export_players(conn, out_dir=OUT_DIR):
     future_seasons = sorted({y for ys in future.values() for y in ys})
     (out_dir / "players.json").write_text(json.dumps({
         "fields": ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
-                   "nationality", "positions_12m", "position_ranks", "future"],
+                   "nationality", "positions_12m", "position_ranks", "future", "season"],
         "seasons": PLAYER_SEASONS,
         "future_seasons": future_seasons,    # oldest first
         "players": [[r[0], r[1], main_pos.get(r[0], r[2]), float(r[3]), r[4], r[5], r[6],
                      [season_ranks[r[0]].get(y) for y in PLAYER_SEASONS], r[7],
                      [i for i, y in enumerate(PLAYER_SEASONS) if y in estimated[r[0]]], r[8],
                      pos_12m.get(r[0], []), pos_ranks.get(r[0], {}),
-                     [future[r[0]].get(y) for y in future_seasons]] for r in players],
+                     [future[r[0]].get(y) for y in future_seasons], season_stats.get(r[0])] for r in players],
         "next_xi": next_xi,
         "fixture_xi": fixture_xi,
         "actual_xi": actual_xi,

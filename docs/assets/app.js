@@ -34,7 +34,7 @@ const storeFlag = (k, on) => { try { localStorage.setItem(`fc.${k}`, on ? "1" : 
 const state = {
   data: null, rankings: null, compLabels: {},
   matchFilter: "all", tableFilter: "all", date: null,
-  tableSort: "lt", tableSearch: "", collapsed: new Set(),
+  tableSort: "current", tableSearch: "", excluded: new Set(), collapsed: new Set(),
   stats: null, statsRange: "30d", statsFilter: "all",
   bets: null, betStrategy: "all", betMarket: "all", betView: "all", betFilter: "all", tipsCollapsed: new Set(),
   players: null, tableView: "clubs", playerSort: null, ranges: {}, playerYears: storedFlag("playerYears"), ageMin: null, ageMax: null,
@@ -150,8 +150,62 @@ const compLabel = (id) => state.compLabels[id] || `Competition ${id}`;
 function countryLeague(id) {
   const c = state.data.competitions[id];
   if (!c) return "";
-  return ` <span class="club-meta">${flagLink(c.country)} ${leagueLink(id)}</span>`;
+  return ` <span class="club-meta">${flagLink(c.country)}<span class="cm-league">${leagueLink(id)}</span></span>`;
 }
+// Shorter club names, for the Rankings rows where the full name and its flag don't fit on one line
+const CLUB_SHORT = {
+  157: "Bayern", 50: "Man City", 85: "PSG", 33: "Man Utd", 52: "Palace", 168: "Leverkusen",
+  165: "Dortmund", 65: "Nott'm Forest", 530: "Atlético", 569: "Club Brugge", 1393: "Union SG",
+  553: "Olympiakos", 167: "Hoffenheim", 169: "Frankfurt", 728: "Rayo", 134: "Athletico-PR",
+  1603: "Vancouver", 106: "Brest", 163: "Gladbach", 558: "Spartak", 397: "Midtjylland",
+  3402: "Omonia", 651: "Ferencváros", 398: "Nordsjælland", 598: "Crvena Zvezda", 550: "Shakhtar",
+  2278: "Chivas", 180: "Heidenheim", 1616: "LAFC", 458: "Argentinos", 571: "Salzburg",
+  437: "Rosario", 2932: "Al-Hilal", 450: "Estudiantes", 339: "Legia", 238: "Viseu",
+  364: "Djurgården", 3491: "Raków", 473: "Ind. Rivadavia", 1599: "Philadelphia", 2286: "Pumas",
+  348: "Pogoń", 563: "Beer Sheva", 438: "Vélez", 1595: "Seattle", 456: "Talleres",
+  604: "Maccabi TA", 565: "Young Boys", 632: "U Craiova", 440: "Belgrano", 608: "Hajduk Split",
+  478: "Instituto", 733: "Standard", 1604: "NYCFC", 442: "Defensa", 476: "Riestra",
+  1596: "San Jose", 782: "Liberec", 1123: "Aris", 185: "Paderborn", 20787: "St. Louis",
+  1612: "Minnesota", 4686: "Stockport", 602: "Apollon", 4665: "Racing", 5902: "La Louvière",
+  3723: "Hradec", 1079: "Krylia", 350: "Cracovia", 1598: "Orlando", 2432: "Barracas",
+  426: "Sparta R'dam", 635: "Dinamo Buc.", 410: "Go Ahead", 1600: "Houston", 2391: "Puskás",
+  544: "Deportivo", 455: "Atl. Tucumán", 2314: "San Luis", 1605: "LA Galaxy", 1606: "Salt Lake",
+  6813: "Makhachkala", 1065: "Central Córdoba", 1610: "Colorado", 457: "Newell's",
+  474: "Sarmiento", 1617: "Portland", 2290: "Querétaro", 333: "Sarpsborg", 345: "Zagłębie",
+  657: "Beitar",
+};
+// Each club is one line (name, flag, league), so every row is the same height. Where the name
+// would be cut short, drop the league and keep just the flag; where it still would be, use the
+// club's short name if it has one; past that it ends in "…" (the full name on hover). Each pass
+// does its changes first and then its measuring, so the layout is worked out once a pass.
+function fitClubMeta(wrap) {
+  const names = [...wrap.querySelectorAll("table.clubs .club-cell > .team-link")];
+  for (const a of names) {
+    a.parentElement.classList.remove("flag-only");
+    if (a.dataset.full) { a.textContent = a.dataset.full; delete a.dataset.full; }
+    a.removeAttribute("title");
+  }
+  const cutShort = (a) => a.scrollWidth > a.clientWidth;
+  const cut = names.filter(cutShort);
+  for (const a of cut) a.parentElement.classList.add("flag-only");
+  const still = cut.filter(cutShort);
+  for (const a of still) {
+    const full = a.textContent, short = CLUB_SHORT[a.closest("tr")?.dataset.team];
+    if (short) { a.dataset.full = full; a.textContent = short; }
+    a.title = full;
+  }
+}
+// ...and again whenever the table's width changes, not only the window's (a scrollbar appearing
+// once the rows are in, the side menu, a split-screen pane)
+const clubTableWidths = new WeakMap();
+const clubTableObserver = new ResizeObserver((entries) => {
+  for (const e of entries) {
+    const w = Math.round(e.contentRect.width);
+    if (clubTableWidths.get(e.target) === w) continue;          // only its height changed
+    clubTableWidths.set(e.target, w);
+    fitClubMeta(e.target);
+  }
+});
 const teamName = (id) => state.data.teams[id] || state.players?.teams?.[id] || `Team ${id}`;
 // Third-party images: API-Football's media host (badges, photos, competition logos) and flagcdn
 // (flags). Every URL is built from a numeric id or checked against that host, never taken as-is
@@ -167,6 +221,22 @@ const clubLink = (id, text = teamName(id)) => `<a class="team-link" href="${club
 // a player's club, or a note when he has left his last club and his new one isn't known
 const playerClub = (p) => p.team ? clubLink(p.team) : `<span class="dim-text">club not known</span>`;
 const playerLink = (id, text) => `<a class="player-link" href="#/player/${id}">${escapeHtml(text)}</a>`;
+// His surname, for narrow tables: "E. Haaland" -> "Haaland", "Lamine Yamal" -> "Yamal", "V. van Dijk"
+// -> "van Dijk", "Vinícius Júnior" -> "Vinícius Jr.", "Son Heung-Min" (surname first) -> "Son"
+const NAME_PARTICLES = new Set(["van", "von", "de", "den", "der", "da", "das", "do", "dos", "di", "del", "della", "du",
+  "le", "la", "lo", "el", "al", "ben", "ter", "ten", "mac", "st.", "bin", "abu"]);
+const NAME_SUFFIXES = new Set(["júnior", "junior", "jr", "jr."]);     // not Neto or Filho: surnames too (Pedro Neto)
+function shortName(name) {
+  const initials = /^(\p{Lu}\.\s*)+/u.exec(name);
+  if (initials) return name.slice(initials[0].length) || name;
+  const w = name.split(/\s+/);
+  if (w.length < 2) return name;
+  if (w.length === 2 && /^\p{Lu}\p{Ll}+-\p{Lu}\p{Ll}+$/u.test(w[1])) return w[0];     // Korean: family name first
+  if (NAME_SUFFIXES.has(w[w.length - 1].toLowerCase())) return `${w[0]} Jr.`;
+  let i = w.length - 1;
+  while (i > 1 && NAME_PARTICLES.has(w[i - 1].toLowerCase())) i--;
+  return w.slice(i).join(" ");
+}
 // Flag for a nationality (API-Football's country names -> ISO codes; flagcdn has the home nations too)
 const FLAG_CODES = {"Afghanistan": "af", "Albania": "al", "Andorra": "ad", "Bosnia": "ba", "Gibraltar": "gi", "Algeria": "dz", "Angola": "ao", "Antigua and Barbuda": "ag", "Argentina": "ar", "Armenia": "am", "Australia": "au", "Austria": "at", "Azerbaijan": "az", "Barbados": "bb", "Belgium": "be", "Benin": "bj", "Bermuda": "bm", "Bolivia": "bo", "Bosnia and Herzegovina": "ba", "Brazil": "br", "Bulgaria": "bg", "Burkina Faso": "bf", "Burundi": "bi", "Cameroon": "cm", "Canada": "ca", "Cape Verde": "cv", "Central African Republic": "cf", "Chad": "td", "Chile": "cl", "Colombia": "co", "Comoros": "km", "Congo": "cg", "Congo DR": "cd", "Costa Rica": "cr", "Croatia": "hr", "Cuba": "cu", "Curaçao": "cw", "Cyprus": "cy", "Czech Republic": "cz", "Czechia": "cz", "Côte d'Ivoire": "ci", "Denmark": "dk", "Dominican Republic": "do", "Ecuador": "ec", "Egypt": "eg", "El Salvador": "sv", "England": "gb-eng", "Equatorial Guinea": "gq", "Estonia": "ee", "Faroe Islands": "fo", "Finland": "fi", "France": "fr", "French Guiana": "gf", "Gabon": "ga", "Gambia": "gm", "Georgia": "ge", "Germany": "de", "Ghana": "gh", "Great Britain": "gb", "Greece": "gr", "Grenada": "gd", "Guadeloupe": "gp", "Guatemala": "gt", "Guinea": "gn", "Guinea-Bissau": "gw", "Guyana": "gy", "Haiti": "ht", "Honduras": "hn", "Hungary": "hu", "Iceland": "is", "Indonesia": "id", "Iran": "ir", "Iraq": "iq", "Israel": "il", "Italy": "it", "Ivory Coast": "ci", "Jamaica": "jm", "Japan": "jp", "Jordan": "jo", "Kazakhstan": "kz", "Kenya": "ke", "Korea Republic": "kr", "Kosovo": "xk", "Latvia": "lv", "Lebanon": "lb", "Liberia": "lr", "Libya": "ly", "Lithuania": "lt", "Luxembourg": "lu", "Madagascar": "mg", "Malawi": "mw", "Mali": "ml", "Malta": "mt", "Mexico": "mx", "Montenegro": "me", "Montserrat": "ms", "Morocco": "ma", "Mozambique": "mz", "Namibia": "na", "Netherlands": "nl", "New Zealand": "nz", "Niger": "ne", "Nigeria": "ng", "North Macedonia": "mk", "Northern Ireland": "gb-nir", "Norway": "no", "Panama": "pa", "Paraguay": "py", "Peru": "pe", "Poland": "pl", "Portugal": "pt", "Republic of Ireland": "ie", "Romania": "ro", "Russia": "ru", "Rwanda": "rw", "Saudi Arabia": "sa", "Scotland": "gb-sct", "Senegal": "sn", "Serbia": "rs", "Sierra Leone": "sl", "Slovakia": "sk", "Slovenia": "si", "South Africa": "za", "Spain": "es", "Sri Lanka": "lk", "St. Kitts and Nevis": "kn", "St. Lucia": "lc", "Suriname": "sr", "Sweden": "se", "Switzerland": "ch", "Tanzania": "tz", "Thailand": "th", "Togo": "tg", "Trinidad and Tobago": "tt", "Tunisia": "tn", "Turkey": "tr", "Türkiye": "tr", "USA": "us", "Uganda": "ug", "Ukraine": "ua", "Uruguay": "uy", "Uzbekistan": "uz", "Venezuela": "ve", "Wales": "gb-wls", "Zambia": "zm", "Zimbabwe": "zw"};
 const flagImg = (nat) => FLAG_CODES[nat] ? `<img class="flag" src="https://flagcdn.com/${FLAG_CODES[nat]}.svg" alt="" loading="lazy" data-broken="remove">` : "";
@@ -337,6 +407,55 @@ function tableFilterIsWide() {   // spans several leagues: show league names and
   const ids = tableLeagueIds();
   return ids === null || ids.length > 1;
 }
+// ---- Exclude: the big five countries and whole continents hidden from the Rankings (Clubs
+// and Players), on top of the competition menu, so "All" less the big five, or the Champions
+// League less England. A search ignores it, as it does the menu. Keys: a big-five country's
+// name, or "r:" + a continent (Europe takes in the big five too).
+const CONTINENTS = ["Europe", "Africa", "Asia", "Oceania", "South America", "North America"];
+// chip labels: "N. America", "S. America" (the full name stays in the key, links and hover text)
+const regionLabel = (r) => r.replace(/^(North|South) America$/, (m, d) => `${d[0]}. America`);
+const continentOf = (country) => {
+  const region = COUNTRY_FIRST.includes(country) ? "Europe" : regionOf(country);
+  return CONTINENTS.includes(region) ? region : "Europe";      // the European regions
+};
+const isExcludeKey = (k) => COUNTRY_FIRST.includes(k) || (k.startsWith("r:") && CONTINENTS.includes(k.slice(2)));
+function isExcluded(lid) {
+  const ex = state.excluded;
+  if (!ex.size || lid == null) return false;
+  const c = state.data.competitions[lid]?.country?.replace(/-/g, " ");
+  if (!c || c === "World") return false;
+  return ex.has(c) || ex.has(`r:${continentOf(c)}`);
+}
+function renderExcludeFilter() {
+  const box = $("#exclude-filter");
+  box.hidden = !state.rankings || (state.tableView === "players" && !state.players);
+  if (box.hidden) return;
+  const ex = state.excluded;
+  const chip = (attr, on, label, title) =>
+    `<button type="button" class="filter-chip ex-chip" ${attr} aria-pressed="${on}" title="${escapeHtml(title)}">${escapeHtml(label)}</button>`;
+  box.innerHTML = `<div class="pos-head"><span>Exclude</span>
+      <button type="button" class="pos-clear" data-ex-clear${ex.size ? "" : " hidden"}>Clear</button></div>
+    <div class="ex-chips">
+      ${chip("data-ex-big5", COUNTRY_FIRST.every((c) => ex.has(c)), "Big 5", `Exclude ${COUNTRY_FIRST.join(", ")}`)}
+      ${COUNTRY_FIRST.map((c) => chip(`data-ex="${escapeHtml(c)}"`, ex.has(c), c, `Exclude ${c}'s clubs`)).join("")}
+      <span class="ex-break"></span>
+      ${CONTINENTS.map((r) => chip(`data-ex="r:${escapeHtml(r)}"`, ex.has(`r:${r}`), regionLabel(r),
+        `Exclude every club in ${r}${r === "Europe" ? " (the big five included)" : ""}`)).join("")}
+    </div>`;
+}
+$("#exclude-filter").addEventListener("click", (e) => {
+  const ex = state.excluded;
+  const b = e.target.closest("[data-ex], [data-ex-big5], [data-ex-clear]");
+  if (!b) return;
+  if (b.hasAttribute("data-ex-clear")) ex.clear();
+  else if (b.hasAttribute("data-ex-big5")) {
+    const all = COUNTRY_FIRST.every((c) => ex.has(c));
+    for (const c of COUNTRY_FIRST) all ? ex.delete(c) : ex.add(c);
+  } else ex.has(b.dataset.ex) ? ex.delete(b.dataset.ex) : ex.add(b.dataset.ex);
+  renderExcludeFilter();
+  renderTable();
+  renderTableFilters();
+});
 function renderTableFilters() {
   const countries = tableCountries();
   // Clubs (current league members) or ranked players per filter, shown on the right in the side menu
@@ -344,13 +463,13 @@ function renderTableFilters() {
   let total = 0;
   const players = state.tableView === "players" && state.players;
   for (const r of players ? state.players.list : state.rankings)
-    if (players ? playerVisible(r) : r.in_league) { counts.set(r.league, (counts.get(r.league) || 0) + 1); total++; }
+    if ((players ? playerVisible(r) : r.in_league) && !isExcluded(r.league)) { counts.set(r.league, (counts.get(r.league) || 0) + 1); total++; }
   const sum = (ids) => ids.reduce((n, id) => n + (counts.get(id) || 0), 0);
   const euroCount = (value) => {
     const teams = euroTeams(value);
     if (!teams) return 0;
-    return players ? state.players.list.filter((p) => teams.has(p.team) && playerVisible(p)).length
-      : state.rankings.filter((r) => teams.has(r.team)).length;
+    return players ? state.players.list.filter((p) => teams.has(p.team) && playerVisible(p) && !isExcluded(p.league)).length
+      : state.rankings.filter((r) => teams.has(r.team) && !isExcluded(r.league)).length;
   };
   const countOf = (value) => value === "all" ? total
     : isCupFilter(value) ? euroCount(value)
@@ -366,13 +485,15 @@ function renderTableFilters() {
   });
   renderMoreFilters();
 }
-// The country / league menu on Clubs and Matches: All, European cups, the big five countries,
-// then the rest by region. countries = [{ name, leagues, region }]; countOf(value) = the number
-// shown beside each filter (null: no numbers, nothing greyed out); titles = hover text.
+// The country / league menu on Clubs, Matches, Stats and Bets: All, European cups, the big five
+// countries, then the rest by region. countries = [{ name, leagues, region }]; countOf(value) =
+// the number shown beside each filter (null: no numbers, nothing greyed out); titles = hover text.
+// Wide screens: a side menu. Narrower: the same menu behind a button naming the selection.
 function renderFilterMenu(wrap, f, countries, countOf, titles) {
   const leagueName = (id) => SHORT_NAMES[id] || state.data.competitions[id].name;
-  const chip = (value, label, title, extra = "", cls = "") =>
-    `<button type="button" class="filter-chip ${cls}${!countOf || countOf(value) ? "" : " none"}" data-filter="${escapeHtml(value)}" title="${escapeHtml(title)}" aria-pressed="${f === value}">${extra}<span class="flabel">${label}</span>${countOf ? `<span class="cnt">${countOf(value)}</span>` : ""}</button>`;
+  const names = {};                 // each filter's name, for the button
+  const chip = (value, label, title, extra = "", cls = "", full = label) => (names[value] = full,
+    `<button type="button" class="filter-chip ${cls}${!countOf || countOf(value) ? "" : " none"}" data-filter="${escapeHtml(value)}" title="${escapeHtml(title)}" aria-pressed="${f === value}">${extra}<span class="flabel">${label}</span>${countOf ? `<span class="cnt">${countOf(value)}</span>` : ""}</button>`);
   const caret = `<span class="caret" aria-hidden="true">▾</span>`;
   const list = (html) => `<div class="league-list"><div class="ll-inner">${html}</div></div>`;
   const activeCountry = f.startsWith("c:") ? countries.find((c) => c.name === f.slice(2))
@@ -383,52 +504,66 @@ function renderFilterMenu(wrap, f, countries, countOf, titles) {
   const countryGroup = (c) => {
     if (c.leagues.length === 1) return chip(String(c.leagues[0]), escapeHtml(c.name), `${c.name} · ${leagueName(c.leagues[0])}`);
     const inside = c.leagues.includes(Number(f));
-    return `<div class="cgroup${activeCountry === c ? " open" : ""}">${chip(`c:${c.name}`, escapeHtml(c.name), titles.country(c.name), caret, `cchip${inside ? " has-active" : ""}`)}${list(c.leagues.map((id) => chip(String(id), escapeHtml(leagueName(id)), leagueName(id))).join(""))}</div>`;
+    return `<div class="cgroup${activeCountry === c ? " open" : ""}">${chip(`c:${c.name}`, escapeHtml(c.name), titles.country(c.name), caret, `cchip${inside ? " has-active" : ""}`)}${list(c.leagues.map((id) => chip(String(id), escapeHtml(leagueName(id)), leagueName(id), "", "", `${escapeHtml(c.name)} · ${escapeHtml(leagueName(id))}`)).join(""))}</div>`;
   };
   const regionGroups = REGIONS.map((region) => {
     const members = countries.filter((c) => c.region === region);
     if (!members.length) return "";
     const inside = activeRegion === region && f !== `r:${region}`;
-    return `<div class="cgroup region${activeRegion === region ? " open" : ""}">${chip(`r:${region}`, escapeHtml(region), titles.region(region), caret, `cchip${inside ? " has-active" : ""}`)}${list(members.map(countryGroup).join(""))}</div>`;
+    return `<div class="cgroup region${activeRegion === region ? " open" : ""}">${chip(`r:${region}`, escapeHtml(regionLabel(region)), titles.region(region), caret, `cchip${inside ? " has-active" : ""}`)}${list(members.map(countryGroup).join(""))}</div>`;
   });
 
-  // Phones (no hover): rows under the chips with the selected region's countries and country's leagues
-  const regionRow = activeRegion ? `<div class="league-row">${countries.filter((c) => c.region === activeRegion)
-    .map((c) => chip(c.leagues.length === 1 ? String(c.leagues[0]) : `c:${c.name}`, escapeHtml(c.name), "", "",
-      c.leagues.length > 1 && c.leagues.includes(Number(f)) ? "has-active" : "")).join("")}</div>` : "";
   const euroGroup = `<div class="cgroup${f.startsWith("e:") ? " open" : ""}">${chip("e:all", "European cups", titles.euro, caret,
     `cchip${f.startsWith("e:") && f !== "e:all" ? " has-active" : ""}`)}${list(EURO_CUPS.map((lid) =>
       chip(`e:${lid}`, escapeHtml(leagueName(lid)), titles.cup(leagueName(lid)))).join(""))}</div>`;
-  const euroRow = f.startsWith("e:") ? `<div class="league-row">${EURO_CUPS.map((lid) =>
-    chip(`e:${lid}`, escapeHtml(leagueName(lid)), "")).join("")}</div>` : "";
   const cupsGroup = titles.domestic ? `<div class="cgroup${f.startsWith("k:") ? " open" : ""}">${chip("k:all", "Domestic cups", titles.domestic, caret,
     `cchip${f.startsWith("k:") && f !== "k:all" ? " has-active" : ""}`)}${list(DOMESTIC_CUPS.map((lid) =>
       chip(`k:${lid}`, escapeHtml(leagueName(lid)), titles.domesticCup(leagueName(lid)))).join(""))}</div>` : "";
-  const cupsRow = titles.domestic && f.startsWith("k:") ? `<div class="league-row">${DOMESTIC_CUPS.map((lid) =>
-    chip(`k:${lid}`, escapeHtml(leagueName(lid)), "")).join("")}</div>` : "";
-  const leagueRow = activeCountry && activeCountry.leagues.length > 1
-    ? `<div class="league-row">${activeCountry.leagues.map((id) => chip(String(id), escapeHtml(leagueName(id)), "")).join("")}</div>` : "";
-  const scrolled = wrap.querySelector(".cgroups")?.scrollLeft || 0;
-  wrap.innerHTML = `<div class="cgroups">
-      ${chip("all", "All", titles.all)}
+  const menu = `${chip("all", "All", titles.all)}
       ${euroGroup}
       ${cupsGroup}
       <div class="sep"></div>
       ${countries.filter((c) => !c.region).map(countryGroup).join("")}
       <div class="sep"></div>
-      ${regionGroups.join("")}
-    </div>${euroRow}${cupsRow}${regionRow}${leagueRow}`;
+      ${regionGroups.join("")}`;
+  const open = wrap.classList.contains("menu-open"), n = countOf ? countOf(f) : null;
+  const scrolled = wrap.querySelector(".cgroups")?.scrollTop || 0;
+  wrap.innerHTML = `<button type="button" class="menu-trigger" aria-expanded="${open}">
+      <span class="mt-name">${names[f] ?? "All"}</span>${n != null ? `<span class="cnt">${n}</span>` : ""}<span class="caret" aria-hidden="true">▾</span></button>
+    <div class="cgroups">${menu}</div>`;
+  wrap.querySelector(".cgroups").scrollTop = scrolled;     // a group opened: the list stays put
   bindFilterHover(wrap);
-  // Phones: each chip row swipes sideways; keep the row where it was and the selection in view
-  wrap.querySelector(".cgroups").scrollLeft = scrolled;
-  for (const row of wrap.querySelectorAll(".cgroups, .league-row")) {
-    const on = row.querySelector('[aria-pressed="true"], .has-active');
-    if (!on || row.scrollWidth <= row.clientWidth) continue;
-    const r = row.getBoundingClientRect(), c = on.getBoundingClientRect();
-    if (c.left < r.left + 12) row.scrollLeft += c.left - r.left - 12;
-    else if (c.right > r.right - 12) row.scrollLeft += c.right - r.right + 12;
-  }
 }
+// Narrower screens: the button opens and closes its menu. Picking a group (a region, a country
+// with several leagues, a set of cups) opens it, and the menu stays open to go further in;
+// picking anything else, or tapping outside, closes it. Capture phase: this runs before the
+// menu's own click handler rebuilds it.
+const closeFilterMenus = (except) => document.querySelectorAll(".side-filters.menu-open").forEach((w) => {
+  if (w === except) return;
+  w.classList.remove("menu-open");
+  w.querySelector(".menu-trigger")?.setAttribute("aria-expanded", "false");
+});
+document.addEventListener("click", (e) => {
+  const trigger = e.target.closest(".menu-trigger");
+  if (trigger) {
+    const wrap = trigger.closest(".side-filters"), open = !wrap.classList.contains("menu-open");
+    closeFilterMenus(wrap);
+    if (open && $("#table-side").classList.contains("filters-open")) {   // one panel at a time
+      $("#table-side").classList.remove("filters-open");
+      renderMoreFilters();
+    }
+    wrap.classList.toggle("menu-open", open);
+    trigger.setAttribute("aria-expanded", String(open));
+    // open on the selection, a third of the way down, with its group's list under it
+    const list = wrap.querySelector(".cgroups"), on = list.querySelector('[aria-pressed="true"]');
+    if (open && on) list.scrollTop = on.getBoundingClientRect().top - list.getBoundingClientRect().top - list.clientHeight / 3;
+    return;
+  }
+  const pick = e.target.closest(".side-filters [data-filter]");
+  if (pick) { if (!pick.classList.contains("cchip")) closeFilterMenus(); return; }
+  if (!e.target.closest(".side-filters")) closeFilterMenus();
+}, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeFilterMenus(); });
 
 // ---- Matches, Stats and Bets: the same menu over the competitions each has (cups under their
 // country, the European cups in their own group); no counts, nothing greyed out
@@ -524,9 +659,10 @@ function renderMoreFilters() {
   const players = state.tableView === "players";
   btn.hidden = !state.rankings || (players && !state.players);
   if (btn.hidden) return;
-  const n = rangesOn() + (!players ? 0 : (state.ageMin != null || state.ageMax != null ? 1 : 0) + (state.positions?.size || 0)
+  const n = rangesOn() + state.excluded.size + (!players ? 0 : (state.ageMin != null || state.ageMax != null ? 1 : 0) + (state.positions?.size || 0)
     + (state.clubs?.size || 0) + (state.nats?.size || 0));
-  btn.innerHTML = `Filters${n ? `<span class="n">${n}</span>` : ""}<span class="caret" aria-hidden="true">▾</span>`;
+  // Clubs has only Exclude behind it, so the button says so
+  btn.innerHTML = `${players ? "Filters" : "Exclude"}${n ? `<span class="n">${n}</span>` : ""}<span class="caret" aria-hidden="true">▾</span>`;
   btn.setAttribute("aria-expanded", String($("#table-side").classList.contains("filters-open")));
 }
 $("#more-filters").addEventListener("click", () => {
@@ -1079,6 +1215,13 @@ function fitYearsBox(wrap) {
   const room = document.documentElement.clientWidth - box.getBoundingClientRect().left - 16;
   const need = table.scrollWidth + box.offsetWidth - box.clientWidth;   // plus its borders
   if (need > box.offsetWidth) box.style.width = search.style.width = `${Math.max(box.offsetWidth, Math.min(need, room))}px`;
+  // #, Player, Pos and Age stay put when it scrolls sideways: each column's left edge, for the CSS
+  // (summed widths: a sticky cell's offsetLeft moves as it sticks)
+  let left = 0;
+  [...table.tHead.rows[0].cells].slice(0, 4).forEach((c, i) => {
+    table.style.setProperty(`--fz${i + 1}`, `${left}px`);
+    left += c.getBoundingClientRect().width;
+  });
 }
 
 function loadPlayerSeasons() {
@@ -1119,6 +1262,7 @@ function renderPlayers() {
                : state.clubs?.size ? state.players.list
                : isCupFilter(state.tableFilter) ? state.players.list.filter((p) => euroTeams(state.tableFilter)?.has(p.team))
                : ids === null ? state.players.list : state.players.list.filter((p) => ids.includes(p.league));
+  if (!q && !state.clubs?.size) rows = rows.filter((p) => !isExcluded(p.league));
   rows = rows.filter(playerVisible);
   // Sort: a season rank ("s2026", the current season by default; highest first) or age
   // (youngest first); blanks last
@@ -1133,7 +1277,9 @@ function renderPlayers() {
   if (!open && /^[sf]\d/.test(key) && key !== `s${seasons[0]}`) key = `s${seasons[0]}`;   // a hidden column
   if (groups.length && key === `s${seasons[0]}`) key = "pos";                                  // Ability is shown as "As ST"
   const val = (p) => key === "pos" ? posRank(p, groups) : key.startsWith("s") ? p.seasons?.[seasons.indexOf(Number(key.slice(1)))]
-    : key.startsWith("f") ? p.future?.[future.indexOf(Number(key.slice(1)))] : p[key];
+    : key.startsWith("f") ? p.future?.[future.indexOf(Number(key.slice(1)))]
+    : key === "ga" ? (p.season ? p.season[2] + p.season[3] + p.season[2] / 1000 : null)   // goals break ties
+    : key === "rating" ? p.season?.[1] : p[key];
   rows = key === "age"
     ? rows.slice().sort((a, b) => (a.age ?? 999) - (b.age ?? 999))
     : rows.slice().sort((a, b) => (val(b) ?? -1) - (val(a) ?? -1));
@@ -1156,7 +1302,8 @@ function renderPlayers() {
         ${th("age", "Age", "Age today (sorts youngest first).", " col-age")}
         <th class="num col-wrank" data-tip="World rank: his place among every listed player by Ability, whatever this list is filtered or sorted by.">World</th>
         <th class="num col-lrank" data-tip="League rank: his place by Ability among the listed players in his club's league.">Lg</th>
-        ${th("minutes", "Mins", "Minutes over his last 20 appearances: the evidence behind his Ability. Under 450 (greyed), his Ability rests more on earlier seasons and his age curve.", " col-mins")}
+        ${th("ga", "G/A", "Goals and assists this season, all his clubs (7G 4A), with his match rating under them where the Rtg column doesn't fit. Sorts by the two added together.", " col-ga")}
+        ${th("rating", "Rtg", "Average match rating this season (API-Football's, weighted by minutes), all his clubs. Greyed when he's played under a third of his clubs' minutes since he joined (a squad player, or back from injury), so it rests on little.", " col-rtg")}
         ${shown.map((y, i) => [y, i]).reverse().map(([y, i]) => i === 0 && groups.length ? posTh : th(`s${y}`, i === 0 ? nowHead("Ability") : `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `${i === 0 ? "Underlying Ability: the model's estimate of how good he is now (not his recent match ratings or this season's totals, which are on his page). " : ""}Rank for the ${seasonName(y)} season (the ${y} season in calendar-year leagues such as MLS and Norway${i === 0 ? "; so far" : ""}): his club's level that season, moved by how his stats compare with other players in his position (elite seasons earn extra, and positions are weighted). Squad players who play little are marked down. Every player follows the typical age curve for his position from a level of his own, and only moves off it as far as his minutes that season justify, so a thin season (an injury year, the start of a season) stays close to his curve. A season with no minutes in these leagues is estimated from his other seasons and his age, and shown outlined.`, ` col-season col-s${i}${i === 0 ? " col-now" : ""}`)).join("")}
         ${open ? future.map((y, j) => th(`f${y}`, `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `Projected for ${seasonName(y)}: his Ability moved along the typical age curve for his position, from his age now to his age that season (young players rise, from 31 (33 for keepers) they decline, faster each year). A guide, not a forecast of his form.`, ` col-season col-future col-f${j}`)).join("") : ""}
       </tr></thead>
@@ -1187,17 +1334,19 @@ function renderPlayers() {
 const FIRST_ROWS = 100, BATCH_ROWS = 100;
 function playerRow(p, i, seasons, groups = selectedGroups(), future = []) {
   const place = state.playerPlaces?.get(p.id);
+  const thin = p.season?.[4] && p.season[0] < p.season[4] / 3;     // under a third of his clubs' minutes
   return `
         <tr${p.team ? ` data-team="${p.team}"` : ""} data-player="${p.id}">
           <td>${i + 1}</td>
           <td><div class="pl-cell">${p.team ? `<a class="pl-badge-link" href="${clubHref(p.team)}" title="${escapeHtml(teamName(p.team))}" aria-label="${escapeHtml(teamName(p.team))}"><img class="club-logo pl-badge" src="${teamLogo(p.team)}" alt="" loading="lazy"></a>` : `<span class="club-logo pl-badge" title="Club not known"></span>`}<img class="player-photo" src="${playerPhoto(p.id)}" alt="" loading="lazy">
-            <div class="pl-text"><div class="pl-name">${playerLink(p.id, p.name)}${playerFlag(p.nationality)}</div>
+            <div class="pl-text"><div class="pl-name"><a class="player-link" href="#/player/${p.id}" title="${escapeHtml(p.name)}"><span class="pn-full">${escapeHtml(p.name)}</span><span class="pn-short">${escapeHtml(shortName(p.name))}</span></a>${playerFlag(p.nationality)}</div>
               <div class="pl-club">${p.team ? escapeHtml(teamName(p.team)) : "Club not known"}${p.league != null && leagueShort(p.league) ? ` · ${escapeHtml(leagueShort(p.league))}` : ""}</div></div></div></td>
           <td class="num">${POS_LABEL[p.position] || escapeHtml(p.position || "")}</td>
           <td class="num col-age">${p.age ?? `<span class="dim">–</span>`}</td>
           <td class="num col-wrank">${place?.world.toLocaleString() ?? `<span class="dim">–</span>`}</td>
           <td class="num col-lrank"${place?.lg ? ` title="${ordinal(place.lg)} of ${place.lgOf} in the ${escapeHtml(leagueShort(p.league))}"` : ""}>${place?.lg ?? `<span class="dim">–</span>`}</td>
-          <td class="num col-mins${(p.minutes ?? 0) < 450 ? " thin" : ""}">${p.minutes != null ? p.minutes.toLocaleString() : `<span class="dim">–</span>`}</td>
+          <td class="num col-ga">${p.season ? `${p.season[2]}G ${p.season[3]}A` : `<span class="dim">–</span>`}${p.season?.[1] != null ? `<span class="ga-rtg${thin ? " thin" : ""}">${p.season[1].toFixed(2)}</span>` : ""}</td>
+          <td class="num col-rtg${thin ? " thin" : ""}">${p.season?.[1] != null ? p.season[1].toFixed(2) : `<span class="dim">–</span>`}</td>
           ${seasons.map((y, k) => [y, k]).reverse().map(([y, k]) => k === 0 && groups.length ? `<td class="num col-posrank">${posRank(p, groups) == null ? `<span class="dim">–</span>` : rankChipSmall(posRank(p, groups))}</td>` : `<td class="num col-season col-s${k}${k === 0 ? " col-now" : ""} tip-cell" data-key="${y}">${p.seasons?.[k] == null ? `<span class="dim">–</span>` : p.estimated?.includes(k) ? `<span class="est">${rankChipSmall(p.seasons[k])}</span>` : rankChipSmall(p.seasons[k])}</td>`).join("")}
           ${future.map((y, j) => `<td class="num col-season col-future col-f${j}">${p.future?.[j] == null ? `<span class="dim">–</span>` : rankChipSmall(p.future[j])}</td>`).join("")}
         </tr>`;
@@ -1332,15 +1481,41 @@ function playerPlaces() {
 }
 const leagueShort = (lid) => SHORT_NAMES[lid] || state.data.competitions[lid]?.name || "";
 
-// ---- Range filters on the Rankings: each [min, max], null = open. They combine with the
-// competition menu, search and (Players) the age, position, club and nationality filters
+// ---- Range filters on Players: each [min, max], null = open. They combine with the competition
+// menu, Exclude, search and the age, position, club and nationality filters
 const RANGES = {
-  rank: { view: "clubs", label: "World rank", tip: "Place among every ranked club by Baseline Strength (1 = strongest), as the World column" },
-  cur: { view: "clubs", label: "Current Strength", tip: "Current Strength: the Elo rating after the latest match" },
   ab: { view: "players", label: "Ability", tip: "Underlying Ability, 0-100: the model's estimate of his level now" },
   crank: { view: "players", label: "Club world rank", tip: "His club's place among every ranked club by Baseline Strength (1 = strongest). Players without a ranked club drop out while this is set" },
-  mins: { view: "players", label: "Minutes", tip: "Minutes over his last 20 appearances, the evidence behind his Ability", minOnly: true },
+  mins: { view: "players", label: "Minutes", tip: "Minutes over his last 20 appearances, the evidence behind his Ability" },
 };
+// Each range is a two-handled slider, like Age, over a list of stops: every whole Ability from the
+// lowest to the highest, minutes a match (90) at a time, and club ranks finer at the top (1, 5, 10,
+// 20 ...) so the top 50 can be picked out of thousands. A handle at either end leaves that end open
+function rangeStops(k) {
+  const cache = state.rangeStopsCache ||= {};
+  if (cache[k]) return cache[k];
+  let stops;
+  if (k === "ab") {
+    const v = state.players.list.map(abilityOf).filter((x) => x != null).map(Math.round);
+    const lo = Math.min(...v), hi = Math.max(...v);
+    stops = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+  } else if (k === "mins") {
+    const hi = Math.ceil(Math.max(...state.players.list.map((p) => p.minutes || 0)) / 90) * 90;
+    stops = Array.from({ length: hi / 90 + 1 }, (_, i) => i * 90);
+  } else {
+    const n = clubPlaces().size;
+    stops = [...[1, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 400, 500, 750].filter((x) => x < n),
+      ...Array.from({ length: Math.max(0, Math.ceil(n / 500) - 1) }, (_, i) => (i + 2) * 500).filter((x) => x < n), n];
+  }
+  return (cache[k] = stops);
+}
+// a handle's stop for a range end (one from a link needn't be on a stop: the nearest stop inside it)
+function stopIndex(stops, v, end) {
+  const n = stops.length - 1;
+  if (v == null) return end ? n : 0;
+  const i = end ? stops.findLastIndex((s) => s <= v) : stops.findIndex((s) => s >= v);
+  return i < 0 ? (end ? 0 : n) : i;
+}
 const rangeOf = (k) => state.ranges[k] || [null, null];
 function inRange(k, v) {
   const [lo, hi] = rangeOf(k);
@@ -1349,36 +1524,57 @@ function inRange(k, v) {
 }
 const rangeKeys = (view = state.tableView) => Object.keys(RANGES).filter((k) => RANGES[k].view === view);
 const rangesOn = (view = state.tableView) => rangeKeys(view).filter((k) => rangeOf(k).some((v) => v != null)).length;
-const clubInRanges = (r) => inRange("rank", clubWorld(r.team)) && inRange("cur", r.current);
-const playerInRanges = (p) => inRange("ab", abilityOf(p)) && inRange("crank", clubWorld(p.team)) && inRange("mins", p.minutes);
+const playerInRanges = (p) => inRange("ab", abilityOf(p) == null ? null : Math.round(abilityOf(p)))   // as shown
+  && inRange("crank", clubWorld(p.team)) && inRange("mins", p.minutes);
 function renderRangeFilter() {
   const box = $("#range-filter");
-  box.hidden = !state.rankings || (state.tableView === "players" && !state.players);
+  box.hidden = !state.rankings || (state.tableView === "players" && !state.players) || !rangeKeys().length;
   if (box.hidden) return;
-  const input = (k, end, v, ph, label) => `<input type="number" inputmode="numeric" min="0" class="rng-in" data-rng="${k}" data-end="${end}"
-      value="${v ?? ""}" placeholder="${ph}" aria-label="${escapeHtml(label)}">`;
+  const slider = (k, end, max, label) => `<input type="range" min="0" max="${max}" step="1" data-rng="${k}" data-end="${end}" aria-label="${escapeHtml(label)}">`;
   box.innerHTML = `<div class="pos-head"><span>Ranges</span>
       <button type="button" class="pos-clear" data-range-clear${rangesOn() ? "" : " hidden"}>Clear</button></div>
     ${rangeKeys().map((k) => {
-      const d = RANGES[k], [lo, hi] = rangeOf(k);
-      return `<div class="rng-row" title="${escapeHtml(d.tip)}"><span class="rng-label">${d.label}</span>
-        ${d.minOnly ? `<span class="rng-pre">at least</span>${input(k, 0, lo, "any", `${d.label}: at least`)}`
-          : `${input(k, 0, lo, "min", `${d.label}: from`)}<span class="rng-sep">–</span>${input(k, 1, hi, "max", `${d.label}: to`)}`}</div>`;
+      const d = RANGES[k], n = rangeStops(k).length - 1;
+      return `<div class="rng-row" data-rng-row="${k}" title="${escapeHtml(d.tip)}">
+        <div class="age-head"><span>${d.label}</span><span class="rng-val"></span></div>
+        <div class="age-slider"><div class="age-track"><div class="age-fill"></div></div>
+          ${slider(k, 0, n, `${d.label}: from`)}${slider(k, 1, n, `${d.label}: to`)}</div></div>`;
     }).join("")}`;
+  rangeKeys().forEach(drawRangeSlider);
 }
-// Typing redraws the list (and the menu's counts) after a short pause; the boxes aren't redrawn,
-// so the cursor stays where it is
-$("#range-filter").addEventListener("input", (e) => {
+// handles, fill and label for one range, from state.ranges
+function drawRangeSlider(k) {
+  const row = $(`#range-filter [data-rng-row="${k}"]`);
+  if (!row) return;
+  const stops = rangeStops(k), [lo, hi] = rangeOf(k), n = stops.length - 1;
+  const a = stopIndex(stops, lo, 0), b = stopIndex(stops, hi, 1);
+  row.querySelector('[data-end="0"]').value = a;
+  row.querySelector('[data-end="1"]').value = b;
+  const fill = row.querySelector(".age-fill");
+  fill.style.left = `${(a / (n || 1)) * 100}%`;
+  fill.style.right = `${100 - (b / (n || 1)) * 100}%`;
+  const fmt = (v) => v.toLocaleString();
+  row.querySelector(".rng-val").textContent = a === 0 && b === n ? "All"
+    : a === 0 ? (k === "crank" ? `Top ${fmt(stops[b])}` : `Up to ${fmt(stops[b])}`)
+    : b === n ? `${fmt(stops[a])}${k === "crank" ? " down" : "+"}` : `${fmt(stops[a])}–${fmt(stops[b])}`;
+}
+// Dragging: the handle and label move straight away, the table redraws at most once a frame and
+// the menu's counts on release (as Age)
+function onRangeInput(e, done) {
   const el = e.target.closest("[data-rng]");
   if (!el) return;
-  const v = el.value.trim() === "" ? null : Number(el.value);
-  const r = [...rangeOf(el.dataset.rng)];
-  r[Number(el.dataset.end)] = Number.isFinite(v) ? v : null;
-  state.ranges[el.dataset.rng] = r;
+  const k = el.dataset.rng, stops = rangeStops(k), n = stops.length - 1, row = el.closest("[data-rng-row]");
+  let a = Number(row.querySelector('[data-end="0"]').value), b = Number(row.querySelector('[data-end="1"]').value);
+  if (a > b) { if (el.dataset.end === "0") a = b; else b = a; }       // handles can't cross
+  state.ranges[k] = [a === 0 ? null : stops[a], b === n ? null : stops[b]];
+  drawRangeSlider(k);
   $("#range-filter [data-range-clear]").hidden = !rangesOn();
-  clearTimeout(state.rangeTimer);
-  state.rangeTimer = setTimeout(() => { renderTable(); renderTableFilters(); }, 200);
-});
+  if (!state.rangeFrame)
+    state.rangeFrame = requestAnimationFrame(() => { state.rangeFrame = 0; renderTable(); });
+  if (done) renderTableFilters();
+}
+$("#range-filter").addEventListener("input", (e) => onRangeInput(e, false));
+$("#range-filter").addEventListener("change", (e) => onRangeInput(e, true));
 $("#range-filter").addEventListener("click", (e) => {
   if (!e.target.closest("[data-range-clear]")) return;
   for (const k of rangeKeys()) state.ranges[k] = [null, null];
@@ -1390,13 +1586,14 @@ $("#range-filter").addEventListener("click", (e) => {
 // ---- Shareable Rankings: #/clubs?… and #/players?… carry the competition, search, sort and
 // every filter, so a view can be bookmarked or sent. Rewritten in place as filters change (no
 // history entry for each click) and read back by route() when the page opens on one.
-const CLUB_SORTS = new Set(["lt", "trend", "current", "form"]);
+const CLUB_SORTS = new Set(["lt", "trend", "current", "form"]), CLUB_SORT_DEFAULT = "current";
 const rangeText = ([lo, hi]) => lo == null && hi == null ? null : `${lo ?? ""}-${hi ?? ""}`;
 function tableHash() {
   const p = new URLSearchParams(), players = state.tableView === "players";
   if (state.tableFilter !== "all") p.set("c", state.tableFilter);
   if (state.tableSearch.trim()) p.set("q", state.tableSearch.trim());
-  if (players ? state.playerSort : state.tableSort !== "lt") p.set("sort", players ? state.playerSort : state.tableSort);
+  if (state.excluded.size) p.set("ex", [...state.excluded].join("|"));
+  if (players ? state.playerSort : state.tableSort !== CLUB_SORT_DEFAULT) p.set("sort", players ? state.playerSort : state.tableSort);
   for (const k of rangeKeys()) { const t = rangeText(rangeOf(k)); if (t) p.set(k, t); }
   if (players) {
     const age = rangeText([state.ageMin, state.ageMax]);
@@ -1421,16 +1618,17 @@ function openTableView(view, query) {
   };
   state.tableFilter = p.get("c") || "all";
   state.tableSearch = p.get("q") || "";
+  state.excluded = new Set((p.get("ex") || "").split("|").filter(isExcludeKey));
   $("#table-search").value = state.tableSearch;
   const sort = p.get("sort");
   for (const k of rangeKeys(view)) state.ranges[k] = range(k);
   if (view === "players") {
-    state.playerSort = sort && /^(age|pos|minutes|[sf]\d{4})$/.test(sort) ? sort : null;
+    state.playerSort = sort && /^(age|pos|ga|rating|[sf]\d{4})$/.test(sort) ? sort : null;
     [state.ageMin, state.ageMax] = range("age");
     state.positions = new Set((p.get("pos") || "").split(",").filter((x) => PITCH_SPOTS.some(([s]) => s === x)));
     state.clubs = new Set((p.get("club") || "").split(",").map(Number).filter((n) => n > 0));
     state.nats = new Set((p.get("nat") || "").split("|").filter(Boolean));
-  } else state.tableSort = CLUB_SORTS.has(sort) ? sort : "lt";
+  } else state.tableSort = CLUB_SORTS.has(sort) ? sort : CLUB_SORT_DEFAULT;
   showTab("table");
   setTableView(view);
 }
@@ -1452,42 +1650,44 @@ function renderTable() {
     if (!teams) { loadEuroCups(); wrap.innerHTML = `<div class="empty-state">Loading the cups…</div>`; return; }
     rows = state.rankings.filter((r) => teams.has(r.team));
   }
+  rows = rows.filter((r) => !isExcluded(r.league));
   if (q) rows = clubSearchRows(q);
-  rows = rows.filter(clubInRanges);
   const places = clubPlaces();
   const key = state.tableSort;
   rows = rows.slice().sort((a, b) => (b[key] ?? -1e9) - (a[key] ?? -1e9));
-  if (!rows.length) { wrap.innerHTML = `<div class="empty-state">No clubs ${rangesOn() ? "match these filters" : "found"}.</div>`; return; }
+  if (!rows.length) { wrap.innerHTML = `<div class="empty-state">No clubs ${state.excluded.size ? "match these filters" : "found"}.</div>`; return; }
   const th = (k, label, tip, cls = "") =>
     `<th class="num sortable${key === k ? " active" : ""}${cls}" data-sort="${k}" data-tip="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   wrap.innerHTML = `
     <div class="table-scroll"><table class="leaderboard clubs">
       <thead><tr>
         <th data-tip="Position in this list, in the current sort order.">#</th>
-        <th data-tip="Club badge."></th>
+        <th data-tip="Club badge. Click a club to open its page."><span class="th-club">Club</span></th>
         <th data-tip="Club name, with its country and league. Click a club to open its page.">Club</th>
         <th class="num" data-tip="World rank: place among every ranked club by Baseline Strength, whatever this list is filtered or sorted by.">World</th>
         <th class="num col-dom" data-tip="In league: place by Baseline Strength among the clubs in its league this season. TheCornerFC's ranking, not the league table (that's on the competition's page).">In lg</th>
         ${th("lt", BASELINE_TH, "Baseline Strength: the long-term Elo rating (LT ALGO), a smoothed rating weighted mostly to the average over the last 100 matches. Slow to move, and the better guide for matches months away.")}
-        ${th("trend", "Gap", "Gap: Current Strength minus Baseline Strength. Green: rated above its long-term level; red: below it. A difference in level, not recent movement (see Last 6).")}
+        ${th("trend", "Gap", "Gap: Current Strength minus Baseline Strength. Green: rated above its long-term level; red: below it. A difference in level, not recent movement (see Last 6).", " col-gap")}
         ${th("current", "Current", "Current Strength: the Elo rating after the latest match. 100 points is worth a goal a game. It rises when a club does better than expected against that opponent, and falls when it does worse. Colour: green is the top 5% of all clubs, amber the top 20%, orange the top half, red the rest.")}
         ${th("form", "Last 6", "Recent movement: how much the club's Elo rating has changed over its last 6 matches.", " col-recent")}
       </tr></thead>
       <tbody>${rows.map((r, i) => `
         <tr data-team="${r.team}">
           <td>${i + 1}</td>
-          <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy"></td>
-          <td>${clubLink(r.team)}${q || all ? countryLeague(r.league) : ""}</td>
+          <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" title="${escapeHtml(teamName(r.team))}" loading="lazy"></td>
+          <td><div class="club-cell">${clubLink(r.team)}${q || all ? countryLeague(r.league) : ""}</div></td>
           <td class="num">${places.get(r.team)?.world.toLocaleString() ?? ""}</td>
           <td class="num col-dom" style="color:var(--text-muted)"${places.get(r.team)?.dom ? ` title="${ordinal(places.get(r.team).dom)} of ${places.get(r.team).domOf} in the ${escapeHtml(leagueShort(r.league))} by Baseline Strength"` : ""}>${places.get(r.team)?.dom ?? ""}</td>
           <td class="num">${eloChip(r.lt)}</td>
-          <td class="num">${formHtml(r.trend)}</td>
+          <td class="num col-gap">${formHtml(r.trend)}</td>
           <td class="num">${formChip(r.current)}</td>
           <td class="num col-recent">${formHtml(r.form)}</td>
         </tr>`).join("")}
       </tbody>
     </table></div>
 `;
+  fitClubMeta(wrap);
+  clubTableObserver.observe(wrap.querySelector(".table-scroll"));
   fitTopRows(wrap, all || !!q);
   fitYearsBox(wrap);
 }
@@ -3723,7 +3923,7 @@ $("#club-body").addEventListener("click", (e) => {
   showTab("table");
   state.tableFilter = "all";
   state.tableSort = "lt";
-  for (const k of rangeKeys("clubs")) state.ranges[k] = [null, null];
+  state.excluded = new Set();
   state.tableSearch = state.rankByTeam.get(team)?.in_league ? "" : teamName(team);
   $("#table-search").value = state.tableSearch;
   if (state.tableView !== "clubs") setTableView("clubs");
@@ -4117,14 +4317,14 @@ function leagueClubsTab() {
 function clubRatingTable(rows, pos, names = {}, meta = null) {
   return `<div class="table-scroll"><table class="leaderboard clubs">
     <thead><tr><th>#</th><th></th><th>Club</th>${pos ? `<th class="num" title="Actual position in the competition's table">Table</th>` : `<th class="num" title="Matches rated">Pl</th>`}
-      <th class="num" title="Baseline Strength: long-term Elo">${BASELINE_TH}</th><th class="num" title="Current minus Baseline">Gap</th><th class="num" title="Current Strength: Elo now">Current</th><th class="num col-recent" title="Elo change over the last 6 matches">Last 6</th></tr></thead>
+      <th class="num" title="Baseline Strength: long-term Elo">${BASELINE_TH}</th><th class="num col-gap" title="Current minus Baseline">Gap</th><th class="num" title="Current Strength: Elo now">Current</th><th class="num col-recent" title="Elo change over the last 6 matches">Last 6</th></tr></thead>
     <tbody>${rows.map((r, i) => `<tr>
       <td>${i + 1}</td>
       <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy"></td>
       <td>${clubLink(r.team, names[r.team] || teamName(r.team))}${meta ? meta(r) : ""}</td>
       <td class="num" style="color:var(--text-muted)">${pos ? pos(r) : r.played}</td>
       <td class="num">${eloChip(r.lt)}</td>
-      <td class="num">${formHtml(r.trend)}</td>
+      <td class="num col-gap">${formHtml(r.trend)}</td>
       <td class="num">${formChip(r.current)}</td>
       <td class="num col-recent">${formHtml(r.form)}</td></tr>`).join("")}</tbody></table></div>`;
 }
@@ -4625,6 +4825,7 @@ for (const id of ["#age-min", "#age-max"]) {
 // Clubs or Players, picked from the menu
 function setTableView(view) {
   state.tableView = view;
+  renderExcludeFilter();
   renderRangeFilter();
   renderAgeFilter();
   renderPosFilter();
@@ -4635,17 +4836,35 @@ function setTableView(view) {
   renderTable();
 }
 
-// "Model detail" on any match card (Matches tab and club pages): drawn when first opened
-document.addEventListener("click", async (e) => {
+// "Model detail" on any match card (Matches tab and club pages): drawn when first opened. On the
+// Matches tab it opens and closes together with the card's line-ups, one card at a time
+async function setMatchExpanded(card, open) {
+  const m = state.data.matches.find((x) => x.id === Number(card.dataset.fixture));
+  if (!m) return;
+  const btn = card.querySelector(".why-toggle"), why = card.querySelector(".why-detail");
+  const withLineups = card.classList.contains("lineup-card") && card.closest("#matches-list");
+  if (open && card.closest("#matches-list")) {
+    document.querySelectorAll("#matches-list .match-card").forEach((c) => {
+      if (c !== card && (c.querySelector(".fixture-lineup-panel") || c.querySelector(".why-detail:not([hidden])"))) setMatchExpanded(c, false);
+    });
+  }
+  if (why) { why.hidden = !open; btn.setAttribute("aria-expanded", String(open)); }
+  if (withLineups) {
+    const existing = card.querySelector(".fixture-lineup-panel");
+    if (!open) existing?.remove();
+    else if (!existing) {
+      const panel = document.createElement("div");
+      panel.className = "fixture-lineup-panel";
+      card.appendChild(panel);
+      renderMatchLineups(m, panel);
+    }
+  }
+  if (open && why) { await loadExplanations(); why.innerHTML = whyDetailHtml(m); }
+}
+document.addEventListener("click", (e) => {
   const btn = e.target.closest(".why-toggle");
-  if (!btn) return;
-  const card = btn.closest(".match-card"), panel = card?.querySelector(".why-detail");
-  const m = card && state.data.matches.find((x) => x.id === Number(card.dataset.fixture));
-  if (!panel || !m) return;
-  const open = panel.hidden;
-  panel.hidden = !open;
-  btn.setAttribute("aria-expanded", String(open));
-  if (open) { await loadExplanations(); panel.innerHTML = whyDetailHtml(m); }
+  const card = btn?.closest(".match-card");
+  if (card?.querySelector(".why-detail")) setMatchExpanded(card, btn.getAttribute("aria-expanded") !== "true");
 });
 $("#matches-list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
@@ -4658,15 +4877,7 @@ $("#matches-list").addEventListener("click", (e) => {
   }
   const lineupCard = e.target.closest(".match-card.lineup-card");
   if (lineupCard) {
-    const m = state.data.matches.find((x) => x.id === Number(lineupCard.dataset.fixture));
-    if (!m) return;
-    const existing = lineupCard.querySelector(".fixture-lineup-panel");
-    document.querySelectorAll("#matches-list .fixture-lineup-panel").forEach((p) => p.remove());
-    if (existing) return;
-    const panel = document.createElement("div");
-    panel.className = "fixture-lineup-panel";
-    lineupCard.appendChild(panel);
-    renderMatchLineups(m, panel);
+    setMatchExpanded(lineupCard, !lineupCard.querySelector(".fixture-lineup-panel"));
     return;
   }
   const go = e.target.closest("[data-goto]");

@@ -58,6 +58,8 @@
   <section class="panel" data-tab="table" data-active="true">
     <div id="table-side">
       <div class="side-stick">
+        <div class="more-panel" id="more-panel">
+        <div id="exclude-filter" hidden></div>
         <div id="range-filter" hidden></div>
         <div id="age-filter" hidden>
           <div class="age-head"><span>Age</span><span id="age-label"></span></div>
@@ -85,8 +87,9 @@
           </div>
           <div class="who-chips" id="who-chips"></div>
         </div>
+        </div>
         <div class="filters-wrap side-filters" id="table-filters"></div>
-        <button type="button" class="filter-chip" id="more-filters" aria-expanded="false" aria-controls="table-side" hidden>Filters</button>
+        <button type="button" class="filter-chip" id="more-filters" aria-expanded="false" aria-controls="more-panel" hidden>Filters</button>
       </div>
     </div>
     <input type="search" id="table-search" class="table-search" placeholder="Search clubs, leagues or countries" aria-label="Search">

@@ -1,9 +1,13 @@
 name: Nightly sync
 
 on:
+  # GitHub's scheduler is best-effort: runs on the hour are often hours late or dropped entirely.
+  # So try three times, off the hour; the later attempts skip if one already succeeded today (UTC).
   schedule:
-    - cron: "0 3 * * *"   # 03:00 UTC every day
-  workflow_dispatch:       # "Run workflow" button for manual runs
+    - cron: "17 1 * * *"   # 01:17 UTC
+    - cron: "47 3 * * *"   # 03:47 UTC (backup)
+    - cron: "17 6 * * *"   # 06:17 UTC (backup)
+  workflow_dispatch:       # "Run workflow" button for manual runs (always runs)
 
 concurrency:
   group: db-sync            # shared with the match-day job so they never overlap
@@ -14,7 +18,33 @@ concurrency:
 permissions: {}
 
 jobs:
+  # Scheduled backups do nothing if the nightly sync has already succeeded today
+  check:
+    permissions:
+      actions: read        # to list this workflow's earlier runs
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          done_today=$(gh run list -R "$GITHUB_REPOSITORY" --workflow nightly.yml --status success \
+            --created ">=$(date -u +%F)" --json databaseId --jq length)
+          if [ "$done_today" -gt 0 ]; then
+            echo "Nightly sync already succeeded today; skipping"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
   sync:
+    needs: check
+    if: needs.check.outputs.run == 'true'
     permissions:
       contents: write      # to commit the website data in docs/data
     runs-on: ubuntu-latest
