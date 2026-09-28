@@ -944,7 +944,7 @@ def export_players(conn, out_dir=OUT_DIR):
             [player, name, pos, float(rank) if rank is not None else None])
     # the XI the model predicted for those matches: its last genuine pre-match capture, taken before
     # the official XI was first seen (evaluation.load_lineups' rule), so the site can mark each
-    # starter as predicted or not
+    # starter as predicted or not. [id, name, role, rank going into the match]
     prematch_xi = {}
     if actual_xi and _table_exists(conn, "lineup_prediction_snapshots") and _table_exists(conn, "official_lineup_snapshots"):
         snapshots = conn.execute(
@@ -960,7 +960,8 @@ def export_players(conn, out_dir=OUT_DIR):
         names = dict(conn.execute("select player_id, name from players where player_id = any(%s)", [ids]).fetchall())
         for fid, team, ps in snapshots:
             prematch_xi.setdefault(str(fid), {})[str(team)] = [
-                [p["player"], names.get(p["player"], ""), p.get("role")] for p in ps if p.get("predicted_starter")]
+                [p["player"], names.get(p["player"], ""), p.get("role"), p.get("player_rating")]
+                for p in ps if p.get("predicted_starter")]
     # team-sheet order: keeper, defence right to left, midfield, attack
     order = {r: i for i, r in enumerate(["GK", "RB", "RWB", "CB", "LB", "LWB", "DM", "CM", "RM", "LM",
                                           "AM", "RW", "LW", "ST"])}
