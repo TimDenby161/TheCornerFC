@@ -83,11 +83,11 @@ async function loadData() {
     if (pj) {        // API-Football sends some names HTML-encoded ("O&apos;Reilly")
       for (const r of pj.players) r[1] = decodeEntities(r[1]);
       for (const xi of Object.values(pj.next_xi || {})) for (const r of xi.players) r[1] = decodeEntities(r[1]);
-      for (const teams of Object.values(pj.fixture_xi || {})) for (const xi of Object.values(teams)) for (const r of xi) r[1] = decodeEntities(r[1]);
-      for (const teams of Object.values(pj.actual_xi || {})) for (const xi of Object.values(teams)) for (const r of xi) r[1] = decodeEntities(r[1]);
+      for (const k of ["fixture_xi", "actual_xi", "prematch_xi"])
+        for (const teams of Object.values(pj[k] || {})) for (const xi of Object.values(teams)) for (const r of xi) r[1] = decodeEntities(r[1]);
     }
     state.players = pj ? { list: rowsToObjects(pj.fields, pj.players), nextXi: pj.next_xi, fixtureXi: pj.fixture_xi || {},
-      actualXi: pj.actual_xi || {}, seasons: pj.seasons || [], futureSeasons: pj.future_seasons || [], teams: pj.teams || {} } : null;
+      actualXi: pj.actual_xi || {}, prematchXi: pj.prematch_xi || {}, seasons: pj.seasons || [], futureSeasons: pj.future_seasons || [], teams: pj.teams || {} } : null;
     state.data = { ...m, matches: rowsToObjects(m.fields, m.matches) };
     state.rankings = rowsToObjects(r.fields, r.rankings);
     // Gap: Current Strength less Baseline Strength (as shown, so the sum adds up), how far a club's
@@ -941,10 +941,11 @@ function matchHead(m, right = "") {
       </div>`;
 }
 
-function matchCard(m) {
+// lineups: false leaves out the Line-ups button (club pages)
+function matchCard(m, { lineups = true } = {}) {
   const finished = FINISHED.has(m.status) && m.hg != null;
   const rated = finished && m.rating;
-  const canLineup = !LIVE.has(m.status) && !CALLED_OFF.has(m.status);
+  const canLineup = lineups && !LIVE.has(m.status) && !CALLED_OFF.has(m.status);
   const cls = (rated ? ` rated acc-${m.rating}` : "") + (canLineup ? " lineup-card" : "");
   const badge = rated
     ? `<span class="rating-badge badge-${m.rating}" title="${m.rating}/5 ${RATING_LABELS[m.rating]}">${m.rating}/5</span>` : "";
@@ -953,15 +954,18 @@ function matchCard(m) {
       ${FACTORS.map(([k, label, w]) => `<div class="factor"><span class="factor-name">${label} <span class="factor-weight">${w}</span></span><span class="factor-score">${m[k]}/5</span></div>`).join("")}
     </div>` : "";
   // Up front: projected goals and likely score (in the head), model and market chances, key
-  // reasons; everything else behind "Model detail"
+  // reasons; the line-ups and everything else behind "Line-ups" and "Model detail"
   const upcoming = !finished && !LIVE.has(m.status);
+  const toggles = (canLineup ? `<button type="button" class="lineup-toggle" aria-expanded="false">${finished ? "Line-ups" : "Predicted line-ups"}</button>` : "")
+    + (m.p_home != null ? `<button type="button" class="why-toggle" aria-expanded="false">${finished ? "Pre-match model detail" : "Model detail"}</button>` : "");
   return `
     <div class="match-card${cls}" data-fixture="${m.id}">
       ${matchHead(m, `${badge}${statusTag(m)}`)}
       ${probBars(m, false)}
       ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${reasonsHtml(m)}</div>` : ""}
       ${upcoming ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
-      ${m.p_home != null ? `<button type="button" class="why-toggle" aria-expanded="false">${finished ? "Pre-match model detail" : "Model detail"}</button><div class="why-detail" hidden></div>` : ""}
+      ${toggles ? `<div class="card-toggles">${toggles}</div>` : ""}
+      ${m.p_home != null ? `<div class="why-detail" hidden></div>` : ""}
       ${detail}
     </div>`;
 }
@@ -2293,16 +2297,41 @@ async function renderMatchLineups(m, panel) {
   const side = (teamId, data, home) => {
     const rating = home ? m.home_xi : m.away_xi;
     const recent = home ? m.home_recent_xi : m.away_recent_xi;
-    const label = `${teamName(teamId)}${rating != null ? ` · rating ${Math.round(rating)}${recent != null ? ` (recent ${Math.round(recent)})` : ""}` : ""}`;
+    let label = `${teamName(teamId)}${rating != null ? ` · rating ${Math.round(rating)}${recent != null ? ` (recent ${Math.round(recent)})` : ""}` : ""}`;
     const listed = exact[String(teamId)];
-    if (listed?.length) return `<div><div class="modal-section">${escapeHtml(label)}</div>${xiPitch(listed.map(([pid, name, pos, rank]) =>
-      ({ p: { id: pid, name }, b: { label: pos }, rank, chance: null, mins: null })), data, { note: "" })}</div>`;
+    if (listed?.length) {
+      const xi = listed.map(([pid, name, pos, rank]) => ({ p: { id: pid, name }, b: { label: pos }, rank, chance: null, mins: null }));
+      const predicted = finished ? state.players?.prematchXi?.[String(m.id)]?.[String(teamId)] : null;
+      if (predicted?.length) label += ` · ${markPredicted(xi, predicted)} of ${xi.length} predicted`;
+      return `<div><div class="modal-section">${escapeHtml(label)}</div>${xiPitch(xi, data, { note: "" })}</div>`;
+    }
     if (finished) return `<div><div class="modal-section">${escapeHtml(label)}</div><div class="page-note">No actual line-up for this team.</div></div>`;
     const xi = predictedXi(teamId, data, m);
     if (!xi) return `<div class="modal-section">${escapeHtml(label)}</div><div class="page-note">No predicted XI for this team.</div>`;
     return `<div><div class="modal-section">${escapeHtml(label)}</div>${xiPitch(xi, data, { note: "" })}</div>`;
   };
-  panel.innerHTML = `<div class="fixture-lineups">${side(m.home, homeData, true)}${side(m.away, awayData, false)}</div>`;
+  const marked = finished && state.players?.prematchXi?.[String(m.id)];
+  panel.innerHTML = `<div class="fixture-lineups">${side(m.home, homeData, true)}${side(m.away, awayData, false)}</div>
+    ${marked ? `<div class="page-note" style="text-align:center">Green: the model predicted him to start. Red: it didn't, and the name under his position is the player it picked instead.</div>` : ""}`;
+}
+// Marks each starter of an actual XI as predicted (hit) or not, against the model's pre-match XI
+// ([id, name, role] rows). Each starter it missed is paired with a predicted player who didn't
+// start: same position first, then the same position group, then the same line, then anyone.
+// Returns how many starters it got right.
+const LINE_OF_ROLE = { GK: "GK", CB: "D", LB: "D", RB: "D", LWB: "D", RWB: "D", DM: "M", CM: "M", LM: "M", RM: "M", AM: "M", LW: "F", RW: "F", ST: "F" };
+function markPredicted(xi, predicted) {
+  const started = new Set(xi.map((c) => c.p.id));
+  const picked = new Set(predicted.map(([pid]) => pid));
+  const spare = predicted.filter(([pid]) => !started.has(pid));
+  const missed = xi.filter((c) => !picked.has(c.p.id));
+  for (const c of xi) c.predicted = picked.has(c.p.id);
+  const tests = [(a, b) => a === b, (a, b) => GROUP_OF[a] === GROUP_OF[b], (a, b) => LINE_OF_ROLE[a] === LINE_OF_ROLE[b], () => true];
+  for (const same of tests) for (const c of missed) {
+    if (c.instead) continue;
+    const i = spare.findIndex(([, , role]) => same(c.b.label, role));
+    if (i !== -1) c.instead = spare.splice(i, 1)[0][1];
+  }
+  return xi.length - missed.length;
 }
 
 // ------------------------------------------------------------------ club page
@@ -2672,17 +2701,19 @@ function xiPitch(xi, data = state.club?.data, opts = {}) {
     const from = Math.min(Math.max(xs.reduce((a, v) => a + v, 0) / xs.length - width / 2, 14), 86 - width);
     return ps.map((q, i) => {
       const x = clash ? from + i * gap : q.x;
-      const { b, p, rank, chance, mins } = q.c;
-      const hasChance = chance != null, hasMins = mins != null;
-      const grade = hasChance ? startTier(chance) : rankTier(rank);
+      const { b, p, rank, chance, mins, predicted, instead } = q.c;
+      const hasChance = chance != null, hasMins = mins != null, marked = predicted != null;
+      // an actual XI marked against the prediction: green if predicted to start, red if not
+      const grade = marked ? (predicted ? 4 : 1) : hasChance ? startTier(chance) : rankTier(rank);
       const rankText = rank == null ? "–" : Math.round(rank);
       const meta = hasChance || hasMins ? `<span class="pp-meta">${hasChance ? `<span class="sc-${startTier(chance)}">${Math.round(chance)}%</span>` : ""}${
         hasChance && hasMins ? " · " : ""}${hasMins ? `${mins}′` : ""}</span>` : `<span class="pp-meta">${escapeHtml(b.label || "")}</span>`;
+      const verdict = !marked ? "" : predicted ? " · predicted to start" : ` · not predicted${instead ? `; the model picked ${instead}` : ""}`;
       // the square in the start-chance colour, the rating in its own
       return `<a class="pp-spot xi-spot sq-${grade}" href="#/player/${p.id}" style="left:${x}%;top:${y}%"
-          title="${escapeHtml(`${p.name} · ${b.label} · rank ${rank != null ? Number(rank).toFixed(1) : "–"}${hasChance ? ` · ${Math.round(chance)}% to start` : ""}${hasMins ? ` · ${mins}′ expected` : ""}`)}">
+          title="${escapeHtml(`${p.name} · ${b.label} · rank ${rank != null ? Number(rank).toFixed(1) : "–"}${hasChance ? ` · ${Math.round(chance)}% to start` : ""}${hasMins ? ` · ${mins}′ expected` : ""}${verdict}`)}">
         <span class="pp-rank rk-${rankTier(rank)}">${rankText}</span><span class="pp-name">${escapeHtml(shortName(p.name))}</span>
-        ${meta}</a>`;
+        ${meta}${instead ? `<span class="pp-instead">${escapeHtml(shortName(instead))}</span>` : ""}</a>`;
     });
   }).join("");
   const ranks = xi.map((c) => c.rank).filter((r) => r != null);
@@ -3096,7 +3127,7 @@ function clubMatchesTab() {
     const home = m.home === id;
     const win = m.p_home != null ? Math.round(100 * (home ? m.p_home : m.p_away)) : null;
     const extra = `<div class="club-card-extra"><span>${escapeHtml(compLabel(m.league))}</span>${win != null ? `<span><b>${win}%</b> win</span>` : ""}</div>`;
-    return addClubExtra(matchCard(m), extra);
+    return addClubExtra(matchCard(m, { lineups: false }), extra);
   };
   const LIMIT = state.club.allResults ? Infinity : 40;
   const thisYear = String(new Date().getFullYear());
@@ -4842,39 +4873,44 @@ function setTableView(view) {
   renderTable();
 }
 
-// "Model detail" on any match card (Matches tab and club pages): drawn when first opened. On the
-// Matches tab it opens and closes together with the card's line-ups, one card at a time
-async function setMatchExpanded(card, open) {
+// "Line-ups" (Matches tab) and "Model detail" (Matches tab and club pages) on a match card, each
+// opened by its own button and drawn when first opened; the line-ups sit above the model detail.
+// On the Matches tab a tap on the card opens its line-ups, and one card is open at a time
+async function setMatchPart(card, part, open) {
   const m = state.data.matches.find((x) => x.id === Number(card.dataset.fixture));
-  if (!m) return;
-  const btn = card.querySelector(".why-toggle"), why = card.querySelector(".why-detail");
-  const withLineups = card.classList.contains("lineup-card") && card.closest("#matches-list");
+  const btn = card.querySelector(part === "why" ? ".why-toggle" : ".lineup-toggle");
+  if (!m || !btn) return;
   if (open && card.closest("#matches-list")) {
-    document.querySelectorAll("#matches-list .match-card").forEach((c) => {
-      if (c !== card && (c.querySelector(".fixture-lineup-panel") || c.querySelector(".why-detail:not([hidden])"))) setMatchExpanded(c, false);
-    });
+    document.querySelectorAll("#matches-list .match-card").forEach((c) => { if (c !== card) closeMatchCard(c); });
   }
-  if (why) { why.hidden = !open; btn.setAttribute("aria-expanded", String(open)); }
-  if (withLineups) {
+  btn.setAttribute("aria-expanded", String(open));
+  if (part === "lineups") {
     const existing = card.querySelector(".fixture-lineup-panel");
     if (!open) existing?.remove();
     else if (!existing) {
       const panel = document.createElement("div");
       panel.className = "fixture-lineup-panel";
-      card.appendChild(panel);
+      card.querySelector(".card-toggles").after(panel);
       renderMatchLineups(m, panel);
     }
+    return;
   }
-  if (open && why) { await loadExplanations(); why.innerHTML = whyDetailHtml(m); }
+  const why = card.querySelector(".why-detail");
+  why.hidden = !open;
+  if (open) { await loadExplanations(); why.innerHTML = whyDetailHtml(m); }
+}
+const togglePart = (btn) => btn.classList.contains("why-toggle") ? "why" : "lineups";
+function closeMatchCard(card) {
+  for (const b of card.querySelectorAll('.card-toggles [aria-expanded="true"]')) setMatchPart(card, togglePart(b), false);
 }
 document.addEventListener("click", (e) => {
-  const btn = e.target.closest(".why-toggle");
+  const btn = e.target.closest(".why-toggle, .lineup-toggle");
   const card = btn?.closest(".match-card");
-  if (card?.querySelector(".why-detail")) setMatchExpanded(card, btn.getAttribute("aria-expanded") !== "true");
+  if (card) setMatchPart(card, togglePart(btn), btn.getAttribute("aria-expanded") !== "true");
 });
 $("#matches-list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
-  if (e.target.closest(".fixture-lineup-panel, .why-toggle, .why-detail")) return;
+  if (e.target.closest(".fixture-lineup-panel, .card-toggles, .why-detail")) return;
   const ratingBadge = e.target.closest(".rating-badge");
   if (ratingBadge) {
     const d = ratingBadge.closest(".match-card")?.querySelector(".rating-detail");
@@ -4883,7 +4919,7 @@ $("#matches-list").addEventListener("click", (e) => {
   }
   const lineupCard = e.target.closest(".match-card.lineup-card");
   if (lineupCard) {
-    setMatchExpanded(lineupCard, !lineupCard.querySelector(".fixture-lineup-panel"));
+    setMatchPart(lineupCard, "lineups", !lineupCard.querySelector(".fixture-lineup-panel"));
     return;
   }
   const go = e.target.closest("[data-goto]");

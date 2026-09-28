@@ -942,6 +942,25 @@ def export_players(conn, out_dir=OUT_DIR):
     for fid, team, player, name, pos, rank in actual_lineups:
         actual_xi.setdefault(str(fid), {}).setdefault(str(team), []).append(
             [player, name, pos, float(rank) if rank is not None else None])
+    # the XI the model predicted for those matches: its last genuine pre-match capture, taken before
+    # the official XI was first seen (evaluation.load_lineups' rule), so the site can mark each
+    # starter as predicted or not
+    prematch_xi = {}
+    if actual_xi and _table_exists(conn, "lineup_prediction_snapshots") and _table_exists(conn, "official_lineup_snapshots"):
+        snapshots = conn.execute(
+            """select distinct on (s.fixture_id, s.team_id) s.fixture_id, s.team_id, s.players
+               from lineup_prediction_snapshots s
+               where s.source = 'prospective' and s.fixture_id = any(%s)
+                 and s.captured_at < coalesce((select min(o.captured_at) from official_lineup_snapshots o
+                     where o.fixture_id = s.fixture_id and o.team_id = s.team_id
+                       and o.effective_at = s.effective_at), 'infinity'::timestamptz)
+               order by s.fixture_id, s.team_id, s.captured_at desc, s.snapshot_id desc""",
+            [[int(f) for f in actual_xi]]).fetchall()
+        ids = list({p["player"] for *_, ps in snapshots for p in ps if p.get("predicted_starter")})
+        names = dict(conn.execute("select player_id, name from players where player_id = any(%s)", [ids]).fetchall())
+        for fid, team, ps in snapshots:
+            prematch_xi.setdefault(str(fid), {})[str(team)] = [
+                [p["player"], names.get(p["player"], ""), p.get("role")] for p in ps if p.get("predicted_starter")]
     # team-sheet order: keeper, defence right to left, midfield, attack
     order = {r: i for i, r in enumerate(["GK", "RB", "RWB", "CB", "LB", "LWB", "DM", "CM", "RM", "LM",
                                           "AM", "RW", "LW", "ST"])}
@@ -1009,6 +1028,7 @@ def export_players(conn, out_dir=OUT_DIR):
         "next_xi": next_xi,
         "fixture_xi": fixture_xi,
         "actual_xi": actual_xi,
+        "prematch_xi": prematch_xi,
         # names of players' clubs outside the club rankings (a move out of our leagues)
         "teams": {str(t): n for t, n in conn.execute(
             "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])},
