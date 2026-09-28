@@ -909,6 +909,7 @@ def sync_fixture_players(api, conn, league_ids, batch_size=20):
             fid = f["fixture"]["id"]
             colors += _home_colors(f)
             grids = {}                               # player -> (grid, role) for starters
+            xi = {}                                  # team -> its official starting XI (player ids)
             for lu in f.get("lineups") or []:
                 formation = lu.get("formation")
                 if lu.get("team", {}).get("id"):
@@ -918,6 +919,7 @@ def sync_fixture_players(api, conn, league_ids, batch_size=20):
                     pl = st.get("player") or {}
                     if pl.get("id"):
                         grids[pl["id"]] = (pl.get("grid"), positions.role(formation, pl.get("grid")))
+                        xi.setdefault(lu.get("team", {}).get("id"), set()).add(pl["id"])
             for team_block in f.get("players") or []:
                 team_id = team_block["team"]["id"]
                 for p in team_block.get("players") or []:
@@ -928,7 +930,11 @@ def sync_fixture_players(api, conn, league_ids, batch_size=20):
                     st = (p.get("statistics") or [{}])[0]
                     g = lambda section, key: _int((st.get(section) or {}).get(key))
                     rows.append({"fixture_id": fid, "team_id": team_id, "player_id": p["player"]["id"],
-                                 "minutes": minutes, "started": games.get("substitute") is False,
+                                 # the official XI where there is one: the per-player substitute
+                                 # flag is sometimes false for subs too (11 + every sub "started")
+                                 "minutes": minutes,
+                                 "started": p["player"]["id"] in xi[team_id] if xi.get(team_id)
+                                 else games.get("substitute") is False,
                                  "position": games.get("position"),
                                  "rating": _parse_stat(games.get("rating")),
                                  "goals": g("goals", "total"), "assists": g("goals", "assists"),

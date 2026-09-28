@@ -42,15 +42,17 @@
 
 <main>
   <section class="panel" data-tab="matches" data-active="false">
-    <div id="match-side">
-      <div class="side-stick"><div class="filters-wrap side-filters" id="match-filters"></div></div>
-    </div>
-    <div class="secondary-filters">
-      <button type="button" class="nav-btn" id="date-prev" aria-label="Previous day">&#8249;</button>
-      <input type="date" id="date-input" class="date-input" aria-label="Match date">
-      <select id="round-select" class="date-input" aria-label="Round" hidden></select>
-      <button type="button" class="nav-btn" id="date-next" aria-label="Next day">&#8250;</button>
-      <button type="button" class="nav-btn today-btn" id="date-today">Today</button>
+    <div class="match-bar">
+      <div id="match-side">
+        <div class="side-stick"><div class="filters-wrap side-filters" id="match-filters"></div></div>
+      </div>
+      <div class="secondary-filters">
+        <button type="button" class="nav-btn" id="date-prev" aria-label="Previous day">&#8249;</button>
+        <input type="date" id="date-input" class="date-input" aria-label="Match date">
+        <select id="round-select" class="date-input" aria-label="Round" hidden></select>
+        <button type="button" class="nav-btn" id="date-next" aria-label="Next day">&#8250;</button>
+        <button type="button" class="nav-btn today-btn" id="date-today">Today</button>
+      </div>
     </div>
     <div id="matches-list"></div>
   </section>

@@ -164,6 +164,11 @@
   }
 
   .secondary-filters { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 12px; }
+  /* Matches: the league menu and date bar stay pinned to the top of the list while it scrolls */
+  body[data-tab="matches"] main { padding-top: 0; }   /* the bar supplies it, so nothing scrolls past above it */
+  .match-bar { position: sticky; top: 0; z-index: 5; background: var(--page-plane);
+    margin: 0 -16px 12px; padding: 12px 16px 10px; }
+  .match-bar .secondary-filters { margin-bottom: 0; }
   .date-input {
     appearance: none; border: 1px solid var(--border); background: var(--chip-bg);
     color: var(--text-secondary); font-family: inherit; font-size: 12px; font-weight: 600;
@@ -1156,6 +1161,10 @@
     body:is([data-tab="table"], [data-tab="matches"], [data-tab="stats"], [data-tab="bets"]) main { max-width: 954px; padding-left: 250px; }
     #table-side, #match-side, #stats-side, #bet-side { position: absolute; top: 0; bottom: 0; right: calc(100% + 24px); width: 210px; }
     :is(#table-side, #match-side, #stats-side, #bet-side) .side-stick { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow-y: auto; padding-right: 4px; }
+    /* the league menu already sticks in the side column; only the date bar pins to the top */
+    .match-bar { display: contents; }
+    [data-tab="matches"] .secondary-filters { position: sticky; top: 0; z-index: 5; background: var(--page-plane);
+      margin: 0 0 12px; padding: 8px 0 10px; }
     #table-search { margin-bottom: 8px; padding: 7px 10px; font-size: 13px; }
     #age-filter { order: 3; margin: 0 0 12px; padding: 0 2px; }
     .rng-row { padding: 0 2px; }            /* the ranges' sliders line up with Age's */
@@ -1168,7 +1177,7 @@
     table.leaderboard.clubs td { padding-top: 5px; padding-bottom: 5px; }
     table.leaderboard.clubs th, table.leaderboard.players th { padding-top: 4px; padding-bottom: 4px; }
     .pl-cell .player-photo { margin: -2px 0; }      /* 24px, over the row's 20px badge line */
-    body:is([data-tab="table"], [data-tab="matches"], [data-tab="stats"], [data-tab="bets"]) main { padding-top: 8px; }
+    body:is([data-tab="table"], [data-tab="stats"], [data-tab="bets"]) main { padding-top: 8px; }
     .club-logo { width: 20px; height: 20px; }
   }
 
@@ -1178,6 +1187,7 @@
     header { padding: calc(env(safe-area-inset-top) + 6px) 10px 7px; }
     header h1 { font-size: 16px; }
     main { padding: 10px 12px 32px; }
+    .match-bar { margin: 0 -12px 10px; padding: 10px 12px 8px; }
     .filter-chip { padding: 5px 8px; font-size: 11px; }
     table.leaderboard { font-size: 12px; }
     table.leaderboard th:nth-child(n+3), table.leaderboard td:nth-child(n+3) { width: 46px; }
