@@ -308,6 +308,35 @@ python -m thecornerfc rank   # the nightly job runs this after syncing
 
 Every run replays all fixtures from scratch, which takes seconds. Late results, corrected scores and changes to `starting_rank` are all picked up automatically.
 
+## National team ranking
+
+`thecornerfc/nations.py` runs the club ranking's Elo over every men's full international since 1872, for the **Nations** tab (`docs/data/nations.json`). The formula is the same (100 points = one goal, capped goal difference, `rank_change = (act_diff - exp_diff) * K`), with these differences, tuned by backtest in `experiments/nations_elo`:
+- Home advantage is 50 points, and only applies away from neutral venues.
+- Goal difference is capped at 8, not 3.
+- There's no xG.
+
+Friendlies, qualifiers and tournament finals all count the same. Weighting them differently scored slightly worse, but `TIER_WEIGHT` is there if that changes.
+
+**Data.** The results come from the public [international_results](https://github.com/martj42/international_results) dataset, which has a neutral-venue flag and the tournament for every match. It is downloaded to `.cache/international_results.csv` and refreshed when it's more than 20 hours old. A failed download keeps the cached copy. Nothing goes in the database. The export rebuilds the ranking every night, and it isn't critical: if it fails, the last `nations.json` stays. To rebuild only this file: `python -m thecornerfc nations` (safe in local mode).
+
+Which teams are listed:
+- Only FIFA members appear: nations that have played a World Cup qualifier since 2010, which is 211 teams.
+- Of those, only nations that have played in the last four years are listed.
+- Non-FIFA sides such as Jersey still count as opponents.
+- Tournaments for non-FIFA sides (CONIFA, Island Games) and multi-sport games (mostly under-23 teams) are left out.
+
+**API-Football (ready, off).** The dataset usually has results within a few days. API-Football can fill that gap and later supply upcoming fixtures:
+1. Run `db/migrations/20260929_national_fixtures.sql`.
+2. Run `python -m thecornerfc sync national`. By default it pulls the current season of each competition in `config.NATIONAL_TEAM_LEAGUES`, at about 20–40 calls, and logs each competition's name so you can check the ids.
+3. Set `THECORNERFC_NATIONAL_SYNC=true` in the nightly workflow to refresh them every night.
+
+These matches go in their own table, `national_fixtures`, never in `fixtures`. The club ranking, predictions and site export read every row of `fixtures`, so national teams there would enter the club Elo.
+
+How API-Football matches are merged:
+- They're added only where the dataset doesn't have the match (the same two nations within a day), so the dataset's neutral flags win.
+- Tournament finals are assumed to be neutral.
+- Team names are mapped with `nations.API_NAMES`. A name that doesn't map is logged and its matches skipped, because an unknown name would start a phantom nation at 1000.
+
 ## Match predictions
 
 `fixture_predictions` holds one row per fixture. The `upcoming_predictions` view adds team and competition names, and shows percentages. The method is based on the sheet's RG tabs:

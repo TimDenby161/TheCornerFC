@@ -4587,6 +4587,86 @@ $("#leagues-body").addEventListener("click", (e) => {
   renderLeagues();
 });
 
+// ------------------------------------------------------------------ Nations
+// The national team ranking (data/nations.json, from nations.py): the club Elo run over every men's
+// international since 1872. Loaded the first time the tab opens.
+const CONFEDS = ["UEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC"];
+function loadNations() {
+  if (state.nations !== undefined) return;
+  state.nations = null;
+  getJsonOrNull("data/nations.json").then((d) => {
+    if (d) for (const n of d.nations) {
+      n.gap = Math.round(n.current) - Math.round(n.baseline);
+      n.change = n.year_ago == null ? null : n.current - n.year_ago;
+    }
+    state.nations = d || false;
+    renderNations();
+  });
+}
+// The nationality page's name for a nation (API-Football's), if we have players from it
+function nationPageName(n, aliases) {
+  const nats = state.natSet ||= new Set((state.players?.list || []).map((p) => p.nationality));
+  return [n.name, ...(aliases[n.name] || [])].find((x) => nats.has(x));
+}
+function renderNations() {
+  const body = $("#nations-body");
+  const d = state.nations;
+  if (d == null) { body.innerHTML = `<div class="empty-state">Loading nations…</div>`; return; }
+  if (!d) { body.innerHTML = `<div class="empty-state">No national team ranking yet.</div>`; return; }
+  const key = state.nationsSort ||= "current";
+  const confed = state.nationsConfed ||= "all";
+  const worldRank = new Map([...d.nations].sort((a, b) => b.current - a.current).map((n, i) => [n.name, i + 1]));
+  const rows = d.nations.filter((n) => confed === "all" || n.confed === confed)
+    .sort((a, b) => (b[key] ?? -Infinity) - (a[key] ?? -Infinity) || b.current - a.current);
+  // badge colours as for clubs, but placed among the nations: top 5% green, 20% amber, half orange
+  const sorted = { current: d.nations.map((n) => n.current).sort((a, b) => b - a),
+                   baseline: d.nations.map((n) => n.baseline).sort((a, b) => b - a) };
+  const tier = (k, v) => { const share = (sorted[k].filter((x) => x > v).length + 1) / sorted[k].length;
+    return share <= 0.05 ? 4 : share <= 0.2 ? 3 : share <= 0.5 ? 2 : 1; };
+  const chip = (value, label) => `<button type="button" class="filter-chip" data-confed="${value}" aria-pressed="${confed === value}">${label}</button>`;
+  const th = (k, label, tip, cls = "") =>
+    `<th class="num sortable${key === k ? " active" : ""}${cls}" data-natsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
+  const score = (l) => `${l.gf}–${l.ga} v ${l.opp}`;
+  body.innerHTML = `
+    <div class="filter-row" style="margin-bottom:10px">${chip("all", "World")}${CONFEDS.map((c) => chip(c, c)).join("")}</div>
+    <div class="table-scroll"><table class="leaderboard clubs">
+      <thead><tr>
+        <th title="Position in this list, in the current sort order.">#</th>
+        <th><span class="th-club">Nation</span></th>
+        <th title="The national team and its confederation. Hover for its last 12 months and last match.">Nation</th>
+        ${th("baseline", BASELINE_TH, "Baseline Strength: a nation's longer-term level, mostly its average over its last 30 matches (about three years).")}
+        ${th("gap", "Gap", "Current Strength minus Baseline Strength. Green: rated above its longer-term level; red: below it.", " col-gap")}
+        ${th("current", "Current", "Current Strength: the Elo rating now. 100 points is about one goal a game on a neutral ground.")}
+        ${th("change", "1 yr", "Change in Current Strength over the last 12 months.")}
+      </tr></thead>
+      <tbody>${rows.map((n, i) => {
+        const page = nationPageName(n, d.aliases || {});
+        const name = page ? `<a class="team-link" href="#/nation/${encodeURIComponent(page)}">${escapeHtml(n.name)}</a>` : `<span class="team-link">${escapeHtml(n.name)}</span>`;
+        const tip = `World #${worldRank.get(n.name)} · Last 12 months: ${n.w}W ${n.d}D ${n.l}L · Last match: ${score(n.last)} (${n.last.comp}, ${fmtShortDate(n.last.date)} ${n.last.date.slice(0, 4)}) · ${n.played} internationals rated`;
+        return `
+        <tr title="${escapeHtml(tip)}">
+          <td>${i + 1}</td>
+          <td>${n.flag ? `<img class="flag" src="https://flagcdn.com/${n.flag}.svg" alt="" loading="lazy" data-broken="remove">` : ""}</td>
+          <td><div class="club-cell">${name}${n.confed ? ` <span class="club-meta">${n.confed}</span>` : ""}</div></td>
+          <td class="num"><span class="rel-chip rel-${tier("baseline", n.baseline)}">${Math.round(n.baseline)}</span></td>
+          <td class="num col-gap">${formHtml(n.gap)}</td>
+          <td class="num"><span class="rel-chip rel-${tier("current", n.current)}">${Math.round(n.current)}</span></td>
+          <td class="num">${formHtml(n.change)}</td>
+        </tr>`; }).join("")}
+      </tbody>
+    </table></div>
+    <div class="page-note">Elo ratings from every men's full international since 1872 (${d.matches.toLocaleString()} matches, the latest on ${fmtShortDate(d.latest_match)} ${d.latest_match.slice(0, 4)}), the club model's method with home advantage only away from neutral grounds. FIFA members that have played in the last four years. Results: <a href="https://github.com/martj42/international_results" rel="noopener">international_results</a>${d.from_api ? ` and API-Football (${d.from_api} recent matches)` : ""}.</div>`;
+  clubTableObserver.observe(body.querySelector(".table-scroll"));
+}
+$("#nations-body").addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-natsort]");
+  const chip = e.target.closest("[data-confed]");
+  if (th) state.nationsSort = th.dataset.natsort;
+  else if (chip) state.nationsConfed = chip.dataset.confed;
+  else return;
+  renderNations();
+});
+
 // ------------------------------------------------------------------ FPL findings
 // The fantasy expected-points model's validation (fpl.json, from experiments/fantasy_v1). No FPL
 // data is used: points are rebuilt from match stats with FPL's scoring rules.
@@ -4848,6 +4928,7 @@ function showTab(tab) {
   state.tab = tab;
   if (tab === "fpl") loadFplPredictions();
   if (tab === "leagues") renderLeagues();
+  if (tab === "nations") { loadNations(); renderNations(); }
   if (tab === "lineups") { loadLineupRecord(); renderLineupRecord(); }
   document.body.dataset.tab = tab;
   document.querySelectorAll(".panel").forEach((p) => p.dataset.active = String(p.dataset.tab === tab));
@@ -4863,7 +4944,7 @@ function syncMenu() {
   $("#app-title").textContent = title;
 }
 // Each tab other than the tables has its own address, so a reload (or a shared link) stays on it
-const TAB_ROUTES = { leagues: "leagues", matches: "matches", stats: "stats", lineups: "lineups", tips: "model-vs-market", bets: "simulation", fpl: "fpl" };
+const TAB_ROUTES = { leagues: "leagues", nations: "nations", matches: "matches", stats: "stats", lineups: "lineups", tips: "model-vs-market", bets: "simulation", fpl: "fpl" };
 const ROUTE_TABS = Object.fromEntries(Object.entries(TAB_ROUTES).map(([t, r]) => [r, t]));
 document.querySelectorAll("nav.tabs button").forEach((btn) => btn.addEventListener("click", () => {
   const to = TAB_ROUTES[btn.dataset.tab] ? `#/${TAB_ROUTES[btn.dataset.tab]}` : location.pathname + location.search;

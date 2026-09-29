@@ -10,6 +10,8 @@
     python -m thecornerfc rank           # recalculate club rankings from every fixture
     python -m thecornerfc predict        # projected scores / W-D-L for upcoming fixtures
     python -m thecornerfc export         # JSON for the website in docs/data
+    python -m thecornerfc nations        # national team ranking only (docs/data/nations.json)
+    python -m thecornerfc sync national  # API-Football internationals into national_fixtures
     python -m thecornerfc matchday       # pre-kickoff odds/injuries, late paper bets, settle
     python -m thecornerfc fpl capture    # pre-deadline FPL state (needs FPL_CAPTURE_ENABLED)
     python -m thecornerfc fpl results    # actual FPL points for finished gameweeks
@@ -56,6 +58,7 @@ def main(argv=None):
     sub.add_parser("rank", help="Recalculate club rankings from every finished fixture")
     sub.add_parser("predict", help="Project scores and W/D/L chances for upcoming fixtures")
     sub.add_parser("export", help="Write JSON for the website to docs/data")
+    sub.add_parser("nations", help="Rebuild the national team ranking (docs/data/nations.json) only")
     sub.add_parser("player-ratings", help="Recalculate player ranks and team XI ratings (backdated)")
     sub.add_parser("matchday", help="Pre-kickoff odds and injuries, late paper bets, settle bets")
     sub.add_parser("fantasy", help="Snapshot fantasy v1.1 expected points for upcoming Premier League fixtures")
@@ -65,12 +68,17 @@ def main(argv=None):
     fpl.add_argument("--events", type=int, nargs="+", help="results: re-fetch these gameweeks")
 
     sync = sub.add_parser("sync", help="Pull data from API-Football")
-    sync.add_argument("target", choices=TARGETS + ["all"])
-    sync.add_argument("--leagues", type=int, nargs="+", default=list(config.LEAGUES))
-    sync.add_argument("--seasons", type=int, nargs="+", default=config.DEFAULT_SEASONS)
+    sync.add_argument("target", choices=TARGETS + ["all", "national"])
+    sync.add_argument("--leagues", type=int, nargs="+",
+                      help="Default: config.LEAGUES (national: config.NATIONAL_TEAM_LEAGUES)")
+    sync.add_argument("--seasons", type=int, nargs="+",
+                      help="Default: config.DEFAULT_SEASONS (national: each competition's current season)")
     sync.add_argument("--limit", type=int, help="Max fixtures to fetch stats for this run")
 
     args = parser.parse_args(argv)
+    if args.command == "sync" and args.target != "national":
+        args.leagues = args.leagues or list(config.LEAGUES)
+        args.seasons = args.seasons or config.DEFAULT_SEASONS
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     os.environ["API_PROCESS_LABEL"] = args.command + (
         f" {args.target}" if args.command == "sync" else f" {args.action}" if args.command == "fpl" else "")
@@ -141,6 +149,9 @@ def _execute(args):
         if args.command == "export":
             export.export_site_data(conn)
             return 0
+        if args.command == "nations":
+            export.export_nations(conn)
+            return 0
         if args.command == "fantasy":
             from . import fantasy_snapshots
             fantasy_snapshots.capture(conn)
@@ -167,6 +178,9 @@ def _execute(args):
                 logging.info("Nightly sync finished with %d failed step(s)", failures)
                 return 1 if failures else 0
 
+            if args.target == "national":
+                ingest.sync_national_fixtures(api, conn, args.leagues, args.seasons)
+                return 0
             targets = TARGETS if args.target == "all" else [args.target]
             for target in targets:
                 logging.info("=== Syncing %s", target)
