@@ -21,6 +21,7 @@ from thecornerfc import fantasy as fm
 ROOT = Path(__file__).parent
 # Registered in PROTOCOLS.md (P8); change only by a dated amendment there.
 TARGET_ROUNDS, TARGET_ROWS = 10, 3000
+MODEL = 'fantasy-v1.1'             # the table also holds v1.3's rows (P9) from 2026-09-29
 DEADLINE_BEFORE = timedelta(minutes=90)      # FPL-style deadline: before the round's first kickoff
 SEED, DRAWS = 20260927, 2000
 TOP_N = (10, 25)
@@ -39,8 +40,10 @@ def extract():
         snaps = c.execute('''select s.fixture_id, s.team_id, s.captured_at, s.created_at, s.effective_at, s.predictions,
                                     s.inputs, s.model_version_id, f.season, f.round, f.home_team_id, f.home_goals, f.away_goals
                              from fantasy_fixture_snapshots s join fixtures f using (fixture_id)
-                             where s.source = 'prospective' and s.captured_at < s.effective_at
-                               and s.created_at < s.effective_at and f.status_short = 'FT' ''').fetchall()
+                             join model_versions mv using (model_version_id)
+                             where mv.version_name = %s                 -- v1.1 only (Amendment 3)
+                               and s.source = 'prospective' and s.captured_at < s.effective_at
+                               and s.created_at < s.effective_at and f.status_short = 'FT' ''', [MODEL]).fetchall()
         fids = sorted({s[0] for s in snaps})
         lines = c.execute('''select fixture_id, team_id, player_id, minutes, started, coalesce(goals,0), coalesce(assists,0),
                                     coalesce(saves,0), coalesce(penalties_saved,0), coalesce(yellow_cards,0), coalesce(red_cards,0)

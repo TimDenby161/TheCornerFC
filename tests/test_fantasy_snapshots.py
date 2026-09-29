@@ -114,6 +114,19 @@ class CaptureTests(unittest.TestCase):
         with patch.object(config, 'READ_ONLY', True), self.assertRaises(config.SafetyError):
             fs.capture(MagicMock())
 
+    def test_each_run_snapshots_v1_1_and_v1_3_under_their_own_versions(self):
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = ('fantasy_fixture_snapshots',)
+        team = [(1, 10, KICKOFF, [{'player_id': 7, 'expected_points': 1.0}], {'availability': {}})]
+        with patch.object(fs, 'History'), patch.object(fs, '_pl_lines'), \
+                patch.object(fs, 'build', side_effect=lambda c, f, doc, history: (doc, team)) as build, \
+                patch.object(fs, 'register_version', side_effect=lambda c, doc: 'mv_' + doc['version_name']), \
+                patch.object(fs, 'append_snapshots') as append:
+            self.assertEqual(fs.capture(conn), 2)
+        self.assertEqual([c.kwargs['doc']['version_name'] for c in build.call_args_list], ['fantasy-v1.1', 'fantasy-v1.3'])
+        self.assertIs(build.call_args_list[0].kwargs['history'], build.call_args_list[1].kwargs['history'])
+        self.assertEqual([c.args[1][0]['model_version_id'] for c in append.call_args_list], ['mv_fantasy-v1.1', 'mv_fantasy-v1.3'])
+
 
 class ParamsAndMigrationTests(unittest.TestCase):
     def test_frozen_params_are_v1_1_with_saves_and_availability(self):
@@ -121,6 +134,22 @@ class ParamsAndMigrationTests(unittest.TestCase):
         self.assertEqual(doc['version_name'], 'fantasy-v1.1')
         self.assertTrue(doc['saves'] and doc['params']['availability'])
         self.assertEqual(len(doc['params']['start_beta']), 7)
+
+    def test_v1_3_is_v1_2_plus_defensive_contributions(self):
+        v12 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_2.json')
+        v13 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_3.json')
+        self.assertEqual(v13['version_name'], 'fantasy-v1.3')
+        self.assertEqual({k: v for k, v in v13['params'].items() if k != 'dc'}, v12['params'])
+        self.assertEqual(v13['params']['dc']['thresholds'], {'D': 10, 'M': 12, 'F': 12})
+
+    def test_p8_and_its_accrual_read_only_v1_1_rows(self):
+        p8 = (ROOT / 'experiments/prospective/fantasy_p8.py').read_text()
+        self.assertIn("MODEL = 'fantasy-v1.1'", p8)
+        self.assertIn('mv.version_name = %s', p8)
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.side_effect = [('t',), (None, 0, 0, 0), (0,)]
+        export._fantasy_progress(conn)
+        self.assertTrue(all(c.args[1] == ['fantasy-v1.1'] for c in conn.execute.call_args_list[1:]))
 
     def test_migration_is_append_only_and_requires_a_fantasy_version(self):
         sql = MIGRATION.read_text()

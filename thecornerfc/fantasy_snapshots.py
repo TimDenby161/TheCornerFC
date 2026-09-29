@@ -1,10 +1,11 @@
-"""Prospective fantasy v1.1 snapshots: every component of every Premier League player's expected
+"""Prospective fantasy snapshots: every component of every Premier League player's expected
 points for upcoming fixtures, stored in fantasy_fixture_snapshots before kickoff, together with
-the availability and benchmark values known then, so the model can be judged later on gameweeks
-it had not seen (experiments/prospective/PROTOCOLS.md, P8).
+the availability and benchmark values known then, so each model can be judged later on gameweeks
+it had not seen (experiments/prospective/PROTOCOLS.md: P8 for v1.1, P9 for v1.3).
 
-Calculations are fantasy.py's (the backtest runs the same functions); the parameters are frozen
-in fantasy_params.json by experiments/fantasy_v1/run.py. Evidence only: nothing reads it, and
+Calculations are fantasy.py's (the backtests run the same functions); the parameters are frozen
+in fantasy_params.json (v1.1, experiments/fantasy_v1/run.py) and fantasy_params_v1_3.json (v1.3,
+experiments/fantasy_dc/run.py). Each version's rows carry its model_version_id. Evidence only: nothing reads it, and
 a failure here never fails the nightly or match-day run (capture_safely).
 """
 from collections import Counter, defaultdict
@@ -24,6 +25,7 @@ PL = 39
 HORIZON = timedelta(days=8)       # fixtures this far ahead get a snapshot each run
 HISTORY_SEASON = 2020             # league history read, as in the backtest
 PARAMS_PATH = Path(__file__).with_name('fantasy_params.json')
+CAPTURED = (PARAMS_PATH, Path(__file__).with_name('fantasy_params_v1_3.json'))     # each run snapshots both
 TABLE = 'fantasy_fixture_snapshots'
 BENCHMARK_MATCHES = 5
 
@@ -52,25 +54,42 @@ def _pl_lines(conn):
                fp.position, fp.role, coalesce(fp.goals, 0) as goals, coalesce(fp.assists, 0) as assists,
                coalesce(fp.shots_on, 0) as shots_on, coalesce(fp.key_passes, 0) as key_passes,
                coalesce(fp.saves, 0) as saves, coalesce(fp.penalties_saved, 0) as penalties_saved,
-               coalesce(fp.yellow_cards, 0) as yellow, coalesce(fp.red_cards, 0) as red
+               coalesce(fp.yellow_cards, 0) as yellow, coalesce(fp.red_cards, 0) as red,
+               coalesce(fp.tackles, 0), coalesce(fp.blocks, 0), coalesce(fp.interceptions, 0),
+               coalesce(fp.dribbles_won, 0), coalesce(fp.passes, 0), coalesce(fp.passes_accurate, 0),
+               coalesce(fp.shots, 0), coalesce(fp.fouls_committed, 0), coalesce(fp.penalties_committed, 0),
+               p.home_xg::float8, p.away_xg::float8
         from fixture_players fp join fixtures f using (fixture_id)
+        left join fixture_predictions p on p.fixture_id = f.fixture_id
         where f.league_id = %s and f.season >= %s and f.status_short = any(%s) and f.home_goals is not null""",
         [PL, HISTORY_SEASON, list(config.FINISHED_STATUSES)], order_by='kickoff, fixture_id, player_id')
 
 
+EXTRA_STATS = ('tackles', 'blocks', 'interceptions', 'dribbles_won', 'passes', 'passes_accurate', 'shots',
+               'fouls', 'penalties_committed')
+
+
 class History:
-    """League history before now, arranged as fantasy.player_features and the benchmarks need it."""
+    """League history before now, arranged as fantasy.player_features and the benchmarks need it.
+    lines: _pl_lines() rows; the trailing v1.2 columns (EXTRA_STATS, home / away xG) may be absent."""
 
     def __init__(self, lines):
         matches = defaultdict(lambda: defaultdict(dict))     # team -> fixture -> player -> line
-        self.kickoffs, self.season_of = {}, {}
+        self.kickoffs, self.season_of, self.lam_against = {}, {}, {}
         counts = defaultdict(Counter)
         for (fid, kickoff, season, team, home, hg, ag, pid, minutes, started, position, role,
-             goals, assists, shots_on, key_passes, saves, pens, yellow, red) in lines:
+             goals, assists, shots_on, key_passes, saves, pens, yellow, red, *extra) in lines:
+            stats = dict(zip(EXTRA_STATS, extra))
             matches[team][fid][pid] = dict(minutes=minutes, started=bool(started), role=role, goals=goals,
                                            assists=assists, shots_on=shots_on, key_passes=key_passes,
                                            saves=saves, pens=pens, yellow=yellow, red=red,
-                                           conceded=ag if team == home else hg)
+                                           conceded=ag if team == home else hg,
+                                           base_bps=fm.bps('M', minutes, key_passes=key_passes, shots_on=shots_on,
+                                                           **stats)['base'],
+                                           cbit=sum(stats.get(k) or 0 for k in ('tackles', 'blocks', 'interceptions')))
+            if len(extra) > len(EXTRA_STATS):
+                hx, ax = extra[len(EXTRA_STATS):len(EXTRA_STATS) + 2]
+                self.lam_against[(fid, team)] = ax if team == home else hx
             self.kickoffs[fid], self.season_of[fid] = kickoff, season
             if minutes > 0 and position in fm.GOAL_POINTS:
                 counts[(pid, season)][position] += 1
@@ -88,7 +107,8 @@ class History:
                     if l['minutes'] <= 0:
                         continue
                     self.appearances[pid].append((self.kickoffs[fid], l['started'], l['minutes'], l['role'], l['goals'],
-                                                  l['shots_on'], l['assists'], l['key_passes'], *totals))
+                                                  l['shots_on'], l['assists'], l['key_passes'], *totals,
+                                                  l['base_bps'], l['yellow'], l['red'], l['cbit']))
                     pos = self.label(pid, self.season_of[fid])
                     pts = fm.actual_points(pos, l['minutes'], l['goals'], l['assists'], l['conceded'], l['saves'],
                                            l['pens'], l['yellow'], l['red'])['total']
@@ -110,6 +130,11 @@ class History:
     def team_recent(self, team, kickoff):
         return [(fid, players) for fid, players in self.team_matches.get(team, [])
                 if kickoff - fm.WINDOW <= self.kickoffs[fid] < kickoff]
+
+    def save_history(self, team, kickoff):
+        """[(team saves, lambda against)] over its league matches in fm.WINDOW before kickoff."""
+        return [(sum(l['saves'] for l in players.values()), self.lam_against.get((fid, team)))
+                for fid, players in self.team_recent(team, kickoff)]
 
     def benchmarks(self, pid, season, team_recent):
         cur, prev = self.season_pts.get((pid, season), (0.0, 0)), self.season_pts.get((pid, season - 1), (0.0, 0))
@@ -133,7 +158,10 @@ def team_snapshot(history, fixture, team, is_home, injuries, doc):
         feats = fm.player_features(pid, kickoff, team_recent, [a for a in history.appearances[pid] if a[0] < kickoff])
         players.append(dict(feats, player_id=pid, position=position, injury=injuries.get(pid)))
         bench[str(pid)] = history.benchmarks(pid, season, recent)
-    comps = fm.predict_team(players, lam_for, lam_against, doc['params'], saves=doc['saves'])
+    params = doc['params']
+    factor = (fm.save_multiplier(history.save_history(team, kickoff), params['save_intercept'], params['save_slope'],
+                                 params['save_pseudo_matches']) if 'save_pseudo_matches' in params else 1.0)
+    comps = fm.predict_team(players, lam_for, lam_against, params, saves=doc['saves'], save_factor=factor)
     predictions = [dict(player_id=p['player_id'], position=p['position'],
                         **{k: round(v, 6) for k, v in c.items()}) for p, c in zip(players, comps)]
     inputs = {'lambda_for': lam_for, 'lambda_against': lam_against, 'is_home': is_home,
@@ -171,9 +199,10 @@ def append_snapshots(conn, rows):
             ON CONFLICT (fixture_id,team_id,model_version_id,source,content_hash) DO NOTHING''', rows)
 
 
-def build(conn, fixture_ids=None, now=None, doc=None, horizon=HORIZON):
+def build(conn, fixture_ids=None, now=None, doc=None, horizon=HORIZON, history=None):
     """(params doc, [(fixture_id, team_id, kickoff, predictions, inputs)]) for every upcoming Premier
-    League fixture within HORIZON (or only fixture_ids). SELECT only."""
+    League fixture within HORIZON (or only fixture_ids). SELECT only. history: a History to reuse
+    when building several versions."""
     now = now or datetime.now(timezone.utc)
     doc = doc or load_params()
     upcoming = conn.execute(
@@ -186,7 +215,7 @@ def build(conn, fixture_ids=None, now=None, doc=None, horizon=HORIZON):
         [PL, now, now + horizon, fixture_ids, fixture_ids]).fetchall()
     if not upcoming:
         return doc, []
-    history = History(_pl_lines(conn))
+    history = history or History(_pl_lines(conn))
     candidates = sorted({p for f in upcoming for t in f[3:5] for _, players in history.team_recent(t, f[1])
                          for p in players})
     latest_club = dict(conn.execute(
@@ -214,18 +243,23 @@ def capture(conn, fixture_ids=None):
         log.warning('Fantasy snapshots: %s does not exist yet (apply db/migrations/'
                     '20260927_fantasy_fixture_snapshots.sql); skipped', TABLE)
         return None
-    doc, teams = build(conn, fixture_ids)
-    if not teams:
-        log.info('Fantasy snapshots: no upcoming Premier League fixtures')
-        return 0
-    version = register_version(conn, doc)
-    captured = datetime.now(timezone.utc)
-    append_snapshots(conn, [make_snapshot(fixture_id=fid, team_id=team, kickoff=kickoff, version_id=version,
-                                          captured_at=captured, predictions=predictions, inputs=inputs)
-                            for fid, team, kickoff, predictions, inputs in teams])
-    conn.commit()
-    log.info('Fantasy snapshots: %d team-fixtures captured', len(teams))
-    return len(teams)
+    history, total = None, 0
+    for path in CAPTURED:
+        doc = load_params(path)
+        history = history or History(_pl_lines(conn))
+        doc, teams = build(conn, fixture_ids, doc=doc, history=history)
+        if not teams:
+            log.info('Fantasy snapshots: no upcoming Premier League fixtures')
+            return 0
+        version = register_version(conn, doc)
+        captured = datetime.now(timezone.utc)
+        append_snapshots(conn, [make_snapshot(fixture_id=fid, team_id=team, kickoff=kickoff, version_id=version,
+                                              captured_at=captured, predictions=predictions, inputs=inputs)
+                                for fid, team, kickoff, predictions, inputs in teams])
+        conn.commit()
+        log.info('Fantasy snapshots (%s): %d team-fixtures captured', doc['version_name'], len(teams))
+        total += len(teams)
+    return total
 
 
 def capture_safely(conn, fixture_ids=None):

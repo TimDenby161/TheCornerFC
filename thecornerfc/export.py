@@ -1641,18 +1641,21 @@ def export_leagues(conn, out_dir=OUT_DIR):
 FANTASY_RESULTS = Path(__file__).resolve().parent.parent / "experiments" / "fantasy_v1" / "results.json"
 
 
-def _fantasy_progress(conn):
-    """Accrual of the prospective fantasy test (P8): finished fixtures with a snapshot before kickoff."""
+def _fantasy_progress(conn, model="fantasy-v1.1"):
+    """Accrual of a prospective fantasy test (P8: v1.1): finished fixtures with one of the model's
+    snapshots before kickoff."""
     if conn.execute("select to_regclass('public.fantasy_fixture_snapshots')").fetchone()[0] is None:
         return {"state": "not_started"}
     first, rows, fixtures, rounds = conn.execute(
         """select min(s.captured_at), count(*), count(distinct s.fixture_id), count(distinct (f.season, f.round))
                   filter (where f.status_short = 'FT')
            from fantasy_fixture_snapshots s join fixtures f using (fixture_id)
-           where s.source = 'prospective'""").fetchone()
+           join model_versions mv using (model_version_id)
+           where s.source = 'prospective' and mv.version_name = %s""", [model]).fetchone()
     done = conn.execute(
         """select count(distinct s.fixture_id) from fantasy_fixture_snapshots s join fixtures f using (fixture_id)
-           where s.source = 'prospective' and f.status_short = 'FT'""").fetchone()[0]
+           join model_versions mv using (model_version_id)
+           where s.source = 'prospective' and mv.version_name = %s and f.status_short = 'FT'""", [model]).fetchone()[0]
     return {"state": "capturing" if first else "waiting", "first_capture": first.isoformat() if first else None,
             "snapshots": rows, "fixtures": fixtures, "finished_fixtures": done, "finished_rounds": rounds}
 
@@ -1763,7 +1766,8 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
             position = (fpl and fpl[0]) or p["position"]
             if position != p["position"]:
                 mins = {k: p[k] for k in ("p_start", "p_play", "p60", "exp_minutes")}
-                p = dict(p, **fm.expected_points(position, mins, p["exp_goals"], p["exp_assists"], p["lambda_against"], save_mean))
+                p = dict(p, **fm.expected_points(position, mins, p["exp_goals"], p["exp_assists"], p["lambda_against"],
+                                                 p.get("save_mean", save_mean), fm.player_extras(params, stored=p)))
             if pid not in players:
                 players[pid] = [pid, names.get(pid, str(pid)), team, p["position"], fpl[0] if fpl else None,
                                 fpl[1] if fpl else None, fpl[2] if fpl else None, fpl[3] if fpl else None,
