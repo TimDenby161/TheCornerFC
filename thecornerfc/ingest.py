@@ -193,6 +193,34 @@ def sync_national_fixtures(api, conn, league_ids=None, seasons=None):
             log.info("National fixtures league=%s (%s) season=%s: %d", league_id, name, season, len(rows))
 
 
+def sync_national_lineups(api, conn, batch_size=20):
+    """Starting XIs, formations and coaches for the finished matches in national_fixtures, as
+    sync_cup_lineups does for clubs (/fixtures?ids=, 20 per call), into their own tables
+    (national_fixture_lineups, national_fixture_formations) so no club model reads them.
+    national_fixtures.players_fetched_at marks them done."""
+    pending = [r[0] for r in conn.execute(
+        """select fixture_id from national_fixtures
+           where players_fetched_at is null and status_short = any(%s) order by kickoff""",
+        [list(config.FINISHED_STATUSES)])]
+    log.info("National matches needing line-ups: %d (~%d API calls)", len(pending), -(-len(pending) // batch_size))
+    now = datetime.now(timezone.utc)
+    for i in range(0, len(pending), batch_size):
+        formations, lineups, done = [], [], []
+        for f in api.get("fixtures", ids="-".join(map(str, pending[i:i + batch_size]))):
+            _starting_xis(f, formations, lineups)
+            if f.get("lineups") or now - datetime.fromisoformat(f["fixture"]["date"]) > STATS_RETRY_WINDOW:
+                done.append(f["fixture"]["id"])
+        upsert(conn, "national_fixture_formations", _dedupe(formations, ("fixture_id", "team_id")),
+               ["fixture_id", "team_id"], touch_updated_at=False)
+        upsert(conn, "national_fixture_lineups", _dedupe(lineups, ("fixture_id", "player_id")),
+               ["fixture_id", "player_id"], touch_updated_at=False)
+        if done:
+            conn.execute("update national_fixtures set players_fetched_at = now() where fixture_id = any(%s)", [done])
+        conn.commit()
+        if (i // batch_size) % 50 == 0:
+            log.info("National line-ups %d/%d", i + batch_size, len(pending))
+
+
 def _national_row(f):
     fx, lg, teams, goals = f["fixture"], f["league"], f["teams"], f["goals"]
     venue, status = fx.get("venue") or {}, fx.get("status") or {}
@@ -500,6 +528,7 @@ def sync_nightly(api, conn, league_ids):
             step("injuries", sync_injuries, [league_id], [season])
     if config.NATIONAL_SYNC:
         step("national fixtures", sync_national_fixtures)
+        step("national line-ups", sync_national_lineups)
     step("rankings", lambda api, conn: update_rankings(conn))
     step("retirement checks", check_retired)
     step("squads", sync_squads)
@@ -885,6 +914,22 @@ def sync_team_colors(api, conn, batch_size=20):
 CUP_LINEUPS_FROM = "2020-07-01"
 
 
+def _starting_xis(f, formations, lineups):
+    """Add a /fixtures response's formations (with the coach) and starting XIs to the two lists."""
+    fid = f["fixture"]["id"]
+    for lu in f.get("lineups") or []:
+        team, formation = (lu.get("team") or {}).get("id"), lu.get("formation")
+        if not team:
+            continue
+        formations.append({"fixture_id": fid, "team_id": team, "formation": formation,
+                           "coach_id": (lu.get("coach") or {}).get("id")})
+        for st in lu.get("startXI") or []:
+            pl = st.get("player") or {}
+            if pl.get("id"):
+                lineups.append({"fixture_id": fid, "team_id": team, "player_id": pl["id"], "grid": pl.get("grid"),
+                                "role": positions.role(formation, pl.get("grid"))})
+
+
 def sync_cup_lineups(api, conn, batch_size=20):
     """Starting XIs, formations and coaches (fixture_lineups, fixture_formations) for the finished
     matches outside the per-match player leagues (cups, Europe) of the clubs in them, since
@@ -905,17 +950,7 @@ def sync_cup_lineups(api, conn, batch_size=20):
             capture_official(conn, f)
             fid = f["fixture"]["id"]
             colors += _home_colors(f)
-            for lu in f.get("lineups") or []:
-                team, formation = (lu.get("team") or {}).get("id"), lu.get("formation")
-                if not team:
-                    continue
-                formations.append({"fixture_id": fid, "team_id": team, "formation": formation,
-                                   "coach_id": (lu.get("coach") or {}).get("id")})
-                for st in lu.get("startXI") or []:
-                    pl = st.get("player") or {}
-                    if pl.get("id"):
-                        lineups.append({"fixture_id": fid, "team_id": team, "player_id": pl["id"], "grid": pl.get("grid"),
-                                        "role": positions.role(formation, pl.get("grid"))})
+            _starting_xis(f, formations, lineups)
             if f.get("lineups") or now - datetime.fromisoformat(f["fixture"]["date"]) > STATS_RETRY_WINDOW:
                 done.append(fid)
         upsert(conn, "fixture_formations", _dedupe(formations, ("fixture_id", "team_id")),

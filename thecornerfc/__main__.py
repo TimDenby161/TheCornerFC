@@ -11,7 +11,7 @@
     python -m thecornerfc predict        # projected scores / W-D-L for upcoming fixtures
     python -m thecornerfc export         # JSON for the website in docs/data
     python -m thecornerfc nations        # national team ranking only (docs/data/nations.json)
-    python -m thecornerfc sync national  # API-Football internationals into national_fixtures
+    python -m thecornerfc sync national  # API-Football internationals and their line-ups
     python -m thecornerfc matchday       # pre-kickoff odds/injuries, late paper bets, settle
     python -m thecornerfc fpl capture    # pre-deadline FPL state (needs FPL_CAPTURE_ENABLED)
     python -m thecornerfc fpl results    # actual FPL points for finished gameweeks
@@ -180,6 +180,7 @@ def _execute(args):
 
             if args.target == "national":
                 ingest.sync_national_fixtures(api, conn, args.leagues, args.seasons)
+                ingest.sync_national_lineups(api, conn)
                 return 0
             targets = TARGETS if args.target == "all" else [args.target]
             for target in targets:
