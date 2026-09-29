@@ -1758,6 +1758,8 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
         for p in preds:
             pid = p["player_id"]
             fpl = fpl_players.get(pid)
+            if source == "fpl" and fpl_players and not fpl:
+                continue     # not in FPL at his club: left it, though our match history still has him
             position = (fpl and fpl[0]) or p["position"]
             if position != p["position"]:
                 mins = {k: p[k] for k in ("p_start", "p_play", "p60", "exp_minutes")}

@@ -4746,24 +4746,25 @@ function leagueClubsTab() {
   const pos = new Map(data.tableRows.map((r) => [r.team, r.rank]));
   const rows = leagueRanked(id, data);
   if (!rows.length) return `<div class="empty-state">No ranked clubs.</div>`;
-  return clubRatingTable(rows, data.tableRows.length ? (r) => pos.get(r.team) ?? "" : null, data.teams, null, true)
+  return clubRatingTable(rows, data.tableRows.length ? (r) => pos.get(r.team) ?? "" : null, data.teams, null, leagueSort("clubs", STRENGTH_COLS, "lt"))
     + `<div class="page-note">Baseline: Baseline Strength, the long-term Elo rating. Current: Current Strength, the Elo rating now. Gap: Current minus Baseline. Last 6: the change in Elo over the club's last 6 matches.</div>`;
 }
 
 // clubs table for the league and country pages; pos = the table position column (Pl when null).
-// sortable (the league page): headers sort it, # stays each club's Baseline Strength rank
+// sort (a { key, dir } kept by the page): headers sort it, # stays each club's Baseline Strength rank
 const STRENGTH_COLS = {
   rank: { dir: 1, val: (r) => r.i }, club: { dir: 1, val: (r) => r.name }, pos: { dir: 1, val: (r) => r.pos === "" ? null : r.pos },
   played: { dir: -1, val: (r) => r.played }, lt: { dir: -1, val: (r) => r.lt }, trend: { dir: -1, val: (r) => r.trend },
   current: { dir: -1, val: (r) => r.current }, form: { dir: -1, val: (r) => r.form },
 };
-function clubRatingTable(rows, pos, names = {}, meta = null, sortable = false) {
-  const s = sortable ? leagueSort("clubs", STRENGTH_COLS, "lt") : { key: null };
+function clubRatingTable(rows, pos, names = {}, meta = null, sort = null, limit = Infinity) {
+  const sortable = !!sort, s = sort || { key: null };
   const th = (key, label, title, cls = "") => sortable ? sortTh("clubs", s, key, label, title, cls)
     : `<th${cls ? ` class="${cls}"` : ""} title="${escapeHtml(title)}">${label}</th>`;
   let list = rows.map((r, i) => ({ r, i: i + 1, name: names[r.team] || teamName(r.team), pos: pos ? pos(r) : null,
     played: r.played, lt: r.lt, trend: r.trend, current: r.current, form: r.form }));
   if (sortable) list = sortLeagueRows(list, s, STRENGTH_COLS);
+  list = list.slice(0, limit);
   return `<div class="table-scroll"><table class="leaderboard clubs">
     <thead><tr>${th("rank", "#", "Baseline Strength rank")}<th></th>${th("club", "Club", "Club name")}${pos ? th("pos", "Table", "Actual position in the competition's table", "num") : th("played", "Pl", "Matches rated", "num")}
       ${th("lt", BASELINE_TH, "Baseline Strength: long-term Elo", "num")}${th("trend", "Gap", "Current minus Baseline", "num col-gap")}${th("current", "Current", "Current Strength: Elo now", "num")}${th("form", "Last 6", "Elo change over the last 6 matches", "num col-recent")}</tr></thead>
@@ -4779,6 +4780,12 @@ function clubRatingTable(rows, pos, names = {}, meta = null, sortable = false) {
 }
 
 $("#club-body").addEventListener("click", (e) => {
+  const countrySort = state.country && e.target.closest("#country-clubs [data-lsort]");
+  if (countrySort) {
+    const key = countrySort.dataset.lsort.split(":")[1], s = state.country.sort;
+    if (s.key === key) s.dir = -s.dir; else Object.assign(s, { key, dir: STRENGTH_COLS[key].dir });
+    return renderCountryClubs();
+  }
   if (!state.league || !$("#league-tab")) return;
   const t = e.target.closest("[data-ltab]");
   if (t) {
@@ -4844,12 +4851,21 @@ function openCountryPage(country) {
       ${leagues.length > 1 ? `<div class="page-note">Strongest first, by the average Baseline Strength of their clubs.</div>` : ""}` : ""}
     ${cups.length ? `<div class="club-section"${leagues.length ? "" : ' style="margin-top:0"'}><div class="modal-section">${leagues.length ? "Cups" : "Competitions"}</div>
       <div class="lg-list">${cups.map(card).join("")}</div></div>` : ""}
-    ${clubs.length ? `<div class="club-section"><div class="modal-section">Clubs by Baseline Strength</div><div id="country-clubs">${clubRatingTable(clubs.slice(0, LIMIT), null, {}, meta)}</div>
+    ${clubs.length ? `<div class="club-section"><div class="modal-section">Clubs</div><div id="country-clubs"></div>
       ${clubs.length > LIMIT ? `<button type="button" class="show-all" id="country-more">Show all ${clubs.length.toLocaleString()}</button>` : ""}</div>` : ""}`;
+  // sorted by Current Strength to start; # stays the Baseline Strength rank
+  state.country = { clubs, meta, limit: LIMIT, sort: { key: "current", dir: STRENGTH_COLS.current.dir } };
+  if (clubs.length) renderCountryClubs();
   $("#country-more")?.addEventListener("click", (e) => {
-    $("#country-clubs").innerHTML = clubRatingTable(clubs, null, {}, meta);
+    state.country.limit = Infinity;
+    renderCountryClubs();
     e.target.remove();
   });
+}
+// the top LIMIT by the chosen sort (all of them once "Show all" is clicked)
+function renderCountryClubs() {
+  const { clubs, meta, limit, sort } = state.country;
+  $("#country-clubs").innerHTML = clubRatingTable(clubs, null, {}, meta, sort, limit);
 }
 
 // ------------------------------------------------------------------ Leagues
@@ -5169,7 +5185,6 @@ function renderFplNext() {
     const sum = (k) => cells.reduce((a, c) => a + c[k], 0);
     const xp = sum("xp");
     return { p, cells, xp, minutes: sum("minutes"), goals: sum("goals"), assists: sum("assists"),
-      p_start: cells[0]?.p_start ?? 0, p_clean_sheet: cells[0]?.p_clean_sheet ?? 0,
       price: price(p) ?? -1, value: price(p) ? xp / price(p) : -1 };
   }).filter((r) => (fp.pos === "all" || r.p.pos === fp.pos)
       && (!q || r.p.name.toLowerCase().includes(q) || team(r.p.team).toLowerCase().includes(q)))
@@ -5182,21 +5197,22 @@ function renderFplNext() {
     return t ? ` <span class="bet-tag warn" title="${p.fpl_status && p.fpl_status !== "a" ? "FPL status" : "On the injury list"}">${t}</span>` : "";
   };
   const opp = (c) => c.home ? code(c.opponent) : code(c.opponent).toLowerCase();
-  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><img class="club-logo" data-club="${r.p.team}" src="${teamLogo(r.p.team)}" alt="${escapeHtml(team(r.p.team))}" title="${escapeHtml(team(r.p.team))}" loading="lazy">
-      <div>${playerById(r.p.player) ? playerLink(r.p.player, r.p.name) : escapeHtml(r.p.name)}${tag(r.p)}
-      <div class="fpl-match">${fp.mode === "gw" ? (r.cells.length ? r.cells.map((c) => `${c.home ? "v" : "at"} ${escapeHtml(team(c.opponent))}`).join(" · ") : "No match (blank)") : escapeHtml(team(r.p.team))}</div></div></div></td>`;
-  const posCell = (p) => `<td>${FPL_POS[p.pos]}${p.fpl_position ? "" : '<span class="dim-text" title="Not matched to FPL yet: our position">*</span>'}</td>`;
-  const priceCell = (r) => `<td>${r.price > 0 ? `£${r.price.toFixed(1)}m` : "–"}</td>`;
-  const sortTh = (k, label) => `<th><button type="button" class="fpl-sort${fp.sort === k ? " on" : ""}" data-fpl-sort="${k}" aria-pressed="${fp.sort === k}">${label}</button></th>`;
+  // photo with the club badge on its corner; surname (full name on hover) · position · price
+  const meta = (r) => `<span class="fpl-meta"><span title="${FPL_POS[r.p.pos]}">${r.p.pos}${r.p.fpl_position ? "" : '<span title="Not matched to FPL yet: our position">*</span>'}</span>${r.price > 0 ? ` · £${r.price.toFixed(1)}` : ""}</span>`;
+  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><span class="fpl-face"><img class="player-photo" src="${playerPhoto(r.p.player)}" alt="" loading="lazy">
+      <img class="club-logo" data-club="${r.p.team}" src="${teamLogo(r.p.team)}" alt="${escapeHtml(team(r.p.team))}" title="${escapeHtml(team(r.p.team))}" loading="lazy"></span>
+      <div class="fpl-name"><div class="fpl-line"><span class="fpl-nm" title="${escapeHtml(r.p.name)}">${playerById(r.p.player) ? playerLink(r.p.player, shortName(r.p.name)) : escapeHtml(shortName(r.p.name))}</span>${meta(r)}${tag(r.p)}</div>
+      <div class="fpl-match">${fp.mode === "gw" ? (r.cells.length ? r.cells.map((c) => `v ${escapeHtml(team(c.opponent))} ${c.home ? "H" : "A"}`).join(" · ") : "No match (blank)") : escapeHtml(team(r.p.team))}</div></div></div></td>`;
+  const sortTh = (k, label, title = "") => `<th${title ? ` title="${title}"` : ""}><button type="button" class="fpl-sort${fp.sort === k ? " on" : ""}" data-fpl-sort="${k}" aria-pressed="${fp.sort === k}"${title ? ` aria-label="${title}"` : ""}>${label}</button></th>`;
   let head, body;
   if (fp.mode === "gw") {
-    head = `<th>#</th><th>Player</th><th>Pos</th>${sortTh("price", "Price")}${sortTh("xp", "Pts")}${sortTh("minutes", "Mins")}${sortTh("p_start", "Start")}${sortTh("goals", "Goals")}${sortTh("assists", "Assists")}${sortTh("p_clean_sheet", "CS")}`;
-    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}${posCell(r.p)}${priceCell(r)}<td><b>${r.xp.toFixed(1)}</b></td><td>${r.minutes}</td>
-      <td>${pct(r.p_start, 0)}</td><td>${r.goals.toFixed(2)}</td><td>${r.assists.toFixed(2)}</td><td>${pct(r.p_clean_sheet, 0)}</td></tr>`).join("");
+    head = `<th>#</th><th>Player</th>${sortTh("xp", "Pts")}${sortTh("minutes", "Mins")}${sortTh("goals", "G", "Expected goals")}${sortTh("assists", "A", "Expected assists")}`;
+    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td><b>${r.xp.toFixed(1)}</b></td><td>${r.minutes}</td>
+      <td>${r.goals.toFixed(2)}</td><td>${r.assists.toFixed(2)}</td></tr>`).join("");
   } else {
-    head = `<th>#</th><th>Player</th><th>Pos</th>${sortTh("price", "Price")}${sortTh("xp", "Total")}${sortTh("value", "Pts/£m")}`
+    head = `<th>#</th><th>Player</th>${sortTh("xp", "Total")}${sortTh("value", "Pts/£m")}`
       + span.map((i) => `<th title="${day(gws[i].first_kickoff)}">${gwLabel(gws[i])}</th>`).join("");
-    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}${posCell(r.p)}${priceCell(r)}<td><b>${r.xp.toFixed(1)}</b></td>
+    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td><b>${r.xp.toFixed(1)}</b></td>
       <td>${r.value > 0 ? r.value.toFixed(2) : "–"}</td>${span.map((g) => {
         const cs = r.cells.filter((c) => c.gw === g);
         return !cs.length ? `<td class="fpl-gw dim-text">–</td>` : `<td class="fpl-gw${cs.length > 1 ? " double" : ""}">${cs.reduce((a, c) => a + c.xp, 0).toFixed(1)}<span>${cs.map(opp).join(" ")}</span></td>`;
@@ -5211,7 +5227,7 @@ function renderFplNext() {
        <button type="button" class="filter-chip" data-fpl-step="1" aria-label="Next gameweek" ${fp.gw === gws.length - 1 ? "disabled" : ""}>▶</button></span>`;
   const chips = [["all", "All"], ["G", "GK"], ["D", "DEF"], ["M", "MID"], ["F", "FWD"]].map(([k, label]) =>
     `<button type="button" class="filter-chip" data-fpl-pos="${k}" aria-pressed="${fp.pos === k}">${label}</button>`).join("");
-  const cols = (fp.mode === "gw" ? 10 : 6 + span.length);
+  const cols = (fp.mode === "gw" ? 6 : 4 + span.length);
   el.innerHTML = `
     <div class="stats-label">Predicted points</div>
     <div class="fpl-filters">${modes}${pager}</div>
@@ -5223,7 +5239,7 @@ function renderFplNext() {
     ${rows.length > FPL_SHOWN ? `<button type="button" class="show-all" id="fpl-more">${fp.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}
     <div class="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, assists, clean sheets,
       goals conceded and saves. <b>Bonus points, cards and own goals aren't included</b>, so the best players come out a point or so below FPL's own figures.
-      ${d.source === "fpl" ? "Positions, prices, status and gameweeks come from FPL (updated nightly); * = not yet matched to FPL, our position shown." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
+      ${d.source === "fpl" ? "Positions, prices, status and gameweeks come from FPL (updated nightly); players FPL doesn't list at their club are left out." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
       In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
       This is ${escapeHtml(d.model)}, still being tested (see below): a guide, not a pick list.</div>`;
 }
@@ -5234,7 +5250,7 @@ $("#fpl-body").addEventListener("click", (e) => {
   const fp = state.fplView;
   if (pos) { fp.pos = pos.dataset.fplPos; fp.all = false; }
   if (sort) fp.sort = sort.dataset.fplSort;
-  if (mode) { fp.mode = mode.dataset.fplMode; fp.all = false; if (fp.mode !== "gw" && (fp.sort === "minutes" || fp.sort === "goals" || fp.sort === "assists" || fp.sort === "p_start" || fp.sort === "p_clean_sheet")) fp.sort = "xp"; }
+  if (mode) { fp.mode = mode.dataset.fplMode; fp.all = false; if (fp.mode !== "gw" && (fp.sort === "minutes" || fp.sort === "goals" || fp.sort === "assists")) fp.sort = "xp"; }
   if (step) fp.gw += +step.dataset.fplStep;
   if (e.target.id === "fpl-more") fp.all = !fp.all;
   renderFplNext();

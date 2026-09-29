@@ -195,9 +195,14 @@ def match_player(element, candidates, overrides):
         ('initial_surname', lambda c: bool(first) and normalise(c[1]) == f'{first[0]} {second}'),
         ('web_name', lambda c: web and web in (normalise(c[1]), normalise(c[3]))),
         # "Gabriel Magalhães" against FPL "Gabriel dos Santos Magalhães": every multi-letter
-        # word of the provider name appears in the FPL names
+        # word of the provider name appears in the FPL names, and any initial starts one of them or
+        # FPL's first name is one of the provider's ("J. Murphy" is not FPL's Alex Murphy; "E. Kroupi",
+        # first names Eli Junior, is FPL's Junior Kroupi)
         ('name_tokens', lambda c: (words := [w for w in normalise(c[1]).split() if len(w) > 1])
-                                  and set(words) <= tokens),
+                                  and set(words) <= tokens
+                                  and (all(any(t.startswith(w) for t in tokens)
+                                           for w in normalise(c[1]).split() if len(w) == 1)
+                                       or (bool(first) and first in normalise(c[2]).split()))),
     ]
     for method, rule in rules:
         found = _unique([c[0] for c in candidates if rule(c)], method)
@@ -242,13 +247,17 @@ def map_ids(conn, season, bootstrap, captured, overrides=None):
         api_id, method, detail = match_team(t, clubs, overrides['teams'])
         team_items.append((t['id'], t.get('code'), api_id, method, dict(detail, name=t.get('name'))))
     teams = {fpl: api for fpl, _, api, _, _ in team_items if api}
+    # candidates: the squad, this season's players, and anyone on a team sheet for the club this
+    # season or last (the fantasy predictions' pool: players injured all season or not yet in a squad)
     squads = {}
     for team, pid, name, first, last in conn.execute(
             '''SELECT DISTINCT s.team_id,p.player_id,p.name,p.firstname,p.lastname FROM (
                    SELECT team_id,player_id FROM team_squads WHERE team_id=ANY(%s)
                    UNION SELECT team_id,player_id FROM player_seasons
-                   WHERE league_id=%s AND season=%s AND team_id=ANY(%s)) s JOIN players p USING (player_id)''',
-            [list(teams.values()), PL_LEAGUE, season, list(teams.values())]):
+                   WHERE league_id=%s AND season=%s AND team_id=ANY(%s)
+                   UNION SELECT fp.team_id,fp.player_id FROM fixture_players fp JOIN fixtures f USING (fixture_id)
+                   WHERE f.league_id=%s AND f.season>=%s AND fp.team_id=ANY(%s)) s JOIN players p USING (player_id)''',
+            [list(teams.values()), PL_LEAGUE, season, list(teams.values()), PL_LEAGUE, season - 1, list(teams.values())]):
         squads.setdefault(team, []).append((pid, name, first, last))
     player_items = []
     for e in bootstrap.get('elements') or []:
