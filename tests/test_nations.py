@@ -1,5 +1,6 @@
 import unittest
-from datetime import date
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from unittest import mock
 
 from thecornerfc import nations
@@ -75,6 +76,52 @@ class NationsTests(unittest.TestCase):
         self.assertEqual(spain["confed"], "UEFA")
         self.assertEqual(spain["flag"], "es")
         self.assertEqual(spain["last"]["opp"], "Greenland")
+
+    def test_team_pages_join_line_ups_and_stat_lines(self):
+        kick = lambda d: datetime(*d, 19, 45, tzinfo=timezone.utc)
+        results = {
+            "to_regclass": [("national_fixture_players",)],
+            "from national_fixtures": [
+                (1, kick((2026, 6, 20)), 10, 20, "England", "Czechia", 2, 1, "World Cup", True),
+                (2, kick((2026, 9, 5)), 20, 10, "Czechia", "England", 0, 0, "Friendlies", False)],
+            "from national_fixture_formations": [(1, 10, "4-2-3-1", "T. Tuchel"), (2, 10, "3-4-2-1", "T. Tuchel")],
+            # player 7 started match 2 but API-Football has no stat line for him
+            "from national_fixture_lineups": [(1, 10, 9, "ST", "H. Kane"), (2, 10, 9, "ST", "H. Kane"),
+                                              (2, 10, 7, "RW", "B. Saka")],
+            "from national_fixture_players": [
+                (1, 10, 9, 90, True, 2, 0, Decimal("8.1"), None, None, "H. Kane"),
+                (1, 10, 11, 20, False, 0, 1, Decimal("7.0"), 1, None, "J. Bellingham"),
+                (2, 10, 9, 90, True, 0, 0, Decimal("6.5"), None, None, "H. Kane")],
+            "from players": [(9, "Harry Kane")],
+        }
+
+        class Conn:
+            def execute(self, sql, params=None):
+                key = next(k for k in results if k in sql)
+                return mock.Mock(fetchone=lambda: results[key][0], fetchall=lambda: results[key],
+                                 __iter__=lambda _: iter(results[key]))
+
+        pages = nations.team_pages(Conn(), today=date(2026, 9, 29))
+        self.assertEqual(set(pages), {10, 20})
+        eng = pages[10]
+        self.assertEqual(eng["name"], "England")
+        self.assertEqual(eng["matches"], [["2026-06-20", "Czechia", "N", 2, 1, "World Cup", "4-2-3-1", "T. Tuchel"],
+                                          ["2026-09-05", "Czechia", "A", 0, 0, "Friendlies", "3-4-2-1", "T. Tuchel"]])
+        apps = [dict(zip(eng["app_fields"], a)) for a in eng["apps"]]
+        self.assertEqual([(a["match"], a["player"], a["started"]) for a in apps],
+                         [(0, 9, 1), (0, 11, 0), (1, 7, 1), (1, 9, 1)])
+        self.assertEqual((apps[0]["goals"], apps[0]["rating"], apps[0]["role"]), (2, 8.1, "ST"))
+        self.assertEqual((apps[1]["assists"], apps[1]["yellow"], apps[1]["role"]), (1, 1, None))
+        self.assertIsNone(apps[2]["minutes"])                    # a starter with no stat line
+        self.assertEqual(eng["players"], {9: "Harry Kane", 11: "J. Bellingham", 7: "B. Saka"})
+        self.assertEqual(pages[20]["matches"][1][2], "H")
+        self.assertEqual(pages[20]["apps"], [])
+
+    def test_team_pages_empty_before_the_migration(self):
+        conn = mock.Mock()
+        conn.execute.return_value.fetchone.return_value = (None,)
+        self.assertEqual(nations.team_pages(conn), {})
+        self.assertEqual(nations.team_pages(None), {})
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@
     python -m thecornerfc rank           # recalculate club rankings from every fixture
     python -m thecornerfc predict        # projected scores / W-D-L for upcoming fixtures
     python -m thecornerfc export         # JSON for the website in docs/data
-    python -m thecornerfc nations        # national team ranking only (docs/data/nations.json)
+    python -m thecornerfc nations        # national team ranking and pages only (docs/data/nations.json, nations/)
     python -m thecornerfc sync national  # API-Football internationals and their line-ups
     python -m thecornerfc matchday       # pre-kickoff odds/injuries, late paper bets, settle
     python -m thecornerfc fpl capture    # pre-deadline FPL state (needs FPL_CAPTURE_ENABLED)

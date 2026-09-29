@@ -194,10 +194,11 @@ def sync_national_fixtures(api, conn, league_ids=None, seasons=None):
 
 
 def sync_national_lineups(api, conn, batch_size=20):
-    """Starting XIs, formations and coaches for the finished matches in national_fixtures, as
-    sync_cup_lineups does for clubs (/fixtures?ids=, 20 per call), into their own tables
-    (national_fixture_lineups, national_fixture_formations) so no club model reads them.
-    national_fixtures.players_fetched_at marks them done."""
+    """Starting XIs, formations, coaches and each player's stat line for the finished matches in
+    national_fixtures, as sync_cup_lineups and sync_fixture_players do for clubs (/fixtures?ids=,
+    20 per call), into their own tables (national_fixture_lineups, national_fixture_formations,
+    national_fixture_players) so no club model reads them. national_fixtures.players_fetched_at
+    marks them done: once both line-ups and stat lines arrive, or after the retry window."""
     pending = [r[0] for r in conn.execute(
         """select fixture_id from national_fixtures
            where players_fetched_at is null and status_short = any(%s) order by kickoff""",
@@ -205,14 +206,23 @@ def sync_national_lineups(api, conn, batch_size=20):
     log.info("National matches needing line-ups: %d (~%d API calls)", len(pending), -(-len(pending) // batch_size))
     now = datetime.now(timezone.utc)
     for i in range(0, len(pending), batch_size):
-        formations, lineups, done = [], [], []
+        formations, lineups, players, done = [], [], [], []
         for f in api.get("fixtures", ids="-".join(map(str, pending[i:i + batch_size]))):
-            _starting_xis(f, formations, lineups)
-            if f.get("lineups") or now - datetime.fromisoformat(f["fixture"]["date"]) > STATS_RETRY_WINDOW:
+            start = len(lineups)
+            _starting_xis(f, formations, lineups, names=True)
+            grids, xi = {}, {}
+            for r in lineups[start:]:
+                grids[r["player_id"]] = (r["grid"], r["role"])
+                xi.setdefault(r["team_id"], set()).add(r["player_id"])
+            players += _player_lines(f, grids, xi, names=True)
+            if (f.get("lineups") and f.get("players")) \
+                    or now - datetime.fromisoformat(f["fixture"]["date"]) > STATS_RETRY_WINDOW:
                 done.append(f["fixture"]["id"])
         upsert(conn, "national_fixture_formations", _dedupe(formations, ("fixture_id", "team_id")),
                ["fixture_id", "team_id"], touch_updated_at=False)
         upsert(conn, "national_fixture_lineups", _dedupe(lineups, ("fixture_id", "player_id")),
+               ["fixture_id", "player_id"], touch_updated_at=False)
+        upsert(conn, "national_fixture_players", _dedupe(players, ("fixture_id", "player_id")),
                ["fixture_id", "player_id"], touch_updated_at=False)
         if done:
             conn.execute("update national_fixtures set players_fetched_at = now() where fixture_id = any(%s)", [done])
@@ -914,20 +924,23 @@ def sync_team_colors(api, conn, batch_size=20):
 CUP_LINEUPS_FROM = "2020-07-01"
 
 
-def _starting_xis(f, formations, lineups):
-    """Add a /fixtures response's formations (with the coach) and starting XIs to the two lists."""
+def _starting_xis(f, formations, lineups, names=False):
+    """Add a /fixtures response's formations (with the coach) and starting XIs to the two lists,
+    with the coach's and players' names if names (the national tables keep them)."""
     fid = f["fixture"]["id"]
     for lu in f.get("lineups") or []:
         team, formation = (lu.get("team") or {}).get("id"), lu.get("formation")
         if not team:
             continue
-        formations.append({"fixture_id": fid, "team_id": team, "formation": formation,
-                           "coach_id": (lu.get("coach") or {}).get("id")})
+        coach = lu.get("coach") or {}
+        formations.append({"fixture_id": fid, "team_id": team, "formation": formation, "coach_id": coach.get("id"),
+                           **({"coach_name": coach.get("name")} if names else {})})
         for st in lu.get("startXI") or []:
             pl = st.get("player") or {}
             if pl.get("id"):
                 lineups.append({"fixture_id": fid, "team_id": team, "player_id": pl["id"], "grid": pl.get("grid"),
-                                "role": positions.role(formation, pl.get("grid"))})
+                                "role": positions.role(formation, pl.get("grid")),
+                                **({"player_name": pl.get("name")} if names else {})})
 
 
 def sync_cup_lineups(api, conn, batch_size=20):
@@ -965,6 +978,48 @@ def sync_cup_lineups(api, conn, batch_size=20):
             log.info("Cup line-ups %d/%d", i + batch_size, len(pending))
 
 
+def _player_lines(f, grids, xi, names=False):
+    """Each player's stat line in a /fixtures response (those with minutes), as fixture_players rows
+    (with his name if names). grids: {player: (grid, role)} for starters; xi: {team: its official XI}."""
+    fid, out = f["fixture"]["id"], []
+    for team_block in f.get("players") or []:
+        team_id = team_block["team"]["id"]
+        for p in team_block.get("players") or []:
+            games = (p.get("statistics") or [{}])[0].get("games") or {}
+            minutes = _int(games.get("minutes"))
+            if not minutes or not p["player"].get("id"):
+                continue
+            st = (p.get("statistics") or [{}])[0]
+            g = lambda section, key: _int((st.get(section) or {}).get(key))
+            out.append({"fixture_id": fid, "team_id": team_id, "player_id": p["player"]["id"],
+                        # the official XI where there is one: the per-player substitute
+                        # flag is sometimes false for subs too (11 + every sub "started")
+                        "minutes": minutes,
+                        "started": p["player"]["id"] in xi[team_id] if xi.get(team_id)
+                        else games.get("substitute") is False,
+                        "position": games.get("position"),
+                        "rating": _parse_stat(games.get("rating")),
+                        "goals": g("goals", "total"), "assists": g("goals", "assists"),
+                        "shots": g("shots", "total"), "shots_on": g("shots", "on"),
+                        "key_passes": g("passes", "key"), "passes": g("passes", "total"),
+                        # per-match "accuracy" is the number of accurate passes
+                        "passes_accurate": g("passes", "accuracy"),
+                        "tackles": g("tackles", "total"), "interceptions": g("tackles", "interceptions"),
+                        "blocks": g("tackles", "blocks"), "duels": g("duels", "total"),
+                        "duels_won": g("duels", "won"), "dribbles": g("dribbles", "attempts"),
+                        "dribbles_won": g("dribbles", "success"),
+                        "fouls_committed": g("fouls", "committed"), "fouls_drawn": g("fouls", "drawn"),
+                        "yellow_cards": g("cards", "yellow"), "red_cards": g("cards", "red"),
+                        "saves": g("goals", "saves"), "goals_conceded": g("goals", "conceded"),
+                        "penalties_saved": g("penalty", "saved"),
+                        "dribbled_past": g("dribbles", "past"),
+                        "penalties_committed": g("penalty", "commited"),   # sic (API spelling)
+                        "grid": grids.get(p["player"]["id"], (None, None))[0],
+                        "role": grids.get(p["player"]["id"], (None, None))[1],
+                        **({"player_name": p["player"].get("name")} if names else {})})
+    return out
+
+
 def sync_fixture_players(api, conn, league_ids, batch_size=20):
     """Per-match player minutes for finished fixtures not fetched yet (/fixtures?ids=)."""
     pending = [r[0] for r in conn.execute(
@@ -992,40 +1047,7 @@ def sync_fixture_players(api, conn, league_ids, batch_size=20):
                     if pl.get("id"):
                         grids[pl["id"]] = (pl.get("grid"), positions.role(formation, pl.get("grid")))
                         xi.setdefault(lu.get("team", {}).get("id"), set()).add(pl["id"])
-            for team_block in f.get("players") or []:
-                team_id = team_block["team"]["id"]
-                for p in team_block.get("players") or []:
-                    games = (p.get("statistics") or [{}])[0].get("games") or {}
-                    minutes = _int(games.get("minutes"))
-                    if not minutes or not p["player"].get("id"):
-                        continue
-                    st = (p.get("statistics") or [{}])[0]
-                    g = lambda section, key: _int((st.get(section) or {}).get(key))
-                    rows.append({"fixture_id": fid, "team_id": team_id, "player_id": p["player"]["id"],
-                                 # the official XI where there is one: the per-player substitute
-                                 # flag is sometimes false for subs too (11 + every sub "started")
-                                 "minutes": minutes,
-                                 "started": p["player"]["id"] in xi[team_id] if xi.get(team_id)
-                                 else games.get("substitute") is False,
-                                 "position": games.get("position"),
-                                 "rating": _parse_stat(games.get("rating")),
-                                 "goals": g("goals", "total"), "assists": g("goals", "assists"),
-                                 "shots": g("shots", "total"), "shots_on": g("shots", "on"),
-                                 "key_passes": g("passes", "key"), "passes": g("passes", "total"),
-                                 # per-match "accuracy" is the number of accurate passes
-                                 "passes_accurate": g("passes", "accuracy"),
-                                 "tackles": g("tackles", "total"), "interceptions": g("tackles", "interceptions"),
-                                 "blocks": g("tackles", "blocks"), "duels": g("duels", "total"),
-                                 "duels_won": g("duels", "won"), "dribbles": g("dribbles", "attempts"),
-                                 "dribbles_won": g("dribbles", "success"),
-                                 "fouls_committed": g("fouls", "committed"), "fouls_drawn": g("fouls", "drawn"),
-                                 "yellow_cards": g("cards", "yellow"), "red_cards": g("cards", "red"),
-                                 "saves": g("goals", "saves"), "goals_conceded": g("goals", "conceded"),
-                                 "penalties_saved": g("penalty", "saved"),
-                                 "dribbled_past": g("dribbles", "past"),
-                                 "penalties_committed": g("penalty", "commited"),   # sic (API spelling)
-                                 "grid": grids.get(p["player"]["id"], (None, None))[0],
-                                 "role": grids.get(p["player"]["id"], (None, None))[1]})
+            rows += _player_lines(f, grids, xi)
             kickoff = datetime.fromisoformat(f["fixture"]["date"])
             if f.get("players") or now - kickoff > STATS_RETRY_WINDOW:
                 done.append(fid)

@@ -326,13 +326,15 @@ Which teams are listed:
 - Tournaments for non-FIFA sides (CONIFA, Island Games) and multi-sport games (mostly under-23 teams) are left out.
 
 **API-Football (ready, off).** The dataset usually has results within a few days. API-Football can fill that gap and later supply upcoming fixtures:
-1. Run `db/migrations/20260929_national_fixtures.sql`, then `db/migrations/20260929_national_lineups.sql`.
+1. Run `db/migrations/20260929_national_fixtures.sql`, then `db/migrations/20260929_national_lineups.sql`, then `db/migrations/20260929_national_players.sql`.
 2. Run `python -m thecornerfc sync national`. By default it pulls the current season of each competition in `config.NATIONAL_TEAM_LEAGUES`, at about 20–40 calls, and logs each competition's name so you can check the ids. It then fetches the line-ups of every finished match it has (see below).
 3. Set `THECORNERFC_NATIONAL_SYNC=true` in the nightly workflow to refresh them every night.
 
 These matches go in their own table, `national_fixtures`, never in `fixtures`. The club ranking, predictions and site export read every row of `fixtures`, so national teams there would enter the club Elo.
 
 **Line-ups.** `ingest.sync_national_lineups` stores each finished international's starting XIs, formations and coaches the same way `sync_cup_lineups` does for clubs: one `/fixtures?ids=` call per 20 matches, each starter's grid and role, and the coach on the line-up. They go in `national_fixture_lineups` and `national_fixture_formations`, not the club tables, which the club models read in full. `national_fixtures.players_fetched_at` marks a match done: once its line-ups arrive, or after the retry window if API-Football never has them. Player ids are API-Football's, so they join to `players`. It runs after the fixtures in `sync national` and in the nightly run. For older matches, pull their seasons first (`python -m thecornerfc sync national --seasons 2022 2023 2024 2025`); the next line-up run picks them up.
+
+**Stat lines and nation pages.** The same calls give each player's stat line (minutes, goals, assists, rating, cards, as `fixture_players` has for clubs), kept in `national_fixture_players` with the player's name as sent (not every international is in `players`), and the coach's name on `national_fixture_formations`. A match is marked done once both line-ups and stat lines arrive, or after the retry window. The `national_players` migration sets matches fetched before it to be fetched once more (about 8 calls for the current seasons). The export writes `docs/data/nations/<team id>.json` for each national team with a finished match in the last four years: its matches with formation and coach, and every appearance (stat lines, plus starters with none, whose minutes are unknown). `nations.json` gives each ranked nation its `team_id`. The nation page's Formations and Players tabs read these files.
 
 How API-Football matches are merged:
 - They're added only where the dataset doesn't have the match (the same two nations within a day), so the dataset's neutral flags win.

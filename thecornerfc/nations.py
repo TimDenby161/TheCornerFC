@@ -355,10 +355,99 @@ def load(conn=None):
     return merge(dataset, [m for m in extra if m.home in known and m.away in known])
 
 
+# --------------------------------------------------------------------------- team pages
+
+TEAM_YEARS = ACTIVE_YEARS   # matches on a nation page's Formations and Players tabs
+APP_FIELDS = ["match", "player", "minutes", "started", "role", "goals", "assists", "rating", "yellow", "red"]
+MATCH_FIELDS = ["date", "opp", "venue", "gf", "ga", "tournament", "formation", "coach"]
+
+
+def team_pages(conn, today=None):
+    """{team_id: page} for each national team with a finished match in national_fixtures in the last
+    TEAM_YEARS: its matches (oldest first) with its formation and coach, and every appearance.
+    Appearances come from national_fixture_players, plus starters from national_fixture_lineups
+    with no stat line (minutes unknown). Empty until the national_players migration has run."""
+    if conn is None or not conn.execute("select to_regclass('national_fixture_players')").fetchone()[0]:
+        return {}
+    today = today or datetime.now(timezone.utc).date()
+    since = today.replace(year=today.year - TEAM_YEARS)
+    fixtures = conn.execute("""
+        select fixture_id, kickoff, home_team_id, away_team_id, home_name, away_name, home_goals, away_goals,
+               tournament, neutral
+        from national_fixtures
+        where status_short in ('FT', 'AET', 'PEN') and home_goals is not null and away_goals is not null
+          and kickoff >= %s
+        order by kickoff, fixture_id""", [since]).fetchall()
+    ids = [f[0] for f in fixtures]
+    formations = {(fid, t): (fm, coach) for fid, t, fm, coach in conn.execute(
+        "select fixture_id, team_id, formation, coach_name from national_fixture_formations where fixture_id = any(%s)",
+        [ids])}
+    apps = {}                                  # (fixture, player) -> [team, minutes, started, role, g, a, rating, y, r]
+    names = {}
+    for fid, team, pid, grid_role, name in conn.execute(
+            "select fixture_id, team_id, player_id, role, player_name from national_fixture_lineups where fixture_id = any(%s)",
+            [ids]):
+        apps[fid, pid] = [team, None, True, grid_role, None, None, None, None, None]
+        if name:
+            names[pid] = name
+    for fid, team, pid, mins, started, g, a, rating, y, r, name in conn.execute("""
+            select fixture_id, team_id, player_id, minutes, started, goals, assists, rating, yellow_cards, red_cards,
+                   player_name
+            from national_fixture_players where fixture_id = any(%s)""", [ids]):
+        role = apps.get((fid, pid), [None] * 4)[3]
+        apps[fid, pid] = [team, mins, bool(started), role, g, a, float(rating) if rating is not None else None, y, r]
+        if name:
+            names[pid] = name
+    # the site's name for a player where we have him (as on his player page)
+    pids = list({pid for _, pid in apps})
+    names.update(conn.execute("select player_id, name from players where player_id = any(%s)", [pids]).fetchall())
+
+    by_match = defaultdict(list)               # (fixture, team) -> [[player, *line]]
+    for (fid, pid), (team, *line) in apps.items():
+        by_match[fid, team].append([pid, *[int(v) if isinstance(v, bool) else v for v in line]])
+
+    pages = {}
+    for fid, kickoff, h_id, a_id, h_name, a_name, hg, ag, tournament, neutral in fixtures:
+        for team, name, opp, gf, ga, venue in ((h_id, h_name, a_name, hg, ag, "H"), (a_id, a_name, h_name, ag, hg, "A")):
+            page = pages.setdefault(team, {"id": team, "name": name, "matches": [], "apps": [], "players": {}})
+            page["name"] = name                # the latest name API-Football sent
+            fm, coach = formations.get((fid, team), (None, None))
+            page["matches"].append([kickoff.date().isoformat(), opp, "N" if neutral else venue, gf, ga, tournament,
+                                    fm, coach])
+            idx = len(page["matches"]) - 1
+            for pid, *line in by_match.get((fid, team), []):
+                page["apps"].append([idx, pid, *line])
+                page["players"][pid] = names.get(pid)
+    for page in pages.values():
+        page["apps"].sort(key=lambda a: (a[0], not a[3], a[1]))     # by match, starters first
+        page["match_fields"], page["app_fields"] = MATCH_FIELDS, APP_FIELDS
+    return pages
+
+
+def export_team_pages(conn, out_dir):
+    """Write data/nations/<team_id>.json for each national team page (team_pages); remove the
+    rest. Returns {dataset name: team_id}, for nations.json."""
+    from .export import _write_json_file
+    pages = team_pages(conn)
+    team_dir = Path(out_dir) / "nations"
+    team_dir.mkdir(parents=True, exist_ok=True)
+    for old in team_dir.glob("*.json"):
+        if not old.stem.isdigit() or int(old.stem) not in pages:
+            old.unlink()
+    for team, page in pages.items():
+        _write_json_file(team_dir / f"{team}.json", page)
+    log.info("Nation pages: %d teams, %d appearances", len(pages), sum(len(p["apps"]) for p in pages.values()))
+    return {api_name(p["name"]): team for team, p in pages.items()}
+
+
 def export_nations(conn=None, out_dir=None):
-    """Write data/nations.json. Returns the payload."""
+    """Write data/nations.json and the team pages (data/nations/). Returns the payload."""
     from .export import OUT_DIR, _write_json_file
+    out_dir = Path(out_dir or OUT_DIR)
     payload = build(load(conn))
-    _write_json_file(Path(out_dir or OUT_DIR) / "nations.json", payload)
+    team_ids = export_team_pages(conn, out_dir)
+    for row in payload["nations"]:
+        row["team_id"] = team_ids.get(row["name"])
+    _write_json_file(out_dir / "nations.json", payload)
     log.info("Nations: %d ranked, latest match %s", len(payload["nations"]), payload["latest_match"])
     return payload

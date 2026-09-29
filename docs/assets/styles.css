@@ -923,6 +923,34 @@
   .fm-bar { height: 4px; border-radius: 2px; background: var(--chip-bg); margin: 4px 0 3px; overflow: hidden; }
   .fm-bar span { display: block; height: 100%; background: var(--series-blue); border-radius: 2px; }
   .fm-sub { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  /* Nation page: formations and players */
+  .nat-windows { margin: 12px 0 10px; }
+  .nat-match summary { cursor: pointer; list-style: none; }
+  .nat-match summary::-webkit-details-marker { display: none; }
+  .nat-match + .nat-match summary { border-top: 1px solid var(--border); }
+  .nat-match .team-row-date { width: 76px; }
+  .nat-match .rel-chip { flex-shrink: 0; }
+  .nat-fm { width: 76px; flex-shrink: 0; text-align: right; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+  .nat-fm::after { content: " ▸"; color: var(--text-muted); font-weight: 400; }
+  .nat-match[open] .nat-fm::after { content: " ▾"; }
+  .nat-xi { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 2px 0 10px 84px; font-size: 12px; }
+  .nat-xi-role { display: inline-block; min-width: 30px; font-size: 10px; font-weight: 700; color: var(--text-muted); }
+  .nat-match .page-note { padding-left: 84px; margin-top: 0; }
+  table.leaderboard.nat-players { min-width: 620px; }
+  table.leaderboard.nat-players th:nth-child(n+3), table.leaderboard.nat-players td:nth-child(n+3) { width: 50px; }
+  table.leaderboard.nat-players .club-cell { overflow: hidden; }
+  table.leaderboard.nat-players .club-cell > .club-meta { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  table.leaderboard.nat-players th:nth-child(3), table.leaderboard.nat-players td:nth-child(3) { width: 40px; }
+  table.leaderboard.nat-players th:nth-child(9), table.leaderboard.nat-players td:nth-child(9),
+  table.leaderboard.nat-players th:nth-child(11), table.leaderboard.nat-players td:nth-child(11) { width: 64px; }
+  .card-y, .card-r { display: inline-block; min-width: 14px; padding: 0 3px; border-radius: 2px; font-size: 10px; font-weight: 700;
+    text-align: center; line-height: 16px; margin-left: 2px; }
+  .card-y { background: #f0c43a; color: #1d1d1b; }
+  .card-r { background: #d64545; color: #fff; }
+  @media (max-width: 480px) {
+    .nat-xi, .nat-match .page-note { padding-left: 0; }
+    .nat-match .team-row-date { width: 52px; }
+  }
   @media (max-width: 480px) {
     .fm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .fm-card { flex-direction: column; align-items: stretch; text-align: center; }

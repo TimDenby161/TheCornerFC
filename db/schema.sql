@@ -1270,3 +1270,13 @@ CREATE TABLE IF NOT EXISTS national_fixture_lineups (
 CREATE INDEX IF NOT EXISTS national_fixture_lineups_player ON national_fixture_lineups (player_id);
 ALTER TABLE national_fixture_formations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE national_fixture_lineups ENABLE ROW LEVEL SECURITY;
+-- Each player's stat line in national_fixtures matches, and the coach's and players' names
+-- (ingest.sync_national_lineups). Own table, as fixture_players is for clubs: the player ratings
+-- read every row of that one.
+ALTER TABLE national_fixture_formations ADD COLUMN IF NOT EXISTS coach_name text;
+ALTER TABLE national_fixture_lineups ADD COLUMN IF NOT EXISTS player_name text;
+CREATE TABLE IF NOT EXISTS national_fixture_players (LIKE fixture_players INCLUDING DEFAULTS);
+ALTER TABLE national_fixture_players ADD COLUMN IF NOT EXISTS player_name text;  -- as sent: not every international is in players
+CREATE UNIQUE INDEX IF NOT EXISTS national_fixture_players_key ON national_fixture_players (fixture_id, player_id);
+CREATE INDEX IF NOT EXISTS national_fixture_players_team ON national_fixture_players (team_id, fixture_id);
+ALTER TABLE national_fixture_players ENABLE ROW LEVEL SECURITY;

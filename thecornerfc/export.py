@@ -356,17 +356,20 @@ def _write_site_data(conn, out_dir=OUT_DIR):
 
 
 def export_nations(conn, out_dir=OUT_DIR):
-    """data/nations.json, the national team ranking (nations.py). Not critical: if it fails (no
-    copy of the public results and no download), the last published file is kept."""
+    """data/nations.json, the national team ranking, and data/nations/, the national team pages
+    (nations.py). Not critical: if it fails (no copy of the public results and no download), the
+    last published files are kept."""
     from . import nations
     try:
         nations.export_nations(conn, out_dir)
     except Exception:
-        log.exception("Nations export failed; keeping the last published nations.json")
+        log.exception("Nations export failed; keeping the last published nations.json and nations/")
         conn.rollback()
         old, new = OUT_DIR / "nations.json", Path(out_dir) / "nations.json"
         if old.exists() and old.resolve() != new.resolve():
             shutil.copy2(old, new)
+            if (OUT_DIR / "nations").is_dir():
+                shutil.copytree(OUT_DIR / "nations", Path(out_dir) / "nations", dirs_exist_ok=True)
 
 
 def _records_sum(side):
