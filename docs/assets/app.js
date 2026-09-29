@@ -4080,7 +4080,16 @@ async function openNationPage(nat) {
     for (const a of team.appRows) if (a.started) team.matchRows[a.match].xi.push(a);
   }
   state.nation.team = team || null;
+  $("#nat-coach").innerHTML = nationCoachHtml();
   renderNationTab();
+}
+// The head coach under the nation's name: his photo and name, once the team's file has loaded
+function nationCoachHtml() {
+  if (!state.nation?.team?.matchRows?.length) return "";
+  const spell = nationSpell();
+  if (!spell.coach) return "";
+  const photo = safeMediaUrl(spell.photo) || (spell.coachId != null ? mediaUrl("coachs", spell.coachId) : "");
+  return `<div class="pl-hero-club pl-hero-nat">${photo ? `<img class="player-photo coach-photo" src="${photo}" alt="" data-broken="remove">` : ""}<span class="pl-meta" title="Head coach">${escapeHtml(spell.coach)}</span></div>`;
 }
 
 function renderNationPage() {
@@ -4091,6 +4100,7 @@ function renderNationPage() {
       ${FLAG_CODES[name] ? `<img class="country-flag-lg" src="https://flagcdn.com/${FLAG_CODES[name]}.svg" alt="">` : "<span></span>"}
       <div class="pl-hero-main">
         <h2>${escapeHtml(name)}</h2>
+        <div id="nat-coach">${nationCoachHtml()}</div>
       </div>
       <div id="nat-elo" data-nat="${escapeHtml(name)}"></div>
     </div>
