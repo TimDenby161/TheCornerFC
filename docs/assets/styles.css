@@ -482,6 +482,7 @@
   .form-up { color: var(--status-good); font-weight: 700; }
   .form-down { color: var(--status-critical); font-weight: 700; }
   .rel-chip { display: inline-block; min-width: 34px; text-align: center; padding: 2px 5px; border-radius: 6px; font-size: 11px; font-weight: 800; }
+  .rel-0 { background: var(--chip-bg); color: var(--text-secondary); }
   .rel-4 { background: color-mix(in srgb, var(--status-good) 18%, transparent); color: var(--status-good); }
   .rel-3 { background: color-mix(in srgb, var(--status-warning) 22%, transparent); color: var(--status-warning); }
   .rel-2 { background: color-mix(in srgb, var(--series-orange) 18%, transparent); color: var(--series-orange); }
@@ -669,10 +670,12 @@
   .pl-hero .head-meta { font-size: 12px; }
   .flag { width: 18px; height: 13px; flex: none; object-fit: cover; border-radius: 2px; box-shadow: 0 0 0 1px var(--border); }
   .pl-hero-nat { margin-top: 3px; font-size: 13px; }
+  .pl-hero-club .coach-photo { width: 22px; height: 22px; object-position: top; }
   .pl-hero-nat .dim-sep { color: var(--text-muted); font-weight: 500; }
   .pl-hero-rank { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 62px;
     padding: 10px 8px; border-radius: 12px; }
   .hero-ranks { display: flex; gap: 8px; }
+  .pl-hero-ga { background: var(--chip-bg); }
   .pl-hero-rank .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-top: 3px; opacity: .8; }
   .pl-hero-rank .val { font-size: 28px; line-height: 1; font-weight: 900; font-variant-numeric: tabular-nums; }
   .page-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 0 12px; overflow-x: auto; scrollbar-width: none; }
@@ -699,7 +702,8 @@
   .form-strip { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
   .form-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
   .form-cell .rel-chip { min-width: 0; width: 100%; padding: 4px 0; font-size: 12px; }
-  .form-res { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .form-ga { display: flex; flex-direction: column; align-items: center; min-height: 13px; font-size: 11px; line-height: 13px; letter-spacing: -1px; }
+  .ga-icon { white-space: nowrap; }
   .rel-chip.rating-none { background: var(--chip-bg); color: var(--text-muted); }
   .stats-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
   .chip-scroll { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
@@ -741,6 +745,11 @@
     .pl-hero h2 { font-size: 19px; }
     .pl-hero-rank { min-width: 52px; padding: 8px 6px; }
     .pl-hero-rank .val { font-size: 23px; }
+    /* a club's three badges: compact, and on their own row under the name so it keeps its width */
+    .pl-hero:has(.hero-ranks) { grid-template-columns: auto minmax(0, 1fr); }
+    .hero-ranks { grid-column: 1 / -1; }
+    .hero-ranks .pl-hero-rank { flex: 1; padding: 6px 4px; }
+    .hero-ranks .pl-hero-rank .val { font-size: 20px; }
     .page-tabs button { padding: 8px 10px 7px; }
     #pl-tab .team-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     #pl-tab .team-stats.compact { grid-template-columns: repeat(auto-fit, minmax(58px, 1fr)); gap: 6px; }
@@ -753,16 +762,12 @@
     .match-list { padding: 0 10px; }
     .match-row { grid-template-columns: 42px minmax(0, 1fr) auto 40px; column-gap: 6px; }
     .season-table td:nth-child(2) { font-size: 12px; }
-    .pos-period-label { width: auto; flex-basis: 100%; }
     .pitch.pp-pitch { max-width: none; }
     .pp-spot { min-width: 48px; padding: 2px 5px 3px; }
     .pp-spot .pp-rank { font-size: 17px; }
   }
   .rated-as { font-size: 11px; color: var(--text-muted); align-self: center; margin-left: 2px; }
   .pos-shares.big .pos-share { font-size: 13px; padding: 3px 10px; }
-  .pos-period { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-  .pos-period-label { font-size: 12px; color: var(--text-secondary); width: 150px; flex-shrink: 0; }
-  .pos-period .pos-shares { margin-top: 0; }
   .season-now .spell + .spell { margin-top: 3px; }
   .season-now .dim { color: var(--text-muted); }
   .season-table .dim, .page-note { color: var(--text-muted); }
@@ -779,15 +784,57 @@
   table.league-table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 18px; font-variant-numeric: tabular-nums; }
   table.league-table th, table.league-table td { padding: 4px 5px; border-bottom: 1px solid var(--gridline); text-align: right; white-space: nowrap; }
   table.league-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--text-muted); font-weight: 600; cursor: help; }
+  table.league-table th.sortable, table.leaderboard th[data-lsort] { cursor: pointer; user-select: none; }
+  table.league-table th.active { color: var(--series-blue); }
+  .sort-dir { font-size: 8px; margin-left: 2px; vertical-align: 1px; }
   table.league-table .lt-pos { text-align: left; color: var(--text-muted); border-left: 3px solid transparent; padding-left: 6px; width: 30px; }
   table.league-table .lt-badge { width: 26px; padding-left: 0; padding-right: 0; }
   table.league-table .lt-badge .club-logo { width: 20px; height: 20px; }
   table.league-table .lt-club { text-align: left; width: 100%; white-space: normal; overflow-wrap: anywhere; min-width: 110px; }
   table.league-table .lt-elo { color: var(--text-muted); }
+  table.league-table .lt-chance { padding-left: 18px; }  /* projected table: points, then the chances */
   table.league-table .lt-zone { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; }
   .table-scroll:has(table.league-table) { overflow-x: auto; }
   .table-scroll table.league-table tbody tr:last-child td { border-bottom: none; }
   .table-scroll + .modal-section { margin-top: 14px; }
+  .lt-form.club-form { display: flex; flex-wrap: wrap; gap: 4px; height: 24px; overflow: hidden; margin: 0 0 10px; }   /* one line: the oldest wrap out of sight */
+  .lt-form.club-form i { width: 24px; height: 24px; line-height: 24px; font-size: 12px; border-radius: 6px; cursor: help; }
+  /* always side by side: a half too narrow for everything drops the form column and the players'
+     positions, and on phones the club names (the badges stand in) and players' first names */
+  .club-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px 12px; margin: 0 0 14px; }
+  .club-mini-table { min-width: 0; container-type: inline-size; }
+  .club-mini-table .cmt-short { display: none; }
+  /* each panel's title sits in its header row, over the name columns */
+  .club-mini-table th.cmt-head { text-align: left; color: var(--text-primary); font-weight: 700; letter-spacing: .04em; cursor: auto; padding-left: 8px;
+    max-width: 0; overflow: hidden; text-overflow: ellipsis; }      /* takes the room the columns leave, never widens them */
+  /* phones: the table, down to badges and numbers, needs less than the players */
+  @media (max-width: 480px) { .club-top { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 10px 8px; } }
+  @container (max-width: 300px) {
+    .club-mini-table .lt-formcol, .club-mini-table .bp-pos, .club-mini-table th.cmt-head .cmt-full { display: none; }
+  }
+  @container (max-width: 210px) {
+    .club-mini-table table.league-table td.lt-clubname { padding: 0; min-width: 0; }
+    .club-mini-table td.lt-clubname > span { display: none; }
+    .club-mini-table .cmt-full { display: none; }
+    .club-mini-table .cmt-short { display: inline; }
+    .club-mini-table table.league-table :is(th, td) { padding: 5px 2px; }
+    .club-mini-table table.league-table td.lt-club:not(.lt-clubname) { min-width: 40px; }
+    .club-mini-table .rel-chip { padding: 0 4px; }
+  }
+  /* half width: phone-sized cells and form chips, no Played column, rows the same height either side */
+  .club-mini-table table.league-table :is(th, td) { padding: 5px 3px; }
+  .club-mini-table table.league-table :is(th, td).lt-wdl { display: none; }
+  .club-mini-table table.league-table .lt-club { min-width: 60px; max-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .club-mini-table .lt-form { gap: 2px; }
+  .club-mini-table .lt-form i { width: 15px; height: 17px; line-height: 17px; font-size: 9.5px; border-radius: 4px; }
+  .club-mini-table .player-photo { width: 20px; height: 20px; vertical-align: middle; }
+  .club-mini-table .rel-chip { padding: 0 6px; line-height: 18px; min-width: 0; }
+  .club-mini-table .bp-pos { font-size: 11px; color: var(--text-muted); }
+  .club-mini-table .table-scroll { overflow-x: auto; }
+  .club-mini-table .cmt-link { color: inherit; text-decoration: none; }
+  .club-mini-table .cmt-link:hover, .club-mini-table .cmt-link:focus-visible { color: var(--series-blue); }
+  table.league-table tr.lt-me td { background: color-mix(in srgb, var(--series-blue) 12%, var(--surface-1)); }
+  table.league-table tr.lt-me .lt-pos { color: var(--text-primary); font-weight: 700; }
   .lt-form { display: inline-flex; gap: 3px; vertical-align: middle; }
   .lt-form i { font-style: normal; font-size: 11px; font-weight: 800; width: 18px; height: 18px; line-height: 18px; text-align: center;
     border-radius: 5px; color: #fff; }
@@ -823,7 +870,7 @@
   .lg-sub { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .country-flag-lg { width: 60px; height: 42px; object-fit: cover; border-radius: 6px; box-shadow: 0 0 0 1px var(--border); }
   @media (max-width: 600px) {
-    table.league-table .lt-wide, table.league-table .lt-wdl { display: none; }
+    table.league-table .lt-wide, table.league-table .lt-wdl, table.league-table .lt-gd, #league-tab table.league-table .lt-formcol { display: none; }
     table.league-table th, table.league-table td { padding: 5px 3px; }
     .lt-form { gap: 2px; }
     .lt-form i { width: 15px; height: 17px; line-height: 17px; font-size: 9.5px; border-radius: 4px; }
@@ -833,8 +880,6 @@
   .league-chips span { background: var(--chip-bg); border-radius: 999px; padding: 3px 9px; font-size: 12px; }
   .show-all { appearance: none; border: 0; background: none; color: var(--series-blue); font: inherit; font-size: 13px;
     font-weight: 700; padding: 8px 0; cursor: pointer; }
-  .club-back { appearance: none; border: none; background: transparent; color: var(--series-blue); font: inherit;
-    font-size: 13px; font-weight: 700; padding: 4px 0; cursor: pointer; margin-bottom: 6px; }
   .club-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .club-logo-lg { width: 52px; height: 52px; object-fit: contain; flex-shrink: 0; }
   .club-head h2 { margin: 0; font-size: 22px; line-height: 1.15; }
@@ -843,8 +888,6 @@
   .chart-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 8px; }
   .chart-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .chart-title { font-size: 13px; font-weight: 700; }
-  .chart-ranges { display: flex; gap: 4px; }
-  .chart-ranges .filter-chip { padding: 4px 9px; font-size: 11px; }
   .chart-wrap { position: relative; margin-top: 6px; touch-action: pan-y; }
   .chart-wrap svg { display: block; width: 100%; overflow: visible; }
   .chart-grid line { stroke: var(--gridline); stroke-width: 1; }
@@ -856,7 +899,6 @@
     border-radius: 8px; padding: 6px 8px; font-size: 11px; line-height: 1.35; box-shadow: 0 4px 14px rgba(0,0,0,0.12);
     white-space: nowrap; color: var(--text-secondary); }
   .chart-tip b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
-  .chart-summary { font-size: 11px; color: var(--text-muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
   .goal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .rank-move { font-size: 11px; font-weight: 700; width: 38px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
@@ -913,6 +955,7 @@
   a.dp-row:hover .dp-name { text-decoration: underline; }
   .dp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .dp-rank { flex: none; font-weight: 800; font-variant-numeric: tabular-nums; }
+  a.dp-row.nat-row { grid-template-columns: minmax(0, 1fr) 20px; }   /* national team pitch: name and rank */
   .dp-rank.t4 { color: #3ecf5a; } .dp-rank.t3 { color: #f0c43a; } .dp-rank.t2 { color: #f08a5a; } .dp-rank.t1 { color: #f07878; }
   @media (max-width: 480px) {
     .pitch.dp-pitch { gap: 8px 4px; padding: 12px 6px; }
@@ -1079,7 +1122,15 @@
   .pitch .pos[aria-pressed="true"] { background: var(--series-blue); color: #fff; }
   .pitch .pos:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
   /* Player page pitch: rank and share of starts in each position he can play, the rest hollow */
-  .pp-period { width: fit-content; margin: 8px auto 0; }
+  /* player overview: his positions in a row, best to worst */
+  .pos-section { margin-top: 14px; }
+  .pos-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pos-chip { display: flex; flex-direction: column; align-items: center; min-width: 58px; padding: 6px 8px; border-radius: 8px;
+    border: 2px solid transparent; }
+  .pos-chip.main { border-color: currentColor; }
+  .pos-chip-pos { font-size: 10px; font-weight: 700; color: var(--text-secondary); letter-spacing: .03em; }
+  .pos-chip-rank { font-size: 19px; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .pos-chip-pct { font-size: 10.5px; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   .pitch.pp-pitch { max-width: 340px; }
   .pp-spot { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center;
     min-width: 52px; padding: 3px 6px 4px; border-radius: 10px; line-height: 1.05; color: #f2f2f0; text-align: center;
@@ -1295,7 +1346,7 @@
   .site-links a { color: inherit; }
   .freshness span { white-space: nowrap; cursor: help; }
   /* Simulated figures and model-vs-market framing, stated once above the numbers */
-  .sim-banner, .frame-note { font-size: 11.5px; line-height: 1.4; color: var(--text-secondary); background: var(--surface-1);
+  .sim-banner { font-size: 11.5px; line-height: 1.4; color: var(--text-secondary); background: var(--surface-1);
     border: 1px dashed var(--border); border-radius: 8px; padding: 7px 10px; margin-bottom: 10px; }
   .th-short { display: none; }
   /* Clubs, by the table's own width rather than the window's (the side menu takes 220px from
@@ -1337,9 +1388,19 @@
 
   /* Key figures at the top of club and player pages: small groups of tiles, a coloured left edge
      for the tier (as the rank chips) */
+  /* Style: attack/defence lean meter */
+  .sp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px 12px; margin: 0 0 12px; }
+  .sp-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 5px 12px; min-width: 0; }
+  .sp-row { display: grid; grid-template-columns: 44px minmax(40px, 1fr) auto; align-items: center; gap: 8px; height: 26px; cursor: help; }
+  .sp-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+  .sp-text { font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sp-track { position: relative; height: 6px; border-radius: 3px; margin: 0 6px;
+    background: linear-gradient(90deg, var(--series-blue), color-mix(in srgb, var(--text-muted) 45%, transparent) 50%, var(--series-orange)); }
+  .sp-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text-muted); border-radius: 1px; }
+  .sp-mark { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
+    background: var(--text-primary); box-shadow: 0 0 0 2px var(--surface-1), 0 1px 3px rgba(0,0,0,.35); }
   .key-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 16px; margin: 0 0 14px; }
   .kf-group { min-width: 0; }
-  .kf-title { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
   .kf-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; }
   .kf-tile { background: var(--chip-bg); border-radius: 8px; padding: 7px 8px; border-left: 3px solid transparent; min-width: 0; }
   .kf-tile.kf-t4 { border-left-color: var(--status-good); }
@@ -1350,22 +1411,22 @@
   .kf-value { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 1px; line-height: 1.2; }
   .kf-value .kf-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--text-muted); }
   .kf-value .kf-club { font-size: 14px; font-weight: 750; overflow-wrap: anywhere; }
-  /* competition pages: actual standings and model figures side by side, above the tabs */
-  .league-summary { margin-top: 4px; }
-  .league-summary .kf-tiles { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
   .kf-unit { font-size: 11px; font-weight: 600; color: var(--text-muted); }
   .kf-sub { font-size: 10.5px; color: var(--text-muted); margin-top: 1px; font-variant-numeric: tabular-nums; line-height: 1.3; }
-  .kf-note { font-size: 11px; color: var(--status-warning); margin-top: 4px; }
   .kf-ev { font-size: 14px; }
+  /* player page: one row of his headline figures, the rest in a smaller row beneath */
+  .pl-figures { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .kf-main { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kf-main .kf-value { font-size: 20px; }
   .kf-ev.good { color: var(--status-good); } .kf-ev.warn { color: var(--status-warning); } .kf-ev.bad { color: var(--status-critical); }
   /* club overview: fixtures and recent results side by side under the squad */
   .ov-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; align-items: start; }
   .ov-row .next-card { margin: 0; }
-  /* player overview: Underlying Ability, Current Season and Recent Performance kept apart */
+  /* player page: Recent Performance above the tabs, Current Season in Overview */
   .pl-block { margin-top: 16px; }
   .pl-block .team-stats { margin-bottom: 6px; }
+  .pl-block + .page-tabs { margin-top: 18px; }
   .pl-callout { font-size: 13px; line-height: 1.45; color: var(--text-secondary); background: var(--chip-bg); border-radius: 8px; padding: 9px 11px; margin-bottom: 8px; }
-  .pl-rank-chart { margin-top: 10px; }
   @media (max-width: 480px) {
     .key-figures { grid-template-columns: minmax(0, 1fr); }
     .kf-tiles { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); }
