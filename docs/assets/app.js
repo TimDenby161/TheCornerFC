@@ -4074,8 +4074,11 @@ async function openNationPage(nat) {
   const [team] = await Promise.all([n?.team_id ? getJsonOrNull(`data/nations/${n.team_id}.json`) : null,
     state.injuries ? null : getJsonOrNull("data/injuries.json").then((d) => { state.injuries ||= d; })]);
   if (state.nation?.name !== nat) return;              // moved on while it loaded
-  if (team) {
-    team.matchRows = rowsToObjects(team.match_fields, team.matches).map((m, i) => ({ ...m, i, xi: [] }));
+  if (team) {           // names as API-Football sent them: some HTML-encoded ("O&apos;Reilly"), as in players.json
+    for (const pid in team.players) team.players[pid] = decodeEntities(team.players[pid]);
+    if (team.coach) team.coach.name = decodeEntities(team.coach.name);
+    team.matchRows = rowsToObjects(team.match_fields, team.matches)
+      .map((m, i) => ({ ...m, opp: decodeEntities(m.opp), coach: decodeEntities(m.coach), tournament: decodeEntities(m.tournament), i, xi: [] }));
     team.appRows = rowsToObjects(team.app_fields, team.apps);
     for (const a of team.appRows) if (a.started) team.matchRows[a.match].xi.push(a);
   }
