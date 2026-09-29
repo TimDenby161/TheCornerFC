@@ -152,6 +152,15 @@ class MappingTests(unittest.TestCase):
         self.assertEqual(found[:2], (None, 'ambiguous'))
         self.assertEqual(found[2], {'candidates': [6, 7], 'at': 'web_name'})
         self.assertEqual(match('Nobody', 'Here', 'Here')[:2], (None, 'unmatched'))
+        # an initial has to agree: FPL's Alex Murphy is not our "J. Murphy"
+        murphys = [(8, 'J. Murphy', 'Jacob Kai', 'Murphy')]
+        self.assertEqual(fpl.match_player({'first_name': 'Alex', 'second_name': 'Murphy', 'web_name': 'A.Murphy'}, murphys, {})[:2],
+                         (None, 'unmatched'))
+        self.assertEqual(fpl.match_player({'first_name': 'Jacob', 'second_name': 'Murphy', 'web_name': 'J.Murphy'}, murphys, {})[:2],
+                         (8, 'initial_surname'))
+        kroupi = [(9, 'E. Kroupi', 'Eli Junior', 'Kroupi')]
+        self.assertEqual(fpl.match_player({'first_name': 'Junior', 'second_name': 'Kroupi', 'web_name': 'Kroupi.Jr'}, kroupi, {})[:2],
+                         (9, 'name_tokens'))
         self.assertEqual(match('Nobody', 'Here', 'Here', code=77)[:2], (None, 'unmatched'))
         self.assertEqual(fpl.match_player({'code': 77}, [], {77: 12})[:2], (12, 'manual'))
 

@@ -1133,6 +1133,8 @@ by JavaScript and was not retrievable for review. Consequences here:
     (`fpl capture` then `fpl results`). That step may fail without stopping the export.
   - The FPL tab shows each player's FPL position, price and status, and FPL's gameweeks,
     through `docs/data/fpl_predictions.json`.
+  - The owner also approved (2026-09-29) using FPL's squad lists to leave out predicted players
+    FPL doesn't list at their club, e.g. players who have left since last season.
   - Changing this is again the owner's decision. To stop, remove that workflow step. The
     export then falls back to our own positions and rounds, with no price.
 - Only the fields needed for fantasy validation and the FPL tab are stored, not whole responses.

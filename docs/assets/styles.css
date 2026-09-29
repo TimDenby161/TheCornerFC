@@ -576,13 +576,22 @@
   .fpl-list { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
   .fpl-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 6px; }
   .fpl-search { flex: 1 1 180px; min-width: 0; margin: 0; }
-  .fpl-table td { vertical-align: top; }
+  .fpl-table td { vertical-align: middle; }
   .fpl-table td:first-child { color: var(--text-muted); width: 24px; }
   .fpl-player { text-align: left !important; }
-  .fpl-table th:nth-child(2), .fpl-table th:nth-child(3), .fpl-table td:nth-child(3) { text-align: left; }
+  .fpl-table th:nth-child(2) { text-align: left; }
   .fpl-match { color: var(--text-muted); font-size: 11px; margin-top: 1px; }
-  .fpl-who { display: flex; align-items: center; gap: 8px; }
-  .fpl-who .club-logo { width: 22px; height: 22px; flex: none; cursor: pointer; }
+  .fpl-who { display: flex; align-items: center; gap: 10px; }
+  .fpl-face { position: relative; flex: none; width: 34px; height: 34px; }
+  .fpl-face .player-photo { width: 34px; height: 34px; }
+  .fpl-face .club-logo { position: absolute; right: -4px; bottom: -3px; width: 16px; height: 16px; cursor: pointer;
+    background: var(--surface-1); border-radius: 50%; padding: 1px; box-shadow: 0 0 0 1px var(--border); }
+  .fpl-name { min-width: 0; white-space: nowrap; }
+  .fpl-name .player-link { font-weight: 600; }
+  .fpl-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .fpl-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .fpl-meta { flex: none; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .fpl-line .bet-tag { flex: none; }
   .fpl-sort { appearance: none; background: none; border: 0; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
   .fpl-sort.on { color: var(--series-blue); }
   .fpl-pager { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
@@ -590,6 +599,19 @@
   .fpl-span { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .fpl-filters > .fpl-span { margin-left: auto; }
   .fpl-table.multi { min-width: 640px; }
+  /* one gameweek fits the card at any width: the name gives way (ellipsis), then spacing tightens */
+  #fpl-next { container-type: inline-size; }
+  .fpl-scroll .fpl-table:not(.multi) { min-width: 0; table-layout: auto; }
+  .fpl-table:not(.multi) td, .fpl-table:not(.multi) th { white-space: nowrap; }
+  .fpl-table:not(.multi) .fpl-player { max-width: 0; width: 100%; }
+  .fpl-table .fpl-name, .fpl-table .fpl-match { overflow: hidden; text-overflow: ellipsis; }
+  .fpl-table .fpl-who > div:last-child { min-width: 0; }
+  @container (max-width: 399px) {
+    .fpl-table:not(.multi) :is(th, td) { padding-left: 3px; padding-right: 3px; }
+    .fpl-table:not(.multi) td:first-child, .fpl-table:not(.multi) th:first-child { display: none; }
+    .fpl-who { gap: 8px; }
+    .fpl-face, .fpl-face .player-photo { width: 28px; height: 28px; }
+  }
   .fpl-gw { font-variant-numeric: tabular-nums; white-space: nowrap; }
   .fpl-gw span { display: block; color: var(--text-muted); font-size: 10px; font-weight: 600; }
   .fpl-gw.double { background: color-mix(in srgb, var(--series-blue) 10%, transparent); }

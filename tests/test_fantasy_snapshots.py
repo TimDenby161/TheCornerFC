@@ -161,11 +161,12 @@ class PredictionPayloadTests(unittest.TestCase):
     def test_fpl_position_rescoring_doubles_and_order(self):
         k = KICKOFF
         fixtures = {1: (6, 10, 20, k), 2: (7, 30, 10, k + timedelta(days=7)), 3: (7, 10, 40, k + timedelta(days=9))}
-        teams_out = [(fid, 10, k, [self.pred(7, 'F'), self.pred(8, 'M', g=0.05)], {'availability': {'8': fm.DOUBTFUL}})
-                     for fid in (1, 2, 3)]
+        teams_out = [(fid, 10, k, [self.pred(7, 'F'), self.pred(8, 'M', g=0.05), self.pred(9, 'M')],
+                      {'availability': {'8': fm.DOUBTFUL}}) for fid in (1, 2, 3)]
         doc = fs.load_params()
-        out = export.fantasy_prediction_payload(fixtures, teams_out, doc, {7: ('M', 85, 'a', None)}, {7: 'Striker', 8: 'Mid'},
-                                                {10: ['Home FC', 'HOM']}, source='fpl')
+        # 9 isn't in FPL at the club (he has left it), so he's dropped
+        out = export.fantasy_prediction_payload(fixtures, teams_out, doc, {7: ('M', 85, 'a', None), 8: ('M', 50, 'd', 75)},
+                                                {7: 'Striker', 8: 'Mid', 9: 'Gone'}, {10: ['Home FC', 'HOM']}, source='fpl')
         self.assertEqual([g['id'] for g in out['gameweeks']], [6, 7])
         players = [dict(zip(out['fields'], r)) for r in out['players']]
         self.assertEqual([p['player'] for p in players], [7, 8])      # most total points first
