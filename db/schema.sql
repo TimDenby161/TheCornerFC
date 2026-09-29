@@ -321,7 +321,8 @@ create table if not exists team_colors (
     shirt       text,
     number      text
 );
--- Each club's current manager (/coachs?team=, ingest.sync_coaches) and when he started there
+-- Each club's and national team's current manager (/coachs?team=, ingest.sync_coaches and
+-- sync_national_coaches) and when he started there
 create table if not exists team_coaches (
     team_id     int primary key,
     coach_id    int,

@@ -84,7 +84,7 @@ class NationsTests(unittest.TestCase):
             "from national_fixtures": [
                 (1, kick((2026, 6, 20)), 10, 20, "England", "Czechia", 2, 1, "World Cup", True),
                 (2, kick((2026, 9, 5)), 20, 10, "Czechia", "England", 0, 0, "Friendlies", False)],
-            "from national_fixture_formations": [(1, 10, "4-2-3-1", "T. Tuchel"), (2, 10, "3-4-2-1", "T. Tuchel")],
+            "from national_fixture_formations": [(1, 10, "4-2-3-1", "T. Tuchel", 5), (2, 10, "3-4-2-1", "T. Tuchel", 5)],
             # player 7 started match 2 but API-Football has no stat line for him
             "from national_fixture_lineups": [(1, 10, 9, "ST", "H. Kane"), (2, 10, 9, "ST", "H. Kane"),
                                               (2, 10, 7, "RW", "B. Saka")],
@@ -93,6 +93,7 @@ class NationsTests(unittest.TestCase):
                 (1, 10, 11, 20, False, 0, 1, Decimal("7.0"), 1, None, "J. Bellingham"),
                 (2, 10, 9, 90, True, 0, 0, Decimal("6.5"), None, None, "H. Kane")],
             "from players": [(9, "Harry Kane")],
+            "from team_coaches": [(10, 5, "T. Tuchel", "https://media.api-sports.io/football/coachs/5.png", date(2025, 1, 1))],
         }
 
         class Conn:
@@ -105,8 +106,10 @@ class NationsTests(unittest.TestCase):
         self.assertEqual(set(pages), {10, 20})
         eng = pages[10]
         self.assertEqual(eng["name"], "England")
-        self.assertEqual(eng["matches"], [["2026-06-20", "Czechia", "N", 2, 1, "World Cup", "4-2-3-1", "T. Tuchel"],
-                                          ["2026-09-05", "Czechia", "A", 0, 0, "Friendlies", "3-4-2-1", "T. Tuchel"]])
+        self.assertEqual(eng["coach"]["since"], "2025-01-01")
+        self.assertIsNone(pages[20]["coach"])
+        self.assertEqual(eng["matches"], [["2026-06-20", "Czechia", "N", 2, 1, "World Cup", "4-2-3-1", "T. Tuchel", 5],
+                                          ["2026-09-05", "Czechia", "A", 0, 0, "Friendlies", "3-4-2-1", "T. Tuchel", 5]])
         apps = [dict(zip(eng["app_fields"], a)) for a in eng["apps"]]
         self.assertEqual([(a["match"], a["player"], a["started"]) for a in apps],
                          [(0, 9, 1), (0, 11, 0), (1, 7, 1), (1, 9, 1)])

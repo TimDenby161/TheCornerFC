@@ -4061,7 +4061,7 @@ $("#club-body").addEventListener("click", (e) => {
 // Overview: the nationality's ranked club players. Formations and Players: the national team's
 // matches, line-ups and stat lines from API-Football (data/nations/<team id>.json, nations.py),
 // found through the ranking (loaded for the Elo in the corner anyway).
-const NATION_TABS = [["overview", "Overview"], ["formations", "Formations"], ["players", "Players"]];
+const NATION_TABS = [["overview", "Overview"], ["xi", "Predicted XI"], ["formations", "Formations"], ["players", "Players"]];
 async function openNationPage(nat) {
   showPage();
   state.club = null;
@@ -4071,7 +4071,8 @@ async function openNationPage(nat) {
   fillNationRating(nat);
   await loadNations();
   const n = state.nations && nationFor(state.nations, nat);
-  const team = n?.team_id ? await getJsonOrNull(`data/nations/${n.team_id}.json`) : null;
+  const [team] = await Promise.all([n?.team_id ? getJsonOrNull(`data/nations/${n.team_id}.json`) : null,
+    state.injuries ? null : getJsonOrNull("data/injuries.json").then((d) => { state.injuries ||= d; })]);
   if (state.nation?.name !== nat) return;              // moved on while it loaded
   if (team) {
     team.matchRows = rowsToObjects(team.match_fields, team.matches).map((m, i) => ({ ...m, i, xi: [] }));
@@ -4105,64 +4106,98 @@ function renderNationTab() {
   $("#nat-tab").innerHTML = tab === "overview" ? nationOverviewTab()
     : state.nation.team === undefined ? `<div class="empty-state">Loading ${escapeHtml(state.nation.name)}'s matches…</div>`
     : !state.nation.team?.matchRows.length ? `<div class="empty-state">No line-ups for ${escapeHtml(state.nation.name)} yet (they come from API-Football's international matches).</div>`
-    : tab === "formations" ? nationFormationsTab() : nationPlayersTab();
+    : tab === "xi" ? nationXiTab() : tab === "formations" ? nationFormationsTab() : nationPlayersTab();
 }
 
 // ---- Overview: the top 3 in each position, where they play, and every ranked player
 function nationOverviewTab() {
   const { name, list, allPlayers } = state.nation;
   if (!list.length) return `<div class="empty-state">No ranked players from ${escapeHtml(name)}.</div>`;
-  // The pitch: the top 3 in each position by current rank, from their main position. Keeper at the
+  // The pitch: the best by current rank in each position of the team's usual shape (3 per player the
+  // shape has there: 6 for a pair of centre-backs), each player in the nearest of its positions to
+  // his main one. Without line-ups, the top 3 in each of a fixed set of positions. Keeper at the
   // top, attacking down the page (so the left-sided positions are on the right), as the club pitches
-  const NAT_SPOTS = [["GK", ["GK"], 1, 2], ["RB", ["RB", "RWB"], 2, 1], ["CB", ["CB"], 2, 2], ["LB", ["LB", "LWB"], 2, 3],
-                     ["DM", ["DM"], 3, 2], ["CM", ["CM"], 4, 2], ["RW", ["RW", "RM"], 5, 1], ["AM", ["AM"], 5, 2],
-                     ["LW", ["LW", "LM"], 5, 3], ["ST", ["ST"], 6, 2]];
-  const spots = NAT_SPOTS.map(([label, positions, row, col]) => {
-    const ps = list.filter((p) => positions.includes(p.position)).slice(0, 3);
+  const shape = state.nation.team?.matchRows.length ? nationShape() : null;
+  const layout = shape
+    ? [...shape.need].sort((a, b) => ROLE_ORDER.indexOf(a[0]) - ROLE_ORDER.indexOf(b[0]))
+      .map(([role, n]) => [role, 3 * n, ...ROLE_CELL[role]])
+    : [["GK", 3, 1, 2], ["RB", 3, 2, 1], ["CB", 3, 2, 2], ["LB", 3, 2, 3], ["DM", 3, 3, 2], ["CM", 3, 4, 2],
+       ["RW", 3, 5, 1], ["AM", 3, 5, 2], ["LW", 3, 5, 3], ["ST", 3, 6, 2]];
+  const roles = new Set(layout.map((l) => l[0]));
+  const slotOf = (pos) => (POS_FIT[pos] || [pos]).find((r) => roles.has(r));
+  // With line-ups, everyone the current coach has picked (played for him, starting or from the bench)
+  // is added to his position too: our ranked players by their main position, the rest by the one
+  // they've started in most for him. Top players he hasn't picked are shown in red
+  const picked = new Map();                          // player -> {id, name, rank, position} (rank null: not ranked)
+  if (shape) {
+    const inSpell = new Set(shape.spell.rows.map((m) => m.i));
+    const started = new Map();
+    for (const a of state.nation.team.appRows) {
+      if (!inSpell.has(a.match)) continue;
+      if (!picked.has(a.player)) picked.set(a.player, null);
+      if (a.started && a.role) {
+        const c = started.get(a.player) || new Map();
+        started.set(a.player, c.set(a.role, (c.get(a.role) || 0) + 1));
+      }
+    }
+    for (const pid of picked.keys()) {
+      const p = list.find((q) => q.id === pid);
+      const role = [...(started.get(pid) || [])].sort((a, b) => b[1] - a[1])[0]?.[0];
+      picked.set(pid, p ? { id: pid, name: p.name, rank: p.rank, position: p.position, team: p.team }
+        : { id: pid, name: state.nation.team.players[pid] || "Unknown", rank: null, position: role });
+    }
+  }
+  const coach = shape?.spell.coach;
+  const pitchRow = (p, unpicked) => {
+    const tip = `${p.name}${p.team ? ` · ${teamName(p.team)}` : ""}${unpicked ? ` · not picked by ${coach || "the current coach"}` : ""}`;
+    const inner = `<span class="dp-name">${escapeHtml(shortName(p.name))}</span><span class="dp-rank${p.rank == null ? "" : ` t${rankTier(p.rank)}`}">${p.rank == null ? "–" : Math.round(p.rank)}</span>`;
+    const cls = `dp-row nat-row${unpicked ? " nat-unpicked" : ""}`;
+    return playerById(p.id) ? `<a class="${cls}" href="#/player/${p.id}" title="${escapeHtml(tip)}">${inner}</a>`
+      : `<span class="${cls}" title="${escapeHtml(tip)}">${inner}</span>`;
+  };
+  const spots = layout.map(([label, max, row, col]) => {
+    const top = list.filter((p) => slotOf(p.position) === label).slice(0, max);
+    const topIds = new Set(top.map((p) => p.id));
+    const extra = [...picked.values()].filter((p) => p.position && slotOf(p.position) === label && !topIds.has(p.id));
+    const ps = [...top.map((p) => [p, shape != null && !picked.has(p.id)]), ...extra.map((p) => [p, false])]
+      .sort((a, b) => (b[0].rank ?? -1) - (a[0].rank ?? -1));
     const cell = `grid-row:${row};grid-column:${col}`;
     if (!ps.length) return `<div class="dp-spot empty" style="${cell}"><span class="dp-pos">${label}</span></div>`;
-    return `<div class="dp-spot" style="${cell}"><span class="dp-pos">${label}</span>
-      ${ps.map((p) => `<a class="dp-row nat-row" href="#/player/${p.id}" title="${escapeHtml(p.team ? `${p.name} · ${teamName(p.team)}` : p.name)}">
-        <span class="dp-name">${escapeHtml(shortName(p.name))}</span><span class="dp-rank t${rankTier(p.rank)}">${Math.round(p.rank)}</span></a>`).join("")}</div>`;
+    return `<div class="dp-spot" style="${cell}"><span class="dp-pos">${label}</span>${ps.map(([p, unpicked]) => pitchRow(p, unpicked)).join("")}</div>`;
   }).join("");
-  const leagues = new Map();
-  for (const p of list) leagues.set(p.league, (leagues.get(p.league) || 0) + 1);
-  const leagueChips = [...leagues].sort((a, b) => b[1] - a[1]).map(([lg, n]) =>
-    `<span>${escapeHtml(SHORT_NAMES[lg] || state.data.competitions[lg]?.name || String(lg))} · ${n}</span>`).join("");
   const LIMIT = 100;
   const row = (p, i) => `<div class="team-row"><span class="team-row-date">${i + 1}. ${escapeHtml(p.position || "")}</span>
     <span class="team-row-opp">${playerLink(p.id, p.name)} <span class="club-sub" style="display:inline">${playerClub(p)}${p.age != null ? ` · ${p.age}` : ""}</span></span>
     <span class="team-row-res">${rankChipSmall(p.rank)}</span></div>`;
   const shown = allPlayers ? list : list.slice(0, LIMIT);
   return `
-    <div class="club-section"><div class="modal-section">Top 3 in each position by current rank</div>
-      <div class="pp-section"><div class="pitch dp-pitch">${PITCH_LINES}${spots}</div></div></div>
-    <div class="club-section"><div class="modal-section">Where they play</div><div class="league-chips">${leagueChips}</div></div>
+    <div class="club-section"><div class="modal-section">${shape ? `Best by current rank in their usual ${escapeHtml(shape.formation)}` : "Top 3 in each position by current rank"}</div>
+      <div class="pp-section"><div class="pitch dp-pitch">${PITCH_LINES}${spots}</div>
+        ${shape ? `<div class="page-note" style="text-align:center">Plus everyone ${escapeHtml(coach || "the current coach")} has picked. <span class="nat-unpicked-key">Red</span>: not picked by him.</div>` : ""}</div></div>
     <div class="club-section"><div class="modal-section">All players</div><div>${shown.map(row).join("")}</div>
       ${shown.length < list.length ? `<button type="button" class="show-all" data-nat-more>Show all ${list.length.toLocaleString()}</button>` : ""}</div>`;
 }
 
-// The matches a window covers (oldest first): the last 12 months, the current coach's run (his
-// unbroken spell up to the latest match), or every match in the file
-function nationWindows(rows) {
-  const coach = rows[rows.length - 1].coach;
+// The current coach's matches (oldest first). With his start date (team_coaches, when he's the coach
+// on the latest team sheet): the matches since then. Else his unbroken spell up to the latest match
+// on the team sheets, from his first known one. Every match when the latest names no coach.
+// full: the stored matches go back to the start of his spell
+function nationSpell() {
+  const { matchRows: rows, coach: head } = state.nation.team;
+  const last = rows[rows.length - 1];
+  if (head?.since && head.name && (last.coach_id == null || last.coach_id === head.id)) {
+    const list = rows.filter((m) => m.date >= head.since);
+    if (list.length) return { coach: head.name, coachId: head.id, photo: head.photo, since: head.since, rows: list,
+      full: rows[0].date <= head.since };
+  }
+  const coach = last.coach;
+  if (!coach) return { coach: null, rows, full: false };
   let k = rows.length;
-  while (coach && k > 0 && (rows[k - 1].coach === coach || rows[k - 1].coach == null)) k--;
-  while (k < rows.length && rows[k].coach == null) k++;        // his spell starts at his first known match
-  const yearAgo = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
-  const out = [["year", "Last 12 months", rows.filter((m) => m.date >= yearAgo)]];
-  if (coach) out.push(["coach", `Under ${coach}`, rows.slice(k)]);
-  out.push(["all", `All (since ${rows[0].date.slice(0, 4)})`, rows]);
-  return out.filter(([, , list]) => list.length);
+  while (k > 0 && (rows[k - 1].coach === coach || rows[k - 1].coach == null)) k--;
+  while (rows[k].coach == null) k++;
+  return { coach, coachId: last.coach_id, rows: rows.slice(k), full: k > 0 };
 }
-function nationWindow() {
-  const windows = nationWindows(state.nation.team.matchRows);
-  const key = state.nationWindow || "year";
-  const [k, label, rows] = windows.find((w) => w[0] === key) || windows[windows.length - 1];
-  const chips = `<div class="filter-row nat-windows">${windows.map(([wk, wl, list]) =>
-    `<button type="button" class="filter-chip" data-nat-window="${wk}" aria-pressed="${wk === k}">${escapeHtml(wl)} · ${list.length}</button>`).join("")}</div>`;
-  return { key: k, label, rows, chips };
-}
+const spellLabel = ({ coach }) => coach ? `Under ${coach}` : "All matches (coach not known)";
 
 // Opponent (flag and name, linking to its page), venue and result of a national team match
 const venueLabel = { H: "Home", A: "Away", N: "Neutral ground" };
@@ -4174,6 +4209,14 @@ function nationMatchCells(m) {
 }
 // A starting XI as one line per unit, keeper first: "GK Pickford · RB Walker ..."
 const ROLE_ORDER = ["GK", "RB", "RWB", "CB", "LB", "LWB", "DM", "RM", "CM", "LM", "AM", "RW", "ST", "LW"];
+// Each role's cell on the overview pitch [row, column] (column 1 is the right: attacking down the page)
+const ROLE_CELL = { GK: [1, 2], RB: [2, 1], CB: [2, 2], LB: [2, 3], RWB: [3, 1], DM: [3, 2], LWB: [3, 3],
+  RM: [4, 1], CM: [4, 2], LM: [4, 3], RW: [5, 1], AM: [5, 2], LW: [5, 3], ST: [6, 2] };
+// A player's main position -> the roles he fits, nearest first (the first the shape has is his)
+const POS_FIT = { GK: ["GK"], CB: ["CB", "DM"], RB: ["RB", "RWB", "RM", "CB"], LB: ["LB", "LWB", "LM", "CB"],
+  RWB: ["RWB", "RB", "RM", "RW"], LWB: ["LWB", "LB", "LM", "LW"], DM: ["DM", "CM", "CB"], CM: ["CM", "DM", "AM"],
+  AM: ["AM", "CM", "ST", "RW", "LW"], RM: ["RM", "RW", "RWB", "AM", "CM"], LM: ["LM", "LW", "LWB", "AM", "CM"],
+  RW: ["RW", "RM", "AM", "ST"], LW: ["LW", "LM", "AM", "ST"], ST: ["ST", "AM"] };
 function nationXi(m) {
   const names = state.nation.team.players;
   const xi = m.xi.slice().sort((a, b) => (ROLE_ORDER.indexOf(a.role) + 1 || 99) - (ROLE_ORDER.indexOf(b.role) + 1 || 99));
@@ -4185,49 +4228,126 @@ function nationXi(m) {
   }).join("")}</div>`;
 }
 
-// ---- Formations: the current coach, the formations used in the chosen window, then match by
-// match with each starting XI (click a match to open it)
+// ---- Predicted XI: from the current coach's recent team sheets (no model). His most used formation
+// in his last 5 matches, laid out as his latest XI in it; then each of its positions goes to the
+// player who has started there most, recent matches counting more (a start in a neighbouring
+// position counts half). Players their club lists as out injured are left out.
+const NAT_XI_RECENT = 6;        // his latest team sheets weighed
+const NAT_XI_DECAY = 0.75;      // each older sheet counts this much of the one after it
+const ROLE_NEAR = { GK: [], CB: [], RB: ["RWB"], LB: ["LWB"], RWB: ["RB", "RM"], LWB: ["LB", "LM"], DM: ["CM"],
+  CM: ["DM", "AM"], AM: ["CM", "ST"], RM: ["RW", "RWB"], LM: ["LW", "LWB"], RW: ["RM", "ST"], LW: ["LM", "ST"], ST: ["AM"] };
+const INJURY = /injur|illness|knock|surgery|fracture|virus|muscle/i;
+// {player: reason} for players their club's latest injury list has missing through injury
+function injuredPlayers() {
+  const out = new Map(), fields = state.injuries?.fields || [];
+  const [pi, ti, ri] = ["player", "type", "reason"].map((f) => fields.indexOf(f));
+  for (const t of Object.values(state.injuries?.teams || {}))
+    for (const r of t.players || []) if (r[ti] === "Missing Fixture" && INJURY.test(r[ri] || "")) out.set(r[pi], r[ri]);
+  return out;
+}
+// The team's usual shape: its most used formation in the current coach's last 5 team sheets (ties:
+// the latest), as {role: count} from his latest XI in it. Null without full team sheets
+function nationShape() {
+  const spell = nationSpell();
+  const sheets = spell.rows.filter((m) => m.xi.length >= 11 && m.xi.every((a) => a.role)).slice(-NAT_XI_RECENT);
+  if (!sheets.length) return null;
+  const counts = new Map();
+  for (const m of sheets.slice(-5)) if (m.formation) counts.set(m.formation, (counts.get(m.formation) || 0) + 1);
+  const latest = [...sheets].reverse();
+  const formation = [...counts].sort((a, b) => b[1] - a[1]
+    || latest.findIndex((m) => m.formation === a[0]) - latest.findIndex((m) => m.formation === b[0]))[0]?.[0];
+  const template = latest.find((m) => m.formation === formation) || latest[0];
+  const need = new Map();
+  for (const a of template.xi) need.set(a.role, (need.get(a.role) || 0) + 1);
+  return { spell, sheets, formation: template.formation, template, need };
+}
+function nationPredictedXi() {
+  const shape = nationShape();
+  if (!shape) return null;
+  const { spell, sheets, template, need } = shape;
+  const injured = injuredPlayers();
+  const score = new Map(), starts = new Map();
+  sheets.forEach((m, k) => {
+    const w = NAT_XI_DECAY ** (sheets.length - 1 - k);
+    for (const a of m.xi) {
+      starts.set(a.player, (starts.get(a.player) || 0) + 1);
+      for (const [role, f] of [[a.role, 1], ...(ROLE_NEAR[a.role] || []).map((r) => [r, 0.5])])
+        score.set(`${role}:${a.player}`, (score.get(`${role}:${a.player}`) || 0) + f * w);
+    }
+  });
+  const picks = [], placed = new Set(), filled = new Map();
+  [...score].map(([key, v]) => { const [role, pid] = key.split(":"); return { role, pid: Number(pid), v }; })
+    .filter((c) => need.has(c.role) && !injured.has(c.pid))
+    .sort((a, b) => b.v - a.v || (starts.get(b.pid) || 0) - (starts.get(a.pid) || 0))
+    .forEach((c) => {
+      if (placed.has(c.pid) || (filled.get(c.role) || 0) >= need.get(c.role)) return;
+      placed.add(c.pid);
+      filled.set(c.role, (filled.get(c.role) || 0) + 1);
+      picks.push({ ...c, starts: starts.get(c.pid) || 0 });
+    });
+  // regulars (2+ starts in these sheets) missing through injury
+  const out = [...starts].filter(([pid, n]) => n >= 2 && injured.has(pid)).map(([pid]) => ({ pid, reason: injured.get(pid) }));
+  return { formation: template.formation, sheets, template, picks, out, spell };
+}
+function nationXiTab() {
+  const pred = nationPredictedXi();
+  if (!pred) return `<div class="empty-state">Not enough line-ups to predict ${escapeHtml(state.nation.name)}'s XI yet.</div>`;
+  const { players: names } = state.nation.team;
+  const name = (pid) => names[pid] || playerById(pid)?.name || "Unknown";
+  const order = (r) => ROLE_ORDER.indexOf(r) + 1 || 99;
+  const picks = pred.picks.slice().sort((a, b) => order(a.role) - order(b.role));
+  const xi = picks.map((c) => ({ b: { label: c.role }, p: { id: c.pid, name: name(c.pid) }, rank: playerById(c.pid)?.rank ?? null }));
+  const who = (pid) => `<img class="player-photo" src="${playerPhoto(pid)}" alt="" loading="lazy" data-broken="remove">${
+    playerById(pid) ? playerLink(pid, shortName(name(pid))) : `<span title="${escapeHtml(name(pid))}">${escapeHtml(shortName(name(pid)))}</span>`}`;
+  const side = `
+    ${pred.out.length ? `<div class="next-card"><div class="next-top"><span class="next-label">Out injured</span></div>
+      ${pred.out.map((o) => `<div class="nat-xi-row"><span class="nat-xi-who">${who(o.pid)}</span><span class="nat-xi-n dim">${escapeHtml(o.reason)}</span></div>`).join("")}</div>` : ""}`;
+  const pitch = xiPitch(xi, {}, { note: "" });
+  return side.trim() ? `<div class="ov-top"><div class="ov-side">${side}</div>${pitch}</div>` : pitch;
+}
+
+// ---- Formations: the current coach, the formations used under him, then match by match with each
+// starting XI (click a match to open it)
 function nationFormationsTab() {
-  const { team } = state.nation;
-  const rows = team.matchRows;
-  const { label, rows: list, chips } = nationWindow();
+  const spell = nationSpell();
+  const list = spell.rows;
   const known = list.filter((m) => m.formation);
-  const last = rows[rows.length - 1];
-  const spell = nationWindows(rows).find((w) => w[0] === "coach")?.[2] || [];
+  const coachPhoto = safeMediaUrl(spell.photo) || (spell.coachId != null ? mediaUrl("coachs", spell.coachId) : "");
   return `
-    ${last.coach ? `<div class="next-card coach-card"><div><div class="next-label">Head coach</div><div class="coach-name">${escapeHtml(last.coach)}</div>
-      <div class="next-meta"><span>First match ${escapeHtml(fmtLongDate(spell[0].date))}${spell[0] === rows[0] ? " (or before)" : ""}</span><span>${spell.length} matches · ${wdl(spell)}</span></div></div></div>` : ""}
-    ${chips}
-    <div class="club-section"><div class="modal-section">Formations · ${escapeHtml(label)}</div>
+    ${spell.coach ? `<div class="next-card coach-card">${coachPhoto ? `<img class="coach-photo" src="${coachPhoto}" alt="" data-broken="remove">` : ""}
+      <div><div class="next-label">Head coach</div><div class="coach-name">${escapeHtml(spell.coach)}</div>
+      <div class="next-meta"><span>${spell.since ? `Since ${escapeHtml(fmtLongDate(spell.since))}` : `First match ${escapeHtml(fmtLongDate(list[0].date))}${spell.full ? "" : " (or before)"}`}</span><span>${list.length} matches${
+        spell.since && !spell.full ? ` from ${escapeHtml(fmtLongDate(list[0].date))}` : ""} · ${wdl(list)}</span></div></div></div>` : ""}
+    <div class="club-section"><div class="modal-section">Formations · ${escapeHtml(spellLabel(spell))}</div>
       ${known.length ? formationCards(known) : `<div class="page-note">No formations known for these matches.</div>`}
       ${known.length < list.length ? `<div class="page-note">${list.length - known.length} match${list.length - known.length === 1 ? "" : "es"} with no known line-up not counted.</div>` : ""}</div>
     <div class="club-section"><div class="modal-section">Match by match</div>
       ${list.slice().reverse().map((m) => `<details class="nat-match"><summary class="team-row">${nationMatchCells(m)}
-        <span class="nat-fm">${m.formation ? escapeHtml(m.formation) : "–"}</span></summary>
-        ${m.coach && m.coach !== last.coach ? `<div class="page-note">Coach: ${escapeHtml(m.coach)}</div>` : ""}${nationXi(m)}</details>`).join("")}</div>
-    <div class="page-note">International matches API-Football has line-ups for, from ${escapeHtml(fmtLongDate(rows[0].date))}. Formations and coaches as on each team sheet.</div>`;
+        <span class="nat-fm">${m.formation ? escapeHtml(m.formation) : "–"}</span></summary>${nationXi(m)}</details>`).join("")}</div>
+    <div class="page-note">International matches API-Football has line-ups for${spell.full ? "" : `, from ${escapeHtml(fmtLongDate(list[0].date))}${spell.since ? "" : " (his spell may have started earlier)"}`}. Formations as on each team sheet.</div>`;
 }
 
-// ---- Players: everyone who played in the chosen window, with appearances, starts, minutes,
+// ---- Players: everyone who has played under the current coach, with appearances, starts, minutes,
 // goals, assists, average match rating and cards
 const NAT_PLAYER_COLS = [
-  ["apps", "Apps", "Matches played, starting or from the bench."], ["starts", "Starts", "Matches started."],
+  ["apps", "Apps", "Matches played, starting or from the bench."],
   ["minutes", "Mins", "Minutes played (where API-Football has the player's stat line)."], ["goals", "G", "Goals."],
   ["assists", "A", "Assists."], ["rating", "Rating", "Average API-Football match rating (matches with one)."],
-  ["cards", "Cards", "Yellow and red cards."], ["last", "Last", "Date of his latest appearance in the window."],
+  ["cards", "Cards", "Yellow and red cards."], ["last", "Last", "Date of his latest appearance."],
 ];
 function nationPlayersTab() {
   const { team } = state.nation;
-  const { rows: list, chips } = nationWindow();
+  const spell = nationSpell();
+  const list = spell.rows;
   const inWindow = new Set(list.map((m) => m.i));
   const by = new Map();
   for (const a of team.appRows) {
     if (!inWindow.has(a.match)) continue;
     let p = by.get(a.player);
-    if (!p) by.set(a.player, p = { id: a.player, name: team.players[a.player] || "Unknown", apps: 0, starts: 0, minutes: 0,
+    if (!p) by.set(a.player, p = { id: a.player, name: team.players[a.player] || "Unknown", apps: 0, minutes: 0,
       noMins: 0, goals: 0, assists: 0, ratings: [], y: 0, r: 0, last: "", roles: new Map() });
     const m = team.matchRows[a.match];
-    p.apps++; p.starts += a.started ? 1 : 0;
+    p.apps++;
     if (a.minutes == null) p.noMins++; else p.minutes += a.minutes;
     p.goals += a.goals || 0; p.assists += a.assists || 0;
     if (a.rating != null) p.ratings.push(a.rating);
@@ -4246,16 +4366,18 @@ function nationPlayersTab() {
   players.sort((a, b) => (val(b) > val(a) ? 1 : val(b) < val(a) ? -1 : 0) || b.apps - a.apps || b.minutes - a.minutes);
   const th = ([k, label, tip]) => `<th class="num sortable${key === k ? " active" : ""}" data-natpsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   const anyNoMins = players.some((p) => p.noMins);
-  return `${chips}
+  return `<div class="modal-section nat-spell">${escapeHtml(spellLabel(spell))}${spell.since ? ` (since ${escapeHtml(fmtLongDate(spell.since))})` : ""} · ${list.length} match${list.length === 1 ? "" : "es"}${
+    spell.full ? "" : ` from ${escapeHtml(fmtLongDate(list[0].date))}`}</div>
     <div class="table-scroll"><table class="leaderboard nat-players">
       <thead><tr><th>#</th><th>Player</th><th title="His most common starting role in these matches (else his club position).">Pos</th>${NAT_PLAYER_COLS.map(th).join("")}</tr></thead>
       <tbody>${players.map((p, i) => {
         const site = playerById(p.id);
         return `<tr>
           <td>${i + 1}</td>
-          <td><div class="club-cell">${site ? playerLink(p.id, p.name) : `<span>${escapeHtml(p.name)}</span>`}${site?.team ? ` <span class="club-meta">${escapeHtml(teamName(site.team))}</span>` : ""}</div></td>
+          <td><div class="club-cell"><img class="player-photo" src="${playerPhoto(p.id)}" alt="" loading="lazy" data-broken="remove">${site ? playerLink(p.id, shortName(p.name)) : `<span title="${escapeHtml(p.name)}">${escapeHtml(shortName(p.name))}</span>`}${
+            site?.team ? `<a class="pl-badge-link nat-badge" href="${clubHref(site.team)}" title="${escapeHtml(teamName(site.team))}" aria-label="${escapeHtml(teamName(site.team))}"><img class="club-logo" src="${teamLogo(site.team)}" alt="" loading="lazy"></a>` : ""}</div></td>
           <td>${escapeHtml(p.role)}</td>
-          <td class="num">${p.apps}</td><td class="num">${p.starts}</td>
+          <td class="num">${p.apps}</td>
           <td class="num"${p.noMins ? ` title="Minutes not known for ${p.noMins} of his matches"` : ""}>${p.noMins === p.apps ? "–" : `${p.minutes}${p.noMins ? "*" : ""}`}</td>
           <td class="num">${p.goals || ""}</td><td class="num">${p.assists || ""}</td>
           <td class="num">${p.rating != null ? p.rating.toFixed(2) : "–"}</td>
@@ -4269,10 +4391,8 @@ function nationPlayersTab() {
 $("#club-body").addEventListener("click", (e) => {
   if (!state.nation) return;
   const t = e.target.closest("[data-ntab]");
-  const w = e.target.closest("[data-nat-window]");
   const th = e.target.closest("th[data-natpsort]");
   if (t) state.nationTab = t.dataset.ntab;
-  else if (w) state.nationWindow = w.dataset.natWindow;
   else if (th) state.nationPlayerSort = th.dataset.natpsort;
   else if (e.target.closest("[data-nat-more]")) state.nation.allPlayers = true;
   else return;

@@ -877,8 +877,6 @@
     .lt-form i { width: 15px; height: 17px; line-height: 17px; font-size: 9.5px; border-radius: 4px; }
     .lf-row { grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr); column-gap: 6px; }
   }
-  .league-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-  .league-chips span { background: var(--chip-bg); border-radius: 999px; padding: 3px 9px; font-size: 12px; }
   .show-all { appearance: none; border: 0; background: none; color: var(--series-blue); font: inherit; font-size: 13px;
     font-weight: 700; padding: 8px 0; cursor: pointer; }
   .club-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
@@ -924,7 +922,12 @@
   .fm-bar span { display: block; height: 100%; background: var(--series-blue); border-radius: 2px; }
   .fm-sub { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   /* Nation page: formations and players */
-  .nat-windows { margin: 12px 0 10px; }
+  .nat-spell { margin-top: 4px; }
+  .nat-xi-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 13px; min-width: 0; }
+  .nat-xi-row .nat-xi-role { flex: none; }
+  .nat-xi-who { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nat-xi-who .player-photo { width: 20px; height: 20px; }
+  .nat-xi-n { flex: none; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   .nat-match summary { cursor: pointer; list-style: none; }
   .nat-match summary::-webkit-details-marker { display: none; }
   .nat-match + .nat-match summary { border-top: 1px solid var(--border); }
@@ -936,13 +939,23 @@
   .nat-xi { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 2px 0 10px 84px; font-size: 12px; }
   .nat-xi-role { display: inline-block; min-width: 30px; font-size: 10px; font-weight: 700; color: var(--text-muted); }
   .nat-match .page-note { padding-left: 84px; margin-top: 0; }
-  table.leaderboard.nat-players { min-width: 620px; }
+  table.leaderboard.nat-players { min-width: 590px; }
+  .table-scroll:has(table.nat-players) { overflow-x: auto; }
+  /* # and Player (photo, name, badge) freeze at the left while the stats scroll; a line marks the edge */
+  table.leaderboard.nat-players :is(th, td):nth-child(-n+2) { position: sticky; background: var(--surface-1); z-index: 1; }
+  table.leaderboard.nat-players th:nth-child(-n+2) { z-index: 3; }
+  table.leaderboard.nat-players :is(th, td):nth-child(1) { left: 0; box-sizing: border-box; width: 34px; }
+  table.leaderboard.nat-players :is(th, td):nth-child(2) { left: 34px; box-shadow: inset -1px 0 var(--gridline); }
   table.leaderboard.nat-players th:nth-child(n+3), table.leaderboard.nat-players td:nth-child(n+3) { width: 50px; }
   table.leaderboard.nat-players .club-cell { overflow: hidden; }
-  table.leaderboard.nat-players .club-cell > .club-meta { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  table.leaderboard.nat-players .player-photo { width: 24px; height: 24px; margin-right: 8px; }
+  table.leaderboard.nat-players .club-cell > .player-link { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  table.leaderboard.nat-players .nat-badge { display: inline-flex; flex: none; margin-left: 6px; }
+  table.leaderboard.nat-players .nat-badge .club-logo { width: 18px; height: 18px; }
   table.leaderboard.nat-players th:nth-child(3), table.leaderboard.nat-players td:nth-child(3) { width: 40px; }
-  table.leaderboard.nat-players th:nth-child(9), table.leaderboard.nat-players td:nth-child(9),
-  table.leaderboard.nat-players th:nth-child(11), table.leaderboard.nat-players td:nth-child(11) { width: 64px; }
+  table.leaderboard.nat-players :is(th, td):is(:nth-child(6), :nth-child(7)) { width: 30px; }   /* G and A, side by side */
+  table.leaderboard.nat-players th:nth-child(8), table.leaderboard.nat-players td:nth-child(8),
+  table.leaderboard.nat-players th:nth-child(10), table.leaderboard.nat-players td:nth-child(10) { width: 64px; }
   .card-y, .card-r { display: inline-block; min-width: 14px; padding: 0 3px; border-radius: 2px; font-size: 10px; font-weight: 700;
     text-align: center; line-height: 16px; margin-left: 2px; }
   .card-y { background: #f0c43a; color: #1d1d1b; }
@@ -984,12 +997,15 @@
   a.dp-row:hover .dp-name { text-decoration: underline; }
   .dp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .dp-rank { flex: none; font-weight: 800; font-variant-numeric: tabular-nums; }
-  a.dp-row.nat-row { grid-template-columns: minmax(0, 1fr) 20px; }   /* national team pitch: name and rank */
+  .dp-row.nat-row { display: grid; grid-template-columns: minmax(0, 1fr) 20px; align-items: baseline; gap: 3px; }   /* national team pitch: name and rank */
+  span.dp-row.nat-row { color: #fff; font-size: 11px; font-weight: 600; }
+  .dp-row.nat-unpicked .dp-name, .nat-unpicked-key { color: #ff6b6b; }
   .dp-rank.t4 { color: #3ecf5a; } .dp-rank.t3 { color: #f0c43a; } .dp-rank.t2 { color: #f08a5a; } .dp-rank.t1 { color: #f07878; }
   @media (max-width: 480px) {
     .pitch.dp-pitch { gap: 8px 4px; padding: 12px 6px; }
     .dp-spot { padding: 2px 3px 3px; }
     a.dp-row { font-size: 9.5px; gap: 2px; grid-template-columns: minmax(0, 1fr) 24px 14px 19px; }
+    span.dp-row.nat-row { font-size: 9.5px; }
     .dp-pct, .dp-xmin { font-size: 9px; }
   }
   /* Club page: predicted XI on the pitch, squad list, end-of-season ranks */

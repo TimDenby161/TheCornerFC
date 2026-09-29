@@ -181,6 +181,7 @@ def _execute(args):
             if args.target == "national":
                 ingest.sync_national_fixtures(api, conn, args.leagues, args.seasons)
                 ingest.sync_national_lineups(api, conn)
+                ingest.sync_national_coaches(api, conn)
                 return 0
             targets = TARGETS if args.target == "all" else [args.target]
             for target in targets:

@@ -359,12 +359,13 @@ def load(conn=None):
 
 TEAM_YEARS = ACTIVE_YEARS   # matches on a nation page's Formations and Players tabs
 APP_FIELDS = ["match", "player", "minutes", "started", "role", "goals", "assists", "rating", "yellow", "red"]
-MATCH_FIELDS = ["date", "opp", "venue", "gf", "ga", "tournament", "formation", "coach"]
+MATCH_FIELDS = ["date", "opp", "venue", "gf", "ga", "tournament", "formation", "coach", "coach_id"]
 
 
 def team_pages(conn, today=None):
     """{team_id: page} for each national team with a finished match in national_fixtures in the last
-    TEAM_YEARS: its matches (oldest first) with its formation and coach, and every appearance.
+    TEAM_YEARS: its head coach (team_coaches: since when), its matches (oldest first) with the
+    formation and coach, and every appearance.
     Appearances come from national_fixture_players, plus starters from national_fixture_lineups
     with no stat line (minutes unknown). Empty until the national_players migration has run."""
     if conn is None or not conn.execute("select to_regclass('national_fixture_players')").fetchone()[0]:
@@ -379,9 +380,9 @@ def team_pages(conn, today=None):
           and kickoff >= %s
         order by kickoff, fixture_id""", [since]).fetchall()
     ids = [f[0] for f in fixtures]
-    formations = {(fid, t): (fm, coach) for fid, t, fm, coach in conn.execute(
-        "select fixture_id, team_id, formation, coach_name from national_fixture_formations where fixture_id = any(%s)",
-        [ids])}
+    formations = {(fid, t): (fm, coach, coach_id) for fid, t, fm, coach, coach_id in conn.execute(
+        "select fixture_id, team_id, formation, coach_name, coach_id from national_fixture_formations"
+        " where fixture_id = any(%s)", [ids])}
     apps = {}                                  # (fixture, player) -> [team, minutes, started, role, g, a, rating, y, r]
     names = {}
     for fid, team, pid, grid_role, name in conn.execute(
@@ -398,6 +399,10 @@ def team_pages(conn, today=None):
         apps[fid, pid] = [team, mins, bool(started), role, g, a, float(rating) if rating is not None else None, y, r]
         if name:
             names[pid] = name
+    coaches = {t: {"id": c, "name": n, "photo": ph, "since": since.isoformat() if since else None}
+               for t, c, n, ph, since in conn.execute(
+                   "select team_id, coach_id, name, photo, since from team_coaches where team_id = any(%s)",
+                   [list({t for f in fixtures for t in f[2:4]})])}
     # the site's name for a player where we have him (as on his player page)
     pids = list({pid for _, pid in apps})
     names.update(conn.execute("select player_id, name from players where player_id = any(%s)", [pids]).fetchall())
@@ -409,11 +414,12 @@ def team_pages(conn, today=None):
     pages = {}
     for fid, kickoff, h_id, a_id, h_name, a_name, hg, ag, tournament, neutral in fixtures:
         for team, name, opp, gf, ga, venue in ((h_id, h_name, a_name, hg, ag, "H"), (a_id, a_name, h_name, ag, hg, "A")):
-            page = pages.setdefault(team, {"id": team, "name": name, "matches": [], "apps": [], "players": {}})
+            page = pages.setdefault(team, {"id": team, "name": name, "coach": coaches.get(team), "matches": [],
+                                           "apps": [], "players": {}})
             page["name"] = name                # the latest name API-Football sent
-            fm, coach = formations.get((fid, team), (None, None))
+            fm, coach, coach_id = formations.get((fid, team), (None, None, None))
             page["matches"].append([kickoff.date().isoformat(), opp, "N" if neutral else venue, gf, ga, tournament,
-                                    fm, coach])
+                                    fm, coach, coach_id])
             idx = len(page["matches"]) - 1
             for pid, *line in by_match.get((fid, team), []):
                 page["apps"].append([idx, pid, *line])
