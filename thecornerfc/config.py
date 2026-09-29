@@ -162,6 +162,35 @@ LEAGUES = {
     188: "Australia A-League",
 }
 
+# API-Football's national team competitions, for the Nations tab (nations.py). They go in their
+# own table, national_fixtures, never in fixtures: the club ranking, predictions and site export
+# all read every row of fixtures. Ids are API-Football's; `sync national` logs each one's name, so
+# check them on a first run. The public results dataset covers history, so these are only needed
+# from the current season on.
+NATIONAL_TEAM_LEAGUES = {
+    1: "World Cup",
+    4: "Euro Championship",
+    5: "UEFA Nations League",
+    6: "Africa Cup of Nations",
+    7: "Asian Cup",
+    9: "Copa America",
+    10: "Friendlies",
+    22: "CONCACAF Gold Cup",
+    29: "World Cup - Qualification Africa",
+    30: "World Cup - Qualification Asia",
+    31: "World Cup - Qualification CONCACAF",
+    32: "World Cup - Qualification Europe",
+    33: "World Cup - Qualification Oceania",
+    34: "World Cup - Qualification South America",
+    35: "Asian Cup - Qualification",
+    36: "Africa Cup of Nations - Qualification",
+    536: "CONCACAF Nations League",
+    960: "Euro Championship - Qualification",
+}
+# Off until switched on: the nightly run then refreshes national_fixtures for the current seasons
+# (about 20-40 calls a night)
+NATIONAL_SYNC = _bool_env("THECORNERFC_NATIONAL_SYNC", False)
+
 # API-Football seasons are keyed by the year the season starts (2025 = 2025/26).
 DEFAULT_SEASONS = list(range(2020, 2027))
 

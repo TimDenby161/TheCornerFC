@@ -171,6 +171,41 @@ def _fixture_row(f):
     }
 
 
+# --------------------------------------------------------------------------- national teams
+
+def sync_national_fixtures(api, conn, league_ids=None, seasons=None):
+    """National team matches into national_fixtures (never fixtures; see config.NATIONAL_TEAM_LEAGUES).
+    Seasons default to each competition's current one, from /leagues (one call per competition)."""
+    for league_id in league_ids or config.NATIONAL_TEAM_LEAGUES:
+        league_seasons = seasons
+        if not league_seasons:
+            resp = api.get("leagues", id=league_id)
+            if not resp:
+                log.warning("National competition %s not found", league_id)
+                continue
+            league_seasons = [s["year"] for s in resp[0].get("seasons", []) if s.get("current")]
+        for season in league_seasons:
+            resp = api.get("fixtures", league=league_id, season=season)
+            rows = [_national_row(f) for f in resp]
+            upsert(conn, "national_fixtures", rows, ["fixture_id"])
+            conn.commit()
+            name = resp[0]["league"]["name"] if resp else config.NATIONAL_TEAM_LEAGUES.get(league_id)
+            log.info("National fixtures league=%s (%s) season=%s: %d", league_id, name, season, len(rows))
+
+
+def _national_row(f):
+    fx, lg, teams, goals = f["fixture"], f["league"], f["teams"], f["goals"]
+    venue, status = fx.get("venue") or {}, fx.get("status") or {}
+    return {
+        "fixture_id": fx["id"], "league_id": lg["id"], "season": lg["season"], "tournament": lg.get("name"),
+        "round": lg.get("round"), "kickoff": fx.get("date"), "venue_name": venue.get("name"),
+        "venue_city": venue.get("city"), "status_short": status.get("short"),
+        "home_team_id": teams["home"]["id"], "away_team_id": teams["away"]["id"],
+        "home_name": teams["home"]["name"], "away_name": teams["away"]["name"],
+        "home_goals": goals.get("home"), "away_goals": goals.get("away"),
+    }
+
+
 # --------------------------------------------------------------------------- match statistics
 
 XG_RETRY_DAYS = 14
@@ -463,6 +498,8 @@ def sync_nightly(api, conn, league_ids):
         if league_id in config.PLAYER_LEAGUES:
             step("players", sync_players, [league_id], [season])
             step("injuries", sync_injuries, [league_id], [season])
+    if config.NATIONAL_SYNC:
+        step("national fixtures", sync_national_fixtures)
     step("rankings", lambda api, conn: update_rankings(conn))
     step("retirement checks", check_retired)
     step("squads", sync_squads)
