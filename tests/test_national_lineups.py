@@ -43,6 +43,25 @@ class NationalLineupsTests(unittest.TestCase):
         done = conn.execute.call_args_list[-1].args[1][0]
         self.assertEqual(done, [1])
 
+    def test_national_coach_and_his_start_date(self):
+        kick = datetime(2026, 9, 26, tzinfo=timezone.utc)
+        conn = mock.Mock()
+        conn.execute.side_effect = [
+            [(10,)],                                    # national teams that played in the last year
+            [(10, kick, 5)],                            # their line-ups' coaches, newest first
+            [],                                         # team_coaches: none stored yet
+        ]
+        api = mock.Mock()
+        api.get.return_value = [{"id": 5, "name": "T. Tuchel", "photo": "p.png",
+                                 "career": [{"team": {"id": 10}, "start": "2025-01-01", "end": None},
+                                            {"team": {"id": 157}, "start": "2023-03-24", "end": "2024-06-30"}]}]
+        stored = {}
+        with mock.patch.object(ingest, "upsert", side_effect=lambda c, table, rows, *a, **k: stored.setdefault(table, rows)):
+            ingest.sync_national_coaches(api, conn)
+        api.get.assert_called_once_with("coachs", team=10)
+        row = stored["team_coaches"][0]
+        self.assertEqual((row["team_id"], row["coach_id"], row["name"], row["since"]), (10, 5, "T. Tuchel", "2025-01-01"))
+
     def test_club_rows_have_no_name_columns(self):
         formations, lineups = [], []
         ingest._starting_xis(_fixture(1, 1), formations, lineups)

@@ -539,6 +539,7 @@ def sync_nightly(api, conn, league_ids):
     if config.NATIONAL_SYNC:
         step("national fixtures", sync_national_fixtures)
         step("national line-ups", sync_national_lineups)
+        step("national coaches", sync_national_coaches)
     step("rankings", lambda api, conn: update_rankings(conn))
     step("retirement checks", check_retired)
     step("squads", sync_squads)
@@ -666,17 +667,39 @@ def sync_coaches(api, conn):
     date, if later). Re-checked weekly, or the next night when a line-up names a different coach.
     """
     teams = _current_player_league_teams(conn)
+    lineups = conn.execute(
+        """select ff.team_id, f.kickoff, ff.coach_id from fixture_formations ff join fixtures f using (fixture_id)
+           where ff.coach_id is not null and ff.team_id = any(%s) order by ff.team_id, f.kickoff desc""", [teams])
+    _sync_team_coaches(api, conn, teams, lineups, "clubs")
+
+
+def sync_national_coaches(api, conn):
+    """Current head coach of every national team with a finished match in national_fixtures in the
+    last year, and the date he started, into team_coaches (national teams have their own team
+    ids), as sync_coaches does for clubs, with their line-ups (national_fixture_formations). For
+    the nation page's spell under him."""
+    teams = [t for (t,) in conn.execute(
+        """select distinct unnest(array[home_team_id, away_team_id]) from national_fixtures
+           where status_short = any(%s) and kickoff > now() - interval '1 year'""",
+        [list(config.FINISHED_STATUSES)])]
+    lineups = conn.execute(
+        """select ff.team_id, f.kickoff, ff.coach_id from national_fixture_formations ff
+           join national_fixtures f using (fixture_id)
+           where ff.coach_id is not null and ff.team_id = any(%s) order by ff.team_id, f.kickoff desc""", [teams])
+    _sync_team_coaches(api, conn, teams, lineups, "national teams")
+
+
+def _sync_team_coaches(api, conn, teams, lineup_rows, label):
+    """sync_coaches for the given teams; lineup_rows: (team, kickoff, coach), newest first per team."""
     known = {t: (c, f) for t, c, f in conn.execute("select team_id, coach_id, fetched_at from team_coaches")}
     lineups = {}                         # team -> [(kickoff, coach)], newest first
-    for team, kickoff, coach in conn.execute(
-            """select ff.team_id, f.kickoff, ff.coach_id from fixture_formations ff join fixtures f using (fixture_id)
-               where ff.coach_id is not null and ff.team_id = any(%s) order by ff.team_id, f.kickoff desc""", [teams]):
+    for team, kickoff, coach in lineup_rows:
         lineups.setdefault(team, []).append((kickoff, coach))
     lineup_coach = {t: rows[0][1] for t, rows in lineups.items()}
     now = datetime.now(timezone.utc)
     due = [t for t in teams if t not in known or now - known[t][1] > timedelta(days=COACH_RECHECK_DAYS)
            or (lineup_coach.get(t) and lineup_coach[t] != known[t][0])]
-    log.info("Coaches to fetch: %d of %d clubs", len(due), len(teams))
+    log.info("Coaches to fetch: %d of %d %s", len(due), len(teams), label)
     rows = []
     for team in due:
         spells = []                      # (start, coach) for each coach listed at the club, still there
