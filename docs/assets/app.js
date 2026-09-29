@@ -5150,10 +5150,22 @@ function renderFpl() {
 // FPL tab first opens). One gameweek at a time (◀ ▶) or totals over the next 2 / 5 / 10.
 const FPL_STATUS = { i: "Injured", s: "Suspended", u: "Unavailable", n: "Not in squad" };
 const FPL_SHOWN = 30;
+// Fantasy previews: local-only files (git-ignored, never published). Where any exists the table
+// gets a model switch and opens on the newest preview (?model=v1.1 or another version picks one).
+const FPL_PREVIEWS = ["v1.2", "v1.3"];
 function loadFplPredictions() {
   if (state.fplPred !== undefined) return;
   state.fplPred = null;
-  getJsonOrNull("data/fpl_predictions.json").then((d) => { state.fplPred = d || false; renderFplNext(); });
+  Promise.all([getJsonOrNull("data/fpl_predictions.json"),
+    ...FPL_PREVIEWS.map((v) => getJsonOrNull(`data/fpl_predictions_${v.replace(".", "_")}.json`))])
+    .then(([main, ...previews]) => {
+      const found = Object.fromEntries(FPL_PREVIEWS.map((v, i) => [v, previews[i]]).filter(([, d]) => d));
+      const names = Object.keys(found);
+      state.fplModels = names.length ? { "v1.1": main || false, ...found } : null;
+      const asked = new URLSearchParams(location.search).get("model");
+      state.fplPred = state.fplModels?.[asked] || found[names[names.length - 1]] || main || false;
+      renderFplNext();
+    });
 }
 function fplRows() {
   const d = state.fplPred;
@@ -5228,8 +5240,12 @@ function renderFplNext() {
   const chips = [["all", "All"], ["G", "GK"], ["D", "DEF"], ["M", "MID"], ["F", "FWD"]].map(([k, label]) =>
     `<button type="button" class="filter-chip" data-fpl-pos="${k}" aria-pressed="${fp.pos === k}">${label}</button>`).join("");
   const cols = (fp.mode === "gw" ? 6 : 4 + span.length);
+  const models = state.fplModels ? `<div class="fpl-filters">${Object.entries(state.fplModels).map(([k, v]) =>
+    `<button type="button" class="filter-chip" data-fpl-model="${k}" aria-pressed="${v === d}">${FPL_PREVIEWS.includes(k) ? `${k} preview` : k}</button>`).join("")}
+    <span class="fpl-span">Previews are on this computer only</span></div>` : "";
   el.innerHTML = `
     <div class="stats-label">Predicted points</div>
+    ${models}
     <div class="fpl-filters">${modes}${pager}</div>
     <div class="fpl-filters">${chips}
       <input type="search" class="table-search fpl-search" id="fpl-q" placeholder="Search players or clubs" aria-label="Search players or clubs" value="${escapeHtml(fp.q)}"></div>
@@ -5238,7 +5254,11 @@ function renderFplNext() {
       <tbody>${body || `<tr><td colspan="${cols}">No players match.</td></tr>`}</tbody></table></div>
     ${rows.length > FPL_SHOWN ? `<button type="button" class="show-all" id="fpl-more">${fp.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}
     <div class="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, assists, clean sheets,
-      goals conceded and saves. <b>Bonus points, cards and own goals aren't included</b>, so the best players come out a point or so below FPL's own figures.
+      goals conceded and saves${d.model === "fantasy-v1.3"
+        ? `, plus penalty saves, cards, bonus and defensive contributions. <b>Preview:</b> bonus is rebuilt from match stats (it tracks FPL's own closely); defensive contributions are fitted on FPL's GW1–5 results (experiments/fantasy_dc/).`
+        : d.model === "fantasy-v1.2"
+        ? `, plus penalty saves, cards and bonus. <b>Preview:</b> bonus is rebuilt from match stats, not FPL's own, and v1.2 failed one of its backtest criteria (experiments/fantasy_v1_2/REPORT.md).`
+        : `. <b>Bonus points, cards and own goals aren't included</b>, so the best players come out a point or so below FPL's own figures.`}
       ${d.source === "fpl" ? "Positions, prices, status and gameweeks come from FPL (updated nightly); players FPL doesn't list at their club are left out." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
       In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
       This is ${escapeHtml(d.model)}, still being tested (see below): a guide, not a pick list.</div>`;
@@ -5246,8 +5266,10 @@ function renderFplNext() {
 $("#fpl-body").addEventListener("click", (e) => {
   const t = (sel) => e.target.closest(sel);
   const pos = t("[data-fpl-pos]"), sort = t("[data-fpl-sort]"), mode = t("[data-fpl-mode]"), step = t("[data-fpl-step]");
-  if (!pos && !sort && !mode && !step && e.target.id !== "fpl-more") return;
+  const model = t("[data-fpl-model]");
+  if (!pos && !sort && !mode && !step && !model && e.target.id !== "fpl-more") return;
   const fp = state.fplView;
+  if (model && state.fplModels[model.dataset.fplModel]) state.fplPred = state.fplModels[model.dataset.fplModel];
   if (pos) { fp.pos = pos.dataset.fplPos; fp.all = false; }
   if (sort) fp.sort = sort.dataset.fplSort;
   if (mode) { fp.mode = mode.dataset.fplMode; fp.all = false; if (fp.mode !== "gw" && (fp.sort === "minutes" || fp.sort === "goals" || fp.sort === "assists")) fp.sort = "xp"; }

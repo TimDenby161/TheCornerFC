@@ -8,3 +8,5 @@ logs/
 .cache/
 .api-usage/
 .DS_Store
+# local previews of fantasy v1.2 / v1.3 (FPL tab switch), not published
+docs/data/fpl_predictions_v1_*.json

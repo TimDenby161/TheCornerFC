@@ -80,6 +80,64 @@ class MinutesTests(unittest.TestCase):
         self.assertEqual(fm.expected_points('G', mins, 0, 0, 1.4)['save_points'], 0.0)
 
 
+class V12Tests(unittest.TestCase):
+    def test_bps_splits_events_from_general_play(self):
+        b = fm.bps('D', 90, goals=1, team_conceded=0, key_passes=2, tackles=1, blocks=1, interceptions=2,
+                   passes=40, passes_accurate=36, shots=3, shots_on=1, fouls=1, yellow=1)
+        self.assertEqual(b['base'], 2 + 2 + 1 + 6 - 2 - 1)     # 36 of 40 passes is 90%
+        self.assertEqual(b['bps'], 6 + 12 + 12 - 3 + b['base'])
+        self.assertEqual(fm.bps('G', 90, saves=4, team_conceded=1)['bps'], 6 + 8)
+        self.assertEqual(fm.bps('M', 90, passes=29, passes_accurate=29)['base'], 0)    # under 30 passes
+        self.assertEqual(fm.bps('F', 0, goals=1), {'bps': 0, 'base': 0})
+
+    def test_match_bonus_follows_fpl_tie_rules(self):
+        self.assertEqual(fm.match_bonus({1: 30, 2: 25, 3: 20, 4: 10}), {1: 3, 2: 2, 3: 1, 4: 0})
+        self.assertEqual(fm.match_bonus({1: 30, 2: 30, 3: 20, 4: 10}), {1: 3, 2: 3, 3: 1, 4: 0})
+        self.assertEqual(fm.match_bonus({1: 30, 2: 25, 3: 25, 4: 10}), {1: 3, 2: 2, 3: 2, 4: 0})
+        self.assertEqual(fm.match_bonus({1: 30, 2: 25, 3: 20, 4: 20}), {1: 3, 2: 2, 3: 1, 4: 1})
+
+    def test_save_multiplier_shrinks_toward_one(self):
+        self.assertEqual(fm.save_multiplier([], 1.0, 1.0, 10), 1.0)
+        self.assertEqual(fm.save_multiplier([(9, None)], 1.0, 1.0, 10), 1.0)
+        m = fm.save_multiplier([(6, 1.0)] * 10, 1.0, 1.0, 10)      # saves at three times the expected 2
+        self.assertAlmostEqual(m, (60 + 20) / (20 + 20))
+
+    def test_extras_add_to_expected_points_and_v1_1_params_add_none(self):
+        mins = fm.minutes_expectation(0.9, 0.5, 88, 0.98, 20, 0.0)
+        extras = {'yellow90': 0.1, 'red90': 0.01, 'base_bps90': 5.0, 'penalty_saves': 0.03,
+                  'bonus_beta': {p: [0.1] * 7 for p in 'GDMF'}, 'start_minutes': 88, 'sub_minutes': 20}
+        c = fm.expected_points('G', mins, 0.0, 0.0, 1.2, save_mean=3.0, extras=extras)
+        self.assertAlmostEqual(c['expected_points'], sum(c[k] for k in fm.COMPONENT_POINTS + fm.EXTRA_POINTS))
+        self.assertAlmostEqual(c['bonus_points'], 0.1 * sum(fm.bonus_features('G', c)))
+        self.assertLess(c['card_points'], 0)
+        self.assertIsNone(fm.player_extras({'K': 450}))
+        # rescoring from a stored prediction reuses its own rates
+        again = fm.player_extras({'bonus_beta': extras['bonus_beta'], 'penalty_saves_per_team_match': 0.03}, stored=c)
+        self.assertEqual((again['yellow90'], again['base_bps90']), (0.1, 5.0))
+        self.assertEqual(c['dc_points'], 0.0)          # v1.2: no defensive contributions
+
+    def test_nb_tail_matches_direct_sum_and_poisson_limit(self):
+        from math import exp, lgamma, log
+        pmf = lambda x, m, r: exp(lgamma(x + r) - lgamma(r) - lgamma(x + 1) + r * log(r / (r + m)) + x * log(m / (r + m)))
+        for m, r, t in ((6.0, 8.0, 10), (3.5, 2.0, 12), (0.4, 50.0, 1)):
+            self.assertAlmostEqual(fm.nb_tail(t, m, r), 1 - sum(pmf(x, m, r) for x in range(t)), places=10)
+        self.assertAlmostEqual(fm.nb_tail(2, 1.5, 1e7), 1 - exp(-1.5) * 2.5, places=5)
+        self.assertEqual(fm.nb_tail(10, 0.0, 5.0), 0.0)
+
+    def test_dc_points_weight_starter_and_sub_chances(self):
+        dc = {'thresholds': {'D': 10}, 'points': 2, 'D': {'c': 3.0, 'k': 1.5, 'r': 8.0}}
+        comps = {'p_start': 0.8, 'p_play': 0.9, 'start_minutes': 88, 'sub_minutes': 20, 'cbit90': 4.0}
+        per90 = 3.0 + 1.5 * 4.0
+        want = 0.8 * fm.nb_tail(10, 88 / 90 * per90, 8.0) + 0.1 * fm.nb_tail(10, 20 / 90 * per90, 8.0)
+        self.assertAlmostEqual(fm.dc_probability('D', comps, dc), want)
+        mins = fm.minutes_expectation(0.8, 0.5, 88, 0.95, 20, 0.0)
+        extras = {'yellow90': 0.1, 'red90': 0.0, 'base_bps90': 3.0, 'penalty_saves': 0.03, 'start_minutes': 88,
+                  'sub_minutes': 20, 'cbit90': 4.0, 'dc': dc, 'bonus_beta': {p: [0.0] * 7 for p in 'GDMF'}}
+        d = fm.expected_points('D', mins, 0.05, 0.05, 1.2, extras=extras)
+        self.assertAlmostEqual(d['dc_points'], 2 * fm.dc_probability('D', d, dc))
+        self.assertEqual(fm.expected_points('G', mins, 0, 0, 1.2, 3.0, extras)['dc_points'], 0.0)
+
+
 class SnapshotTests(unittest.TestCase):
     ROWS = [{'player_id': 9, 'fixture_id': 2, 'team_id': 1, 'expected_points': 3.1, 'p_start': 0.9},
             {'player_id': 4, 'fixture_id': 2, 'team_id': 1, 'expected_points': 1.0, 'p_start': 0.2}]

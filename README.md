@@ -1135,6 +1135,9 @@ by JavaScript and was not retrievable for review. Consequences here:
     through `docs/data/fpl_predictions.json`.
   - The owner also approved (2026-09-29) using FPL's squad lists to leave out predicted players
     FPL doesn't list at their club, e.g. players who have left since last season.
+  - The owner also approved (2026-09-29) using FPL's captured gameweek results (defensive
+    contribution counts, bonus and BPS) to fit and check the fantasy model's defensive
+    contribution and bonus parts (experiments/fantasy_dc/).
   - Changing this is again the owner's decision. To stop, remove that workflow step. The
     export then falls back to our own positions and rounds, with no price.
 - Only the fields needed for fantasy validation and the FPL tab are stored, not whole responses.
