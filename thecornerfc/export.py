@@ -1544,12 +1544,16 @@ def export_clubs(conn, out_dir=OUT_DIR):
     log.info("Exported %d club pages", len(active))
 
 
+XG_RECENT = 5   # league games behind the tables' xG and xG conceded per 90
+
+
 def export_leagues(conn, out_dir=OUT_DIR):
     """One file per competition for its league page: docs/data/leagues/<league_id>.json.
 
     The current season's table (every group, as API-Football sends it) and all its fixtures, the
     upcoming ones with the model's projected goals and home / draw / away chances (for the page's
-    projected table). Loaded only when the page opens.
+    projected table), and each club's recent xG for and against (for the table). Loaded only when
+    the page opens.
     """
     seasons = {lid: (season, start) for lid, season, start in conn.execute(
         """select distinct on (league_id) league_id, season, start_date from league_seasons
@@ -1574,6 +1578,26 @@ def export_leagues(conn, out_dir=OUT_DIR):
                order by f.kickoff, f.fixture_id""", [list(UPCOMING_STATUSES)]):
         fixtures[lid].append([fid, kickoff.isoformat(), rnd, home, away, status, hg, ag, ph, pa_,
                               _r(xh), _r(xa), _r(p1, 3), _r(px, 3), _r(p2, 3)])
+    # each club's xG and xG conceded per 90 over its last XG_RECENT league games with xG for both sides
+    # (a match that went to extra time counts as 120 minutes)
+    recent_xg = defaultdict(dict)
+    for lid, team, xg, xga, n in conn.execute(
+            """with games as (
+                 select f.league_id, s.team_id, f.kickoff,
+                        s.expected_goals * 90 / case when f.status_short in ('AET', 'PEN') then 120 else 90 end as xg,
+                        o.expected_goals * 90 / case when f.status_short in ('AET', 'PEN') then 120 else 90 end as xga
+                 from fixtures f
+                 join fixture_team_stats s on s.fixture_id = f.fixture_id
+                 join fixture_team_stats o on o.fixture_id = f.fixture_id and o.team_id <> s.team_id
+                 where f.status_short = any(%s) and s.expected_goals is not null and o.expected_goals is not null
+                   and (f.league_id, f.season) in (select league_id, max(season) from league_seasons
+                                                   where is_current group by league_id)),
+               ranked as (select *, row_number() over (partition by league_id, team_id order by kickoff desc) as n
+                          from games)
+               select league_id, team_id, avg(xg)::float8, avg(xga)::float8, count(*)
+               from ranked where n <= %s group by 1, 2""",
+            [list(config.FINISHED_STATUSES), XG_RECENT]):
+        recent_xg[lid][team] = [_r(xg), _r(xga), n]
     names = dict(conn.execute("select team_id, name from teams"))
     league_dir = out_dir / "leagues"
     league_dir.mkdir(parents=True, exist_ok=True)
@@ -1589,6 +1613,8 @@ def export_leagues(conn, out_dir=OUT_DIR):
                    "fixture_fields": ["id", "kickoff", "round", "home", "away", "status", "hg", "ag", "pen_h", "pen_a",
                                       "home_xg", "away_xg", "p_home", "p_draw", "p_away"],
                    "fixtures": fixtures[lid],
+                   "recent_xg_fields": ["xg90", "xga90", "games"],
+                   "recent_xg": recent_xg[lid],
                    "teams": {t: names.get(t) for t in teams}}
         (league_dir / f"{lid}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     log.info("Exported %d league pages", len(seasons))
