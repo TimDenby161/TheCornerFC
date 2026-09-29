@@ -4086,6 +4086,7 @@ function openNationPage(nat) {
       <div class="pl-hero-main">
         <h2>${escapeHtml(nat)}</h2>
       </div>
+      <div id="nat-elo" data-nat="${escapeHtml(nat)}"></div>
     </div>
     <div class="club-section"><div class="modal-section">Top 3 in each position by current rank</div>
       <div class="pp-section"><div class="pitch dp-pitch">${PITCH_LINES}${spots}</div></div></div>
@@ -4093,6 +4094,7 @@ function openNationPage(nat) {
     <div class="club-section"><div class="modal-section">All players</div><div id="nat-list">${list.slice(0, LIMIT).map(row).join("")}</div>
       ${list.length > LIMIT ? `<button type="button" class="show-all" id="nat-more">Show all ${list.length.toLocaleString()}</button>` : ""}</div>`;
   $("#nat-more")?.addEventListener("click", (e) => { $("#nat-list").innerHTML = list.map(row).join(""); e.target.remove(); });
+  fillNationRating(nat);
 }
 
 // ------------------------------------------------------------------ league and country pages
@@ -4592,16 +4594,29 @@ $("#leagues-body").addEventListener("click", (e) => {
 // international since 1872. Loaded the first time the tab opens.
 const CONFEDS = ["UEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC"];
 function loadNations() {
-  if (state.nations !== undefined) return;
+  if (state.nations !== undefined) return state.nationsLoading;
   state.nations = null;
-  getJsonOrNull("data/nations.json").then((d) => {
-    if (d) for (const n of d.nations) {
-      n.gap = Math.round(n.current) - Math.round(n.baseline);
-      n.change = n.year_ago == null ? null : n.current - n.year_ago;
-    }
+  return state.nationsLoading = getJsonOrNull("data/nations.json").then((d) => {
+    if (d) for (const n of d.nations) n.change = n.year_ago == null ? null : n.current - n.year_ago;
     state.nations = d || false;
     renderNations();
   });
+}
+// A rating's place among the nations, as the badge colours: top 5% green, 20% amber, half orange
+function nationTier(d, v) {
+  const share = (d.nations.filter((n) => n.current > v).length + 1) / d.nations.length;
+  return share <= 0.05 ? 4 : share <= 0.2 ? 3 : share <= 0.5 ? 2 : 1;
+}
+// The top right of a nationality page: the national team's current Elo, once the ranking has loaded
+async function fillNationRating(nat) {
+  await loadNations();
+  const el = $("#nat-elo"), d = state.nations;
+  if (!el || el.dataset.nat !== nat || !d) return;
+  const n = d.nations.find((x) => x.name === nat || (d.aliases?.[x.name] || []).includes(nat));
+  if (!n) return;
+  const rank = d.nations.filter((x) => x.current > n.current).length + 1;
+  el.outerHTML = heroRank(n.current, "", nationTier(d, n.current),
+    `National team Elo rating: world #${rank} of ${d.nations.length}${n.change != null ? ` · ${n.change >= 0 ? "+" : ""}${Math.round(n.change)} on a year ago` : ""}`);
 }
 // The nationality page's name for a nation (API-Football's), if we have players from it
 function nationPageName(n, aliases) {
@@ -4619,10 +4634,7 @@ function renderNations() {
   const rows = d.nations.filter((n) => confed === "all" || n.confed === confed)
     .sort((a, b) => (b[key] ?? -Infinity) - (a[key] ?? -Infinity) || b.current - a.current);
   // badge colours as for clubs, but placed among the nations: top 5% green, 20% amber, half orange
-  const sorted = { current: d.nations.map((n) => n.current).sort((a, b) => b - a),
-                   baseline: d.nations.map((n) => n.baseline).sort((a, b) => b - a) };
-  const tier = (k, v) => { const share = (sorted[k].filter((x) => x > v).length + 1) / sorted[k].length;
-    return share <= 0.05 ? 4 : share <= 0.2 ? 3 : share <= 0.5 ? 2 : 1; };
+  const tier = (v) => nationTier(d, v);
   const chip = (value, label) => `<button type="button" class="filter-chip" data-confed="${value}" aria-pressed="${confed === value}">${label}</button>`;
   const th = (k, label, tip, cls = "") =>
     `<th class="num sortable${key === k ? " active" : ""}${cls}" data-natsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
@@ -4634,8 +4646,6 @@ function renderNations() {
         <th title="Position in this list, in the current sort order.">#</th>
         <th><span class="th-club">Nation</span></th>
         <th title="The national team and its confederation. Hover for its last 12 months and last match.">Nation</th>
-        ${th("baseline", BASELINE_TH, "Baseline Strength: a nation's longer-term level, mostly its average over its last 30 matches (about three years).")}
-        ${th("gap", "Gap", "Current Strength minus Baseline Strength. Green: rated above its longer-term level; red: below it.", " col-gap")}
         ${th("current", "Current", "Current Strength: the Elo rating now. 100 points is about one goal a game on a neutral ground.")}
         ${th("change", "1 yr", "Change in Current Strength over the last 12 months.")}
       </tr></thead>
@@ -4648,9 +4658,7 @@ function renderNations() {
           <td>${i + 1}</td>
           <td>${n.flag ? `<img class="flag" src="https://flagcdn.com/${n.flag}.svg" alt="" loading="lazy" data-broken="remove">` : ""}</td>
           <td><div class="club-cell">${name}${n.confed ? ` <span class="club-meta">${n.confed}</span>` : ""}</div></td>
-          <td class="num"><span class="rel-chip rel-${tier("baseline", n.baseline)}">${Math.round(n.baseline)}</span></td>
-          <td class="num col-gap">${formHtml(n.gap)}</td>
-          <td class="num"><span class="rel-chip rel-${tier("current", n.current)}">${Math.round(n.current)}</span></td>
+          <td class="num"><span class="rel-chip rel-${tier(n.current)}">${Math.round(n.current)}</span></td>
           <td class="num">${formHtml(n.change)}</td>
         </tr>`; }).join("")}
       </tbody>

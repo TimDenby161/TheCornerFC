@@ -18,11 +18,8 @@ Values come from experiments/nations_elo (backtest, see REPORT.md): tuned on 200
 2014-26. Against the club values unchanged (K 6, home 30, cap 3, friendlies 1/3), goal difference
 RMSE on 2014-26 fell from 1.708 to 1.651 and W/D/L log loss from 0.8756 to 0.8702.
 
-Summary figures (Nations tab), where history = [starting rank, rank after each match]:
-    rank_10  = mean of the last 10 history values   (about a year of matches)
-    rank_30  = mean of the last 30                  (about three years)
-    current  = the rank now
-    baseline = 0.1 * current + 0.3 * rank_10 + 0.6 * rank_30   (the club lt_algo, scaled to nations)
+The Nations tab shows each nation's rank now (Current Strength) and its change over the last
+12 months. No Baseline Strength: that's for clubs.
 
 Data:
   * The public "international_results" dataset (github.com/martj42/international_results): every
@@ -273,13 +270,6 @@ def replay(matches, k=K_FACTOR, home_adv=HOME_ADVANTAGE_POINTS, cap=MAX_GOAL_DIF
     return history
 
 
-def summarise(history):
-    mean = lambda xs: sum(xs) / len(xs)
-    rank_10, rank_30 = mean(history[-10:]), mean(history[-30:])
-    current = history[-1]
-    return {"current": current, "baseline": 0.1 * current + 0.3 * rank_10 + 0.6 * rank_30}
-
-
 def members(matches):
     return {t for m in matches if m.tournament == "FIFA World Cup qualification" and m.day >= MEMBER_SINCE
             for t in (m.home, m.away)}
@@ -320,13 +310,12 @@ def build(matches, today=None):
         games = rated.get(team, [])
         if not games or games[-1][0] < active_since:
             continue
-        s = summarise(history[team])
         last = games[-1]
         recent = [g for g in games if g[0] >= year_ago]
         past = [g for g in games if g[0] < year_ago]
         rows.append({
             "name": team, "flag": FLAGS.get(team), "confed": confed.get(team),
-            "current": round(s["current"], 1), "baseline": round(s["baseline"], 1),
+            "current": round(history[team][-1], 1),
             "year_ago": round(past[-1][5], 1) if past else None,
             "played": len(games), "played_4y": sum(g[0] >= active_since for g in games),
             "w": sum(g[2] > g[3] for g in recent), "d": sum(g[2] == g[3] for g in recent),

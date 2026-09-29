@@ -677,6 +677,7 @@
   .hero-ranks { display: flex; gap: 8px; }
   .pl-hero-ga { background: var(--chip-bg); }
   .pl-hero-rank .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-top: 3px; opacity: .8; }
+  .pl-hero-rank .lbl:empty { display: none; }
   .pl-hero-rank .val { font-size: 28px; line-height: 1; font-weight: 900; font-variant-numeric: tabular-nums; }
   .page-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 0 12px; overflow-x: auto; scrollbar-width: none; }
   .page-tabs::-webkit-scrollbar { display: none; }
