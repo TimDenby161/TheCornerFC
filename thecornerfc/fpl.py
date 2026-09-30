@@ -108,14 +108,15 @@ def target_gameweek(weeks, now):
 
 
 def player_states(bootstrap):
-    """Price, position, team and availability of every FPL player, sorted by FPL id."""
+    """Price, position, team, availability and penalty order of every FPL player, sorted by FPL id."""
     positions = {t['id']: t.get('singular_name_short') for t in bootstrap.get('element_types') or []}
     rows = [{'fpl_player_id': e['id'], 'fpl_code': e.get('code'), 'web_name': e.get('web_name'),
              'fpl_team_id': e.get('team'), 'element_type': e.get('element_type'),
              'position': positions.get(e.get('element_type')), 'price_tenths': e.get('now_cost'),
              'status': e.get('status'), 'chance_this_round': e.get('chance_of_playing_this_round'),
              'chance_next_round': e.get('chance_of_playing_next_round'),
-             'news': e.get('news') or None, 'news_added': _iso(e.get('news_added'))}
+             'news': e.get('news') or None, 'news_added': _iso(e.get('news_added')),
+             'penalties_order': e.get('penalties_order')}
             for e in bootstrap.get('elements') or [] if e.get('id')]
     return sorted(rows, key=lambda r: r['fpl_player_id'])
 
@@ -312,7 +313,7 @@ def store_capture(conn, capture):
          capture['seconds_to_deadline'], json.dumps(capture['fixtures']), len(capture['players']),
          capture['content_hash']]).fetchone()[0]
     cols = ('fpl_player_id', 'fpl_code', 'web_name', 'fpl_team_id', 'element_type', 'position', 'price_tenths',
-            'status', 'chance_this_round', 'chance_next_round', 'news', 'news_added')
+            'status', 'chance_this_round', 'chance_next_round', 'news', 'news_added', 'penalties_order')
     with conn.cursor() as cur:
         cur.executemany(f'''INSERT INTO fpl_player_states (capture_id,{','.join(cols)})
             VALUES (%s,{','.join(['%s'] * len(cols))})''',

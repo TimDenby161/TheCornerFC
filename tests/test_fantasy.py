@@ -157,6 +157,86 @@ class V12Tests(unittest.TestCase):
         self.assertEqual(fm.player_extras(params, dict(r, fpl_dc=None))['fpl_dc_minutes'], 0)
 
 
+class V15Tests(unittest.TestCase):
+    PEN = {'rate': 0.12, 'lambda_power': 0, 'mean_lambda': 1.5, 'conversion': 0.8, 'alpha': 0.5, 'decay': 0.5,
+           'order_weight': 0.75, 'order_ratio': 0.15, 'self_won': 0.2, 'won_per_foul': 0.01,
+           'fouls_drawn_prior': dict.fromkeys('GDMF', 1.0), 'shots_prior': dict.fromkeys('GDMF', 1.0),
+           'extra_assists_per_goal': 0.2}
+
+    @staticmethod
+    def app(days, team, goals=0, sot=0, scored=0, missed=0, team_scored=0):
+        from datetime import datetime, timedelta, timezone
+        kickoff = datetime(2026, 9, 30, tzinfo=timezone.utc) - timedelta(days=days)
+        return (kickoff, True, 90, 'ST', goals, sot, 0, 0, 2, 5, 1, 8, 10, 0, 0, 3,
+                team, scored, missed, 0, 3, 1, team_scored)
+
+    def test_penalty_features_drop_penalties_from_goal_evidence_and_keep_this_clubs_record(self):
+        from datetime import datetime, timezone
+        apps = [self.app(400, 7, scored=1), self.app(30, 8, goals=2, sot=3, scored=1, team_scored=1),
+                self.app(10, 8, missed=1)]
+        f = fm.player_features(1, datetime(2026, 9, 30, tzinfo=timezone.utc), [], apps, team=8)
+        self.assertEqual((f['g'], f['g_np'], f['sot_np']), (2, 1, 2))
+        self.assertAlmostEqual(f['tg_np'], 2 + 2 - 1)            # his team's goals less its penalties, per 90
+        self.assertEqual(f['pen_hist'], [(30, 1), (10, 1)])        # the other club's penalty doesn't count
+        self.assertEqual(fm.player_features(1, datetime(2026, 9, 30, tzinfo=timezone.utc), [], [], team=8)['pen_hist'], [])
+
+    def test_fpl_order_blends_with_history_and_is_ignored_when_absent(self):
+        scores = [3.0, 1.0, 0.0]
+        self.assertEqual(fm.with_fpl_order(scores, [None] * 3, self.PEN), scores)
+        blended = fm.with_fpl_order(scores, [None, 1, 2], self.PEN)
+        self.assertAlmostEqual(sum(blended), 1.0)
+        self.assertAlmostEqual(blended[1], 0.25 * 0.25 + 0.75 / 1.15)     # FPL's first choice leads
+        self.assertGreater(blended[1], blended[0])
+
+    def test_allocation_keeps_team_totals(self):
+        players = [{'position': p, 'att_min': 900, 'pen_hist': h, 'won': 1, 'shots': 20, 'fouls_drawn': 10}
+                   for p, h in (('F', [(20, 2)]), ('M', []), ('D', []))]
+        minutes = [{'exp_minutes': m} for m in (90, 80, 90)]
+        out = fm.penalty_allocation(players, minutes, [0.4, 0.2, 0.05], 1.5, 1.45, self.PEN, 5.0)
+        self.assertAlmostEqual(out['pen_goals'], 0.12 * 0.8)
+        self.assertAlmostEqual(sum(out['pen_share']), 1.0)
+        self.assertGreater(out['pen_share'][0], 0.8)                       # the club's taker
+        self.assertAlmostEqual(sum(out['exp_pen_goals']), out['pen_goals'])
+        self.assertAlmostEqual(sum(out['exp_pen_misses']), 0.12 * 0.2)
+        self.assertAlmostEqual(sum(out['exp_fpl_pen_assists']), out['pen_goals'] * 0.8)
+        self.assertAlmostEqual(sum(out['exp_fpl_other_assists']), (1.45 - out['pen_goals']) * 0.2)
+
+    def test_penalty_and_fpl_assist_points_and_stored_rescoring(self):
+        mins = fm.minutes_expectation(0.9, 0.5, 88, 0.98, 20, 0.0)
+        pens = {'exp_pen_goals': 0.08, 'exp_pen_misses': 0.02, 'exp_fpl_pen_assists': 0.01, 'exp_fpl_other_assists': 0.04}
+        extras = {'yellow90': 0.1, 'red90': 0.0, 'base_bps90': 5.0, 'penalty_saves': 0.03, 'start_minutes': 88, 'sub_minutes': 20,
+                  'bonus_beta': {p: [0.1] * 7 for p in 'GDMF'}, 'penalties': pens}
+        c = fm.expected_points('M', mins, 0.3, 0.2, 1.2, extras=extras)
+        self.assertAlmostEqual(c['penalty_points'], 5 * 0.08 - 2 * 0.02)
+        self.assertAlmostEqual(c['fpl_assist_points'], 3 * 0.05)
+        self.assertAlmostEqual(c['goal_points'], 5 * 0.3)                  # open play only
+        self.assertAlmostEqual((c['exp_np_goals'], c['exp_goals']), (0.3, 0.38))
+        self.assertAlmostEqual(c['expected_points'],
+                               sum(c[k] for k in fm.COMPONENT_POINTS + fm.EXTRA_POINTS + fm.PENALTY_POINTS))
+        params = {'bonus_beta': extras['bonus_beta'], 'penalty_saves_per_team_match': 0.03, 'penalties': self.PEN}
+        f = fm.expected_points('F', mins, c['exp_np_goals'], 0.2, 1.2, extras=fm.player_extras(params, stored=c))
+        self.assertAlmostEqual(f['penalty_points'], 4 * 0.08 - 2 * 0.02)   # FPL scores a forward's goal at 4
+
+    def test_frozen_v1_5_predicts_team_goals_split_into_open_play_and_penalties(self):
+        import json
+        from pathlib import Path
+        doc = json.loads((Path(fm.__file__).with_name('fantasy_params_v1_5.json')).read_text())
+        from datetime import datetime, timezone
+        kickoff = datetime(2026, 9, 30, tzinfo=timezone.utc)
+        recent = [{1: (True, 90), 2: (True, 90), 3: (True, 90)}] * 10
+        apps = {1: [self.app(d, 8, goals=1, sot=2, scored=1, team_scored=1) for d in range(7, 77, 7)],
+                2: [self.app(d, 8, goals=0, sot=1) for d in range(7, 77, 7)],
+                3: [self.app(d, 8) for d in range(7, 77, 7)]}
+        players = [dict(fm.player_features(p, kickoff, recent, apps[p], team=8), position=pos, injury=None)
+                   for p, pos in ((1, 'F'), (2, 'M'), (3, 'D'))]
+        out = fm.predict_team(players, 1.6, 1.1, doc['params'])
+        goals = 1.6 * (1 - doc['params']['own_goal_share'])
+        self.assertAlmostEqual(sum(c['exp_goals'] for c in out), goals, places=6)
+        pen_goals = doc['params']['penalties']['rate'] * doc['params']['penalties']['conversion']
+        self.assertAlmostEqual(sum(c['exp_pen_goals'] for c in out), pen_goals, places=6)
+        self.assertGreater(out[0]['exp_pen_goals'], 0.9 * pen_goals)        # ten penalties for this club
+
+
 class SnapshotTests(unittest.TestCase):
     ROWS = [{'player_id': 9, 'fixture_id': 2, 'team_id': 1, 'expected_points': 3.1, 'p_start': 0.9},
             {'player_id': 4, 'fixture_id': 2, 'team_id': 1, 'expected_points': 1.0, 'p_start': 0.2}]

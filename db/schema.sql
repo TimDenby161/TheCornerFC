@@ -1284,3 +1284,6 @@ ALTER TABLE national_fixture_players ADD COLUMN IF NOT EXISTS player_name text; 
 CREATE UNIQUE INDEX IF NOT EXISTS national_fixture_players_key ON national_fixture_players (fixture_id, player_id);
 CREATE INDEX IF NOT EXISTS national_fixture_players_team ON national_fixture_players (team_id, fixture_id);
 ALTER TABLE national_fixture_players ENABLE ROW LEVEL SECURITY;
+
+-- FPL's penalty order, 1 = first choice (fantasy v1.5; db/migrations/20260930_fpl_penalty_order.sql)
+ALTER TABLE fpl_player_states ADD COLUMN IF NOT EXISTS penalties_order smallint;

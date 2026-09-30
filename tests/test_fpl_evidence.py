@@ -25,7 +25,7 @@ BOOTSTRAP = {
         {'id': 20, 'code': 223340, 'first_name': 'Bukayo', 'second_name': 'Saka', 'web_name': 'Saka', 'team': 1,
          'element_type': 3, 'now_cost': 101, 'status': 'd', 'chance_of_playing_this_round': 75,
          'chance_of_playing_next_round': 75, 'news': 'Knock - 75% chance of playing',
-         'news_added': '2026-09-24T09:15:00.123456Z', 'selected_by_percent': '40.1'},
+         'news_added': '2026-09-24T09:15:00.123456Z', 'selected_by_percent': '40.1', 'penalties_order': 2},
         {'id': 1, 'code': 9, 'first_name': 'David', 'second_name': 'Raya Martín', 'web_name': 'Raya', 'team': 1,
          'element_type': 1, 'now_cost': 55, 'status': 'a', 'chance_of_playing_this_round': None,
          'chance_of_playing_next_round': None, 'news': '', 'news_added': None}]}
@@ -51,6 +51,7 @@ class ParsingTests(unittest.TestCase):
         self.assertEqual(saka['news_added'], '2026-09-24T09:15:00.123456+00:00')
         self.assertIsNone(raya['news'])            # empty news is no news
         self.assertNotIn('selected_by_percent', saka)
+        self.assertEqual((saka['penalties_order'], raya['penalties_order']), (2, None))
 
     def test_known_fixtures_keep_schedule_not_scores(self):
         rows = fpl.known_fixtures(FIXTURES)
@@ -97,7 +98,7 @@ class CaptureTests(unittest.TestCase):
             self.assertEqual(fpl.store_capture(conn, capture), 41)
         rows = conn.cursor.return_value.__enter__.return_value.executemany.call_args[0][1]
         self.assertEqual([r[:2] for r in rows], [(41, 1), (41, 20)])
-        self.assertEqual(rows[1][-5:], ('d', 75, 75, 'Knock - 75% chance of playing', '2026-09-24T09:15:00.123456+00:00'))
+        self.assertEqual(rows[1][-6:], ('d', 75, 75, 'Knock - 75% chance of playing', '2026-09-24T09:15:00.123456+00:00', 2))
 
     def test_results_due_until_final_and_empty_answer_not_stored(self):
         conn = MagicMock()

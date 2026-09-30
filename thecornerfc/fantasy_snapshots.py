@@ -1,11 +1,12 @@
 """Prospective fantasy snapshots: every component of every Premier League player's expected
 points for upcoming fixtures, stored in fantasy_fixture_snapshots before kickoff, together with
 the availability and benchmark values known then, so each model can be judged later on gameweeks
-it had not seen (experiments/prospective/PROTOCOLS.md: P8 for v1.1, P9 for v1.3, P10 for v1.4).
+it had not seen (experiments/prospective/PROTOCOLS.md: P8 for v1.1, P9 for v1.3, P10 for v1.4, P11 for v1.5).
 
 Calculations are fantasy.py's (the backtests run the same functions); the parameters are frozen
 in fantasy_params.json (v1.1, experiments/fantasy_v1/run.py), fantasy_params_v1_3.json (v1.3,
-experiments/fantasy_dc/run.py) and fantasy_params_v1_4.json (v1.4, experiments/fantasy_v1_4/run.py).
+experiments/fantasy_dc/run.py), fantasy_params_v1_4.json (v1.4, experiments/fantasy_v1_4/run.py) and
+fantasy_params_v1_5.json (v1.5, experiments/fantasy_v1_5/run.py).
 Each version's rows carry its model_version_id. Evidence only: nothing reads it, and
 a failure here never fails the nightly or match-day run (capture_safely).
 """
@@ -27,7 +28,8 @@ HORIZON = timedelta(days=8)       # fixtures this far ahead get a snapshot each 
 HISTORY_SEASON = 2020             # league history read, as in the backtest
 PARAMS_PATH = Path(__file__).with_name('fantasy_params.json')
 CAPTURED = (PARAMS_PATH, Path(__file__).with_name('fantasy_params_v1_3.json'),
-            Path(__file__).with_name('fantasy_params_v1_4.json'))                    # each run snapshots all three
+            Path(__file__).with_name('fantasy_params_v1_4.json'),
+            Path(__file__).with_name('fantasy_params_v1_5.json'))                    # each run snapshots all four
 TABLE = 'fantasy_fixture_snapshots'
 BENCHMARK_MATCHES = 5
 
@@ -60,20 +62,24 @@ def _pl_lines(conn):
                coalesce(fp.tackles, 0), coalesce(fp.blocks, 0), coalesce(fp.interceptions, 0),
                coalesce(fp.dribbles_won, 0), coalesce(fp.passes, 0), coalesce(fp.passes_accurate, 0),
                coalesce(fp.shots, 0), coalesce(fp.fouls_committed, 0), coalesce(fp.penalties_committed, 0),
-               p.home_xg::float8, p.away_xg::float8
+               p.home_xg::float8, p.away_xg::float8,
+               coalesce(fp.penalties_scored, 0), coalesce(fp.penalties_missed, 0),
+               coalesce(fp.penalties_won, 0), coalesce(fp.fouls_drawn, 0)
         from fixture_players fp join fixtures f using (fixture_id)
         left join fixture_predictions p on p.fixture_id = f.fixture_id
         where f.league_id = %s and f.season >= %s and f.status_short = any(%s) and f.home_goals is not null""",
         [PL, HISTORY_SEASON, list(config.FINISHED_STATUSES)], order_by='kickoff, fixture_id, player_id')
 
 
+PENALTY_STATS = ('pens_scored', 'pens_missed', 'pens_won', 'fouls_drawn')     # v1.5
 EXTRA_STATS = ('tackles', 'blocks', 'interceptions', 'dribbles_won', 'passes', 'passes_accurate', 'shots',
                'fouls', 'penalties_committed')
 
 
 class History:
     """League history before now, arranged as fantasy.player_features and the benchmarks need it.
-    lines: _pl_lines() rows; the trailing v1.2 columns (EXTRA_STATS, home / away xG) may be absent."""
+    lines: _pl_lines() rows; the trailing v1.2 columns (EXTRA_STATS, home / away xG) and v1.5's
+    (PENALTY_STATS) may be absent."""
 
     def __init__(self, lines):
         matches = defaultdict(lambda: defaultdict(dict))     # team -> fixture -> player -> line
@@ -82,13 +88,16 @@ class History:
         for (fid, kickoff, season, team, home, hg, ag, pid, minutes, started, position, role,
              goals, assists, shots_on, key_passes, saves, pens, yellow, red, *extra) in lines:
             stats = dict(zip(EXTRA_STATS, extra))
+            n = len(EXTRA_STATS) + 2
+            pen = dict(zip(PENALTY_STATS, extra[n:n + len(PENALTY_STATS)])) if len(extra) > n else {}
             matches[team][fid][pid] = dict(minutes=minutes, started=bool(started), role=role, goals=goals,
                                            assists=assists, shots_on=shots_on, key_passes=key_passes,
                                            saves=saves, pens=pens, yellow=yellow, red=red,
                                            conceded=ag if team == home else hg,
                                            base_bps=fm.bps('M', minutes, key_passes=key_passes, shots_on=shots_on,
                                                            **stats)['base'],
-                                           cbit=sum(stats.get(k) or 0 for k in ('tackles', 'blocks', 'interceptions')))
+                                           cbit=sum(stats.get(k) or 0 for k in ('tackles', 'blocks', 'interceptions')),
+                                           shots=stats.get('shots') or 0, **pen)
             if len(extra) > len(EXTRA_STATS):
                 hx, ax = extra[len(EXTRA_STATS):len(EXTRA_STATS) + 2]
                 self.lam_against[(fid, team)] = ax if team == home else hx
@@ -105,12 +114,15 @@ class History:
         for team, ms in self.team_matches.items():
             for fid, players in ms:
                 totals = tuple(sum(l[c] for l in players.values()) for c in ('goals', 'shots_on', 'assists', 'key_passes'))
+                team_pens = sum(l.get('pens_scored', 0) for l in players.values())
                 for pid, l in players.items():
                     if l['minutes'] <= 0:
                         continue
                     self.appearances[pid].append((self.kickoffs[fid], l['started'], l['minutes'], l['role'], l['goals'],
                                                   l['shots_on'], l['assists'], l['key_passes'], *totals,
-                                                  l['base_bps'], l['yellow'], l['red'], l['cbit']))
+                                                  l['base_bps'], l['yellow'], l['red'], l['cbit'],
+                                                  *((team, l['pens_scored'], l['pens_missed'], l['pens_won'], l['shots'],
+                                                     l['fouls_drawn'], team_pens) if 'pens_scored' in l else ())))
                     pos = self.label(pid, self.season_of[fid])
                     pts = fm.actual_points(pos, l['minutes'], l['goals'], l['assists'], l['conceded'], l['saves'],
                                            l['pens'], l['yellow'], l['red'])['total']
@@ -159,9 +171,25 @@ def fpl_dc_record(conn, season, now):
            where m.api_id is not null and r.minutes > 0 group by m.api_id""", [season, now, season])}
 
 
-def team_snapshot(history, fixture, team, is_home, injuries, doc, fpl_dc=None):
+def fpl_penalty_order(conn, now):
+    """v1.5's input: {API player: FPL penalties_order (1 = first choice)} from the latest FPL capture
+    before now. Empty before FPL capture stores it (db/migrations/20260930_fpl_penalty_order.sql)."""
+    has = conn.execute("""select 1 from information_schema.columns
+                          where table_name = 'fpl_player_states' and column_name = 'penalties_order'""").fetchone()
+    if not has:
+        return {}
+    return {api: order for api, order in conn.execute(
+        """select m.api_id, s.penalties_order
+           from (select capture_id, season from fpl_captures where captured_at < %s
+                 order by captured_at desc, capture_id desc limit 1) c
+           join fpl_player_states s using (capture_id)
+           join fpl_id_map_current m on m.kind = 'player' and m.season = c.season and m.fpl_id = s.fpl_player_id
+           where m.api_id is not null and s.penalties_order is not null""", [now])}
+
+
+def team_snapshot(history, fixture, team, is_home, injuries, doc, fpl_dc=None, fpl_pen_order=None):
     """(predictions, inputs) for one side of an upcoming fixture, from history before kickoff.
-    fpl_dc: fpl_dc_record() for v1.4."""
+    fpl_dc: fpl_dc_record() for v1.4; fpl_pen_order: fpl_penalty_order() for v1.5."""
     fid, kickoff, season, home_xg, away_xg, latest_club = fixture
     lam_for, lam_against = (home_xg, away_xg) if is_home else (away_xg, home_xg)
     recent = history.team_recent(team, kickoff)
@@ -171,9 +199,10 @@ def team_snapshot(history, fixture, team, is_home, injuries, doc, fpl_dc=None):
         position = history.label(pid, season)
         if position is None:
             continue
-        feats = fm.player_features(pid, kickoff, team_recent, [a for a in history.appearances[pid] if a[0] < kickoff])
+        feats = fm.player_features(pid, kickoff, team_recent, [a for a in history.appearances[pid] if a[0] < kickoff],
+                                   team=team)
         players.append(dict(feats, player_id=pid, position=position, injury=injuries.get(pid),
-                            fpl_dc=(fpl_dc or {}).get(pid)))
+                            fpl_dc=(fpl_dc or {}).get(pid), fpl_pen_order=(fpl_pen_order or {}).get(pid)))
         bench[str(pid)] = history.benchmarks(pid, season, recent)
     params = doc['params']
     factor = (fm.save_multiplier(history.save_history(team, kickoff), params['save_intercept'], params['save_slope'],
@@ -184,6 +213,9 @@ def team_snapshot(history, fixture, team, is_home, injuries, doc, fpl_dc=None):
     inputs = {'lambda_for': lam_for, 'lambda_against': lam_against, 'is_home': is_home,
               'team_matches_in_window': len(recent),
               'availability': {str(p['player_id']): p['injury'] for p in players if p['injury']},
+              **({'penalty_takers': {str(p['player_id']): {'order': p['fpl_pen_order'], 'history': p['pen_hist']}
+                                     for p in players if p['fpl_pen_order'] or p.get('pen_hist')}}
+                 if 'penalties' in params else {}),
               'benchmarks': bench}
     return predictions, inputs
 
@@ -243,12 +275,13 @@ def build(conn, fixture_ids=None, now=None, doc=None, horizon=HORIZON, history=N
     avail = availability.load(conn, [(f[0], f[1], f[3], f[4], True) for f in upcoming], observed_at=now)
     own = 'own_pseudo_90s' in doc['params'].get('dc', {})
     fpl_dc = {season: fpl_dc_record(conn, season, now) for season in {f[2] for f in upcoming}} if own else {}
+    pen_order = fpl_penalty_order(conn, now) if 'penalties' in doc['params'] else None
     out = []
     for fid, kickoff, season, home, away, hx, ax in upcoming:
         for team, is_home in ((home, True), (away, False)):
             injuries = {p: fm.injury_type(v.get('evidence')) for p, v in avail.get((fid, team), {}).items()}
             predictions, inputs = team_snapshot(history, (fid, kickoff, season, hx, ax, latest_club),
-                                                team, is_home, injuries, doc, fpl_dc.get(season))
+                                                team, is_home, injuries, doc, fpl_dc.get(season), pen_order)
             if predictions:
                 out.append((fid, team, kickoff, predictions, inputs))
     return doc, out
