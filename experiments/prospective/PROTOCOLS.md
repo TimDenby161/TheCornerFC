@@ -30,8 +30,8 @@ Sample-size basis (`power.py` → `power.json`): two-sided α = 0.05, 80% power,
 | P6 | Model vs timestamped pre-kickoff market | **Ready** | Model minus market log loss | Estimation (see P6) | 2,000 (re-estimate at 500) | 79 |
 | P7 | Year-ahead Current weight | **Ready** | Selected weight minus 0.2 on the confirmation half | 0.002 | 6,500 confirmation fixtures | 0 |
 | P8 | Fantasy v1.1 expected points (Amendments 2, 3) | **Capturing** once the snapshot migration is applied | v1.1 minus stored recent-average / PPG benchmarks, points MAE and MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
-| P9 | Fantasy v1.3: bonus, cards, penalty saves, keeper minutes, defensive contributions (Amendment 3) | **Capturing** from 2026-09-29; evaluator not yet built | v1.3 minus v1.1 on the same player-fixtures, points MAE and MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
-| P10 | Fantasy v1.4: v1.3 plus each player's own FPL defensive-contribution record (Amendment 4) | **Capturing** from 2026-09-30; evaluator not yet built | v1.4 minus v1.3 on the same player-fixtures, DC points Brier and points MAE / MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
+| P9 | Fantasy v1.3: bonus, cards, penalty saves, keeper minutes, defensive contributions (Amendment 3) | **Capturing** from 2026-09-29; evaluator written blinded 2026-09-30 (`fantasy_p9.py`) | v1.3 minus v1.1 on the same player-fixtures, points MAE and MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
+| P10 | Fantasy v1.4: v1.3 plus each player's own FPL defensive-contribution record (Amendment 4) | **Capturing** from 2026-09-30; evaluator written blinded 2026-09-30 (`fantasy_p10.py`) | v1.4 minus v1.3 on the same player-fixtures, DC points Brier and points MAE / MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 | P11 | Fantasy v1.5: v1.4 plus penalty takers, misses and FPL-only assists (Amendment 5) | **Capturing** once v1.5 deploys (2026-09-30); evaluator written blinded 2026-09-30 (`fantasy_p11.py`) | v1.5 minus v1.4 on the same player-fixtures, goal + penalty + FPL assist points MAE / MSE, then all points | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 | P12 | Fantasy v1.6: v1.5 plus FPL's injury status as an availability factor (Amendment 6) | **Capturing** once v1.6 deploys (2026-09-30); evaluator written blinded 2026-09-30 (`fantasy_p12.py`) | v1.6 minus v1.5 on the same player-fixtures, log loss of P(play) | 95% CI excluding 0 | 6 Premier League rounds and 300 FPL-flagged player rows | 0 |
 
@@ -124,7 +124,10 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
   - DC points and bonus, predicted against FPL's own, by position.
   - Goalkeeper start ECE.
 - **Target size.** 10 rounds and 3,000 player rows from the first v1.3 capture.
-- **Evaluator.** To be written blinded (accrual only by default, like `fantasy_p8.py`) before the first captured round finishes.
+- **Evaluator.** `python3 experiments/prospective/fantasy_p9.py` (blinded; accrual only), then `--unblind` at target. Written on 2026-09-30, before any fantasy snapshot had a finished fixture (first run: 0 rows). Details fixed with it:
+  - FPL's bonus and defensive-contribution points are read from its `explain` (identifiers `bonus` and `defensive_contribution`) in the latest final result for each gameweek.
+  - Rows are player-fixtures in both versions' chosen snapshots, in single-fixture gameweeks, with a final FPL result.
+  - Bootstrap seed 20260929.
 - **Decision relevance.** If supported, v1.3 may replace v1.1 on the public FPL tab. Otherwise the FPL tab keeps v1.1, and the failing component is fixed first.
 
 ## P1: Club-neutral squad strength after large verified squad changes (blocked)
@@ -190,7 +193,11 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
 - **Target.** As P9.
 - **Primary.** v1.4 minus v1.3, paired on player-fixtures present in both. First, the Brier score of P(DC) against FPL's own DC points, for FPL defenders and midfielders. Then points MAE and MSE. 95% round-cluster bootstrap. v1.4 is supported only if the Brier interval excludes 0 in its favour and points MAE is not worse (the upper end of its interval ≤ 0.02).
 - **Secondary.** As P9, plus DC calibration by the size of a player's record.
-- **Target size and evaluator.** As P9: 10 rounds and 3,000 player rows from the first v1.4 capture. The evaluator is written blinded before the first captured round finishes.
+- **Target size and evaluator.** As P9: 10 rounds and 3,000 player rows from the first v1.4 capture. Evaluator: `python3 experiments/prospective/fantasy_p10.py` (blinded; accrual only), then `--unblind` at target. Written on 2026-09-30, before any fantasy snapshot had a finished fixture. It reuses `fantasy_p9.py`'s target and pairing. Details fixed with it:
+  - P(DC) is a version's stored DC points / 2, and the hit is FPL's DC points > 0.
+  - "FPL defenders and midfielders" means FPL's position in the latest capture.
+  - The record-size bins are 0, 1–269, 270–539 and 540+ FPL minutes.
+  - Bootstrap seed 20260930.
 
 **Amendment 4 (2026-09-30): P10 registered; the public FPL tab shows v1.4.** From 2026-09-30 the capture also stores fantasy v1.4 snapshots. P8 still reads only `fantasy-v1.1` rows and P9 only `fantasy-v1.3` rows, so neither changes. The owner chose to show v1.4 on the public FPL tab before any of P8–P10 is evaluated. This is a display decision, not evidence. P9's and P10's "decision relevance" clauses no longer decide what the tab shows; their results will be reported on the tab when they exist.
 
