@@ -357,6 +357,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     export_player_pages(conn, out_dir)
     export_fantasy(conn, out_dir)
     export_fantasy_predictions(conn, out_dir)
+    export_efl_fantasy(conn, out_dir)
     export_nations(conn, out_dir)
 
 
@@ -1839,3 +1840,16 @@ def export_fantasy_predictions(conn, out_dir=OUT_DIR, doc=None, filename="fpl_pr
     except Exception:
         conn.rollback()
         log.exception("Fantasy predictions export skipped")
+
+
+def export_efl_fantasy(conn, out_dir=OUT_DIR):
+    """efl_predictions.json: expected Fantasy EFL points for Championship, League One and League Two
+    players and clubs (efl_fantasy.py). Not critical: a failure skips it."""
+    try:
+        from . import efl_fantasy
+        doc = efl_fantasy.payload(conn)
+        if doc:
+            _write_json_file(Path(out_dir) / "efl_predictions.json", doc)
+    except Exception:
+        conn.rollback()
+        log.exception("EFL fantasy export skipped")

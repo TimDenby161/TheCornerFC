@@ -55,7 +55,13 @@ def register_version(conn, doc):
 
 def _pl_lines(conn):
     """Every finished Premier League player line since HISTORY_SEASON, oldest first."""
-    return cached_rows(conn, 'fantasy_pl_lines', f"""
+    return league_lines(conn, 'fantasy_pl_lines', '= %s', PL, HISTORY_SEASON)
+
+
+def league_lines(conn, name, league_op, leagues, since):
+    """Every finished player line of leagues (league_op: '= %s' for one id, '= any(%s)' for a list)
+    since a season, oldest first, cached as name. History's input."""
+    return cached_rows(conn, name, f"""
         select {WEEK.format('f.kickoff')} as part, f.fixture_id, f.kickoff, f.season, fp.team_id,
                f.home_team_id, f.home_goals, f.away_goals, fp.player_id, fp.minutes, fp.started,
                fp.position, fp.role, coalesce(fp.goals, 0) as goals, coalesce(fp.assists, 0) as assists,
@@ -70,8 +76,8 @@ def _pl_lines(conn):
                coalesce(fp.penalties_won, 0), coalesce(fp.fouls_drawn, 0)
         from fixture_players fp join fixtures f using (fixture_id)
         left join fixture_predictions p on p.fixture_id = f.fixture_id
-        where f.league_id = %s and f.season >= %s and f.status_short = any(%s) and f.home_goals is not null""",
-        [PL, HISTORY_SEASON, list(config.FINISHED_STATUSES)], order_by='kickoff, fixture_id, player_id')
+        where f.league_id {league_op} and f.season >= %s and f.status_short = any(%s) and f.home_goals is not null""",
+        [leagues, since, list(config.FINISHED_STATUSES)], order_by='kickoff, fixture_id, player_id')
 
 
 PENALTY_STATS = ('pens_scored', 'pens_missed', 'pens_won', 'fouls_drawn')     # v1.5
@@ -282,20 +288,21 @@ def append_snapshots(conn, rows):
             ON CONFLICT (fixture_id,team_id,model_version_id,source,content_hash) DO NOTHING''', rows)
 
 
-def build(conn, fixture_ids=None, now=None, doc=None, horizon=HORIZON, history=None):
+def build(conn, fixture_ids=None, now=None, doc=None, horizon=HORIZON, history=None, leagues=(PL,), fpl=True):
     """(params doc, [(fixture_id, team_id, kickoff, predictions, inputs)]) for every upcoming Premier
     League fixture within HORIZON (or only fixture_ids). SELECT only. history: a History to reuse
-    when building several versions."""
+    when building several versions. leagues and fpl=False let efl_fantasy.py run the same model on
+    other leagues (with their own history), without FPL's inputs."""
     now = now or datetime.now(timezone.utc)
     doc = doc or load_params()
     upcoming = conn.execute(
         """select f.fixture_id, f.kickoff, f.season, f.home_team_id, f.away_team_id,
                   p.home_xg::float8, p.away_xg::float8
            from fixtures f join fixture_predictions p using (fixture_id)
-           where f.league_id = %s and f.status_short in ('NS', 'TBD') and f.kickoff > %s and f.kickoff <= %s
+           where f.league_id = any(%s) and f.status_short in ('NS', 'TBD') and f.kickoff > %s and f.kickoff <= %s
              and p.home_xg is not null and p.away_xg is not null
              and (%s::int[] is null or f.fixture_id = any(%s::int[])) order by f.kickoff""",
-        [PL, now, now + horizon, fixture_ids, fixture_ids]).fetchall()
+        [list(leagues), now, now + horizon, fixture_ids, fixture_ids]).fetchall()
     if not upcoming:
         return doc, []
     history = history or History(_pl_lines(conn))
@@ -307,10 +314,10 @@ def build(conn, fixture_ids=None, now=None, doc=None, horizon=HORIZON, history=N
            where fp.player_id = any(%s) and fp.minutes > 0 and f.kickoff < %s
            order by fp.player_id, f.kickoff desc, f.fixture_id desc""", [candidates, now]).fetchall())
     avail = availability.load(conn, [(f[0], f[1], f[3], f[4], True) for f in upcoming], observed_at=now)
-    own = 'own_pseudo_90s' in doc['params'].get('dc', {})
+    own = fpl and 'own_pseudo_90s' in doc['params'].get('dc', {})
     fpl_dc = {season: fpl_dc_record(conn, season, now) for season in {f[2] for f in upcoming}} if own else {}
-    pen_order = fpl_penalty_order(conn, now) if 'penalties' in doc['params'] else None
-    fpl_states = fpl_status(conn, now) if doc['params'].get('fpl_availability') else None
+    pen_order = fpl_penalty_order(conn, now) if fpl and 'penalties' in doc['params'] else None
+    fpl_states = fpl_status(conn, now) if fpl and doc['params'].get('fpl_availability') else None
     out = []
     for fid, kickoff, season, home, away, hx, ax in upcoming:
         for team, is_home in ((home, True), (away, False)):

@@ -5538,11 +5538,234 @@ $("#myteam-body").addEventListener("change", (e) => {
 });
 $("#myteam-body").addEventListener("input", (e) => { if (e.target.id === "mt-key") state.myTeam.key = e.target.value; });
 
+// ------------------------------------------------------------------ EFL Fantasy
+// Expected Fantasy EFL points for Championship, League One and League Two players and clubs
+// (efl_predictions.json, from thecornerfc/efl_fantasy.py; loaded when the tab first opens). Nothing
+// comes from the Fantasy EFL site: positions are guessed from match data (efl_positions.json corrects them).
+const EFL_SHOWN = 30;
+const EFL_FORMATIONS = [[2, 2, 2], [2, 3, 1], [3, 2, 1]];      // DEF-MID-FWD behind one goalkeeper
+const EFL_PARTS = { appearance: "Minutes", goal: "Goals", hat_trick: "Hat-trick", assist: "Assists", penalty_miss: "Penalty misses",
+  clean_sheet: "Clean sheet", goals_conceded: "Goals conceded", save: "Saves", penalty_save: "Penalty saves", card: "Cards",
+  tackle: "Tackles", block: "Blocks", clearance: "Clearances", interception: "Interceptions", key_pass: "Key passes",
+  shot_on_target: "Shots on target" };
+const EFL_CLUB_PARTS = { win: "Win", draw: "Draw", away_win: "Away win", clean_sheet: "Clean sheet", goals_2: "2+ goals", goals_4: "4+ goals" };
+const EFL_LEAGUE_SHORT = { 40: "Champ", 41: "L1", 42: "L2" };
+function loadEfl() {
+  if (state.efl !== undefined) return;
+  state.efl = null;
+  renderEfl();
+  getJsonOrNull("data/efl_predictions.json").then((d) => { state.efl = d || false; renderEfl(); });
+}
+function eflData() {
+  const d = state.efl;
+  if (d.rows) return d;
+  const obj = (fields, r) => Object.fromEntries(fields.map((k, j) => [k, r[j]]));
+  d.rows = d.players.map((r, i) => {
+    const p = obj(d.fields, r);
+    p.name = decodeEntities(p.name);
+    p.league = d.teams[p.team]?.[2];
+    p.cells = d.cells[i].map((c) => obj(d.cell_fields, c));
+    return p;
+  });
+  d.clubRows = Object.entries(d.clubs).map(([team, cs]) => ({ team: +team, league: d.teams[team]?.[2], cells: cs.map((c) => obj(d.club_fields, c)) }));
+  return d;
+}
+// The best 7 + 2 for one gameweek: for each formation, players by expected points with at most two
+// from a club; the captain's points count twice. Greedy, so close to the best rather than exact.
+function eflBestTeam(rows, clubs, gw) {
+  const pts = (cells) => cells.filter((c) => c.gw === gw).reduce((a, c) => a + c.xp, 0);
+  const pool = rows.map((p) => ({ p, xp: pts(p.cells) })).filter((r) => r.xp > 0).sort((a, b) => b.xp - a.xp);
+  let best = null;
+  for (const [nd, nm, nf] of EFL_FORMATIONS) {
+    const need = { G: 1, D: nd, M: nm, F: nf }, per = {}, xi = [];
+    for (const r of pool) {
+      if (!need[r.p.position] || (per[r.p.team] || 0) >= 2) continue;
+      need[r.p.position]--; per[r.p.team] = (per[r.p.team] || 0) + 1; xi.push(r);
+      if (xi.length === 7) break;
+    }
+    if (xi.length < 7) continue;
+    const total = xi.reduce((a, r) => a + r.xp, 0) + xi[0].xp;
+    if (!best || total > best.total) best = { xi, total, formation: `1-${nd}-${nm}-${nf}` };
+  }
+  const picks = clubs.map((c) => ({ c, xp: pts(c.cells) })).filter((r) => r.xp > 0).sort((a, b) => b.xp - a.xp).slice(0, 2);
+  if (best) best.clubs = picks;
+  return best;
+}
+function renderEfl() {
+  const body = $("#efl-body");
+  const note = (text) => `<div class="stats-card"><div class="stats-note">${text}</div></div>`;
+  if (state.efl == null) { body.innerHTML = note("Loading…"); return; }
+  if (!state.efl || !state.efl.players.length) { body.innerHTML = note("No upcoming EFL gameweeks yet."); return; }
+  const d = eflData();
+  const v = state.eflView ||= { pos: "all", league: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0, open: null, clubsAll: false };
+  const gws = d.gameweeks;
+  v.gw = Math.max(0, Math.min(v.gw, gws.length - 1));
+  const n = v.mode === "gw" ? 1 : Math.min(+v.mode, gws.length);
+  const span = v.mode === "gw" ? [gws[v.gw].id] : gws.slice(0, n).map((g) => g.id);
+  const team = (id) => d.teams[id]?.[0] || teamName(id), code = (id) => d.teams[id]?.[1] || team(id).slice(0, 3).toUpperCase();
+  const day = (iso) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const range = (g) => `${day(g.start + "T12:00:00")} – ${day(g.end + "T12:00:00")}`;
+  const opp = (c) => c.home ? code(c.opponent) : code(c.opponent).toLowerCase();
+  const vs = (cells) => cells.length ? cells.map((c) => `v ${escapeHtml(team(c.opponent))} ${c.home ? "H" : "A"}`).join(" · ") : "No match (blank)";
+  const pick = (cells) => cells.filter((c) => span.includes(c.gw));
+  const q = v.q.trim().toLowerCase();
+  const inLeague = (lg) => v.league === "all" || String(lg) === v.league;
+  const nameOf = (p) => playerById(p.player) ? playerLink(p.player, shortName(p.name)) : escapeHtml(shortName(p.name));
+  const tag = (p) => p.availability ? ` <span class="bet-tag warn" title="On the injury list">${p.availability === "Missing Fixture" ? "Out" : "Doubtful"}</span>` : "";
+
+  // ---- suggested team for the gameweek shown (the first one in the multi-gameweek views)
+  const g0 = v.mode === "gw" ? gws[v.gw] : gws[0];
+  const best = eflBestTeam(d.rows.filter((p) => inLeague(p.league)), d.clubRows.filter((c) => inLeague(c.league)), g0.id);
+  let suggest = "";
+  if (best) {
+    const cap = best.xi[0].p.player, vice = best.xi[1].p.player;
+    const card = (r) => `<div class="mt-player"><span class="mt-nm">${nameOf(r.p)}${r.p.player === cap ? ' <b class="mt-c" title="Captain">C</b>' : r.p.player === vice ? ' <b class="mt-c v" title="Vice-captain">V</b>' : ""}</span>
+      <small>${escapeHtml(code(r.p.team))} · ${r.xp.toFixed(1)}</small>${tag(r.p)}</div>`;
+    const row = (pos) => `<div class="mt-row">${best.xi.filter((r) => r.p.position === pos).map(card).join("")}</div>`;
+    const clubs = best.clubs.map((r) => `<div class="mt-player"><span class="mt-nm">${escapeHtml(team(r.c.team))}</span>
+      <small>${r.c.cells.filter((c) => c.gw === g0.id).map((c) => `v ${escapeHtml(code(c.opponent))} ${c.home ? "H" : "A"}`).join(" · ")} · ${r.xp.toFixed(1)}</small></div>`).join("");
+    const total = best.total + best.clubs.reduce((a, r) => a + r.xp, 0);
+    suggest = `<div class="stats-card">
+      <div class="stats-label">Suggested team · GW${g0.id} (${range(g0)}) · ${total.toFixed(1)} expected points</div>
+      <div class="mt-pitch">${["G", "D", "M", "F"].map(row).join("")}</div>
+      <div class="stats-label mt-sub">Clubs</div>
+      <div class="mt-row mt-bench">${clubs}</div>
+      <div class="stats-note">${best.formation}, at most two players from a club, captain (C) on the most expected points.
+        ${v.league === "all" ? "" : `Only ${escapeHtml(d.leagues[v.league])}. `}It doesn't know how many of your five picks of each club you've used.</div>
+    </div>`;
+  }
+
+  // ---- players
+  const rows = d.rows.filter((p) => inLeague(p.league) && (v.pos === "all" || p.position === v.pos)
+      && (!q || p.name.toLowerCase().includes(q) || team(p.team).toLowerCase().includes(q)))
+    .map((p) => {
+      const cells = pick(p.cells), sum = (k) => cells.reduce((a, c) => a + c[k], 0);
+      return { p, cells, xp: sum("xp"), minutes: sum("minutes"), goals: sum("goals"), assists: sum("assists") };
+    }).sort((a, b) => b[v.sort] - a[v.sort] || b.xp - a.xp);
+  const list = v.all ? rows : rows.slice(0, EFL_SHOWN);
+  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><span class="fpl-face"><img class="player-photo" src="${playerPhoto(r.p.player)}" alt="" loading="lazy">
+      <img class="club-logo" data-club="${r.p.team}" src="${teamLogo(r.p.team)}" alt="${escapeHtml(team(r.p.team))}" title="${escapeHtml(team(r.p.team))}" loading="lazy"></span>
+      <div class="fpl-name"><div class="fpl-line"><span class="fpl-nm" title="${escapeHtml(r.p.name)}">${nameOf(r.p)}</span>
+        <span class="fpl-meta"><span title="${FPL_POS[r.p.position]}${r.p.corrected ? "" : ": guessed from match data"}">${r.p.position}${r.p.corrected ? "" : "*"}</span> · ${EFL_LEAGUE_SHORT[r.p.league] || ""}</span>${tag(r.p)}</div>
+      <div class="fpl-match">${v.mode === "gw" ? vs(r.cells) : escapeHtml(team(r.p.team))}</div></div></div></td>`;
+  const pts = (r) => `<button type="button" class="fpl-pts" data-efl-break="${r.p.player}" aria-expanded="${v.open === r.p.player}" title="Where the points come from"><b>${r.xp.toFixed(1)}</b></button>`;
+  const line = (label, figure, x) => `<div class="fpl-part"><span>${label}</span><span>${figure ?? ""}</span>
+      <b class="${x < 0 ? "neg" : ""}">${x < 0 ? "−" : ""}${Math.abs(x).toFixed(2)}</b></div>`;
+  const breakdown = (r, cols) => {
+    if (v.open !== r.p.player) return "";
+    const one = r.cells.length === 1 ? r.cells[0] : null;
+    const stat = { appearance: r.minutes, goal: r.goals.toFixed(2), assist: r.assists.toFixed(2),
+      clean_sheet: one ? `${Math.round(one.p_clean_sheet * 100)}%` : "" };
+    const parts = d.part_fields.map((k, j) => [k, r.cells.reduce((a, c) => a + (c.parts[j] || 0), 0)]).filter(([, x]) => Math.abs(x) >= 0.005);
+    return `<tr class="fpl-break"><td class="fpl-parts-cell" colspan="${cols}"><div class="fpl-parts">
+      ${parts.map(([k, x]) => line(EFL_PARTS[k] || k, stat[k], x)).join("")}</div></td></tr>`;
+  };
+  const sortTh = (k, label, title = "") => `<th${title ? ` title="${title}"` : ""}><button type="button" class="fpl-sort${v.sort === k ? " on" : ""}" data-efl-sort="${k}" aria-pressed="${v.sort === k}"${title ? ` aria-label="${title}"` : ""}>${label}</button></th>`;
+  const gwCell = (cs) => !cs.length ? `<td class="fpl-gw dim-text">–</td>`
+    : `<td class="fpl-gw${cs.length > 1 ? " double" : ""}">${cs.reduce((a, c) => a + c.xp, 0).toFixed(1)}<span>${cs.map(opp).join(" ")}</span></td>`;
+  let head, tbody, cols;
+  if (v.mode === "gw") {
+    cols = 6;
+    head = `<th>#</th><th>Player</th>${sortTh("xp", "Pts")}${sortTh("minutes", "Mins")}${sortTh("goals", "G", "Expected goals")}${sortTh("assists", "A", "Expected assists")}`;
+    tbody = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td>${pts(r)}</td><td>${r.minutes}</td>
+      <td>${r.goals.toFixed(2)}</td><td>${r.assists.toFixed(2)}</td></tr>${breakdown(r, cols)}`).join("");
+  } else {
+    cols = 3 + span.length;
+    head = `<th>#</th><th>Player</th>${sortTh("xp", "Total")}` + span.map((id) => {
+      const g = gws.find((x) => x.id === id);
+      return `<th title="${range(g)}">GW${id}</th>`;
+    }).join("");
+    tbody = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td>${pts(r)}</td>${span.map((id) => gwCell(r.cells.filter((c) => c.gw === id))).join("")}</tr>${breakdown(r, cols)}`).join("");
+  }
+  const chip = (attr, k, label, on) => `<button type="button" class="filter-chip" data-${attr}="${k}" aria-pressed="${on}">${label}</button>`;
+  const modes = [["gw", "Gameweek"], ["3", "Next 3"], ["6", "Next 6"]].map(([k, label]) => chip("efl-mode", k, label, v.mode === k)).join("");
+  const pager = v.mode !== "gw" ? `<span class="fpl-span">GW${span[0]}–${span[span.length - 1]}</span>`
+    : `<span class="fpl-pager"><button type="button" class="filter-chip" data-efl-step="-1" aria-label="Previous gameweek" ${v.gw === 0 ? "disabled" : ""}>◀</button>
+       <span class="fpl-span">GW${gws[v.gw].id} · ${range(gws[v.gw])}</span>
+       <button type="button" class="filter-chip" data-efl-step="1" aria-label="Next gameweek" ${v.gw === gws.length - 1 ? "disabled" : ""}>▶</button></span>`;
+  const leagues = [["all", "All leagues"], ...Object.entries(d.leagues)].map(([k, label]) => chip("efl-league", k, escapeHtml(label), v.league === k)).join("");
+  const posChips = [["all", "All"], ["G", "GK"], ["D", "DEF"], ["M", "MID"], ["F", "FWD"]].map(([k, label]) => chip("efl-pos", k, label, v.pos === k)).join("");
+  const players = `<div class="stats-card">
+    <div class="stats-label">Predicted points</div>
+    <div class="fpl-filters">${posChips}
+      <input type="search" class="table-search fpl-search" id="efl-q" placeholder="Search players or clubs" aria-label="Search players or clubs" value="${escapeHtml(v.q)}"></div>
+    <div class="fpl-scroll"><table class="calib-table fpl-table${v.mode === "gw" ? "" : " multi"}">
+      <thead><tr>${head}</tr></thead>
+      <tbody>${tbody || `<tr><td colspan="${cols}">No players match.</td></tr>`}</tbody></table></div>
+    ${rows.length > EFL_SHOWN ? `<button type="button" class="show-all" id="efl-more">${v.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}
+    </div>`;
+
+  // ---- club picks
+  const clubs = d.clubRows.filter((c) => inLeague(c.league) && (!q || team(c.team).toLowerCase().includes(q))).map((c) => {
+    const cells = pick(c.cells);
+    return { c, cells, xp: cells.reduce((a, x) => a + x.xp, 0) };
+  }).filter((r) => r.cells.length).sort((a, b) => b.xp - a.xp);
+  const clubList = v.clubsAll ? clubs : clubs.slice(0, 12);
+  const clubHead = v.mode === "gw" ? `<th>#</th><th>Club</th><th>Pts</th><th title="Chance of winning">Win</th><th title="Chance of a clean sheet">CS</th>`
+    : `<th>#</th><th>Club</th><th>Total</th>${span.map((id) => `<th>GW${id}</th>`).join("")}`;
+  const clubRow = (r, i) => {
+    const name = `<td class="fpl-player"><div class="fpl-who"><img class="efl-club-logo" src="${teamLogo(r.c.team)}" alt="" loading="lazy">
+      <div class="fpl-name"><div class="fpl-line"><span class="fpl-nm">${escapeHtml(team(r.c.team))}</span><span class="fpl-meta">${EFL_LEAGUE_SHORT[r.c.league] || ""}</span></div>
+      ${v.mode === "gw" ? `<div class="fpl-match">${vs(r.cells)}</div>` : ""}</div></div></td>`;
+    if (v.mode !== "gw") return `<tr><td>${i + 1}</td>${name}<td><b>${r.xp.toFixed(1)}</b></td>${span.map((id) => gwCell(r.cells.filter((c) => c.gw === id))).join("")}</tr>`;
+    const pct = (k) => r.cells.map((c) => `${Math.round(c[k] * 100)}%`).join(" · ");
+    const title = d.club_part_fields.map((k, j) => `${EFL_CLUB_PARTS[k]} ${r.cells.reduce((a, c) => a + c.parts[j], 0).toFixed(2)}`).join(", ");
+    return `<tr><td>${i + 1}</td>${name}<td title="${title}"><b>${r.xp.toFixed(1)}</b></td><td>${pct("p_win")}</td><td>${pct("p_clean_sheet")}</td></tr>`;
+  };
+  const clubCard = `<div class="stats-card">
+    <div class="stats-label">Club picks</div>
+    <div class="fpl-scroll"><table class="calib-table fpl-table${v.mode === "gw" ? "" : " multi"}">
+      <thead><tr>${clubHead}</tr></thead><tbody>${clubList.map(clubRow).join("") || `<tr><td colspan="5">No clubs match.</td></tr>`}</tbody></table></div>
+    ${clubs.length > 12 ? `<button type="button" class="show-all" id="efl-clubs-more">${v.clubsAll ? "Show fewer" : `Show all ${clubs.length}`}</button>` : ""}
+    </div>`;
+
+  const notes = `<div class="stats-card"><div class="stats-note">
+    Points use Fantasy EFL's scoring. Everyone: 1 for playing, 2 for 60 minutes, 3 an assist, 5 a hat-trick, −3 a missed penalty, −1 a yellow and −3 a red.
+    Goals: 10 goalkeeper, 7 defender, 6 midfielder, 5 forward. Goalkeepers and defenders: 5 a clean sheet (60+ minutes), −1 per 2 conceded; goalkeepers 2 per 3 saves and 5 a penalty save.
+    Defenders: 1 per 2 tackles, per 2 blocks and per 4 clearances. Midfielders: 2 an interception. Midfielders and forwards: 1 per 2 key passes and 1 a shot on target.
+    Clubs: 5 a win (2 more away), 3 a draw, 2 a clean sheet, 2 for 2+ goals and 2 more for 4+.
+    <br><br>Minutes, goals, assists, penalties, clean sheets, saves and cards come from the same model as the FPL tab, run on each division's own matches and our match predictions.
+    Tackles, blocks, interceptions, key passes and shots on target are each player's own rates over the last year, pulled toward his role's when he's played little.
+    Our match data has no clearances, so defenders get a typical rate for their role (centre-backs 5 a match, full-backs 2.2): a rough guess. Own goals aren't included.
+    <br><br>Positions marked * are guessed from match data and may not match Fantasy EFL's; corrected ones have no mark.
+    Gameweeks run Thursday to Wednesday, numbered from the season's first week, so check the numbers against the game. Predictions further ahead assume today's form and fitness.
+    This is ${escapeHtml(d.model)}, not yet tested against real Fantasy EFL scores: a guide, not a pick list. Click a player's points to see where they come from.</div></div>`;
+
+  body.innerHTML = `<div class="fpl-filters">${modes}${pager}</div><div class="fpl-filters">${leagues}</div>${suggest}${players}${clubCard}${notes}`;
+  body.querySelectorAll(".fpl-table.multi").forEach((t) => t.style.setProperty("--fz2", `${t.tHead.rows[0].cells[0].getBoundingClientRect().width}px`));
+}
+$("#efl-body").addEventListener("click", (e) => {
+  const t = (sel) => e.target.closest(sel);
+  const pos = t("[data-efl-pos]"), league = t("[data-efl-league]"), sort = t("[data-efl-sort]"), mode = t("[data-efl-mode]");
+  const step = t("[data-efl-step]"), brk = t("[data-efl-break]");
+  const more = e.target.id === "efl-more", clubsMore = e.target.id === "efl-clubs-more";
+  if (!pos && !league && !sort && !mode && !step && !brk && !more && !clubsMore) return;
+  const v = state.eflView;
+  if (brk) v.open = v.open === +brk.dataset.eflBreak ? null : +brk.dataset.eflBreak;
+  if (pos) { v.pos = pos.dataset.eflPos; v.all = false; }
+  if (league) { v.league = league.dataset.eflLeague; v.all = false; v.clubsAll = false; }
+  if (sort) v.sort = sort.dataset.eflSort;
+  if (mode) { v.mode = mode.dataset.eflMode; v.all = false; if (v.mode !== "gw") v.sort = "xp"; }
+  if (step) v.gw += +step.dataset.eflStep;
+  if (more) v.all = !v.all;
+  if (clubsMore) v.clubsAll = !v.clubsAll;
+  renderEfl();
+});
+$("#efl-body").addEventListener("input", (e) => {
+  if (e.target.id !== "efl-q") return;
+  state.eflView.q = e.target.value;
+  state.eflView.all = false;
+  const at = e.target.selectionStart;
+  renderEfl();
+  const box = $("#efl-q"); box.focus(); box.setSelectionRange(at, at);
+});
+
 // ------------------------------------------------------------------ wiring
 function showTab(tab) {
   state.tab = tab;
   if (tab === "fpl") loadFplPredictions();
   if (tab === "myteam") loadMyTeam();
+  if (tab === "efl") loadEfl();
   if (tab === "leagues") renderLeagues();
   if (tab === "nations") { loadNations(); renderNations(); }
   if (tab === "lineups") { loadLineupRecord(); renderLineupRecord(); }
@@ -5560,7 +5783,7 @@ function syncMenu() {
   $("#app-title").textContent = title;
 }
 // Each tab other than the tables has its own address, so a reload (or a shared link) stays on it
-const TAB_ROUTES = { leagues: "leagues", nations: "nations", matches: "matches", stats: "stats", lineups: "lineups", tips: "model-vs-market", bets: "simulation", fpl: "fpl", myteam: "my-fpl-team" };
+const TAB_ROUTES = { leagues: "leagues", nations: "nations", matches: "matches", stats: "stats", lineups: "lineups", tips: "model-vs-market", bets: "simulation", fpl: "fpl", myteam: "my-fpl-team", efl: "efl-fantasy" };
 const ROUTE_TABS = Object.fromEntries(Object.entries(TAB_ROUTES).map(([t, r]) => [r, t]));
 document.querySelectorAll("nav.tabs button").forEach((btn) => btn.addEventListener("click", () => {
   const to = TAB_ROUTES[btn.dataset.tab] ? `#/${TAB_ROUTES[btn.dataset.tab]}` : location.pathname + location.search;
