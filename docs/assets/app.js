@@ -5273,6 +5273,9 @@ function renderFplNext() {
       ${d.source === "fpl" ? "Positions, prices, status and gameweeks come from FPL (updated nightly); players FPL doesn't list at their club are left out." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
       In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
       This is ${escapeHtml(d.model)}, designed after the backtest below and still being tested on upcoming gameweeks: a guide, not a pick list.</div>`;
+  // multi-gameweek: # and Player freeze when the table scrolls sideways; Player's left edge is #'s width
+  const table = el.querySelector(".fpl-table.multi");
+  if (table) table.style.setProperty("--fz2", `${table.tHead.rows[0].cells[0].getBoundingClientRect().width}px`);
 }
 $("#fpl-body").addEventListener("click", (e) => {
   const t = (sel) => e.target.closest(sel);
