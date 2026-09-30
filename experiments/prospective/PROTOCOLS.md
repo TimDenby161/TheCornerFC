@@ -33,6 +33,7 @@ Sample-size basis (`power.py` → `power.json`): two-sided α = 0.05, 80% power,
 | P9 | Fantasy v1.3: bonus, cards, penalty saves, keeper minutes, defensive contributions (Amendment 3) | **Capturing** from 2026-09-29; evaluator not yet built | v1.3 minus v1.1 on the same player-fixtures, points MAE and MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 | P10 | Fantasy v1.4: v1.3 plus each player's own FPL defensive-contribution record (Amendment 4) | **Capturing** from 2026-09-30; evaluator not yet built | v1.4 minus v1.3 on the same player-fixtures, DC points Brier and points MAE / MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 | P11 | Fantasy v1.5: v1.4 plus penalty takers, misses and FPL-only assists (Amendment 5) | **Capturing** once v1.5 deploys (2026-09-30); evaluator written blinded 2026-09-30 (`fantasy_p11.py`) | v1.5 minus v1.4 on the same player-fixtures, goal + penalty + FPL assist points MAE / MSE, then all points | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
+| P12 | Fantasy v1.6: v1.5 plus FPL's injury status as an availability factor (Amendment 6) | **Capturing** once v1.6 deploys (2026-09-30); evaluator written blinded 2026-09-30 (`fantasy_p12.py`) | v1.6 minus v1.5 on the same player-fixtures, log loss of P(play) | 95% CI excluding 0 | 6 Premier League rounds and 300 FPL-flagged player rows | 0 |
 
 Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual; it is blinded.
 
@@ -209,3 +210,15 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
   - Bootstrap seed 20260930.
 
 **Amendment 5 (2026-09-30): P11 registered; the public FPL tab shows v1.5.** From the deploy of v1.5 the capture also stores fantasy v1.5 snapshots. P8, P9 and P10 read only their own versions' rows, so none of them changes. The owner chose to show v1.5 on the public FPL tab before any of P8–P11 is evaluated. This is a display decision, not evidence.
+
+## P12: Fantasy v1.6 availability from FPL's injury status
+
+- **Question.** Does FPL's injury status, applied as an availability factor (`experiments/fantasy_v1_6/DESIGN.md`), predict who plays better than v1.5? v1.5 uses only API-Football's match-day lists and manual absences. And what factor does each FPL status actually warrant?
+- **Evidence.** `fantasy_fixture_snapshots` rows whose model version is named `fantasy-v1.6`, paired with `fantasy-v1.5` rows for the same team-fixture, with P8's timing rules. Each v1.6 snapshot's inputs store every FPL-flagged player's status, chance, news and the factor used (`fpl_availability`).
+- **Target.** Whether he played (minutes > 0) and whether he started, from `fixture_players`. A player in the snapshot with no match line counts as not playing.
+- **Primary.** v1.6 minus v1.5, paired: mean log loss of P(play), over all player-fixtures and over FPL-flagged ones. 95% round-cluster bootstrap. v1.6 is supported if the flagged interval excludes 0 in its favour and the all-players interval's upper end is ≤ 0.001.
+- **Secondary.** The same for P(start). Expected-minutes MAE. Calibration of P(play) by bucket: dated absence before its date; no date; doubtful at 25 / 50 / 75%; API missing; API questionable; both sources.
+- **The refit, registered now.** At target, each FPL bucket's fitted factor is its observed play rate over v1.5's mean P(play) for the same rows, capped at 1. Buckets with fewer than 30 rows keep the v1.6 value. The fitted factors become a proposed v1.7, judged prospectively in turn.
+- **Target size and evaluator.** 6 Premier League rounds and at least 300 FPL-flagged player rows from the first v1.6 capture, analysed once. Evaluator: `python3 experiments/prospective/fantasy_p12.py` (blinded), then `--unblind` at target.
+
+**Amendment 6 (2026-09-30): P12 registered; the public FPL tab shows v1.6.** From the deploy of v1.6 the capture also stores fantasy v1.6 snapshots. P8–P11 read only their own versions' rows, so none of them changes. The owner approved using FPL's injury status as a model input and chose to show v1.6 on the public FPL tab. This is a display decision, not evidence.

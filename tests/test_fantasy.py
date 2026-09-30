@@ -1,3 +1,4 @@
+from datetime import timedelta
 import math
 import unittest
 
@@ -235,6 +236,41 @@ class V15Tests(unittest.TestCase):
         pen_goals = doc['params']['penalties']['rate'] * doc['params']['penalties']['conversion']
         self.assertAlmostEqual(sum(c['exp_pen_goals'] for c in out), pen_goals, places=6)
         self.assertGreater(out[0]['exp_pen_goals'], 0.9 * pen_goals)        # ten penalties for this club
+
+
+class V16Tests(unittest.TestCase):
+    def test_fpl_availability_follows_return_dates_status_and_next_round_chance(self):
+        from datetime import datetime, timezone
+        k = datetime(2026, 10, 10, 14, tzinfo=timezone.utc)
+        later = datetime(2026, 10, 24, 14, tzinfo=timezone.utc)
+        self.assertEqual(fm.fpl_availability(None, k), 1.0)
+        back = ('i', 0, 'Hamstring injury - Expected back 17 Oct')
+        self.assertEqual((fm.fpl_availability(back, k), fm.fpl_availability(back, later)), (0.0, 1.0))
+        self.assertEqual(fm.fpl_availability(('i', 0, 'Knee injury - Expected back 10 Oct'), k), 1.0)   # back that day
+        self.assertEqual(fm.fpl_availability(('s', 0, 'Suspended until 17 Oct'), k), 0.0)
+        unknown = ('i', 0, 'Knee injury - Unknown return date')
+        self.assertEqual((fm.fpl_availability(unknown, k), fm.fpl_availability(unknown, later)), (0.0, 0.0))
+        doubt = ('d', 75, 'Hamstring injury - 75% chance of playing')
+        self.assertEqual(fm.fpl_availability(doubt, k, 7, 7), 0.75)                  # next gameweek only
+        self.assertEqual(fm.fpl_availability(doubt, later, 7, 9), 1.0)
+        self.assertEqual(fm.fpl_availability(doubt, k), 0.75)                         # gameweek unknown: as the next
+        self.assertEqual(fm.fpl_return_date('Expected back 03 Jan', datetime(2026, 12, 20).date()).year, 2027)
+
+    def test_availability_scales_minutes_and_moves_goals_to_teammates(self):
+        import json
+        from pathlib import Path
+        params = json.loads((Path(fm.__file__).with_name('fantasy_params_v1_6.json')).read_text())['params']
+        from datetime import datetime, timezone
+        kickoff = datetime(2026, 9, 30, tzinfo=timezone.utc)
+        recent = [{1: (True, 90), 2: (True, 90)}] * 10
+        app = lambda d, g: (kickoff - timedelta(days=d), True, 90, 'ST', g, g, 0, 0, 2, 5, 1, 8, 10, 0, 0, 3, 8, 0, 0, 0, 3, 1, 0)
+        players = [dict(fm.player_features(p, kickoff, recent, [app(d, g) for d in range(7, 77, 7)], team=8),
+                        position='F', injury=None, fpl_available=a) for p, g, a in ((1, 1, 0.5), (2, 0, 1.0))]
+        out = fm.predict_team(players, 1.6, 1.1, params)
+        full = fm.predict_team([dict(p, fpl_available=1.0) for p in players], 1.6, 1.1, params)
+        self.assertAlmostEqual(out[0]['p_start'], 0.5 * full[0]['p_start'])
+        self.assertAlmostEqual(out[0]['exp_minutes'], 0.5 * full[0]['exp_minutes'])
+        self.assertGreater(out[1]['exp_goals'], full[1]['exp_goals'])            # his teammate picks up the share
 
 
 class SnapshotTests(unittest.TestCase):

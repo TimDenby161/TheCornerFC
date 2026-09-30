@@ -114,7 +114,7 @@ class CaptureTests(unittest.TestCase):
         with patch.object(config, 'READ_ONLY', True), self.assertRaises(config.SafetyError):
             fs.capture(MagicMock())
 
-    def test_each_run_snapshots_v1_1_v1_3_v1_4_and_v1_5_under_their_own_versions(self):
+    def test_each_run_snapshots_every_captured_version_under_its_own_id(self):
         conn = MagicMock()
         conn.execute.return_value.fetchone.return_value = ('fantasy_fixture_snapshots',)
         team = [(1, 10, KICKOFF, [{'player_id': 7, 'expected_points': 1.0}], {'availability': {}})]
@@ -122,12 +122,12 @@ class CaptureTests(unittest.TestCase):
                 patch.object(fs, 'build', side_effect=lambda c, f, doc, history: (doc, team)) as build, \
                 patch.object(fs, 'register_version', side_effect=lambda c, doc: 'mv_' + doc['version_name']), \
                 patch.object(fs, 'append_snapshots') as append:
-            self.assertEqual(fs.capture(conn), 4)
+            self.assertEqual(fs.capture(conn), 5)
         self.assertEqual([c.kwargs['doc']['version_name'] for c in build.call_args_list],
-                         ['fantasy-v1.1', 'fantasy-v1.3', 'fantasy-v1.4', 'fantasy-v1.5'])
+                         ['fantasy-v1.1', 'fantasy-v1.3', 'fantasy-v1.4', 'fantasy-v1.5', 'fantasy-v1.6'])
         self.assertIs(build.call_args_list[0].kwargs['history'], build.call_args_list[1].kwargs['history'])
         self.assertEqual([c.args[1][0]['model_version_id'] for c in append.call_args_list],
-                         ['mv_fantasy-v1.1', 'mv_fantasy-v1.3', 'mv_fantasy-v1.4', 'mv_fantasy-v1.5'])
+                         ['mv_fantasy-v1.1', 'mv_fantasy-v1.3', 'mv_fantasy-v1.4', 'mv_fantasy-v1.5', 'mv_fantasy-v1.6'])
 
 
 class ParamsAndMigrationTests(unittest.TestCase):
@@ -162,6 +162,13 @@ class ParamsAndMigrationTests(unittest.TestCase):
         pen = v15['params']['penalties']
         self.assertTrue(0.05 < pen['rate'] < 0.2 and 0.7 < pen['conversion'] < 0.9)
         self.assertEqual((pen['order_weight'], pen['order_ratio']), (0.75, 0.15))
+
+    def test_v1_6_is_v1_5_plus_fpl_availability(self):
+        v15 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_5.json')['params']
+        v16 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_6.json')
+        self.assertEqual(v16['version_name'], 'fantasy-v1.6')
+        self.assertEqual({k: v for k, v in v16['params'].items() if k != 'fpl_availability'}, v15)
+        self.assertIs(v16['params']['fpl_availability'], True)
 
     def test_p8_and_its_accrual_read_only_v1_1_rows(self):
         p8 = (ROOT / 'experiments/prospective/fantasy_p8.py').read_text()

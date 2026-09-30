@@ -32,15 +32,21 @@ v1.5 splits goals into non-penalty and penalty goals (experiments/fantasy_v1_5/D
     FPL assists     assists FPL gives that API-Football doesn't: winning a penalty a teammate
                     scores, and rebounds / deflections, shared by shots per 90
 
+v1.6 adds FPL's own injury status (experiments/fantasy_v1_6/DESIGN.md): an availability factor per
+fixture that scales P(start), P(play), P(60+) and expected minutes. 0 before an "Expected back" /
+"Suspended until" date and 1 from it; injured or suspended with no date, 0 until FPL changes it;
+doubtful, FPL's chance for the next gameweek only. API-Football's lists keep their fitted flags.
+
 Not modelled: own goals (and penalty misses before v1.5, defensive contributions before v1.3; bonus, cards
 and penalty saves in v1.1). Positions are API-Football's G/D/M/F. Pure functions: experiments/fantasy_v1 fits the parameters
 and validates them against reconstructed points (fpl.py has no captured FPL data to use yet).
 """
 from collections import Counter
-from datetime import timedelta
+from datetime import date, timedelta
 import hashlib
 import json
 import math
+import re
 
 GOAL_POINTS = {'G': 6, 'D': 6, 'M': 5, 'F': 4}
 CLEAN_SHEET_POINTS = {'G': 4, 'D': 4, 'M': 1, 'F': 0}
@@ -54,6 +60,9 @@ WINDOW = timedelta(days=365)  # team matches, attacking evidence and roles
 RECENT_MINUTES = 20         # his last starts / sub appearances for minutes as a starter / sub
 PRIOR_N = 5                 # pseudo-appearances pulling those toward the position's
 MISSING, DOUBTFUL = 'Missing Fixture', 'Questionable'   # API-Football injury list types
+FPL_OUT = ('i', 's', 'u', 'n')   # FPL statuses: injured, suspended, unavailable, not in squad
+FPL_BACK = re.compile(r'(?:Expected back|Suspended until) (\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)')
+MONTHS = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 COMPONENT_POINTS = ('appearance_points', 'goal_points', 'assist_points', 'clean_sheet_points',
                     'goals_conceded_points', 'save_points')
 EXTRA_POINTS = ('penalty_save_points', 'card_points', 'bonus_points', 'dc_points')      # v1.2, v1.3
@@ -365,6 +374,37 @@ def penalty_features(kickoff, recent, appearances, team, per90):
                           if a[16] == team and a[17] + a[18] > 0])
 
 
+def fpl_return_date(news, near):
+    """The date in FPL news such as 'Knee injury - Expected back 10 Oct' or 'Suspended until 17 Oct',
+    in the year that puts it nearest to near (a date), or None."""
+    m = FPL_BACK.search(news or '')
+    if not m:
+        return None
+    day, month = int(m.group(1)), MONTHS.index(m.group(2)) + 1
+    try:
+        return min((date(y, month, day) for y in (near.year - 1, near.year, near.year + 1)),
+                   key=lambda d: abs((d - near).days))
+    except ValueError:
+        return None
+
+
+def fpl_availability(state, kickoff, next_event=None, event=None):
+    """v1.6: chance he is available for a fixture, from FPL's status as last captured.
+    state: (status, chance of playing next round, news) or None; next_event: the gameweek FPL's
+    chance refers to; event: the fixture's gameweek (None when unknown: treated as the next)."""
+    if not state:
+        return 1.0
+    status, chance, news = state
+    back = fpl_return_date(news, kickoff.date())
+    if back is not None and status != 'a':
+        return 0.0 if kickoff.date() < back else 1.0
+    if status in FPL_OUT:
+        return 0.0
+    if status == 'd' and (event is None or event == next_event):
+        return (50 if chance is None else chance) / 100
+    return 1.0
+
+
 def injury_type(evidence):
     """MISSING, DOUBTFUL or None from availability.merge evidence (API lists and manual absences;
     a manual absence counts as missing)."""
@@ -408,6 +448,8 @@ def predict_team(players, lam_for, lam_against, params, saves=True, save_factor=
         np_rates.append(rate_g)
         rate_a = attacking_rate(.5 * r['a'] + .5 * c_a * r['kp'], .5 * r['ta'] + .5 * c_a * r['tkp'],
                                 a0, pseudo * params['team_assist_evidence'])
+        if params.get('fpl_availability'):       # v1.6: FPL's status scales every chance of playing
+            mins = {k: v * r.get('fpl_available', 1.0) for k, v in mins.items()}
         minutes.append(dict(mins, start_minutes=mins_start, sub_minutes=mins_sub))
         weights.append((rate_g * mins['exp_minutes'], rate_a * mins['exp_minutes']))
     goals = lam_for * (1 - params['own_goal_share'])
