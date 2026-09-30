@@ -255,6 +255,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     market = market_probabilities(conn)
     matches = []
     team_ids = set()
+    teams_extra = {}           # national team names (national teams aren't in teams)
     for row in conn.execute(
             """select f.fixture_id, f.kickoff, f.league_id, f.round, f.home_team_id, f.away_team_id,
                       f.status_short, f.home_goals, f.away_goals, f.pen_home, f.pen_away,
@@ -287,7 +288,22 @@ def _write_site_data(conn, out_dir=OUT_DIR):
             _r(h_miss), _r(a_miss), _r(p_over, 3), _r(p_btts, 3),
             _r(h_xi, 1), _r(h_recent, 1), _r(a_xi, 1), _r(a_recent, 1),
             _xi_lines(lines[:4]), _xi_lines(lines[4:]),
+            0,
         ])
+
+    # National team matches (national_fixtures), shown on the Matches tab only: no predictions,
+    # line-ups or ranks, and flagged intl = 1 so the site links them to the nation pages
+    since, until = now - timedelta(days=PAST_DAYS), now + timedelta(days=FUTURE_DAYS)
+    for row in national_matches(conn, since, until):
+        fid, kickoff, lid, tournament, rnd, home, away, h_name, a_name, status, hg, ag = row
+        competitions.setdefault(lid, {"name": tournament or config.NATIONAL_TEAM_LEAGUES.get(lid, f"Competition {lid}"),
+                                      "country": "World", "type": "International"})
+        teams_extra[home], teams_extra[away] = html.unescape(h_name), html.unescape(a_name)
+        matches.append([fid, kickoff.isoformat(), lid, rnd, home, away, status, hg, ag, None, None,
+                        *[None] * 28, 1])
+    matches.sort(key=lambda m: (m[1], m[0]))
+    nation_pages = {t: nat for t, nat in national_nationalities(conn, list(teams_extra)).items()
+                    if nat != teams_extra[t]}
 
     # Form: total rank change over each team's last FORM_GAMES games
     form = dict(conn.execute(
@@ -323,6 +339,8 @@ def _write_site_data(conn, out_dir=OUT_DIR):
 
     teams = {t: n for t, n in conn.execute(
         "select team_id, name from teams where team_id = any(%s)", [list(team_ids)])}
+    for team, name in teams_extra.items():
+        teams.setdefault(team, name)
 
     generated = now.isoformat()
     (out_dir / "matches.json").write_text(json.dumps({
@@ -333,10 +351,12 @@ def _write_site_data(conn, out_dir=OUT_DIR):
                    "likely", "home_rank", "away_rank", "source", "rating", "r_winner",
                    "r_margin", "r_clean_sheets", "r_shape", "r_goals", "m_home", "m_draw", "m_away",
                    "home_missing", "away_missing", "p_over25", "p_btts",
-                   "home_xi", "home_recent_xi", "away_xi", "away_recent_xi", "home_lines", "away_lines"],
+                   "home_xi", "home_recent_xi", "away_xi", "away_recent_xi", "home_lines", "away_lines",
+                   "intl"],
         "matches": matches,
         "competitions": competitions,
         "teams": teams,
+        "nation_pages": nation_pages,
     }, separators=(",", ":")), encoding="utf-8")
     (out_dir / "rankings.json").write_text(json.dumps({
         "generated_at": generated,
@@ -642,6 +662,44 @@ def export_stats(conn, out_dir=OUT_DIR):
 def _table_exists(conn, name):
     (found,) = conn.execute("select to_regclass(%s)", [f"public.{name}"]).fetchone()
     return found is not None
+
+
+def national_matches(conn, since, until):
+    """Senior national team matches (national_fixtures) kicking off between since and until, for
+    the Matches tab. Friendlies also has youth sides ("England U19") and clubs touring against
+    national teams (teams.national false); both are left out. Empty until that table exists."""
+    if not _table_exists(conn, "national_fixtures"):
+        return []
+    return conn.execute(
+        r"""select fixture_id, kickoff, league_id, tournament, round, home_team_id, away_team_id,
+                   home_name, away_name, status_short, home_goals, away_goals
+            from national_fixtures nf
+            where kickoff between %s and %s
+              and home_name !~ ' U\d{2}$' and away_name !~ ' U\d{2}$'
+              and not exists (select 1 from teams t where t.team_id in (nf.home_team_id, nf.away_team_id)
+                                                     and t.national is false)
+            order by kickoff, fixture_id""", [since, until]).fetchall()
+
+
+def national_nationalities(conn, team_ids):
+    """{national team id: its players' most common nationality}: the site's nation pages go by
+    nationality, which isn't always the team's name ("Bosnia & Herzegovina" plays as "Bosnia and
+    Herzegovina"). A nationality that is another national team's name is dropped: small nations
+    have many dual nationals (Madagascar's players are mostly listed as French). Teams with no
+    stat lines yet are left out."""
+    if not team_ids or not _table_exists(conn, "national_fixture_players"):
+        return {}
+    return dict(conn.execute(
+        """select x.team_id, x.nationality from (
+             select distinct on (nfp.team_id) nfp.team_id, p.nationality
+             from national_fixture_players nfp join players p using (player_id)
+             where nfp.team_id = any(%s) and p.nationality is not null
+             group by nfp.team_id, p.nationality
+             order by nfp.team_id, count(*) desc, p.nationality) x
+           where not exists (select 1 from national_fixtures nf
+                             where (nf.home_name = x.nationality and nf.home_team_id <> x.team_id)
+                                or (nf.away_name = x.nationality and nf.away_team_id <> x.team_id))""",
+        [team_ids]).fetchall())
 
 
 def _period(rows):
