@@ -22,9 +22,11 @@ v1.2 adds, when its parameters are given (experiments/fantasy_v1_2/DESIGN.md):
 v1.3 adds defensive contributions (experiments/fantasy_dc/DESIGN.md): FPL's count in a match
 ~ NegBin(minutes / 90 x (c + k x his tackles + blocks + interceptions per 90), r), with c, k, r
 fitted on FPL's own results; 2 points x P(count >= threshold), as a starter or a sub.
+v1.4 updates that per-90 mean with his own FPL record this season (experiments/fantasy_v1_4/DESIGN.md):
+(his FPL count + mean x m) / (his FPL minutes / 90 + m), since API-Football has no clearances.
 
-Not modelled: own goals, penalty misses, defensive contributions (and bonus, cards and penalty
-saves in v1.1). Positions are API-Football's G/D/M/F. Pure functions: experiments/fantasy_v1 fits the parameters
+Not modelled: own goals, penalty misses (and defensive contributions before v1.3; bonus, cards
+and penalty saves in v1.1). Positions are API-Football's G/D/M/F. Pure functions: experiments/fantasy_v1 fits the parameters
 and validates them against reconstructed points (fpl.py has no captured FPL data to use yet).
 """
 from collections import Counter
@@ -209,6 +211,8 @@ def expected_points(position, minutes, exp_goals, exp_assists, lam_against, save
         comps.update(start_minutes=extras['start_minutes'], sub_minutes=extras['sub_minutes'], dc_points=0.0)
         if 'dc' in extras:
             comps['cbit90'] = extras['cbit90']
+            if 'own_pseudo_90s' in extras['dc']:
+                comps.update(fpl_dc_minutes=extras['fpl_dc_minutes'], fpl_dc_count=extras['fpl_dc_count'])
             dc = extras['dc']
             comps['dc_points'] = dc['points'] * dc_probability(position, comps, dc) if position in dc['thresholds'] else 0.0
         comps['expected_points'] += sum(comps[k] for k in EXTRA_POINTS)
@@ -231,9 +235,12 @@ def nb_tail(threshold, mean, r):
 def dc_probability(position, comps, dc):
     """P(he reaches FPL's defensive-contribution threshold): as a starter over his minutes as a
     starter, or as a sub over his minutes as a sub. comps: expected_points() output with v1.3's
-    start_minutes, sub_minutes and cbit90."""
+    start_minutes, sub_minutes and cbit90 (and v1.4's fpl_dc_minutes and fpl_dc_count)."""
     q, t = dc[position], dc['thresholds'][position]
     per90 = q['c'] + q['k'] * comps['cbit90']
+    if 'own_pseudo_90s' in dc:
+        m = dc['own_pseudo_90s']
+        per90 = (comps['fpl_dc_count'] + per90 * m) / (comps['fpl_dc_minutes'] / 90 + m)
     return (comps['p_start'] * nb_tail(t, comps['start_minutes'] / 90 * per90, q['r'])
             + (comps['p_play'] - comps['p_start']) * nb_tail(t, comps['sub_minutes'] / 90 * per90, q['r']))
 
@@ -256,6 +263,8 @@ def player_extras(params, r=None, stored=None):
         rates = {k: stored[k] for k in ('yellow90', 'red90', 'base_bps90', 'start_minutes', 'sub_minutes')}
         if dc:
             rates['cbit90'] = stored['cbit90']
+        if dc and 'own_pseudo_90s' in dc:
+            rates.update(fpl_dc_minutes=stored['fpl_dc_minutes'], fpl_dc_count=stored['fpl_dc_count'])
     else:
         pseudo, prior = params['rate_pseudo_minutes'] / 90, params['rate_priors'][r['position']]
         n90 = r['att_min'] / 90
@@ -264,6 +273,8 @@ def player_extras(params, r=None, stored=None):
         if dc:        # goalkeepers borrow the defenders' prior; they can't score DC anyway
             p = dc['cbit_priors'].get(r['position'], dc['cbit_priors']['D'])
             rates['cbit90'] = (r['cbit'] + p * pseudo) / (n90 + pseudo)
+        if dc and 'own_pseudo_90s' in dc:     # v1.4: his FPL record this season, (minutes, count)
+            rates['fpl_dc_minutes'], rates['fpl_dc_count'] = r.get('fpl_dc') or (0, 0)
     return dict(rates, penalty_saves=params['penalty_saves_per_team_match'], bonus_beta=params['bonus_beta'],
                 **({'dc': dc} if dc else {}))
 

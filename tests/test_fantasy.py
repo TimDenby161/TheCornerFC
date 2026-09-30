@@ -137,6 +137,25 @@ class V12Tests(unittest.TestCase):
         self.assertAlmostEqual(d['dc_points'], 2 * fm.dc_probability('D', d, dc))
         self.assertEqual(fm.expected_points('G', mins, 0, 0, 1.2, 3.0, extras)['dc_points'], 0.0)
 
+    def test_v1_4_blends_his_own_fpl_record_into_the_rate(self):
+        dc = {'thresholds': {'D': 10}, 'points': 2, 'own_pseudo_90s': 3.0, 'D': {'c': 3.0, 'k': 1.5, 'r': 8.0}}
+        comps = {'p_start': 1.0, 'p_play': 1.0, 'start_minutes': 90, 'sub_minutes': 20, 'cbit90': 4.0}
+        # no record: v1.3's rate; 5 full matches averaging 11 pull it most of the way to 11
+        self.assertAlmostEqual(fm.dc_probability('D', dict(comps, fpl_dc_minutes=0, fpl_dc_count=0), dc),
+                               fm.nb_tail(10, 9.0, 8.0))
+        own = fm.dc_probability('D', dict(comps, fpl_dc_minutes=450, fpl_dc_count=55), dc)
+        self.assertAlmostEqual(own, fm.nb_tail(10, (55 + 9.0 * 3) / (5 + 3), 8.0))
+        # the record rides through player_extras, expected_points and a stored rescoring
+        r = {'position': 'D', 'att_min': 900, 'yellow': 1, 'red': 0, 'bps_base': 30, 'cbit': 40, 'fpl_dc': (450, 55)}
+        params = {'bonus_beta': {p: [0.0] * 7 for p in 'GDMF'}, 'rate_pseudo_minutes': 900, 'penalty_saves_per_team_match': 0.03,
+                  'rate_priors': {'D': {'yellow90': 0.1, 'red90': 0.0, 'base_bps90': 3.0}},
+                  'dc': dict(dc, cbit_priors={'D': 4.0})}
+        extras = dict(fm.player_extras(params, r), start_minutes=90, sub_minutes=20)
+        d = fm.expected_points('D', fm.minutes_expectation(1.0, 0.0, 90, 1.0, 20, 0.0), 0, 0, 1.2, extras=extras)
+        self.assertEqual((d['fpl_dc_minutes'], d['fpl_dc_count']), (450, 55))
+        self.assertEqual(fm.player_extras(params, stored=d)['fpl_dc_count'], 55)
+        self.assertEqual(fm.player_extras(params, dict(r, fpl_dc=None))['fpl_dc_minutes'], 0)
+
 
 class SnapshotTests(unittest.TestCase):
     ROWS = [{'player_id': 9, 'fixture_id': 2, 'team_id': 1, 'expected_points': 3.1, 'p_start': 0.9},

@@ -1712,6 +1712,7 @@ def export_fantasy(conn, out_dir=OUT_DIR):
 
 
 PREDICTION_GWS = 10                     # gameweeks ahead on the FPL tab
+PUBLISHED_FANTASY_PARAMS = Path(__file__).with_name("fantasy_params_v1_4.json")   # the FPL tab shows v1.4
 FPL_POSITIONS = {"GKP": "G", "DEF": "D", "MID": "M", "FWD": "F"}
 
 
@@ -1753,6 +1754,7 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
     gws = sorted({g for g, *_ in fixtures.values()})
     index = {g: i for i, g in enumerate(gws)}
     first = {g: min(k for gg, _, _, k in fixtures.values() if gg == g) for g in gws}
+    parts = [*fm.COMPONENT_POINTS, *(fm.EXTRA_POINTS if "bonus_beta" in params else ())]   # v1.1 has no extras
     players, cells = {}, {}
     for fid, team, _, preds, inputs in teams_out:
         gw, home, away, _ = fixtures[fid]
@@ -1774,21 +1776,24 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
                                 inputs["availability"].get(str(pid))]
             cells.setdefault(pid, []).append([index[gw], away if team == home else home, team == home,
                                               _r(p["expected_points"]), round(p["exp_minutes"]), _r(p["p_start"]),
-                                              _r(p["exp_goals"]), _r(p["exp_assists"]), _r(p["p_clean_sheet"])])
+                                              _r(p["exp_goals"]), _r(p["exp_assists"]), _r(p["p_clean_sheet"]),
+                                              [_r(p[k]) for k in parts]])
     order = sorted(players, key=lambda pid: -sum(c[3] for c in cells[pid]))
     return {"generated_at": datetime.now(timezone.utc).isoformat(), "model": doc["version_name"], "source": source,
             "fpl_captured_at": captured.isoformat() if captured else None,
             "gameweeks": [{"id": g, "first_kickoff": first[g].isoformat()} for g in gws],
             "teams": {str(t): v for t, v in team_info.items()},
             "fields": ["player", "name", "team", "position", "fpl_position", "price", "fpl_status", "fpl_chance", "availability"],
-            "cell_fields": ["gw", "opponent", "home", "xp", "minutes", "p_start", "goals", "assists", "p_clean_sheet"],
+            "cell_fields": ["gw", "opponent", "home", "xp", "minutes", "p_start", "goals", "assists", "p_clean_sheet", "parts"],
+            "part_fields": [k.removesuffix("_points") for k in parts],
             "players": [players[pid] for pid in order], "cells": [sorted(cells[pid]) for pid in order]}
 
 
-def export_fantasy_predictions(conn, out_dir=OUT_DIR):
+def export_fantasy_predictions(conn, out_dir=OUT_DIR, doc=None, filename="fpl_predictions.json"):
     """fpl_predictions.json: every player's expected points for the next PREDICTION_GWS gameweeks
     (FPL's gameweeks once FPL is captured, else API-Football rounds), with FPL position and price.
-    Same code and frozen parameters as the fantasy snapshots. Not critical: a failure skips it."""
+    Same code as the fantasy snapshots, with v1.4's frozen parameters (the version the site shows)
+    unless doc is given. Not critical: a failure skips it."""
     try:
         from . import fantasy_snapshots
         now = datetime.now(timezone.utc)
@@ -1808,13 +1813,14 @@ def export_fantasy_predictions(conn, out_dir=OUT_DIR):
         if not fixtures:
             return
         horizon = max(v[3] for v in fixtures.values()) - now + timedelta(days=1)
-        doc, teams_out = fantasy_snapshots.build(conn, list(fixtures), now=now, horizon=horizon)
+        doc, teams_out = fantasy_snapshots.build(conn, list(fixtures), now=now, horizon=horizon,
+                                                 doc=doc or fantasy_snapshots.load_params(PUBLISHED_FANTASY_PARAMS))
         pids = sorted({p["player_id"] for *_, preds, _ in teams_out for p in preds})
         names = dict(conn.execute("select player_id, name from players where player_id = any(%s)", [pids]).fetchall())
         team_ids = sorted({t for v in fixtures.values() for t in v[1:3]})
         team_info = {t: [n, c] for t, n, c in conn.execute(
             "select team_id, name, code from teams where team_id = any(%s)", [team_ids])}
-        _write_json_file(Path(out_dir) / "fpl_predictions.json", fantasy_prediction_payload(
+        _write_json_file(Path(out_dir) / filename, fantasy_prediction_payload(
             fixtures, teams_out, doc, fpl_players, names, team_info, source=source, captured=captured))
     except Exception:
         conn.rollback()

@@ -114,7 +114,7 @@ class CaptureTests(unittest.TestCase):
         with patch.object(config, 'READ_ONLY', True), self.assertRaises(config.SafetyError):
             fs.capture(MagicMock())
 
-    def test_each_run_snapshots_v1_1_and_v1_3_under_their_own_versions(self):
+    def test_each_run_snapshots_v1_1_v1_3_and_v1_4_under_their_own_versions(self):
         conn = MagicMock()
         conn.execute.return_value.fetchone.return_value = ('fantasy_fixture_snapshots',)
         team = [(1, 10, KICKOFF, [{'player_id': 7, 'expected_points': 1.0}], {'availability': {}})]
@@ -122,10 +122,10 @@ class CaptureTests(unittest.TestCase):
                 patch.object(fs, 'build', side_effect=lambda c, f, doc, history: (doc, team)) as build, \
                 patch.object(fs, 'register_version', side_effect=lambda c, doc: 'mv_' + doc['version_name']), \
                 patch.object(fs, 'append_snapshots') as append:
-            self.assertEqual(fs.capture(conn), 2)
-        self.assertEqual([c.kwargs['doc']['version_name'] for c in build.call_args_list], ['fantasy-v1.1', 'fantasy-v1.3'])
+            self.assertEqual(fs.capture(conn), 3)
+        self.assertEqual([c.kwargs['doc']['version_name'] for c in build.call_args_list], ['fantasy-v1.1', 'fantasy-v1.3', 'fantasy-v1.4'])
         self.assertIs(build.call_args_list[0].kwargs['history'], build.call_args_list[1].kwargs['history'])
-        self.assertEqual([c.args[1][0]['model_version_id'] for c in append.call_args_list], ['mv_fantasy-v1.1', 'mv_fantasy-v1.3'])
+        self.assertEqual([c.args[1][0]['model_version_id'] for c in append.call_args_list], ['mv_fantasy-v1.1', 'mv_fantasy-v1.3', 'mv_fantasy-v1.4'])
 
 
 class ParamsAndMigrationTests(unittest.TestCase):
@@ -141,6 +141,16 @@ class ParamsAndMigrationTests(unittest.TestCase):
         self.assertEqual(v13['version_name'], 'fantasy-v1.3')
         self.assertEqual({k: v for k, v in v13['params'].items() if k != 'dc'}, v12['params'])
         self.assertEqual(v13['params']['dc']['thresholds'], {'D': 10, 'M': 12, 'F': 12})
+
+    def test_v1_4_is_v1_3_plus_his_own_record(self):
+        v13 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_3.json')['params']
+        v14 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_4.json')
+        self.assertEqual(v14['version_name'], 'fantasy-v1.4')
+        p = v14['params']
+        self.assertEqual({k: v for k, v in p.items() if k != 'dc'}, {k: v for k, v in v13.items() if k != 'dc'})
+        self.assertGreater(p['dc']['own_pseudo_90s'], 0)
+        for pos in 'DMF':        # c and k are v1.3's; only r is refitted
+            self.assertEqual({k: p['dc'][pos][k] for k in 'ck'}, {k: v13['dc'][pos][k] for k in 'ck'})
 
     def test_p8_and_its_accrual_read_only_v1_1_rows(self):
         p8 = (ROOT / 'experiments/prospective/fantasy_p8.py').read_text()
@@ -207,6 +217,9 @@ class PredictionPayloadTests(unittest.TestCase):
         # scored as FPL's MID: 5 per goal, 1 per clean sheet, not FWD's 4 and 0
         self.assertAlmostEqual(cells[0]['xp'], round(self.pred(7, 'M')['expected_points'], 2), places=2)
         self.assertGreater(cells[0]['xp'], round(self.pred(7, 'F')['expected_points'], 2))
+        # the points by part add up to the total (v1.1: the six v1 parts)
+        self.assertEqual(out['part_fields'], ['appearance', 'goal', 'assist', 'clean_sheet', 'goals_conceded', 'save'])
+        self.assertAlmostEqual(sum(cells[0]['parts']), cells[0]['xp'], places=1)
 
     def test_prediction_export_failure_is_skipped(self):
         conn = MagicMock()

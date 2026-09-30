@@ -5066,7 +5066,8 @@ function renderFpl() {
       <p class="fpl-text">Our model predicts each Premier League player's fantasy points per match from expected minutes, our match predictions,
         each player's shots and chances, and clean-sheet odds. Tested on ${f.test.rows.toLocaleString()} player-matches since July 2024 that it had never seen,
         it beats the usual shortcuts clearly and its probabilities are well calibrated. It fails one check: goalkeepers come out too low because save points were left out.
-        The next version (v1.1) adds saves and injury news, and is now being tested on upcoming gameweeks before anyone should rely on it.</p>
+        The predictions below use a later version (v1.4), which adds saves, injury news, bonus, cards, penalty saves and defensive contributions.
+        It was designed after seeing these results, so it is now being tested on upcoming gameweeks before anyone should rely on it.</p>
     </details>
     <div class="stats-card" id="fpl-next"></div>
     <div class="stats-grid">
@@ -5131,7 +5132,7 @@ function renderFpl() {
       <div class="stats-value">${rounds} / ${pr.target_rounds} <span style="font-size:14px;color:var(--text-muted)">rounds</span></div>
       <div class="dist-row"><span class="dist-bar-wrap"><span class="dist-bar" style="display:block;width:${Math.min(100, 100 * rounds / pr.target_rounds).toFixed(0)}%;background:var(--series-blue)"></span></span></div>
       <div class="stats-note">${liveText} Every player's prediction is saved before kickoff and can't be changed afterwards. Results stay sealed until
-        ${pr.target_rounds} rounds are in, then the same checks are run once.</div>
+        ${pr.target_rounds} rounds are in, then the same checks are run once. This count is v1.1's; later versions' predictions are saved the same way and checked separately.</div>
     </div>
     <div class="stats-card">
       <div class="stats-label">What this doesn't show yet</div>
@@ -5150,22 +5151,13 @@ function renderFpl() {
 // FPL tab first opens). One gameweek at a time (◀ ▶) or totals over the next 2 / 5 / 10.
 const FPL_STATUS = { i: "Injured", s: "Suspended", u: "Unavailable", n: "Not in squad" };
 const FPL_SHOWN = 30;
-// Fantasy previews: local-only files (git-ignored, never published). Where any exists the table
-// gets a model switch and opens on the newest preview (?model=v1.1 or another version picks one).
-const FPL_PREVIEWS = ["v1.2", "v1.3"];
+// Where a player's points come from (part_fields in the predictions file)
+const FPL_PARTS = { appearance: "Minutes", goal: "Goals", assist: "Assists", clean_sheet: "Clean sheet", goals_conceded: "Goals conceded",
+  save: "Saves", penalty_save: "Penalty saves", card: "Cards", bonus: "Bonus", dc: "Defensive contributions" };
 function loadFplPredictions() {
   if (state.fplPred !== undefined) return;
   state.fplPred = null;
-  Promise.all([getJsonOrNull("data/fpl_predictions.json"),
-    ...FPL_PREVIEWS.map((v) => getJsonOrNull(`data/fpl_predictions_${v.replace(".", "_")}.json`))])
-    .then(([main, ...previews]) => {
-      const found = Object.fromEntries(FPL_PREVIEWS.map((v, i) => [v, previews[i]]).filter(([, d]) => d));
-      const names = Object.keys(found);
-      state.fplModels = names.length ? { "v1.1": main || false, ...found } : null;
-      const asked = new URLSearchParams(location.search).get("model");
-      state.fplPred = state.fplModels?.[asked] || found[names[names.length - 1]] || main || false;
-      renderFplNext();
-    });
+  getJsonOrNull("data/fpl_predictions.json").then((d) => { state.fplPred = d || false; renderFplNext(); });
 }
 function fplRows() {
   const d = state.fplPred;
@@ -5215,20 +5207,35 @@ function renderFplNext() {
       <img class="club-logo" data-club="${r.p.team}" src="${teamLogo(r.p.team)}" alt="${escapeHtml(team(r.p.team))}" title="${escapeHtml(team(r.p.team))}" loading="lazy"></span>
       <div class="fpl-name"><div class="fpl-line"><span class="fpl-nm" title="${escapeHtml(r.p.name)}">${playerById(r.p.player) ? playerLink(r.p.player, shortName(r.p.name)) : escapeHtml(shortName(r.p.name))}</span>${meta(r)}${tag(r.p)}</div>
       <div class="fpl-match">${fp.mode === "gw" ? (r.cells.length ? r.cells.map((c) => `v ${escapeHtml(team(c.opponent))} ${c.home ? "H" : "A"}`).join(" · ") : "No match (blank)") : escapeHtml(team(r.p.team))}</div></div></div></td>`;
+  // the points open a row below with where they come from, summed over the gameweeks shown
+  const pts = (r) => !d.part_fields ? `<b>${r.xp.toFixed(1)}</b>`
+    : `<button type="button" class="fpl-pts" data-fpl-break="${r.p.player}" aria-expanded="${fp.open === r.p.player}" title="Where the points come from"><b>${r.xp.toFixed(1)}</b></button>`;
+  const breakdown = (r, cols) => {
+    if (fp.open !== r.p.player || !d.part_fields) return "";
+    // one line a part: name, its main figure (minutes, clean sheet chance, expected goals / assists), points
+    const one = r.cells.length === 1 ? r.cells[0] : null;
+    const stat = { appearance: r.minutes, goal: r.goals.toFixed(2), assist: r.assists.toFixed(2),
+      clean_sheet: one ? `${Math.round(one.p_clean_sheet * 100)}%` : "" };
+    const line = (label, figure, v) => `<div class="fpl-part"><span>${label}</span><span>${figure ?? ""}</span>
+      <b class="${v < 0 ? "neg" : ""}">${v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)}</b></div>`;
+    const parts = d.part_fields.map((k, j) => [k, r.cells.reduce((a, c) => a + (c.parts[j] || 0), 0)]).filter(([, v]) => Math.abs(v) >= 0.005);
+    return `<tr class="fpl-break"><td class="fpl-parts-cell" colspan="${cols}"><div class="fpl-parts">
+      ${parts.map(([k, v]) => line(FPL_PARTS[k] || k, stat[k], v)).join("")}</div></td></tr>`;
+  };
   const sortTh = (k, label, title = "") => `<th${title ? ` title="${title}"` : ""}><button type="button" class="fpl-sort${fp.sort === k ? " on" : ""}" data-fpl-sort="${k}" aria-pressed="${fp.sort === k}"${title ? ` aria-label="${title}"` : ""}>${label}</button></th>`;
   let head, body;
   if (fp.mode === "gw") {
     head = `<th>#</th><th>Player</th>${sortTh("xp", "Pts")}${sortTh("minutes", "Mins")}${sortTh("goals", "G", "Expected goals")}${sortTh("assists", "A", "Expected assists")}`;
-    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td><b>${r.xp.toFixed(1)}</b></td><td>${r.minutes}</td>
-      <td>${r.goals.toFixed(2)}</td><td>${r.assists.toFixed(2)}</td></tr>`).join("");
+    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td>${pts(r)}</td><td>${r.minutes}</td>
+      <td>${r.goals.toFixed(2)}</td><td>${r.assists.toFixed(2)}</td></tr>${breakdown(r, 6)}`).join("");
   } else {
     head = `<th>#</th><th>Player</th>${sortTh("xp", "Total")}${sortTh("value", "Pts/£m")}`
       + span.map((i) => `<th title="${day(gws[i].first_kickoff)}">${gwLabel(gws[i])}</th>`).join("");
-    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td><b>${r.xp.toFixed(1)}</b></td>
+    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td>${pts(r)}</td>
       <td>${r.value > 0 ? r.value.toFixed(2) : "–"}</td>${span.map((g) => {
         const cs = r.cells.filter((c) => c.gw === g);
         return !cs.length ? `<td class="fpl-gw dim-text">–</td>` : `<td class="fpl-gw${cs.length > 1 ? " double" : ""}">${cs.reduce((a, c) => a + c.xp, 0).toFixed(1)}<span>${cs.map(opp).join(" ")}</span></td>`;
-      }).join("")}</tr>`).join("");
+      }).join("")}</tr>${breakdown(r, 4 + span.length)}`).join("");
   }
   const modes = [["gw", "Gameweek"], ["2", "Next 2"], ["5", "Next 5"], ["10", "Next 10"]].map(([k, label]) =>
     `<button type="button" class="filter-chip" data-fpl-mode="${k}" aria-pressed="${fp.mode === k}">${label}</button>`).join("");
@@ -5240,12 +5247,8 @@ function renderFplNext() {
   const chips = [["all", "All"], ["G", "GK"], ["D", "DEF"], ["M", "MID"], ["F", "FWD"]].map(([k, label]) =>
     `<button type="button" class="filter-chip" data-fpl-pos="${k}" aria-pressed="${fp.pos === k}">${label}</button>`).join("");
   const cols = (fp.mode === "gw" ? 6 : 4 + span.length);
-  const models = state.fplModels ? `<div class="fpl-filters">${Object.entries(state.fplModels).map(([k, v]) =>
-    `<button type="button" class="filter-chip" data-fpl-model="${k}" aria-pressed="${v === d}">${FPL_PREVIEWS.includes(k) ? `${k} preview` : k}</button>`).join("")}
-    <span class="fpl-span">Previews are on this computer only</span></div>` : "";
   el.innerHTML = `
     <div class="stats-label">Predicted points</div>
-    ${models}
     <div class="fpl-filters">${modes}${pager}</div>
     <div class="fpl-filters">${chips}
       <input type="search" class="table-search fpl-search" id="fpl-q" placeholder="Search players or clubs" aria-label="Search players or clubs" value="${escapeHtml(fp.q)}"></div>
@@ -5254,22 +5257,19 @@ function renderFplNext() {
       <tbody>${body || `<tr><td colspan="${cols}">No players match.</td></tr>`}</tbody></table></div>
     ${rows.length > FPL_SHOWN ? `<button type="button" class="show-all" id="fpl-more">${fp.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}
     <div class="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, assists, clean sheets,
-      goals conceded and saves${d.model === "fantasy-v1.3"
-        ? `, plus penalty saves, cards, bonus and defensive contributions. <b>Preview:</b> bonus is rebuilt from match stats (it tracks FPL's own closely); defensive contributions are fitted on FPL's GW1–5 results (experiments/fantasy_dc/).`
-        : d.model === "fantasy-v1.2"
-        ? `, plus penalty saves, cards and bonus. <b>Preview:</b> bonus is rebuilt from match stats, not FPL's own, and v1.2 failed one of its backtest criteria (experiments/fantasy_v1_2/REPORT.md).`
-        : `. <b>Bonus points, cards and own goals aren't included</b>, so the best players come out a point or so below FPL's own figures.`}
+      goals conceded, saves, penalty saves, cards, bonus and defensive contributions. Bonus is rebuilt from match stats (it tracks FPL's own closely).
+      Defensive contributions combine each player's tackles, blocks and interceptions with his own FPL record this season, which also counts clearances. Click a player's points to see where they come from.
       ${d.source === "fpl" ? "Positions, prices, status and gameweeks come from FPL (updated nightly); players FPL doesn't list at their club are left out." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
       In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
-      This is ${escapeHtml(d.model)}, still being tested (see below): a guide, not a pick list.</div>`;
+      This is ${escapeHtml(d.model)}, designed after the backtest below and still being tested on upcoming gameweeks: a guide, not a pick list.</div>`;
 }
 $("#fpl-body").addEventListener("click", (e) => {
   const t = (sel) => e.target.closest(sel);
   const pos = t("[data-fpl-pos]"), sort = t("[data-fpl-sort]"), mode = t("[data-fpl-mode]"), step = t("[data-fpl-step]");
-  const model = t("[data-fpl-model]");
-  if (!pos && !sort && !mode && !step && !model && e.target.id !== "fpl-more") return;
+  const brk = t("[data-fpl-break]");
+  if (!pos && !sort && !mode && !step && !brk && e.target.id !== "fpl-more") return;
   const fp = state.fplView;
-  if (model && state.fplModels[model.dataset.fplModel]) state.fplPred = state.fplModels[model.dataset.fplModel];
+  if (brk) fp.open = fp.open === +brk.dataset.fplBreak ? null : +brk.dataset.fplBreak;
   if (pos) { fp.pos = pos.dataset.fplPos; fp.all = false; }
   if (sort) fp.sort = sort.dataset.fplSort;
   if (mode) { fp.mode = mode.dataset.fplMode; fp.all = false; if (fp.mode !== "gw" && (fp.sort === "minutes" || fp.sort === "goals" || fp.sort === "assists")) fp.sort = "xp"; }

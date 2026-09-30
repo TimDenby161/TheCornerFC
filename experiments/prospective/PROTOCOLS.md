@@ -31,6 +31,7 @@ Sample-size basis (`power.py` → `power.json`): two-sided α = 0.05, 80% power,
 | P7 | Year-ahead Current weight | **Ready** | Selected weight minus 0.2 on the confirmation half | 0.002 | 6,500 confirmation fixtures | 0 |
 | P8 | Fantasy v1.1 expected points (Amendments 2, 3) | **Capturing** once the snapshot migration is applied | v1.1 minus stored recent-average / PPG benchmarks, points MAE and MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 | P9 | Fantasy v1.3: bonus, cards, penalty saves, keeper minutes, defensive contributions (Amendment 3) | **Capturing** from 2026-09-29; evaluator not yet built | v1.3 minus v1.1 on the same player-fixtures, points MAE and MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
+| P10 | Fantasy v1.4: v1.3 plus each player's own FPL defensive-contribution record (Amendment 4) | **Capturing** from 2026-09-30; evaluator not yet built | v1.4 minus v1.3 on the same player-fixtures, DC points Brier and points MAE / MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 
 Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual; it is blinded.
 
@@ -179,3 +180,14 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
 - **Migration:** `db/migrations/20260927_fantasy_fixture_snapshots.sql`, **not yet applied**. Until it is, the capture logs a warning and skips.
 
 **Amendment 3 (2026-09-29): P8 restricted to v1.1; P9 registered.** From 2026-09-29 the capture also stores fantasy v1.3 snapshots in `fantasy_fixture_snapshots`. P8's evaluator (`fantasy_p8.py`) and the site's accrual counter (`export._fantasy_progress`) now read only rows whose model version is named `fantasy-v1.1`, as Amendment 2 intended ("its snapshots accrue separately"). This was made before any P8 outcome existed, with no Premier League round played since capture began.
+
+## P10: Fantasy v1.4 expected points
+
+- **Question.** Does each player's own FPL defensive-contribution record improve v1.3 on gameweeks neither has seen? v1.4 is v1.3 with each player's per-90 DC mean updated by his FPL count and minutes this season: (count + mean × m) / (minutes / 90 + m). m and each position's r are fitted on GW2–5 (`experiments/fantasy_v1_4/`). On GW4–5, with m chosen on GW2–3, it beat v1.3's Brier score for defenders (0.133 vs 0.147) and midfielders (0.053 vs 0.057). That backtest is small, and it was designed after seeing Tarkowski's case.
+- **Evidence.** `fantasy_fixture_snapshots` rows whose model version is named `fantasy-v1.4`, with P8's timing rules. Parameters are frozen in `thecornerfc/fantasy_params_v1_4.json`. Each snapshot stores the FPL record it used (`fpl_dc_minutes`, `fpl_dc_count`): only final (`data_checked`) results captured before the snapshot.
+- **Target.** As P9.
+- **Primary.** v1.4 minus v1.3, paired on player-fixtures present in both. First, the Brier score of P(DC) against FPL's own DC points, for FPL defenders and midfielders. Then points MAE and MSE. 95% round-cluster bootstrap. v1.4 is supported only if the Brier interval excludes 0 in its favour and points MAE is not worse (the upper end of its interval ≤ 0.02).
+- **Secondary.** As P9, plus DC calibration by the size of a player's record.
+- **Target size and evaluator.** As P9: 10 rounds and 3,000 player rows from the first v1.4 capture. The evaluator is written blinded before the first captured round finishes.
+
+**Amendment 4 (2026-09-30): P10 registered; the public FPL tab shows v1.4.** From 2026-09-30 the capture also stores fantasy v1.4 snapshots. P8 still reads only `fantasy-v1.1` rows and P9 only `fantasy-v1.3` rows, so neither changes. The owner chose to show v1.4 on the public FPL tab before any of P8–P10 is evaluated. This is a display decision, not evidence. P9's and P10's "decision relevance" clauses no longer decide what the tab shows; their results will be reported on the tab when they exist.
