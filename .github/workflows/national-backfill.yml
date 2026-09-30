@@ -1,0 +1,97 @@
+name: Backfill national teams
+
+# Manual run for past internationals: pulls the chosen seasons of every competition in
+# config.NATIONAL_TEAM_LEAGUES into national_fixtures, then the line-ups of every finished match
+# not fetched yet, then rebuilds the Nations ranking. The nightly job only refreshes current seasons.
+on:
+  workflow_dispatch:
+    inputs:
+      seasons:
+        description: "Seasons (year the season starts), space-separated"
+        required: true
+        default: "2022 2023 2024 2025"
+      call_budget:
+        description: "Maximum API attempts for this run (about 20 per season for fixtures, plus 1 per 20 matches for line-ups)"
+        required: true
+        default: "600"
+
+concurrency:
+  group: db-sync            # never overlaps the nightly or match-day jobs
+  cancel-in-progress: false
+
+# Nothing by default: each job asks for only what it needs (actions are pinned to commit SHAs,
+# kept current by Dependabot)
+permissions: {}
+
+jobs:
+  backfill:
+    permissions:
+      contents: write      # to commit docs/data/nations.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      API_DAILY_RESERVE: "200"
+      API_RUN_BUDGET: ${{ inputs.call_budget }}
+      THECORNERFC_MODE: production
+      THECORNERFC_READ_ONLY: "false"
+      THECORNERFC_NO_API: "false"
+      SEASONS: ${{ inputs.seasons }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Restore API usage ledger
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .api-usage
+          key: api-usage-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: api-usage-
+
+      - name: Pull national fixtures and line-ups from API-Football
+        run: |
+          # the league list is a placeholder: only the validated seasons are used
+          python -m thecornerfc.workflow_inputs 0 "$SEASONS" > /tmp/backfill-inputs.env
+          source /tmp/backfill-inputs.env
+          python -m thecornerfc sync national --seasons "${SEASON_ARGS[@]}"
+
+      - name: Rebuild the Nations ranking
+        run: python -m thecornerfc nations
+
+      - name: Commit website data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898183+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          if ! git diff --cached --quiet; then
+            git commit -m "Update website data"
+            git pull --rebase -X theirs   # on a clash, this run's freshly generated data wins
+            git push
+          fi
+
+      - name: Report API usage
+        if: always()
+        run: python -m thecornerfc usage
+
+      - name: Save API usage ledger
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .api-usage
+          key: api-usage-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Archive API usage ledger
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: api-usage-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .api-usage/ledger.sqlite3
