@@ -1138,6 +1138,9 @@ by JavaScript and was not retrievable for review. Consequences here:
   - The owner also approved (2026-09-29) using FPL's captured gameweek results (defensive
     contribution counts, bonus and BPS) to fit and check the fantasy model's defensive
     contribution and bonus parts (experiments/fantasy_dc/).
+  - The owner also approved (2026-09-30) using each player's own captured FPL
+    defensive-contribution counts and minutes this season as an input to his own prediction
+    (fantasy v1.4, experiments/fantasy_v1_4/), and chose v1.4 for the public FPL tab.
   - Changing this is again the owner's decision. To stop, remove that workflow step. The
     export then falls back to our own positions and rounds, with no price.
 - Only the fields needed for fantasy validation and the FPL tab are stored, not whole responses.

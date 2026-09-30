@@ -1,11 +1,12 @@
 """Prospective fantasy snapshots: every component of every Premier League player's expected
 points for upcoming fixtures, stored in fantasy_fixture_snapshots before kickoff, together with
 the availability and benchmark values known then, so each model can be judged later on gameweeks
-it had not seen (experiments/prospective/PROTOCOLS.md: P8 for v1.1, P9 for v1.3).
+it had not seen (experiments/prospective/PROTOCOLS.md: P8 for v1.1, P9 for v1.3, P10 for v1.4).
 
 Calculations are fantasy.py's (the backtests run the same functions); the parameters are frozen
-in fantasy_params.json (v1.1, experiments/fantasy_v1/run.py) and fantasy_params_v1_3.json (v1.3,
-experiments/fantasy_dc/run.py). Each version's rows carry its model_version_id. Evidence only: nothing reads it, and
+in fantasy_params.json (v1.1, experiments/fantasy_v1/run.py), fantasy_params_v1_3.json (v1.3,
+experiments/fantasy_dc/run.py) and fantasy_params_v1_4.json (v1.4, experiments/fantasy_v1_4/run.py).
+Each version's rows carry its model_version_id. Evidence only: nothing reads it, and
 a failure here never fails the nightly or match-day run (capture_safely).
 """
 from collections import Counter, defaultdict
@@ -25,7 +26,8 @@ PL = 39
 HORIZON = timedelta(days=8)       # fixtures this far ahead get a snapshot each run
 HISTORY_SEASON = 2020             # league history read, as in the backtest
 PARAMS_PATH = Path(__file__).with_name('fantasy_params.json')
-CAPTURED = (PARAMS_PATH, Path(__file__).with_name('fantasy_params_v1_3.json'))     # each run snapshots both
+CAPTURED = (PARAMS_PATH, Path(__file__).with_name('fantasy_params_v1_3.json'),
+            Path(__file__).with_name('fantasy_params_v1_4.json'))                    # each run snapshots all three
 TABLE = 'fantasy_fixture_snapshots'
 BENCHMARK_MATCHES = 5
 
@@ -144,8 +146,22 @@ class History:
                 'recent5_minutes': sum(p[pid]['minutes'] if pid in p else 0 for _, p in last) / len(last) if last else 0.0}
 
 
-def team_snapshot(history, fixture, team, is_home, injuries, doc):
-    """(predictions, inputs) for one side of an upcoming fixture, from history before kickoff."""
+def fpl_dc_record(conn, season, now):
+    """v1.4's input: {API player: (FPL minutes, FPL defensive-contribution count)} this season, from
+    each gameweek's latest final (data_checked) FPL results captured before now."""
+    return {api: (int(m), int(c)) for api, m, c in conn.execute(
+        """select m.api_id, sum(r.minutes), sum(coalesce((r.stats->>'defensive_contribution')::int, 0))
+           from (select distinct on (event_id) result_capture_id from fpl_result_captures
+                 where season = %s and data_checked and captured_at < %s
+                 order by event_id, captured_at desc, result_capture_id desc) c
+           join fpl_player_results r using (result_capture_id)
+           join fpl_id_map_current m on m.kind = 'player' and m.season = %s and m.fpl_id = r.fpl_player_id
+           where m.api_id is not null and r.minutes > 0 group by m.api_id""", [season, now, season])}
+
+
+def team_snapshot(history, fixture, team, is_home, injuries, doc, fpl_dc=None):
+    """(predictions, inputs) for one side of an upcoming fixture, from history before kickoff.
+    fpl_dc: fpl_dc_record() for v1.4."""
     fid, kickoff, season, home_xg, away_xg, latest_club = fixture
     lam_for, lam_against = (home_xg, away_xg) if is_home else (away_xg, home_xg)
     recent = history.team_recent(team, kickoff)
@@ -156,7 +172,8 @@ def team_snapshot(history, fixture, team, is_home, injuries, doc):
         if position is None:
             continue
         feats = fm.player_features(pid, kickoff, team_recent, [a for a in history.appearances[pid] if a[0] < kickoff])
-        players.append(dict(feats, player_id=pid, position=position, injury=injuries.get(pid)))
+        players.append(dict(feats, player_id=pid, position=position, injury=injuries.get(pid),
+                            fpl_dc=(fpl_dc or {}).get(pid)))
         bench[str(pid)] = history.benchmarks(pid, season, recent)
     params = doc['params']
     factor = (fm.save_multiplier(history.save_history(team, kickoff), params['save_intercept'], params['save_slope'],
@@ -224,12 +241,14 @@ def build(conn, fixture_ids=None, now=None, doc=None, horizon=HORIZON, history=N
            where fp.player_id = any(%s) and fp.minutes > 0 and f.kickoff < %s
            order by fp.player_id, f.kickoff desc, f.fixture_id desc""", [candidates, now]).fetchall())
     avail = availability.load(conn, [(f[0], f[1], f[3], f[4], True) for f in upcoming], observed_at=now)
+    own = 'own_pseudo_90s' in doc['params'].get('dc', {})
+    fpl_dc = {season: fpl_dc_record(conn, season, now) for season in {f[2] for f in upcoming}} if own else {}
     out = []
     for fid, kickoff, season, home, away, hx, ax in upcoming:
         for team, is_home in ((home, True), (away, False)):
             injuries = {p: fm.injury_type(v.get('evidence')) for p, v in avail.get((fid, team), {}).items()}
             predictions, inputs = team_snapshot(history, (fid, kickoff, season, hx, ax, latest_club),
-                                                team, is_home, injuries, doc)
+                                                team, is_home, injuries, doc, fpl_dc.get(season))
             if predictions:
                 out.append((fid, team, kickoff, predictions, inputs))
     return doc, out
