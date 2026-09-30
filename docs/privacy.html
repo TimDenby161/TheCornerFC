@@ -33,6 +33,11 @@ analytics, and it doesn't collect or store anything about you on a server of its
     local storage (<code>fc.balance</code>, <code>fc.stakePct</code>, <code>fc.playerYears</code>) so
     they're still there next time. They never leave your device. Clear them by clearing this site's
     data in your browser.</li>
+  <li><strong>My FPL team.</strong> This page shows the site owner's own Fantasy Premier League team.
+    Opening it asks the site's Supabase database (<code>supabase.co</code>) which weeks the owner has
+    locked in, so Supabase receives your IP address and browser details. The owner's passphrase is
+    kept in that browser's local storage (<code>fc.fplKey</code>) after it's used, and nothing about
+    visitors is stored. See the <a href="https://supabase.com/privacy">Supabase Privacy Policy</a>.</li>
 </ul>
 <p>The site shows information about professional footballers and managers (names, clubs, ages,
 nationalities, match statistics, injuries and ratings computed from those). It comes from API-Football

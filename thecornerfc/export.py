@@ -23,6 +23,8 @@ from .predictions import GOAL_LINES, UPCOMING_STATUSES, goal_lines
 log = logging.getLogger(__name__)
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "docs" / "data"
+# Written by other commands, not the export (fpl_team.json: `fpl team`): kept across a full export
+CARRIED_FILES = ("fpl_team.json",)
 PAST_DAYS = 21       # recent results shown on the site
 FUTURE_DAYS = 60     # upcoming fixtures shown on the site
 FORM_GAMES = 6       # rank change over this many recent games = "form"
@@ -124,6 +126,9 @@ def _publish_export(build, out_dir=OUT_DIR):
     staged = Path(tempfile.mkdtemp(prefix=f".{out_dir.name}-staged-", dir=parent))
     try:
         build(staged)
+        for rel in CARRIED_FILES:
+            if (out_dir / rel).exists() and not (staged / rel).exists():
+                shutil.copy2(out_dir / rel, staged / rel)
         validate_export(staged, previous_dir=out_dir if out_dir.exists() else None)
         _replace_export(staged, out_dir)
         staged = None

@@ -15,6 +15,7 @@
     python -m thecornerfc matchday       # pre-kickoff odds/injuries, late paper bets, settle
     python -m thecornerfc fpl capture    # pre-deadline FPL state (needs FPL_CAPTURE_ENABLED)
     python -m thecornerfc fpl results    # actual FPL points for finished gameweeks
+    python -m thecornerfc fpl team       # the owner's FPL team (FPL_TEAM_ENTRY) for My FPL team
 """
 import argparse
 import logging
@@ -64,7 +65,7 @@ def main(argv=None):
     sub.add_parser("fantasy", help="Snapshot fantasy v1.1 expected points for upcoming Premier League fixtures")
 
     fpl = sub.add_parser("fpl", help="Fantasy Premier League evidence (off unless FPL_CAPTURE_ENABLED)")
-    fpl.add_argument("action", choices=["capture", "results"])
+    fpl.add_argument("action", choices=["capture", "results", "team"])
     fpl.add_argument("--events", type=int, nargs="+", help="results: re-fetch these gameweeks")
 
     sync = sub.add_parser("sync", help="Pull data from API-Football")
@@ -161,6 +162,9 @@ def _execute(args):
             client = fpl.FplClient()
             if args.action == "capture":
                 fpl.capture(client, conn)
+            elif args.action == "team":
+                from . import fpl_team
+                fpl_team.export_team(client, conn, config.FPL_TEAM_ENTRY)
             else:
                 fpl.capture_results(client, conn, args.events)
             logging.info("FPL requests this run: %d", client.calls_made)
