@@ -1145,6 +1145,9 @@ by JavaScript and was not retrievable for review. Consequences here:
     using it as an input to penalty takers, and adding an "FPL assists" part fitted on captured FPL
     results (assists FPL gives that API-Football doesn't). This is fantasy v1.5
     (experiments/fantasy_v1_5/), which the owner chose for the public FPL tab.
+  - The owner also approved (2026-09-30) using FPL's injury status, chance of playing and news
+    (return dates) as an input to each player's chance of playing: fantasy v1.6
+    (experiments/fantasy_v1_6/), shown on the public FPL tab.
   - Changing this is again the owner's decision. To stop, remove that workflow step. The
     export then falls back to our own positions and rounds, with no price.
 - Only the fields needed for fantasy validation and the FPL tab are stored, not whole responses.

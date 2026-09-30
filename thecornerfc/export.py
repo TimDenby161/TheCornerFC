@@ -1712,7 +1712,7 @@ def export_fantasy(conn, out_dir=OUT_DIR):
 
 
 PREDICTION_GWS = 10                     # gameweeks ahead on the FPL tab
-PUBLISHED_FANTASY_PARAMS = Path(__file__).with_name("fantasy_params_v1_5.json")   # the FPL tab shows v1.5
+PUBLISHED_FANTASY_PARAMS = Path(__file__).with_name("fantasy_params_v1_6.json")   # the FPL tab shows v1.6
 FPL_POSITIONS = {"GKP": "G", "DEF": "D", "MID": "M", "FWD": "F"}
 # v1.5's figures behind the goal / penalty / FPL assist lines of the breakdown
 PENALTY_CELLS = ("exp_np_goals", "exp_pen_goals", "exp_pen_misses", "exp_fpl_pen_assists", "exp_fpl_other_assists")
@@ -1801,7 +1801,7 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
 def export_fantasy_predictions(conn, out_dir=OUT_DIR, doc=None, filename="fpl_predictions.json"):
     """fpl_predictions.json: every player's expected points for the next PREDICTION_GWS gameweeks
     (FPL's gameweeks once FPL is captured, else API-Football rounds), with FPL position and price.
-    Same code as the fantasy snapshots, with v1.5's frozen parameters (the version the site shows)
+    Same code as the fantasy snapshots, with v1.6's frozen parameters (the version the site shows)
     unless doc is given. Not critical: a failure skips it."""
     try:
         from . import fantasy_snapshots

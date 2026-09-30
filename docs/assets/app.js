@@ -5268,6 +5268,7 @@ function renderFplNext() {
       Defensive contributions combine each player's tackles, blocks and interceptions with his own FPL record this season, which also counts clearances.
       Penalties go mostly to each club's taker, from FPL's penalty order and who has taken them recently; a miss costs 2.
       FPL assists are the ones FPL gives that match stats don't: winning a penalty a teammate scores, and rebounds or deflections from a player's shot.
+      Injuries use FPL's status: injured or suspended players are out until FPL's return date (or until FPL clears them), and doubtful players count at FPL's chance of playing for the next gameweek; match-day injury lists apply near kickoff.
       Click a player's points to see where they come from.
       ${d.source === "fpl" ? "Positions, prices, status and gameweeks come from FPL (updated nightly); players FPL doesn't list at their club are left out." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
       In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
