@@ -32,7 +32,7 @@ Sample-size basis (`power.py` → `power.json`): two-sided α = 0.05, 80% power,
 | P8 | Fantasy v1.1 expected points (Amendments 2, 3) | **Capturing** once the snapshot migration is applied | v1.1 minus stored recent-average / PPG benchmarks, points MAE and MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 | P9 | Fantasy v1.3: bonus, cards, penalty saves, keeper minutes, defensive contributions (Amendment 3) | **Capturing** from 2026-09-29; evaluator not yet built | v1.3 minus v1.1 on the same player-fixtures, points MAE and MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 | P10 | Fantasy v1.4: v1.3 plus each player's own FPL defensive-contribution record (Amendment 4) | **Capturing** from 2026-09-30; evaluator not yet built | v1.4 minus v1.3 on the same player-fixtures, DC points Brier and points MAE / MSE | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
-| P11 | Fantasy v1.5: v1.4 plus penalty takers, misses and FPL-only assists (Amendment 5) | **Capturing** once v1.5 deploys (2026-09-30); evaluator not yet built | v1.5 minus v1.4 on the same player-fixtures, goal + penalty + FPL assist points MAE / MSE, then all points | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
+| P11 | Fantasy v1.5: v1.4 plus penalty takers, misses and FPL-only assists (Amendment 5) | **Capturing** once v1.5 deploys (2026-09-30); evaluator written blinded 2026-09-30 (`fantasy_p11.py`) | v1.5 minus v1.4 on the same player-fixtures, goal + penalty + FPL assist points MAE / MSE, then all points | 95% CI excluding 0 | 10 Premier League rounds and 3,000 player rows | 0 |
 
 Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual; it is blinded.
 
@@ -201,6 +201,11 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
 - **Target.** FPL's own points per player-fixture: goals, penalty misses and assists from `fpl_player_results`. FPL results don't separate penalty goals, so the primary is the sum of goal + penalty + FPL assist + assist points.
 - **Primary.** v1.5 minus v1.4, paired on player-fixtures present in both: MAE and MSE of goal + assist points (v1.5's goal, penalty, assist and FPL assist parts, against v1.4's goal and assist parts). 95% round-cluster bootstrap. Reported separately for players with a predicted penalty share above 0.5. v1.5 is supported only if the MAE interval excludes 0 in its favour and all-points MAE is not worse (upper end ≤ 0.02).
 - **Secondary.** As P9. Also calibration of predicted penalty share against FPL's `penalties_missed` and the API-Football penalty takers.
-- **Target size and evaluator.** As P9: 10 rounds and 3,000 player rows from the first v1.5 capture. The evaluator is written blinded before the first captured round finishes.
+- **Target size and evaluator.** As P9: 10 rounds and 3,000 player rows from the first v1.5 capture. Evaluator: `python3 experiments/prospective/fantasy_p11.py` (blinded; accrual only), then `--unblind` at target. It was written on 2026-09-30, before any v1.5 snapshot had a finished fixture (first run: 0 rows). Details fixed with it:
+  - Rows: player-fixtures in both versions' latest snapshots before kickoff; the deadline view is secondary, as in P8.
+  - Scored against FPL's final results (goals, assists, penalties missed, total points) at FPL's position. Predictions are rescored at that position from their stored parts.
+  - Left out: double gameweeks, and players with no final FPL result.
+  - Taker log loss uses each snapshot's expected penalty goals. Takers outside the snapshot count at a floor of 1e-6.
+  - Bootstrap seed 20260930.
 
 **Amendment 5 (2026-09-30): P11 registered; the public FPL tab shows v1.5.** From the deploy of v1.5 the capture also stores fantasy v1.5 snapshots. P8, P9 and P10 read only their own versions' rows, so none of them changes. The owner chose to show v1.5 on the public FPL tab before any of P8–P11 is evaluated. This is a display decision, not evidence.
