@@ -147,6 +147,8 @@ API_NAMES = {
     "FYR Macedonia": "North Macedonia", "Swaziland": "Eswatini", "Sao Tome and Principe": "São Tomé and Príncipe",
     "Curacao": "Curaçao", "East Timor": "Timor-Leste", "Brunei Darussalam": "Brunei", "Kyrgyz Republic": "Kyrgyzstan",
     "UAE": "United Arab Emirates", "US Virgin Islands": "United States Virgin Islands",
+    "Bosnia & Herzegovina": "Bosnia and Herzegovina", "Rep. Of Ireland": "Republic of Ireland",
+    "Cape Verde Islands": "Cape Verde", "French Guyana": "French Guiana",
 }
 
 

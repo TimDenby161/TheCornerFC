@@ -521,8 +521,13 @@ function renderFilterMenu(wrap, f, countries, countOf, titles) {
   const cupsGroup = titles.domestic ? `<div class="cgroup${f.startsWith("k:") ? " open" : ""}">${chip("k:all", "Domestic cups", titles.domestic, caret,
     `cchip${f.startsWith("k:") && f !== "k:all" ? " has-active" : ""}`)}${list(DOMESTIC_CUPS.map((lid) =>
       chip(`k:${lid}`, escapeHtml(leagueName(lid)), titles.domesticCup(leagueName(lid)))).join(""))}</div>` : "";
+  const intl = titles.intl ? intlLeagues() : [];
+  const intlGroup = intl.length ? `<div class="cgroup${f.startsWith("i:") ? " open" : ""}">${chip("i:all", "Internationals", titles.intl, caret,
+    `cchip${f.startsWith("i:") && f !== "i:all" ? " has-active" : ""}`)}${list(intl.map((lid) =>
+      chip(`i:${lid}`, escapeHtml(leagueName(lid)), titles.cup(leagueName(lid)))).join(""))}</div>` : "";
   const menu = `${chip("all", "All", titles.all)}
       ${euroGroup}
+      ${intlGroup}
       ${cupsGroup}
       <div class="sep"></div>
       ${countries.filter((c) => !c.region).map(countryGroup).join("")}
@@ -593,7 +598,8 @@ function filterLeagueIds(f, countries) {
   if (f === "all") return null;
   if (f === "e:all") return EURO_CUPS;
   if (f === "k:all") return DOMESTIC_CUPS;
-  if (f.startsWith("e:") || f.startsWith("k:")) return [Number(f.slice(2))];
+  if (f === "i:all") return intlLeagues();
+  if (f.startsWith("e:") || f.startsWith("k:") || f.startsWith("i:")) return [Number(f.slice(2))];
   if (f.startsWith("c:")) return countries.find((c) => c.name === f.slice(2))?.leagues || [];
   if (f.startsWith("r:")) return countries.filter((c) => c.region === f.slice(2)).flatMap((c) => c.leagues);
   return [Number(f)];
@@ -602,6 +608,13 @@ function matchCountries() {
   return state.matchCountries ||= compCountries(state.data.matches.map((m) => m.league));
 }
 const matchLeagueIds = (f = state.matchFilter) => filterLeagueIds(f, matchCountries());
+// National team competitions on the Matches tab (national_fixtures), most matches first
+function intlLeagues() {
+  if (state.intlLeagues) return state.intlLeagues;
+  const count = new Map();
+  for (const m of state.data.matches) if (m.intl) count.set(m.league, (count.get(m.league) || 0) + 1);
+  return state.intlLeagues = [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || a - b);
+}
 // Stats: every competition with stats in any range, so the menu stays put when the range changes
 function statsCountries() {
   return state.statsCountries ||= compCountries(Object.values(state.stats?.ranges || {}).flatMap(Object.keys).filter((k) => /^\d+$/.test(k)));
@@ -652,6 +665,7 @@ function renderMatchFilters() {
   renderFilterMenu($("#match-filters"), state.matchFilter, matchCountries(), null, {
     all: "All competitions", country: (c) => `All ${c} matches`, region: (r) => `All matches in ${r}`,
     euro: "Champions League, Europa League and Conference League matches", cup: (name) => `${name} matches`,
+    intl: "National team matches: World Cup, qualifiers, Nations League, friendlies and others",
   });
 }
 // Phones: the age, position, club and nationality filters sit behind one button, which
@@ -925,6 +939,10 @@ function matchHead(m, right = "") {
   const hRank = finished ? m.home_rank : state.rankByTeam.get(m.home)?.current ?? m.home_rank;
   const aRank = finished ? m.away_rank : state.rankByTeam.get(m.away)?.current ?? m.away_rank;
   const rankTitle = finished ? "Strength going into this match (Elo)" : "Current Strength (Elo)";
+  // national teams: the name opens the nation page (no club page to open, no squad badges)
+  const side = (id, name, where) => m.intl
+    ? `<img class="club-logo" src="${teamLogo(id)}" alt="" loading="lazy"><a class="team-link" href="#/nation/${encodeURIComponent(state.data.nation_pages?.[id] || teamName(id))}">${escapeHtml(name || teamName(id))}</a>`
+    : `<img class="club-logo" data-club="${id}" src="${teamLogo(id)}" alt="" loading="lazy">${clubLink(id, name)}<span class="team-squad-badges" data-squad-team="${where}"></span>`;
   return `
       <div class="match-card-top">
         <span class="match-meta">${meta}${round}</span>
@@ -932,12 +950,12 @@ function matchHead(m, right = "") {
       </div>
       <div class="match-teams">
         <div class="match-team">
-          <div class="mt-name"><img class="club-logo" data-club="${m.home}" src="${teamLogo(m.home)}" alt="" loading="lazy">${clubLink(m.home, m.home_name)}<span class="team-squad-badges" data-squad-team="home"></span></div>
+          <div class="mt-name">${side(m.home, m.home_name, "home")}</div>
           <div class="score-badges">${rankChip(hRank, rankTitle)}<span data-squad-overall="home"></span></div>
         </div>
         ${scoreCentre(m)}
         <div class="match-team away">
-          <div class="mt-name"><img class="club-logo" data-club="${m.away}" src="${teamLogo(m.away)}" alt="" loading="lazy">${clubLink(m.away, m.away_name)}<span class="team-squad-badges" data-squad-team="away"></span></div>
+          <div class="mt-name">${side(m.away, m.away_name, "away")}</div>
           <div class="score-badges"><span data-squad-overall="away"></span>${rankChip(aRank, rankTitle)}</div>
         </div>
       </div>`;
@@ -947,7 +965,7 @@ function matchHead(m, right = "") {
 function matchCard(m, { lineups = true } = {}) {
   const finished = FINISHED.has(m.status) && m.hg != null;
   const rated = finished && m.rating;
-  const canLineup = lineups && !LIVE.has(m.status) && !CALLED_OFF.has(m.status);
+  const canLineup = lineups && !m.intl && !LIVE.has(m.status) && !CALLED_OFF.has(m.status);
   const cls = (rated ? ` rated acc-${m.rating}` : "") + (canLineup ? " lineup-card" : "");
   const badge = rated
     ? `<span class="rating-badge badge-${m.rating}" title="${m.rating}/5 ${RATING_LABELS[m.rating]}">${m.rating}/5</span>` : "";
@@ -965,7 +983,7 @@ function matchCard(m, { lineups = true } = {}) {
       ${matchHead(m, `${badge}${statusTag(m)}`)}
       ${probBars(m, false)}
       ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${reasonsHtml(m)}</div>` : ""}
-      ${upcoming ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
+      ${upcoming && !m.intl ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
       ${toggles ? `<div class="card-toggles">${toggles}</div>` : ""}
       ${m.p_home != null ? `<div class="why-detail" hidden></div>` : ""}
       ${detail}
@@ -976,7 +994,7 @@ function matchCard(m, { lineups = true } = {}) {
 // The competition a filter picks on its own (a league, or one European cup), or null
 function matchSingleLeague(f = state.matchFilter) {
   if (/^\d+$/.test(f)) return Number(f);
-  if (/^e:\d+$/.test(f)) return Number(f.slice(2));
+  if (/^[ei]:\d+$/.test(f)) return Number(f.slice(2));
   return null;
 }
 const ROUND_WINDOW = 4 * 864e5;     // a match more than 4 days from its round's middle was rearranged
@@ -4817,7 +4835,7 @@ function openCountryPage(country) {
   state.club = null;
   const body = $("#club-body");
   const name = countryDisplay(country);
-  const comps = Object.entries(state.data.competitions).filter(([, c]) => c.country === country)
+  const comps = Object.entries(state.data.competitions).filter(([, c]) => c.country === country && c.type !== "International")
     .map(([lid, c]) => ({ lid: Number(lid), ...c }));
   if (!comps.length) { body.innerHTML = `<div class="empty-state">No competitions for ${escapeHtml(name)}.</div>`; return; }
   const leagues = comps.filter((c) => c.type === "League").map((c) => {
