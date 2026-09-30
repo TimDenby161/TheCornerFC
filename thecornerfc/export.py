@@ -1712,8 +1712,10 @@ def export_fantasy(conn, out_dir=OUT_DIR):
 
 
 PREDICTION_GWS = 10                     # gameweeks ahead on the FPL tab
-PUBLISHED_FANTASY_PARAMS = Path(__file__).with_name("fantasy_params_v1_4.json")   # the FPL tab shows v1.4
+PUBLISHED_FANTASY_PARAMS = Path(__file__).with_name("fantasy_params_v1_5.json")   # the FPL tab shows v1.5
 FPL_POSITIONS = {"GKP": "G", "DEF": "D", "MID": "M", "FWD": "F"}
+# v1.5's figures behind the goal / penalty / FPL assist lines of the breakdown
+PENALTY_CELLS = ("exp_np_goals", "exp_pen_goals", "exp_pen_misses", "exp_fpl_pen_assists", "exp_fpl_other_assists")
 
 
 def _fpl_state(conn):
@@ -1755,6 +1757,10 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
     index = {g: i for i, g in enumerate(gws)}
     first = {g: min(k for gg, _, _, k in fixtures.values() if gg == g) for g in gws}
     parts = [*fm.COMPONENT_POINTS, *(fm.EXTRA_POINTS if "bonus_beta" in params else ())]   # v1.1 has no extras
+    pens = "penalties" in params          # v1.5: penalties after goals, FPL-only assists after assists
+    if pens:
+        parts.insert(parts.index("goal_points") + 1, "penalty_points")
+        parts.insert(parts.index("assist_points") + 1, "fpl_assist_points")
     players, cells = {}, {}
     for fid, team, _, preds, inputs in teams_out:
         gw, home, away, _ = fixtures[fid]
@@ -1768,7 +1774,8 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
             position = (fpl and fpl[0]) or p["position"]
             if position != p["position"]:
                 mins = {k: p[k] for k in ("p_start", "p_play", "p60", "exp_minutes")}
-                p = dict(p, **fm.expected_points(position, mins, p["exp_goals"], p["exp_assists"], p["lambda_against"],
+                p = dict(p, **fm.expected_points(position, mins, p.get("exp_np_goals", p["exp_goals"]), p["exp_assists"],
+                                                 p["lambda_against"],
                                                  p.get("save_mean", save_mean), fm.player_extras(params, stored=p)))
             if pid not in players:
                 players[pid] = [pid, names.get(pid, str(pid)), team, p["position"], fpl[0] if fpl else None,
@@ -1777,14 +1784,16 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
             cells.setdefault(pid, []).append([index[gw], away if team == home else home, team == home,
                                               _r(p["expected_points"]), round(p["exp_minutes"]), _r(p["p_start"]),
                                               _r(p["exp_goals"]), _r(p["exp_assists"]), _r(p["p_clean_sheet"]),
-                                              [_r(p[k]) for k in parts]])
+                                              [_r(p[k]) for k in parts],
+                                              *([_r(p[k]) for k in PENALTY_CELLS] if pens else [])])
     order = sorted(players, key=lambda pid: -sum(c[3] for c in cells[pid]))
     return {"generated_at": datetime.now(timezone.utc).isoformat(), "model": doc["version_name"], "source": source,
             "fpl_captured_at": captured.isoformat() if captured else None,
             "gameweeks": [{"id": g, "first_kickoff": first[g].isoformat()} for g in gws],
             "teams": {str(t): v for t, v in team_info.items()},
             "fields": ["player", "name", "team", "position", "fpl_position", "price", "fpl_status", "fpl_chance", "availability"],
-            "cell_fields": ["gw", "opponent", "home", "xp", "minutes", "p_start", "goals", "assists", "p_clean_sheet", "parts"],
+            "cell_fields": ["gw", "opponent", "home", "xp", "minutes", "p_start", "goals", "assists", "p_clean_sheet", "parts",
+                            *([k.removeprefix("exp_") for k in PENALTY_CELLS] if pens else [])],
             "part_fields": [k.removesuffix("_points") for k in parts],
             "players": [players[pid] for pid in order], "cells": [sorted(cells[pid]) for pid in order]}
 
@@ -1792,7 +1801,7 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
 def export_fantasy_predictions(conn, out_dir=OUT_DIR, doc=None, filename="fpl_predictions.json"):
     """fpl_predictions.json: every player's expected points for the next PREDICTION_GWS gameweeks
     (FPL's gameweeks once FPL is captured, else API-Football rounds), with FPL position and price.
-    Same code as the fantasy snapshots, with v1.4's frozen parameters (the version the site shows)
+    Same code as the fantasy snapshots, with v1.5's frozen parameters (the version the site shows)
     unless doc is given. Not critical: a failure skips it."""
     try:
         from . import fantasy_snapshots

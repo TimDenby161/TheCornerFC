@@ -1,0 +1,143 @@
+{
+ "input_sha256": "292d08be88e32dc41d6cca6eea58c643b11ee1b4d3d2db96dae77205a3f905e8",
+ "code_sha256": "03b661df4919ac2f6bdd3e72a4a953b0d90cc91b3c11c0fe6cf321fb2853a7c6",
+ "team_matches": 1620,
+ "penalties": 184,
+ "taker": {
+  "alpha": 0.5,
+  "decay": 0.05,
+  "last_taker_eps": 0.5,
+  "test": {
+   "v1_5": {
+    "log_loss_per_penalty": 1.1861123852400692,
+    "penalties": 101
+   },
+   "last_taker": {
+    "log_loss_per_penalty": 1.327365817935071,
+    "penalties": 101
+   },
+   "v1_4_goal_share": {
+    "log_loss_per_penalty": 1.8079694527546377,
+    "penalties": 101
+   }
+  }
+ },
+ "rate": {
+  "n_fit": 760,
+  "n_test": 860,
+  "league_rate": 0.10921052631578948,
+  "power": 1.5,
+  "power_rate": 0.10608555880316331,
+  "shrink_k": 1000,
+  "test_ll_per_match": {
+   "a_league": -0.3717008773803744,
+   "b_lambda": -0.3726007383397883,
+   "c_team_shrunk": -0.37138735416346325
+  },
+  "chosen": "a_league"
+ },
+ "conversion_fit": 0.8313253012048193,
+ "scorer": {
+  "team_matches": 623,
+  "goals": 1138,
+  "ll_per_goal_v15_minus_v14": 0.0003550364628564511,
+  "ci95": [
+   -0.0029677101938785197,
+   0.0037187369579791576
+  ],
+  "in_matches_with_a_penalty_goal": 0.004418974064530299,
+  "in_matches_without": -0.0003784958428398658
+ },
+ "calibration_test": [
+  {
+   "share": "0.0-0.1",
+   "player_matches": 1286,
+   "expected_attempts": 27.7,
+   "actual_attempts": 16
+  },
+  {
+   "share": "0.1-0.3",
+   "player_matches": 120,
+   "expected_attempts": 20.7,
+   "actual_attempts": 23
+  },
+  {
+   "share": "0.3-0.6",
+   "player_matches": 38,
+   "expected_attempts": 18.8,
+   "actual_attempts": 24
+  },
+  {
+   "share": "0.6-1.0",
+   "player_matches": 45,
+   "expected_attempts": 33.8,
+   "actual_attempts": 38
+  }
+ ],
+ "league": {
+  "won_per_foul": 0.008904149450037828,
+  "fouls_drawn_prior": {
+   "G": 0.1728063197739803,
+   "D": 0.7238702784237321,
+   "M": 1.2280617581299837,
+   "F": 1.271592982140042
+  },
+  "shots_prior": {
+   "G": 0.001851496283292646,
+   "D": 0.42407768210671865,
+   "M": 0.9806358131902929,
+   "F": 1.7621224747190378
+  },
+  "self_won": 0.15789473684210525,
+  "won_recorded_share": 0.8315217391304348
+ },
+ "fpl_assists": {
+  "gameweeks": [
+   1,
+   2,
+   3,
+   4,
+   5
+  ],
+  "fpl_assists": 130,
+  "fpl_goals": 134,
+  "api_assists": 97,
+  "pen_won_assists_api": 5,
+  "penalty_goals": 6,
+  "goals": 134,
+  "extra_per_np_goal": 0.21875,
+  "corr_extra_with_shots90": 0.18056124348509506,
+  "corr_extra_with_key_passes90": 0.1806380679061497,
+  "players": 243
+ },
+ "checks_pass": {
+  "taker_beats_last_taker": true,
+  "taker_beats_v1_4": true,
+  "scorer_ll_better": false
+ },
+ "final": {
+  "rate": 0.11358024691358025,
+  "lambda_power": 0,
+  "mean_lambda": 1.503039591553943,
+  "conversion": 0.8260869565217391,
+  "alpha": 0.5,
+  "decay": 0.5,
+  "order_weight": 0.75,
+  "order_ratio": 0.15,
+  "self_won": 0.15789473684210525,
+  "won_per_foul": 0.008904149450037828,
+  "fouls_drawn_prior": {
+   "G": 0.1728063197739803,
+   "D": 0.7238702784237321,
+   "M": 1.2280617581299837,
+   "F": 1.271592982140042
+  },
+  "shots_prior": {
+   "G": 0.001851496283292646,
+   "D": 0.42407768210671865,
+   "M": 0.9806358131902929,
+   "F": 1.7621224747190378
+  },
+  "extra_assists_per_goal": 0.21875
+ }
+}

@@ -1141,6 +1141,10 @@ by JavaScript and was not retrievable for review. Consequences here:
   - The owner also approved (2026-09-30) using each player's own captured FPL
     defensive-contribution counts and minutes this season as an input to his own prediction
     (fantasy v1.4, experiments/fantasy_v1_4/), and chose v1.4 for the public FPL tab.
+  - The owner also approved (2026-09-30) storing FPL's `penalties_order` for each player and
+    using it as an input to penalty takers, and adding an "FPL assists" part fitted on captured FPL
+    results (assists FPL gives that API-Football doesn't). This is fantasy v1.5
+    (experiments/fantasy_v1_5/), which the owner chose for the public FPL tab.
   - Changing this is again the owner's decision. To stop, remove that workflow step. The
     export then falls back to our own positions and rounds, with no price.
 - Only the fields needed for fantasy validation and the FPL tab are stored, not whole responses.

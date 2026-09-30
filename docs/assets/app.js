@@ -5152,8 +5152,9 @@ function renderFpl() {
 const FPL_STATUS = { i: "Injured", s: "Suspended", u: "Unavailable", n: "Not in squad" };
 const FPL_SHOWN = 30;
 // Where a player's points come from (part_fields in the predictions file)
-const FPL_PARTS = { appearance: "Minutes", goal: "Goals", assist: "Assists", clean_sheet: "Clean sheet", goals_conceded: "Goals conceded",
-  save: "Saves", penalty_save: "Penalty saves", card: "Cards", bonus: "Bonus", dc: "Defensive contributions" };
+const FPL_PARTS = { appearance: "Minutes", goal: "Goals", penalty: "Penalties", assist: "Assists", fpl_assist: "FPL assists",
+  clean_sheet: "Clean sheet", goals_conceded: "Goals conceded", save: "Saves", penalty_save: "Penalty saves", card: "Cards", bonus: "Bonus",
+  dc: "Defensive contributions" };
 function loadFplPredictions() {
   if (state.fplPred !== undefined) return;
   state.fplPred = null;
@@ -5214,13 +5215,19 @@ function renderFplNext() {
     if (fp.open !== r.p.player || !d.part_fields) return "";
     // one line a part: name, its main figure (minutes, clean sheet chance, expected goals / assists), points
     const one = r.cells.length === 1 ? r.cells[0] : null;
-    const stat = { appearance: r.minutes, goal: r.goals.toFixed(2), assist: r.assists.toFixed(2),
+    const sum = (k) => r.cells.reduce((a, c) => a + (c[k] || 0), 0);
+    // v1.5 splits goals into open play and penalties (scored · missed), and adds the assists only FPL gives
+    const pens = "pen_goals" in (r.cells[0] || {});
+    const stat = { appearance: r.minutes, goal: (pens ? sum("np_goals") : r.goals).toFixed(2), assist: r.assists.toFixed(2),
+      penalty: pens ? `${sum("pen_goals").toFixed(2)} · ${sum("pen_misses").toFixed(2)} missed` : "",
+      fpl_assist: pens ? (sum("fpl_pen_assists") + sum("fpl_other_assists")).toFixed(2) : "",
       clean_sheet: one ? `${Math.round(one.p_clean_sheet * 100)}%` : "" };
+    const labels = pens ? { ...FPL_PARTS, goal: "Goals (open play)" } : FPL_PARTS;
     const line = (label, figure, v) => `<div class="fpl-part"><span>${label}</span><span>${figure ?? ""}</span>
       <b class="${v < 0 ? "neg" : ""}">${v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)}</b></div>`;
     const parts = d.part_fields.map((k, j) => [k, r.cells.reduce((a, c) => a + (c.parts[j] || 0), 0)]).filter(([, v]) => Math.abs(v) >= 0.005);
     return `<tr class="fpl-break"><td class="fpl-parts-cell" colspan="${cols}"><div class="fpl-parts">
-      ${parts.map(([k, v]) => line(FPL_PARTS[k] || k, stat[k], v)).join("")}</div></td></tr>`;
+      ${parts.map(([k, v]) => line(labels[k] || k, stat[k], v)).join("")}</div></td></tr>`;
   };
   const sortTh = (k, label, title = "") => `<th${title ? ` title="${title}"` : ""}><button type="button" class="fpl-sort${fp.sort === k ? " on" : ""}" data-fpl-sort="${k}" aria-pressed="${fp.sort === k}"${title ? ` aria-label="${title}"` : ""}>${label}</button></th>`;
   let head, body;
@@ -5256,9 +5263,12 @@ function renderFplNext() {
       <thead><tr>${head}</tr></thead>
       <tbody>${body || `<tr><td colspan="${cols}">No players match.</td></tr>`}</tbody></table></div>
     ${rows.length > FPL_SHOWN ? `<button type="button" class="show-all" id="fpl-more">${fp.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}
-    <div class="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, assists, clean sheets,
+    <div class="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, penalties, assists, FPL assists, clean sheets,
       goals conceded, saves, penalty saves, cards, bonus and defensive contributions. Bonus is rebuilt from match stats (it tracks FPL's own closely).
-      Defensive contributions combine each player's tackles, blocks and interceptions with his own FPL record this season, which also counts clearances. Click a player's points to see where they come from.
+      Defensive contributions combine each player's tackles, blocks and interceptions with his own FPL record this season, which also counts clearances.
+      Penalties go mostly to each club's taker, from FPL's penalty order and who has taken them recently; a miss costs 2.
+      FPL assists are the ones FPL gives that match stats don't: winning a penalty a teammate scores, and rebounds or deflections from a player's shot.
+      Click a player's points to see where they come from.
       ${d.source === "fpl" ? "Positions, prices, status and gameweeks come from FPL (updated nightly); players FPL doesn't list at their club are left out." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
       In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
       This is ${escapeHtml(d.model)}, designed after the backtest below and still being tested on upcoming gameweeks: a guide, not a pick list.</div>`;

@@ -114,7 +114,7 @@ class CaptureTests(unittest.TestCase):
         with patch.object(config, 'READ_ONLY', True), self.assertRaises(config.SafetyError):
             fs.capture(MagicMock())
 
-    def test_each_run_snapshots_v1_1_v1_3_and_v1_4_under_their_own_versions(self):
+    def test_each_run_snapshots_v1_1_v1_3_v1_4_and_v1_5_under_their_own_versions(self):
         conn = MagicMock()
         conn.execute.return_value.fetchone.return_value = ('fantasy_fixture_snapshots',)
         team = [(1, 10, KICKOFF, [{'player_id': 7, 'expected_points': 1.0}], {'availability': {}})]
@@ -122,10 +122,12 @@ class CaptureTests(unittest.TestCase):
                 patch.object(fs, 'build', side_effect=lambda c, f, doc, history: (doc, team)) as build, \
                 patch.object(fs, 'register_version', side_effect=lambda c, doc: 'mv_' + doc['version_name']), \
                 patch.object(fs, 'append_snapshots') as append:
-            self.assertEqual(fs.capture(conn), 3)
-        self.assertEqual([c.kwargs['doc']['version_name'] for c in build.call_args_list], ['fantasy-v1.1', 'fantasy-v1.3', 'fantasy-v1.4'])
+            self.assertEqual(fs.capture(conn), 4)
+        self.assertEqual([c.kwargs['doc']['version_name'] for c in build.call_args_list],
+                         ['fantasy-v1.1', 'fantasy-v1.3', 'fantasy-v1.4', 'fantasy-v1.5'])
         self.assertIs(build.call_args_list[0].kwargs['history'], build.call_args_list[1].kwargs['history'])
-        self.assertEqual([c.args[1][0]['model_version_id'] for c in append.call_args_list], ['mv_fantasy-v1.1', 'mv_fantasy-v1.3', 'mv_fantasy-v1.4'])
+        self.assertEqual([c.args[1][0]['model_version_id'] for c in append.call_args_list],
+                         ['mv_fantasy-v1.1', 'mv_fantasy-v1.3', 'mv_fantasy-v1.4', 'mv_fantasy-v1.5'])
 
 
 class ParamsAndMigrationTests(unittest.TestCase):
@@ -151,6 +153,15 @@ class ParamsAndMigrationTests(unittest.TestCase):
         self.assertGreater(p['dc']['own_pseudo_90s'], 0)
         for pos in 'DMF':        # c and k are v1.3's; only r is refitted
             self.assertEqual({k: p['dc'][pos][k] for k in 'ck'}, {k: v13['dc'][pos][k] for k in 'ck'})
+
+    def test_v1_5_is_v1_4_plus_penalties(self):
+        v14 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_4.json')['params']
+        v15 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_5.json')
+        self.assertEqual(v15['version_name'], 'fantasy-v1.5')
+        self.assertEqual({k: v for k, v in v15['params'].items() if k != 'penalties'}, v14)
+        pen = v15['params']['penalties']
+        self.assertTrue(0.05 < pen['rate'] < 0.2 and 0.7 < pen['conversion'] < 0.9)
+        self.assertEqual((pen['order_weight'], pen['order_ratio']), (0.75, 0.15))
 
     def test_p8_and_its_accrual_read_only_v1_1_rows(self):
         p8 = (ROOT / 'experiments/prospective/fantasy_p8.py').read_text()
@@ -220,6 +231,23 @@ class PredictionPayloadTests(unittest.TestCase):
         # the points by part add up to the total (v1.1: the six v1 parts)
         self.assertEqual(out['part_fields'], ['appearance', 'goal', 'assist', 'clean_sheet', 'goals_conceded', 'save'])
         self.assertAlmostEqual(sum(cells[0]['parts']), cells[0]['xp'], places=1)
+
+    def test_v1_5_payload_splits_goals_penalties_and_fpl_assists(self):
+        doc = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_5.json')
+        mins = fm.minutes_expectation(0.9, 0.5, 85, 0.9, 20, 0.0)
+        pens = {'exp_pen_goals': 0.08, 'exp_pen_misses': 0.02, 'exp_fpl_pen_assists': 0.01, 'exp_fpl_other_assists': 0.04}
+        extras = {'yellow90': 0.1, 'red90': 0.0, 'base_bps90': 5.0, 'penalty_saves': 0.03, 'start_minutes': 85,
+                  'sub_minutes': 20, 'bonus_beta': doc['params']['bonus_beta'], 'penalties': pens,
+                  'dc': doc['params']['dc'], 'cbit90': 1.0, 'fpl_dc_minutes': 0, 'fpl_dc_count': 0}
+        pred = dict(player_id=7, position='F', **fm.expected_points('F', mins, 0.3, 0.1, 1.2, 2.0, extras))
+        out = export.fantasy_prediction_payload({1: (6, 10, 20, KICKOFF)}, [(1, 10, KICKOFF, [pred], {'availability': {}})],
+                                                doc, {7: ('M', 85, 'a', None)}, {7: 'Striker'}, {10: ['Home FC', 'HOM']}, source='fpl')
+        self.assertEqual(out['part_fields'][:5], ['appearance', 'goal', 'penalty', 'assist', 'fpl_assist'])
+        cell = dict(zip(out['cell_fields'], out['cells'][0][0]))
+        self.assertEqual((cell['np_goals'], cell['pen_goals'], cell['goals']), (0.3, 0.08, 0.38))
+        parts = dict(zip(out['part_fields'], cell['parts']))
+        self.assertAlmostEqual(parts['penalty'], 5 * 0.08 - 2 * 0.02, places=2)       # rescored as FPL's MID
+        self.assertAlmostEqual(sum(cell['parts']), cell['xp'], places=1)
 
     def test_prediction_export_failure_is_skipped(self):
         conn = MagicMock()

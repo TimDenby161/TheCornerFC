@@ -24,8 +24,15 @@ v1.3 adds defensive contributions (experiments/fantasy_dc/DESIGN.md): FPL's coun
 fitted on FPL's own results; 2 points x P(count >= threshold), as a starter or a sub.
 v1.4 updates that per-90 mean with his own FPL record this season (experiments/fantasy_v1_4/DESIGN.md):
 (his FPL count + mean x m) / (his FPL minutes / 90 + m), since API-Football has no clearances.
+v1.5 splits goals into non-penalty and penalty goals (experiments/fantasy_v1_5/DESIGN.md):
+    penalties       expected attempts x conversion, taken out of the team total and shared by
+                    taker weight (his decayed attempts for this club + alpha x his non-penalty
+                    goal rate, blended with FPL's penalty order) x expected minutes; misses -2
+    goals           the rest, shared by non-penalty evidence (penalties out of goals and shots on target)
+    FPL assists     assists FPL gives that API-Football doesn't: winning a penalty a teammate
+                    scores, and rebounds / deflections, shared by shots per 90
 
-Not modelled: own goals, penalty misses (and defensive contributions before v1.3; bonus, cards
+Not modelled: own goals (and penalty misses before v1.5, defensive contributions before v1.3; bonus, cards
 and penalty saves in v1.1). Positions are API-Football's G/D/M/F. Pure functions: experiments/fantasy_v1 fits the parameters
 and validates them against reconstructed points (fpl.py has no captured FPL data to use yet).
 """
@@ -41,6 +48,7 @@ ASSIST_POINTS = 3
 SAVES_PER_POINT = 3
 CONCEDED_PER_POINT = 2
 PENALTY_SAVE_POINTS, YELLOW_POINTS, RED_POINTS = 5, -1, -3
+PENALTY_MISS_POINTS = -2
 HISTORY_MATCHES = 10        # team matches in the start / sub rates
 WINDOW = timedelta(days=365)  # team matches, attacking evidence and roles
 RECENT_MINUTES = 20         # his last starts / sub appearances for minutes as a starter / sub
@@ -49,6 +57,8 @@ MISSING, DOUBTFUL = 'Missing Fixture', 'Questionable'   # API-Football injury li
 COMPONENT_POINTS = ('appearance_points', 'goal_points', 'assist_points', 'clean_sheet_points',
                     'goals_conceded_points', 'save_points')
 EXTRA_POINTS = ('penalty_save_points', 'card_points', 'bonus_points', 'dc_points')      # v1.2, v1.3
+PENALTY_POINTS = ('penalty_points', 'fpl_assist_points')                                  # v1.5
+PENALTY_PARTS = ('exp_pen_goals', 'exp_pen_misses', 'exp_fpl_pen_assists', 'exp_fpl_other_assists')
 # FPL's published BPS values for the actions API-Football records (no clearances, recoveries,
 # big chances, crosses, errors, offsides, own goals, penalty misses or winning goals)
 BPS_GOAL = {'G': 12, 'D': 12, 'M': 18, 'F': 24}
@@ -206,6 +216,13 @@ def expected_points(position, minutes, exp_goals, exp_assists, lam_against, save
                      base_bps90=extras['base_bps90'],
                      penalty_save_points=PENALTY_SAVE_POINTS * per90 * extras['penalty_saves'] if position == 'G' else 0.0,
                      card_points=per90 * (YELLOW_POINTS * extras['yellow90'] + RED_POINTS * extras['red90']))
+        pens = extras.get('penalties')
+        if pens is not None:          # v1.5: exp_goals was the non-penalty part; bonus sees them all
+            comps.update(pens, exp_np_goals=exp_goals, exp_goals=exp_goals + pens['exp_pen_goals'],
+                         penalty_points=GOAL_POINTS[position] * pens['exp_pen_goals']
+                         + PENALTY_MISS_POINTS * pens['exp_pen_misses'],
+                         fpl_assist_points=ASSIST_POINTS * (pens['exp_fpl_pen_assists'] + pens['exp_fpl_other_assists']))
+            comps['expected_points'] += comps['penalty_points'] + comps['fpl_assist_points']
         x = bonus_features(position, comps)
         comps['bonus_points'] = max(0.0, sum(f * b for f, b in zip(x, extras['bonus_beta'][position])))
         comps.update(start_minutes=extras['start_minutes'], sub_minutes=extras['sub_minutes'], dc_points=0.0)
@@ -265,6 +282,8 @@ def player_extras(params, r=None, stored=None):
             rates['cbit90'] = stored['cbit90']
         if dc and 'own_pseudo_90s' in dc:
             rates.update(fpl_dc_minutes=stored['fpl_dc_minutes'], fpl_dc_count=stored['fpl_dc_count'])
+        if 'penalties' in params:
+            rates['penalties'] = {k: stored[k] for k in PENALTY_PARTS}
     else:
         pseudo, prior = params['rate_pseudo_minutes'] / 90, params['rate_priors'][r['position']]
         n90 = r['att_min'] / 90
@@ -300,14 +319,16 @@ def universe(team, team_recent, latest_club):
     return sorted(p for p in seen if latest_club.get(p) == team)
 
 
-def player_features(player, kickoff, team_recent, appearances):
+def player_features(player, kickoff, team_recent, appearances, team=None):
     """Everything v1 needs about one player before kickoff.
 
     team_recent: his team's league matches within WINDOW, oldest first, as {player: (started,
     minutes)}. appearances: his earlier league appearances with minutes, any club, oldest first:
     (kickoff, started, minutes, role, goals, shots_on, assists, key_passes, and his team's goals,
     shots_on, assists, key_passes in that match), optionally followed by v1.2's (base BPS,
-    yellow cards, red cards) and v1.3's tackles + blocks + interceptions."""
+    yellow cards, red cards) and v1.3's tackles + blocks + interceptions, and v1.5's (club, penalties
+    scored, missed and won, shots, fouls drawn, his team's penalties scored). team: his club now,
+    whose penalties alone count toward his taker record."""
     history, gap = [], None
     for j, match in enumerate(reversed(team_recent)):
         line = match.get(player)
@@ -329,7 +350,19 @@ def player_features(player, kickoff, team_recent, appearances):
                 tg=per90(8), tsot=per90(9), ta=per90(10), tkp=per90(11),
                 bps_base=sum(a[12] for a in recent if len(a) > 12), yellow=sum(a[13] for a in recent if len(a) > 12),
                 red=sum(a[14] for a in recent if len(a) > 12), cbit=sum(a[15] for a in recent if len(a) > 15),
-                group=roles.most_common(1)[0][0] if roles else None)
+                group=roles.most_common(1)[0][0] if roles else None,
+                **(penalty_features(kickoff, recent, appearances, team, per90)
+                   if not appearances or len(appearances[-1]) > 16 else {}))
+
+
+def penalty_features(kickoff, recent, appearances, team, per90):
+    """v1.5: non-penalty goal evidence over the window, penalties won / shots / fouls drawn, and his
+    penalty attempts for this club ever, as [(days before kickoff, attempts)]."""
+    return dict(g_np=sum(a[4] - a[17] for a in recent), sot_np=sum(max(a[5] - a[17], 0) for a in recent),
+                tg_np=sum((a[8] - a[22]) * a[2] / 90 for a in recent), tsot_np=per90(9) - sum(a[22] * a[2] / 90 for a in recent),
+                won=sum(a[19] for a in recent), shots=sum(a[20] for a in recent), fouls_drawn=sum(a[21] for a in recent),
+                pen_hist=[((kickoff - a[0]).days, a[17] + a[18]) for a in appearances
+                          if a[16] == team and a[17] + a[18] > 0])
 
 
 def injury_type(evidence):
@@ -339,13 +372,24 @@ def injury_type(evidence):
     return MISSING if MISSING in types else DOUBTFUL if DOUBTFUL in types else None
 
 
+def goal_rate(r, params, non_penalty=False):
+    """His share of his team's goal evidence per 90 (goals and shots on target), shrunk to his role
+    group's; v1.5 counts non-penalty evidence only."""
+    g, sot, tg, tsot = ('g_np', 'sot_np', 'tg_np', 'tsot_np') if non_penalty else ('g', 'sot', 'tg', 'tsot')
+    c_g = params['goals_per_shot_on']
+    g0 = params['role_priors'][r['group'] or POSITION_GROUPS[r['position']]][0]
+    return attacking_rate(.5 * r[g] + .5 * c_g * r[sot], .5 * r[tg] + .5 * c_g * r[tsot],
+                          g0, params['K'] / 90 * params['team_goal_evidence'])
+
+
 def predict_team(players, lam_for, lam_against, params, saves=True, save_factor=1.0):
     """Components for one team-fixture. players: player_features() dicts with 'position' (G/D/M/F)
     and 'injury' (injury_type); params: a fitted parameter set (thecornerfc/fantasy_params.json,
     or fantasy_params_v1_2.json); save_factor: v1.2's save_multiplier() for the team."""
     pr, c_g, c_a = params['position_priors'], params['goals_per_shot_on'], params['assists_per_key_pass']
     pseudo = params['K'] / 90
-    minutes, weights = [], []
+    pen = params.get('penalties')
+    minutes, weights, np_rates = [], [], []
     for r in players:
         s, b = minutes_features(r['history'], r['gap'], params['decay'])
         if params['availability']:
@@ -359,24 +403,68 @@ def predict_team(players, lam_for, lam_against, params, saves=True, save_factor=
             start_probability(s, params['gk_start_beta' if gk else 'start_beta']),
             start_probability(b, params['gk_sub_beta' if gk else 'sub_beta']),
             mins_start, shrunk(r['start_60'], r['start_n'], p['start_p60'], PRIOR_N), mins_sub, params['sub_p60'])
-        g0, a0 = params['role_priors'][r['group'] or POSITION_GROUPS[r['position']]]
-        rate_g = attacking_rate(.5 * r['g'] + .5 * c_g * r['sot'], .5 * r['tg'] + .5 * c_g * r['tsot'],
-                                g0, pseudo * params['team_goal_evidence'])
+        _, a0 = params['role_priors'][r['group'] or POSITION_GROUPS[r['position']]]
+        rate_g = goal_rate(r, params, non_penalty=bool(pen))
+        np_rates.append(rate_g)
         rate_a = attacking_rate(.5 * r['a'] + .5 * c_a * r['kp'], .5 * r['ta'] + .5 * c_a * r['tkp'],
                                 a0, pseudo * params['team_assist_evidence'])
         minutes.append(dict(mins, start_minutes=mins_start, sub_minutes=mins_sub))
         weights.append((rate_g * mins['exp_minutes'], rate_a * mins['exp_minutes']))
-    eg = allocate(lam_for * (1 - params['own_goal_share']), [w[0] for w in weights])
+    goals = lam_for * (1 - params['own_goal_share'])
+    pens = penalty_allocation(players, minutes, np_rates, lam_for, goals, pen, pseudo) if pen else None
+    eg = allocate(goals - (pens['pen_goals'] if pens else 0.0), [w[0] for w in weights])
     ea = allocate(lam_for * params['assists_per_goal'], [w[1] for w in weights])
     save_mean = max(params['save_intercept'] + params['save_slope'] * lam_against, 0.1) * save_factor if saves else None
     out = []
-    for r, m, g, a in zip(players, minutes, eg, ea):
+    for i, (r, m, g, a) in enumerate(zip(players, minutes, eg, ea)):
         extras = player_extras(params, r)
         if extras is not None:
             extras.update(start_minutes=m['start_minutes'], sub_minutes=m['sub_minutes'])
+            if pens:
+                extras['penalties'] = {k: pens[k][i] for k in PENALTY_PARTS}
         m = {k: m[k] for k in ('p_start', 'p_play', 'p60', 'exp_minutes')}
         out.append(expected_points(r['position'], m, g, a, lam_against, save_mean, extras))
     return out
+
+
+def team_penalties(lam_for, pen):
+    """v1.5: a team's expected penalty attempts in a match."""
+    return pen['rate'] * (lam_for / pen['mean_lambda']) ** pen['lambda_power']
+
+
+def taker_scores(players, np_rates, pen):
+    """v1.5 taker weight of each player were he on the pitch: his penalty attempts for this club,
+    each decayed by pen['decay'] a year, plus alpha x his non-penalty goal rate (first-time takers)."""
+    return [sum(pen['decay'] ** (days / 365) * n for days, n in r.get('pen_hist', ())) + pen['alpha'] * g
+            for r, g in zip(players, np_rates)]
+
+
+def with_fpl_order(scores, orders, pen):
+    """Blend history's taker shares with FPL's penalty order where FPL lists the team's takers:
+    order k counts order_ratio ** (k - 1), and the blend gives FPL order_weight."""
+    listed = [pen['order_ratio'] ** (o - 1) if o else 0.0 for o in orders]
+    if not any(listed) or not any(scores):
+        return scores
+    s, t = sum(scores), sum(listed)
+    return [(1 - pen['order_weight']) * x / s + pen['order_weight'] * y / t for x, y in zip(scores, listed)]
+
+
+def penalty_allocation(players, minutes, np_rates, lam_for, goals, pen, pseudo):
+    """v1.5's team penalty goals and each player's share of them, misses and FPL-only assists."""
+    attempts = team_penalties(lam_for, pen)
+    pen_goals = min(attempts * pen['conversion'], goals)
+    scores = with_fpl_order(taker_scores(players, np_rates, pen), [r.get('fpl_pen_order') for r in players], pen)
+    exp_min = [m['exp_minutes'] for m in minutes]
+    share = allocate(1.0, [s * m for s, m in zip(scores, exp_min)])
+    per90 = lambda r, k, prior: (r.get(k, 0) + prior * pseudo) / (r['att_min'] / 90 + pseudo)
+    won = [(per90(r, 'won', 0) + pen['won_per_foul'] * per90(r, 'fouls_drawn', pen['fouls_drawn_prior'][r['position']])) * m
+           for r, m in zip(players, exp_min)]
+    shots = [per90(r, 'shots', pen['shots_prior'][r['position']]) * m for r, m in zip(players, exp_min)]
+    return {'pen_goals': pen_goals, 'pen_share': share,
+            'exp_pen_goals': [pen_goals * x for x in share],
+            'exp_pen_misses': [attempts * (1 - pen['conversion']) * x for x in share],
+            'exp_fpl_pen_assists': allocate(pen_goals * (1 - pen['self_won']), won),
+            'exp_fpl_other_assists': allocate((goals - pen_goals) * pen['extra_assists_per_goal'], shots)}
 
 
 # ---- Snapshots ----
@@ -408,7 +496,8 @@ def fpl_predictions(rows, api_to_fpl):
         p = out.setdefault(fpl_id, {'fpl_player_id': fpl_id, 'api_player_id': r['player_id'], 'fixtures': 0})
         p['fixtures'] += 1
         for key, value in r.items():
-            if key in ('exp_minutes', 'exp_goals', 'exp_assists', 'expected_points', *COMPONENT_POINTS, *EXTRA_POINTS):
+            if key in ('exp_minutes', 'exp_goals', 'exp_assists', 'expected_points', *COMPONENT_POINTS, *EXTRA_POINTS,
+                       *PENALTY_POINTS, *PENALTY_PARTS, 'exp_np_goals'):
                 p[key] = p.get(key, 0.0) + value
             elif key in ('p_start', 'p_play', 'p60', 'p_clean_sheet') and p['fixtures'] == 1:
                 p[key] = value      # a probability is kept for the first fixture only
