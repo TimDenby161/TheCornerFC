@@ -637,6 +637,51 @@
   .fpl-gw { font-variant-numeric: tabular-nums; white-space: nowrap; }
   .fpl-gw span { display: block; color: var(--text-muted); font-size: 10px; font-weight: 600; }
   .fpl-gw.double { background: color-mix(in srgb, var(--series-blue) 10%, transparent); }
+  /* My FPL team (renderMyTeam) */
+  #myteam-body .stats-card { margin-bottom: 12px; }
+  .mt-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .mt-title b { font-size: 18px; }
+  .mt-title span { color: var(--text-secondary); font-size: 13px; }
+  .mt-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+  .mt-stats > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .mt-stats b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .mt-select { font: inherit; font-size: 16px; font-weight: 700; height: 30px; width: 60px; color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); padding: 0 6px; }
+  @media (max-width: 520px) { .mt-stats { grid-template-columns: 1fr 1fr; } }
+  .mt-move { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: 8px; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--gridline); font-size: 14px; }
+  .mt-move small { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+  .mt-nm { font-weight: 600; }
+  .mt-arrow { color: var(--text-muted); }
+  .mt-gain { color: var(--status-good); font-variant-numeric: tabular-nums; }
+  .mt-warn { color: #f08a5a; }
+  .mt-lock, .mt-locked { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .mt-lock .table-search, .mt-locked .table-search { flex: 1 1 160px; width: auto; }
+  .mt-locked > span { color: var(--status-good); font-weight: 700; }
+  .mt-btn { font: inherit; font-weight: 700; font-size: 14px; padding: 9px 14px; border-radius: 8px; border: 0; cursor: pointer;
+    background: var(--series-blue); color: #fff; }
+  .mt-btn:disabled { opacity: 0.6; cursor: default; }
+  .mt-btn:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
+  .mt-pitch { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 10px 6px; border-radius: 8px;
+    background: color-mix(in srgb, var(--status-good) 8%, transparent); }
+  .mt-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+  .mt-player { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 76px; max-width: 110px; padding: 4px 6px;
+    border-radius: 6px; background: var(--surface-1); border: 1px solid var(--border); font-size: 12px; text-align: center; }
+  .mt-player .mt-nm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mt-player small { color: var(--text-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .mt-c { display: inline-block; font-size: 9px; line-height: 14px; width: 14px; border-radius: 50%; background: var(--text-primary); color: var(--surface-1); }
+  .mt-c.v { background: var(--text-muted); }
+  .mt-sub { margin-top: 10px; }
+  .mt-bench { justify-content: flex-start; margin-top: 6px; }
+  .mt-plan td, .mt-squad td { vertical-align: top; }
+  .mt-plan-moves { font-size: 12px; }
+  .fpl-scroll .mt-plan { min-width: 0; }            /* moves wrap: fits a phone without scrolling */
+  .mt-chip { padding: 8px 0; border-bottom: 1px solid var(--gridline); }
+  .mt-chip > div:first-child { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .mt-details summary { cursor: pointer; font-size: 12px; color: var(--series-blue); margin-top: 4px; }
+  .mt-details .mt-move { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); font-size: 13px; padding: 4px 0; }
+  .mt-nm-cell { white-space: nowrap; }
+  .mt-foot { margin: 0 2px 12px; }
   .tips-bank { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 12px; align-items: end; margin-bottom: 10px !important;
     padding: 12px 14px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; }
   .tb-field, .tb-out { display: flex; flex-direction: column; gap: 5px; min-width: 0; }

@@ -1200,6 +1200,50 @@ version, gameweek and horizon, and counts snapshots without final points and pre
 missing from the results. It deliberately stores no ownership, transfers or FPL's own `ep_next`.
 Add those, with their own licensing check, if a later model or benchmark needs them.
 
+### My FPL team
+
+The **My FPL team** page runs the owner's own FPL team (entry 3996593, `FPL_TEAM_ENTRY`): it
+suggests this week's transfers, plans the next six gameweeks, sets the line-up and captain, and
+says when to play each chip left. **Owner's decision, 2026-09-30:** read FPL's manager endpoints
+for this entry (`entry/{id}/`, `entry/{id}/history/`, `entry/{id}/transfers/`,
+`entry/{id}/event/{gw}/picks/`) and show the squad, plan and chip advice publicly. It's a new FPL
+source under the licensing notes above, and no other entry is read.
+
+- `python -m thecornerfc fpl team` (in the FPL update and nightly workflows, after the export)
+  writes `docs/data/fpl_team.json`: the squad after any transfers already made for the next
+  deadline, each player's selling price (bought at FPL's start price, or at `element_in_cost` for
+  later buys, keeping half of any rise), bank, free transfers (1 a week up to 5, less those used;
+  a Wildcard or Free Hit week keeps them), chips with their windows from `bootstrap-static`, and
+  the season's history. API-Football ids come from `fpl_id_map_current`. The full export keeps
+  this file (`export.CARRIED_FILES`).
+- The planning runs in the browser (`docs/assets/fpl-planner.js`, tested by
+  `tests/fpl_planner.test.mjs`) from `fpl_predictions.json`. It's a beam search over six weeks.
+  Each week it rolls the free transfer or makes the best one, two or three moves, and a move
+  beyond the free ones costs 4 points. A squad scores its best legal XI with the captain doubled,
+  plus 0.1 of the bench. Each later week is weighted 0.9 of the one before, and a free transfer
+  still banked at the end is worth 1.5 points. Chips: Triple Captain's gain is the captain's
+  points, Bench Boost's the bench's, Free Hit's the best one-week squad over the planned one, and
+  Wildcard's the best squad over six weeks against the plan (first four weeks only). A chip is
+  advised once its week's gain reaches 10 / 18 / 12 / 15, which usually takes a double
+  gameweek. Otherwise it's held, unless its window closes within the predictions. All of these
+  numbers are judgment, not fitted.
+- **Locking in.** "I've made these transfers" calls `lock_fpl_transfers` in Supabase with the
+  week's moves. The page then plans from the squad after them, until the next FPL update reads
+  the real transfers from FPL (FPL's squad wins). The page carries Supabase's public anon key
+  (`SUPABASE` in `app.js`), and CSP `connect-src` allows only this project.
+  `db/migrations/20260930_fpl_team_locks.sql` limits anon to reading `fpl_team_locks` and calling
+  `lock_fpl_transfers` / `unlock_fpl_transfers`. Both are SECURITY DEFINER and check a bcrypt
+  hash of the owner's passphrase; 10 wrong passphrases lock the entry out for an hour. The same
+  migration revokes anon's read of the `upcoming_predictions` view, since views skip RLS.
+
+  One-time setup:
+  1. Run `db/migrations/20260930_fpl_team_locks.sql` in the Supabase SQL editor (it's also in
+     `db/schema.sql`).
+  2. Set the passphrase there, with one you choose:
+     `INSERT INTO fpl_team_keys VALUES (3996593, extensions.crypt('your passphrase', extensions.gen_salt('bf'))) ON CONFLICT (entry_id) DO UPDATE SET key_hash = EXCLUDED.key_hash;`
+  3. Put the project's anon (or publishable) key from Supabase → Project Settings → API Keys into
+     `SUPABASE.key` in `docs/assets/app.js`. Without it the page still plans, but can't lock in.
+
 ### Fantasy expected points (v1.1, evidence only)
 
 `thecornerfc/fantasy.py` gives each Premier League player's expected FPL points per fixture from:

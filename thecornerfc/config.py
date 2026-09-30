@@ -64,6 +64,8 @@ def require_api_access(action):
 # and the Premier League's terms restrict building databases from its sites. Off until the owner
 # decides the use is acceptable (README: Fantasy Premier League evidence).
 FPL_CAPTURE_ENABLED = _bool_env("FPL_CAPTURE_ENABLED", False)
+# The owner's FPL entry, read by `fpl team` for the My FPL team page (owner's decision, 2026-09-30)
+FPL_TEAM_ENTRY = int(os.getenv("FPL_TEAM_ENTRY", "3996593"))
 
 
 def require_fpl_access(action):
