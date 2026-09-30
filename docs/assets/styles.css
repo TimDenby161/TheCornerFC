@@ -556,8 +556,9 @@
   .bets-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   #tips-top, #tips-bank, #tips-body { max-width: 640px; margin: 0 auto; }
 
-  #fpl-body { max-width: 760px; margin: 0 auto; }
-  #fpl-body .stats-card { margin-bottom: 12px; }
+  #fpl-body, #efl-body { max-width: 760px; margin: 0 auto; }
+  #fpl-body .stats-card, #efl-body .stats-card { margin-bottom: 12px; }
+  .efl-club-logo { width: 28px; height: 28px; object-fit: contain; flex: none; }
   #fpl-body .stats-grid .stats-card { margin-bottom: 0; }
   .fpl-verdict { border-left: 4px solid var(--status-warning); }
   .fpl-verdict.ok { border-left-color: var(--status-good); }
