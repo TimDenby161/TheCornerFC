@@ -291,6 +291,9 @@ alter table fixture_players add column if not exists goals_conceded smallint;
 alter table fixture_players add column if not exists penalties_saved smallint;
 alter table fixture_players add column if not exists dribbled_past smallint;        -- times an opponent dribbled past him
 alter table fixture_players add column if not exists penalties_committed smallint;
+alter table fixture_players add column if not exists penalties_won smallint;      -- fantasy v1.5 penalty takers
+alter table fixture_players add column if not exists penalties_scored smallint;
+alter table fixture_players add column if not exists penalties_missed smallint;
 -- Starting position from the line-up: grid "row:col" and the role derived from it with the
 -- formation (positions.py), e.g. 'LB', 'DM', 'RW'. Null for substitutes.
 alter table fixture_players add column if not exists grid text;

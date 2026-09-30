@@ -1037,6 +1037,8 @@ def _player_lines(f, grids, xi, names=False):
                         "penalties_saved": g("penalty", "saved"),
                         "dribbled_past": g("dribbles", "past"),
                         "penalties_committed": g("penalty", "commited"),   # sic (API spelling)
+                        "penalties_won": g("penalty", "won"), "penalties_scored": g("penalty", "scored"),
+                        "penalties_missed": g("penalty", "missed"),
                         "grid": grids.get(p["player"]["id"], (None, None))[0],
                         "role": grids.get(p["player"]["id"], (None, None))[1],
                         **({"player_name": p["player"].get("name")} if names else {})})

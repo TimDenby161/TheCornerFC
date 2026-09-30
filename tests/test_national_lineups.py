@@ -69,6 +69,14 @@ class NationalLineupsTests(unittest.TestCase):
         self.assertNotIn("player_name", lineups[0])
         self.assertNotIn("player_name", ingest._player_lines(_fixture(1, 1), {}, {})[0])
 
+    def test_player_lines_keep_penalties_won_scored_and_missed(self):
+        f = _fixture(1, 1)
+        f["players"][0]["players"][0]["statistics"][0]["penalty"] = {
+            "won": 1, "commited": None, "scored": 1, "missed": 0, "saved": None}
+        kane, bellingham = ingest._player_lines(f, {}, {})
+        self.assertEqual((kane["penalties_won"], kane["penalties_scored"], kane["penalties_missed"]), (1, 1, 0))
+        self.assertEqual((bellingham["penalties_scored"], bellingham["penalties_missed"]), (None, None))
+
 
 if __name__ == "__main__":
     unittest.main()
