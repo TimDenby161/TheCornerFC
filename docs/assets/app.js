@@ -241,7 +241,7 @@ function shortName(name) {
 }
 // Flag for a nationality (API-Football's country names -> ISO codes; flagcdn has the home nations too)
 const FLAG_CODES = {"Afghanistan": "af", "Albania": "al", "Andorra": "ad", "Bosnia": "ba", "Gibraltar": "gi", "Algeria": "dz", "Angola": "ao", "Antigua and Barbuda": "ag", "Argentina": "ar", "Armenia": "am", "Australia": "au", "Austria": "at", "Azerbaijan": "az", "Barbados": "bb", "Belgium": "be", "Benin": "bj", "Bermuda": "bm", "Bolivia": "bo", "Bosnia and Herzegovina": "ba", "Brazil": "br", "Bulgaria": "bg", "Burkina Faso": "bf", "Burundi": "bi", "Cameroon": "cm", "Canada": "ca", "Cape Verde": "cv", "Central African Republic": "cf", "Chad": "td", "Chile": "cl", "Colombia": "co", "Comoros": "km", "Congo": "cg", "Congo DR": "cd", "Costa Rica": "cr", "Croatia": "hr", "Cuba": "cu", "Curaçao": "cw", "Cyprus": "cy", "Czech Republic": "cz", "Czechia": "cz", "Côte d'Ivoire": "ci", "Denmark": "dk", "Dominican Republic": "do", "Ecuador": "ec", "Egypt": "eg", "El Salvador": "sv", "England": "gb-eng", "Equatorial Guinea": "gq", "Estonia": "ee", "Faroe Islands": "fo", "Finland": "fi", "France": "fr", "French Guiana": "gf", "Gabon": "ga", "Gambia": "gm", "Georgia": "ge", "Germany": "de", "Ghana": "gh", "Great Britain": "gb", "Greece": "gr", "Grenada": "gd", "Guadeloupe": "gp", "Guatemala": "gt", "Guinea": "gn", "Guinea-Bissau": "gw", "Guyana": "gy", "Haiti": "ht", "Honduras": "hn", "Hungary": "hu", "Iceland": "is", "Indonesia": "id", "Iran": "ir", "Iraq": "iq", "Israel": "il", "Italy": "it", "Ivory Coast": "ci", "Jamaica": "jm", "Japan": "jp", "Jordan": "jo", "Kazakhstan": "kz", "Kenya": "ke", "Korea Republic": "kr", "Kosovo": "xk", "Latvia": "lv", "Lebanon": "lb", "Liberia": "lr", "Libya": "ly", "Lithuania": "lt", "Luxembourg": "lu", "Madagascar": "mg", "Malawi": "mw", "Mali": "ml", "Malta": "mt", "Mexico": "mx", "Montenegro": "me", "Montserrat": "ms", "Morocco": "ma", "Mozambique": "mz", "Namibia": "na", "Netherlands": "nl", "New Zealand": "nz", "Niger": "ne", "Nigeria": "ng", "North Macedonia": "mk", "Northern Ireland": "gb-nir", "Norway": "no", "Panama": "pa", "Paraguay": "py", "Peru": "pe", "Poland": "pl", "Portugal": "pt", "Republic of Ireland": "ie", "Romania": "ro", "Russia": "ru", "Rwanda": "rw", "Saudi Arabia": "sa", "Scotland": "gb-sct", "Senegal": "sn", "Serbia": "rs", "Sierra Leone": "sl", "Slovakia": "sk", "Slovenia": "si", "South Africa": "za", "Spain": "es", "Sri Lanka": "lk", "St. Kitts and Nevis": "kn", "St. Lucia": "lc", "Suriname": "sr", "Sweden": "se", "Switzerland": "ch", "Tanzania": "tz", "Thailand": "th", "Togo": "tg", "Trinidad and Tobago": "tt", "Tunisia": "tn", "Turkey": "tr", "Türkiye": "tr", "USA": "us", "Uganda": "ug", "Ukraine": "ua", "Uruguay": "uy", "Uzbekistan": "uz", "Venezuela": "ve", "Wales": "gb-wls", "Zambia": "zm", "Zimbabwe": "zw"};
-const flagImg = (nat) => FLAG_CODES[nat] ? `<img class="flag" src="https://flagcdn.com/${FLAG_CODES[nat]}.svg" alt="" loading="lazy" data-broken="remove">` : "";
+const flagImg = (nat) => FLAG_CODES[nat] ? `<img class="flag" src="https://flagcdn.com/w40/${FLAG_CODES[nat]}.png" alt="" loading="lazy" data-broken="remove">` : "";
 // country and competition pages
 const countryDisplay = (c) => c === "World" ? "International" : (c || "").replace(/-/g, " ");
 const countryHref = (c) => `#/country/${encodeURIComponent(c)}`;
@@ -275,7 +275,7 @@ const playerFlag = (nat) => !nat ? "" : FLAG_CODES[nat]
 function flagLink(c) {
   const name = countryDisplay(c);
   return FLAG_CODES[name] ? `<a class="flag-link" href="${countryHref(c)}" title="${escapeHtml(name)}" aria-label="${escapeHtml(name)}">`
-    + `<img class="flag" src="https://flagcdn.com/${FLAG_CODES[name]}.svg" alt="" loading="lazy"></a>` : `${countryLink(c)} ·`;
+    + `<img class="flag" src="https://flagcdn.com/w40/${FLAG_CODES[name]}.png" alt="" loading="lazy"></a>` : `${countryLink(c)} ·`;
 }
 const natLink = (nat) => nat ? `<a class="nat-link" href="#/nation/${encodeURIComponent(nat)}">${escapeHtml(nat)}</a>` : "";
 
@@ -4118,7 +4118,7 @@ function renderNationPage() {
   const tab = state.nationTab || "overview";
   $("#club-body").innerHTML = `
     <div class="pl-hero">
-      ${FLAG_CODES[name] ? `<img class="country-flag-lg" src="https://flagcdn.com/${FLAG_CODES[name]}.svg" alt="">` : "<span></span>"}
+      ${FLAG_CODES[name] ? `<img class="country-flag-lg" src="https://flagcdn.com/w160/${FLAG_CODES[name]}.png" alt="">` : "<span></span>"}
       <div class="pl-hero-main">
         <h2>${escapeHtml(name)}</h2>
         <div id="nat-coach">${nationCoachHtml()}</div>
@@ -4856,7 +4856,7 @@ function openCountryPage(country) {
   const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   body.innerHTML = `
     <div class="pl-hero">
-      ${FLAG_CODES[name] ? `<img class="country-flag-lg" src="https://flagcdn.com/${FLAG_CODES[name]}.svg" alt="">` : "<span></span>"}
+      ${FLAG_CODES[name] ? `<img class="country-flag-lg" src="https://flagcdn.com/w160/${FLAG_CODES[name]}.png" alt="">` : "<span></span>"}
       <div class="pl-hero-main">
         <h2>${escapeHtml(name)}</h2>
         <div class="pl-hero-club"><span class="pl-meta">${[leagues.length && count(leagues.length, "league"), cups.length && count(cups.length, "cup"),
@@ -5007,7 +5007,7 @@ function renderNations() {
         return `
         <tr title="${escapeHtml(tip)}">
           <td>${i + 1}</td>
-          <td>${n.flag ? `<img class="flag" src="https://flagcdn.com/${n.flag}.svg" alt="" loading="lazy" data-broken="remove">` : ""}</td>
+          <td>${n.flag ? `<img class="flag" src="https://flagcdn.com/w40/${n.flag}.png" alt="" loading="lazy" data-broken="remove">` : ""}</td>
           <td><div class="club-cell">${name}${n.confed ? ` <span class="club-meta">${n.confed}</span>` : ""}</div></td>
           <td class="num"><span class="rel-chip rel-${tier(n.current)}">${Math.round(n.current)}</span></td>
           <td class="num">${formHtml(n.change)}</td>
