@@ -33,8 +33,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       API_DAILY_RESERVE: "200"
       API_RUN_BUDGET: ${{ inputs.call_budget }}
       THECORNERFC_MODE: production
@@ -74,6 +72,9 @@ jobs:
           restore-keys: db-cache-
 
       - name: Pull the leagues' history from API-Football
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           python -m thecornerfc.workflow_inputs "$LEAGUES" "$SEASONS" > /tmp/backfill-inputs.env
           source /tmp/backfill-inputs.env
@@ -83,6 +84,9 @@ jobs:
           done
 
       - name: Re-rank and re-predict
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           python -m thecornerfc rank
           python -m thecornerfc predict
@@ -108,10 +112,16 @@ jobs:
 
       - name: Report API usage
         if: always()
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc usage
 
       - name: Report pipeline and dataset health
         if: always()
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc health
 
       - name: Save API usage ledger

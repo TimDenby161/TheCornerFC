@@ -8,3 +8,6 @@ logs/
 .cache/
 .api-usage/
 .DS_Store
+
+# Security audit findings — never commit (public repo)
+audit/
