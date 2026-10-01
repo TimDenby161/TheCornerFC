@@ -1553,7 +1553,7 @@ def export_clubs(conn, out_dir=OUT_DIR):
             join cur on cur.team_id = fp.team_id and cur.s = f.season
             join fixture_formations ff on ff.fixture_id = fp.fixture_id and ff.team_id = fp.team_id
             where ff.formation is not null and f.status_short = any(%(fin)s)
-            order by f.kickoff, fp.fixture_id""", args):
+            order by f.kickoff, fp.fixture_id, fp.player_id""", args):
         xis[team].setdefault(fid, []).extend([player, role])
         xi_league[team][fid] = league
         xi_formation[team][fid] = formation
