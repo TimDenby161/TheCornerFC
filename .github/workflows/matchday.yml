@@ -20,8 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       API_DAILY_RESERVE: "200"
       THECORNERFC_MODE: production
       THECORNERFC_READ_ONLY: "false"
@@ -49,6 +47,9 @@ jobs:
 
 
       - name: Pre-kickoff odds, injuries, late paper bets, settle
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc matchday
 
       - name: Commit bets and injury data if it changed
@@ -64,10 +65,16 @@ jobs:
 
       - name: Report API usage
         if: always()
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc usage
 
       - name: Report pipeline and dataset health
         if: always()
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc health
 
       - name: Save API usage ledger

@@ -30,8 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       API_DAILY_RESERVE: "200"
       API_RUN_BUDGET: ${{ inputs.call_budget }}
       THECORNERFC_MODE: production
@@ -58,6 +56,9 @@ jobs:
           restore-keys: api-usage-
 
       - name: Pull national fixtures and line-ups from API-Football
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           # the league list is a placeholder: only the validated seasons are used
           python -m thecornerfc.workflow_inputs 0 "$SEASONS" > /tmp/backfill-inputs.env
@@ -65,6 +66,9 @@ jobs:
           python -m thecornerfc sync national --seasons "${SEASON_ARGS[@]}"
 
       - name: Rebuild the Nations ranking
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc nations
 
       - name: Commit website data
@@ -80,6 +84,9 @@ jobs:
 
       - name: Report API usage
         if: always()
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc usage
 
       - name: Save API usage ledger

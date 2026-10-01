@@ -23,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       THECORNERFC_MODE: production
       THECORNERFC_READ_ONLY: "false"
       THECORNERFC_NO_API: "false"     # FPL requests are external; API-Football is not called
@@ -51,19 +50,27 @@ jobs:
           restore-keys: db-cache-
 
       - name: Capture FPL state
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc fpl capture
 
       - name: Capture FPL results
         continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc fpl results
 
       - name: Export website data
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc export
 
       # The owner's team for My FPL team (owner's decision, 2026-09-30; README). After the export,
       # which keeps the file it writes. Not critical.
       - name: My FPL team
         continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc fpl team
 
       - name: Commit website data
@@ -86,4 +93,6 @@ jobs:
 
       - name: Report pipeline and dataset health
         if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc health

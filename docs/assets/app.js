@@ -209,15 +209,34 @@ const clubTableObserver = new ResizeObserver((entries) => {
   }
 });
 const teamName = (id) => state.data.teams[id] || state.players?.teams?.[id] || `Team ${id}`;
-// Third-party images: API-Football's media host (badges, photos, competition logos) and flagcdn
-// (flags). Every URL is built from a numeric id or checked against that host, never taken as-is
-// from the data; a broken or refused image is hidden by the error listener below
-const MEDIA = "https://media.api-sports.io/football";
-const mediaUrl = (kind, id) => /^\d+$/.test(String(id)) ? `${MEDIA}/${kind}/${id}.png` : "";
-const MEDIA_URL = /^https:\/\/media\.api-sports\.io\/football\/[a-z]+\/\d+\.(?:png|jpg|svg)$/;
-const safeMediaUrl = (url) => typeof url === "string" && MEDIA_URL.test(url) ? url : "";
-const teamLogo = (id) => mediaUrl("teams", id);
-const playerPhoto = (id) => mediaUrl("players", id);
+// No club badges, competition logos or player and coach photos: badges and logos are the clubs' and
+// competitions' trade marks and the photos belong to photographers. Each is a chip instead, the
+// initials on a colour of the club's or competition's own (worked out from its id, so the same
+// everywhere; not its kit colours) or, for a person, on the plain chip colour. The only third-party
+// images left are flagcdn's flags (public domain); a broken one is hidden by the error listener below
+const CREST_SKIP = new Set(["fc", "afc", "cf", "sc", "ac", "as", "cd", "ud", "sd", "rc", "fk", "sk", "nk", "bk", "sv",
+  "if", "de", "del", "la", "le", "el", "the", "and", "of", "&"]);
+function crestInitials(name, skip) {
+  const all = String(name || "").replace(/[.'’]/g, "").split(/[\s-]+/).filter(Boolean);
+  const kept = skip ? all.filter((w) => !CREST_SKIP.has(w.toLowerCase())) : all;
+  const words = kept.length ? kept : all;
+  if (!words.length) return "?";
+  return (words.length === 1 ? [...words[0]].slice(0, 3).join("") : words.slice(0, 3).map((w) => [...w][0]).join("")).toUpperCase();
+}
+// his first and last initials: "E. Haaland" -> "EH", "Rodri" -> "R"
+function personInitials(name) {
+  const w = String(name || "").replace(/\./g, " ").split(/\s+/).filter(Boolean);
+  return w.length ? ([...w[0]][0] + (w.length > 1 ? [...w[w.length - 1]][0] : "")).toUpperCase() : "?";
+}
+const crestHue = (id) => Math.round((Number(id) || 0) * 137.508 % 360);
+// cls sizes it (club-logo, club-logo-lg, next5-comp ...); attrs adds data-club / data-league (which
+// make it open that page) or a title; a label is read out, otherwise it's hidden from screen readers
+const chip = (text, cls, attrs, label, style = "") => `<span class="${cls}"${style} ${attrs}${label ? ` role="img" aria-label="${escapeHtml(label)}"` : ` aria-hidden="true"`}><b>${escapeHtml(text)}</b></span>`;
+const clubCrest = (id, cls = "club-logo", attrs = "", label = "", name = teamName(id)) =>
+  chip(crestInitials(name, true), `${cls} crest`, attrs, label, ` style="--crest-h:${crestHue(id)}"`);
+const leagueCrest = (lid, cls = "club-logo", attrs = "", label = "") =>
+  chip(crestInitials(SHORT_NAMES[lid] || state.data.competitions[lid]?.name || compLabel(lid), false), `${cls} crest`, attrs, label, ` style="--crest-h:${crestHue(Number(lid) + 7)}"`);
+const personChip = (name, cls = "player-photo") => chip(personInitials(name), `${cls} person-chip`, "", "");
 const clubHref = (id) => `#/club/${id}`;
 const clubLink = (id, text = teamName(id)) => `<a class="team-link" href="${clubHref(id)}">${escapeHtml(text)}</a>`;
 // a player's club, or a note when he has left his last club and his new one isn't known
@@ -240,23 +259,22 @@ function shortName(name) {
   return w.slice(i).join(" ");
 }
 // Flag for a nationality (API-Football's country names -> ISO codes; flagcdn has the home nations too)
-const FLAG_CODES = {"Afghanistan": "af", "Albania": "al", "Andorra": "ad", "Bosnia": "ba", "Gibraltar": "gi", "Algeria": "dz", "Angola": "ao", "Antigua and Barbuda": "ag", "Argentina": "ar", "Armenia": "am", "Australia": "au", "Austria": "at", "Azerbaijan": "az", "Barbados": "bb", "Belgium": "be", "Benin": "bj", "Bermuda": "bm", "Bolivia": "bo", "Bosnia and Herzegovina": "ba", "Brazil": "br", "Bulgaria": "bg", "Burkina Faso": "bf", "Burundi": "bi", "Cameroon": "cm", "Canada": "ca", "Cape Verde": "cv", "Central African Republic": "cf", "Chad": "td", "Chile": "cl", "Colombia": "co", "Comoros": "km", "Congo": "cg", "Congo DR": "cd", "Costa Rica": "cr", "Croatia": "hr", "Cuba": "cu", "Curaçao": "cw", "Cyprus": "cy", "Czech Republic": "cz", "Czechia": "cz", "Côte d'Ivoire": "ci", "Denmark": "dk", "Dominican Republic": "do", "Ecuador": "ec", "Egypt": "eg", "El Salvador": "sv", "England": "gb-eng", "Equatorial Guinea": "gq", "Estonia": "ee", "Faroe Islands": "fo", "Finland": "fi", "France": "fr", "French Guiana": "gf", "Gabon": "ga", "Gambia": "gm", "Georgia": "ge", "Germany": "de", "Ghana": "gh", "Great Britain": "gb", "Greece": "gr", "Grenada": "gd", "Guadeloupe": "gp", "Guatemala": "gt", "Guinea": "gn", "Guinea-Bissau": "gw", "Guyana": "gy", "Haiti": "ht", "Honduras": "hn", "Hungary": "hu", "Iceland": "is", "Indonesia": "id", "Iran": "ir", "Iraq": "iq", "Israel": "il", "Italy": "it", "Ivory Coast": "ci", "Jamaica": "jm", "Japan": "jp", "Jordan": "jo", "Kazakhstan": "kz", "Kenya": "ke", "Korea Republic": "kr", "Kosovo": "xk", "Latvia": "lv", "Lebanon": "lb", "Liberia": "lr", "Libya": "ly", "Lithuania": "lt", "Luxembourg": "lu", "Madagascar": "mg", "Malawi": "mw", "Mali": "ml", "Malta": "mt", "Mexico": "mx", "Montenegro": "me", "Montserrat": "ms", "Morocco": "ma", "Mozambique": "mz", "Namibia": "na", "Netherlands": "nl", "New Zealand": "nz", "Niger": "ne", "Nigeria": "ng", "North Macedonia": "mk", "Northern Ireland": "gb-nir", "Norway": "no", "Panama": "pa", "Paraguay": "py", "Peru": "pe", "Poland": "pl", "Portugal": "pt", "Republic of Ireland": "ie", "Romania": "ro", "Russia": "ru", "Rwanda": "rw", "Saudi Arabia": "sa", "Scotland": "gb-sct", "Senegal": "sn", "Serbia": "rs", "Sierra Leone": "sl", "Slovakia": "sk", "Slovenia": "si", "South Africa": "za", "Spain": "es", "Sri Lanka": "lk", "St. Kitts and Nevis": "kn", "St. Lucia": "lc", "Suriname": "sr", "Sweden": "se", "Switzerland": "ch", "Tanzania": "tz", "Thailand": "th", "Togo": "tg", "Trinidad and Tobago": "tt", "Tunisia": "tn", "Turkey": "tr", "Türkiye": "tr", "USA": "us", "Uganda": "ug", "Ukraine": "ua", "Uruguay": "uy", "Uzbekistan": "uz", "Venezuela": "ve", "Wales": "gb-wls", "Zambia": "zm", "Zimbabwe": "zw"};
+const FLAG_CODES = Object.assign(Object.create(null), {"Afghanistan": "af", "Albania": "al", "Andorra": "ad", "Bosnia": "ba", "Gibraltar": "gi", "Algeria": "dz", "Angola": "ao", "Antigua and Barbuda": "ag", "Argentina": "ar", "Armenia": "am", "Australia": "au", "Austria": "at", "Azerbaijan": "az", "Barbados": "bb", "Belgium": "be", "Benin": "bj", "Bermuda": "bm", "Bolivia": "bo", "Bosnia and Herzegovina": "ba", "Brazil": "br", "Bulgaria": "bg", "Burkina Faso": "bf", "Burundi": "bi", "Cameroon": "cm", "Canada": "ca", "Cape Verde": "cv", "Central African Republic": "cf", "Chad": "td", "Chile": "cl", "Colombia": "co", "Comoros": "km", "Congo": "cg", "Congo DR": "cd", "Costa Rica": "cr", "Croatia": "hr", "Cuba": "cu", "Curaçao": "cw", "Cyprus": "cy", "Czech Republic": "cz", "Czechia": "cz", "Côte d'Ivoire": "ci", "Denmark": "dk", "Dominican Republic": "do", "Ecuador": "ec", "Egypt": "eg", "El Salvador": "sv", "England": "gb-eng", "Equatorial Guinea": "gq", "Estonia": "ee", "Faroe Islands": "fo", "Finland": "fi", "France": "fr", "French Guiana": "gf", "Gabon": "ga", "Gambia": "gm", "Georgia": "ge", "Germany": "de", "Ghana": "gh", "Great Britain": "gb", "Greece": "gr", "Grenada": "gd", "Guadeloupe": "gp", "Guatemala": "gt", "Guinea": "gn", "Guinea-Bissau": "gw", "Guyana": "gy", "Haiti": "ht", "Honduras": "hn", "Hungary": "hu", "Iceland": "is", "Indonesia": "id", "Iran": "ir", "Iraq": "iq", "Israel": "il", "Italy": "it", "Ivory Coast": "ci", "Jamaica": "jm", "Japan": "jp", "Jordan": "jo", "Kazakhstan": "kz", "Kenya": "ke", "Korea Republic": "kr", "Kosovo": "xk", "Latvia": "lv", "Lebanon": "lb", "Liberia": "lr", "Libya": "ly", "Lithuania": "lt", "Luxembourg": "lu", "Madagascar": "mg", "Malawi": "mw", "Mali": "ml", "Malta": "mt", "Mexico": "mx", "Montenegro": "me", "Montserrat": "ms", "Morocco": "ma", "Mozambique": "mz", "Namibia": "na", "Netherlands": "nl", "New Zealand": "nz", "Niger": "ne", "Nigeria": "ng", "North Macedonia": "mk", "Northern Ireland": "gb-nir", "Norway": "no", "Panama": "pa", "Paraguay": "py", "Peru": "pe", "Poland": "pl", "Portugal": "pt", "Republic of Ireland": "ie", "Romania": "ro", "Russia": "ru", "Rwanda": "rw", "Saudi Arabia": "sa", "Scotland": "gb-sct", "Senegal": "sn", "Serbia": "rs", "Sierra Leone": "sl", "Slovakia": "sk", "Slovenia": "si", "South Africa": "za", "Spain": "es", "Sri Lanka": "lk", "St. Kitts and Nevis": "kn", "St. Lucia": "lc", "Suriname": "sr", "Sweden": "se", "Switzerland": "ch", "Tanzania": "tz", "Thailand": "th", "Togo": "tg", "Trinidad and Tobago": "tt", "Tunisia": "tn", "Turkey": "tr", "Türkiye": "tr", "USA": "us", "Uganda": "ug", "Ukraine": "ua", "Uruguay": "uy", "Uzbekistan": "uz", "Venezuela": "ve", "Wales": "gb-wls", "Zambia": "zm", "Zimbabwe": "zw"});
 const flagImg = (nat) => FLAG_CODES[nat] ? `<img class="flag" src="https://flagcdn.com/w40/${FLAG_CODES[nat]}.png" alt="" loading="lazy" data-broken="remove">` : "";
 // country and competition pages
 const countryDisplay = (c) => c === "World" ? "International" : (c || "").replace(/-/g, " ");
 const countryHref = (c) => `#/country/${encodeURIComponent(c)}`;
 const leagueHref = (lid) => `#/league/${lid}`;
-// Every club badge and competition logo opens its page: tagged data-club / data-league, one
-// listener for the whole site (not links of their own, so a badge inside a clickable row or card
-// works too; ones inside a link or button keep that control's behaviour)
+// Every club and competition chip opens its page: tagged data-club / data-league, one listener for
+// the whole site (not links of their own, so a chip inside a clickable row or card works too; ones
+// inside a link or button keep that control's behaviour)
 document.addEventListener("click", (e) => {
-  const img = e.target.closest("img[data-club], img[data-league]");
-  if (!img || img.closest("a, button")) return;
+  const crest = e.target.closest(".crest[data-club], .crest[data-league]");
+  if (!crest || crest.closest("a, button")) return;
   e.preventDefault();
   e.stopPropagation();
-  location.hash = img.dataset.club ? clubHref(img.dataset.club) : leagueHref(img.dataset.league);
+  location.hash = crest.dataset.club ? clubHref(crest.dataset.club) : leagueHref(crest.dataset.league);
 }, true);
-const leagueLogo = (lid) => mediaUrl("leagues", lid);
 // A broken image is hidden (keeping its space), or removed where tagged data-broken="remove". One
 // capturing listener instead of inline onerror attributes, so the Content-Security-Policy in
 // index.html can refuse all inline script
@@ -493,7 +511,7 @@ function renderTableFilters() {
 // Wide screens: a side menu. Narrower: the same menu behind a button naming the selection.
 function renderFilterMenu(wrap, f, countries, countOf, titles) {
   const leagueName = (id) => SHORT_NAMES[id] || state.data.competitions[id].name;
-  const names = {};                 // each filter's name, for the button
+  const names = Object.create(null); // each filter's name, for the button
   const chip = (value, label, title, extra = "", cls = "", full = label) => (names[value] = full,
     `<button type="button" class="filter-chip ${cls}${!countOf || countOf(value) ? "" : " none"}" data-filter="${escapeHtml(value)}" title="${escapeHtml(title)}" aria-pressed="${f === value}">${extra}<span class="flabel">${label}</span>${countOf ? `<span class="cnt">${countOf(value)}</span>` : ""}</button>`);
   const caret = `<span class="caret" aria-hidden="true">▾</span>`;
@@ -637,7 +655,7 @@ function onePerPick(bets) {
 }
 // The badge of the team a bet backs, or both teams' for a draw or goals bet
 function betBadges(b) {
-  const img = (id) => id ? `<img class="club-logo" data-club="${id}" src="${teamLogo(id)}" alt="" loading="lazy">` : "";
+  const img = (id) => id ? clubCrest(id, "club-logo", `data-club="${id}"`) : "";
   const ids = b.market === "1X2" && b.selection !== "Draw" ? [b.selection === "Home" ? b.home_id : b.away_id] : [b.home_id, b.away_id];
   return `<span class="tip-badges">${ids.map(img).join("")}</span>`;
 }
@@ -941,8 +959,8 @@ function matchHead(m, right = "") {
   const rankTitle = finished ? "Strength going into this match (Elo)" : "Current Strength (Elo)";
   // national teams: the name opens the nation page (no club page to open, no squad badges)
   const side = (id, name, where) => m.intl
-    ? `<img class="club-logo" src="${teamLogo(id)}" alt="" loading="lazy"><a class="team-link" href="#/nation/${encodeURIComponent(state.data.nation_pages?.[id] || teamName(id))}">${escapeHtml(name || teamName(id))}</a>`
-    : `<img class="club-logo" data-club="${id}" src="${teamLogo(id)}" alt="" loading="lazy">${clubLink(id, name)}<span class="team-squad-badges" data-squad-team="${where}"></span>`;
+    ? `${clubCrest(id, "club-logo")}<a class="team-link" href="#/nation/${encodeURIComponent(state.data.nation_pages?.[id] || teamName(id))}">${escapeHtml(name || teamName(id))}</a>`
+    : `${clubCrest(id, "club-logo", `data-club="${id}"`)}${clubLink(id, name)}<span class="team-squad-badges" data-squad-team="${where}"></span>`;
   return `
       <div class="match-card-top">
         <span class="match-meta">${meta}${round}</span>
@@ -1362,7 +1380,7 @@ function playerRow(p, i, seasons, groups = selectedGroups(), future = []) {
   return `
         <tr${p.team ? ` data-team="${p.team}"` : ""} data-player="${p.id}">
           <td>${i + 1}</td>
-          <td><div class="pl-cell">${p.team ? `<a class="pl-badge-link" href="${clubHref(p.team)}" title="${escapeHtml(teamName(p.team))}" aria-label="${escapeHtml(teamName(p.team))}"><img class="club-logo pl-badge" src="${teamLogo(p.team)}" alt="" loading="lazy"></a>` : `<span class="club-logo pl-badge" title="Club not known"></span>`}<img class="player-photo" src="${playerPhoto(p.id)}" alt="" loading="lazy">
+          <td><div class="pl-cell">${p.team ? `<a class="pl-badge-link" href="${clubHref(p.team)}" title="${escapeHtml(teamName(p.team))}" aria-label="${escapeHtml(teamName(p.team))}">${clubCrest(p.team, "club-logo pl-badge")}</a>` : `<span class="club-logo pl-badge" title="Club not known"></span>`}${personChip(p.name)}
             <div class="pl-text"><div class="pl-name"><a class="player-link" href="#/player/${p.id}" title="${escapeHtml(p.name)}"><span class="pn-full">${escapeHtml(p.name)}</span><span class="pn-short">${escapeHtml(shortName(p.name))}</span></a>${playerFlag(p.nationality)}</div>
               <div class="pl-club">${p.team ? escapeHtml(teamName(p.team)) : "Club not known"}${p.league != null && leagueShort(p.league) ? ` · ${escapeHtml(leagueShort(p.league))}` : ""}</div></div></div></td>
           <td class="num">${POS_LABEL[p.position] || escapeHtml(p.position || "")}</td>
@@ -1698,7 +1716,7 @@ function renderTable() {
       <tbody>${rows.map((r, i) => `
         <tr data-team="${r.team}">
           <td>${i + 1}</td>
-          <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" title="${escapeHtml(teamName(r.team))}" loading="lazy"></td>
+          <td>${clubCrest(r.team, "club-logo", `data-club="${r.team}" title="${escapeHtml(teamName(r.team))}"`)}</td>
           <td><div class="club-cell">${clubLink(r.team)}${q || all ? countryLeague(r.league) : ""}</div></td>
           <td class="num">${places.get(r.team)?.world.toLocaleString() ?? ""}</td>
           <td class="num col-dom" style="color:var(--text-muted)"${places.get(r.team)?.dom ? ` title="${ordinal(places.get(r.team).dom)} of ${places.get(r.team).domOf} in the ${escapeHtml(leagueShort(r.league))} by Baseline Strength"` : ""}>${places.get(r.team)?.dom ?? ""}</td>
@@ -1791,7 +1809,7 @@ function renderWhoFilter() {
   state.nats ||= new Set();
   $("#who-chips").innerHTML =
     [...state.clubs].map((t) => `<button type="button" class="who-chip" data-club="${t}" title="Remove">
-       <img class="club-logo" src="${teamLogo(t)}" alt="" loading="lazy" data-broken="remove">${escapeHtml(byId.get(t)?.name || teamName(t))}<span class="x" aria-hidden="true">×</span></button>`).join("")
+       ${clubCrest(t, "club-logo")}${escapeHtml(byId.get(t)?.name || teamName(t))}<span class="x" aria-hidden="true">×</span></button>`).join("")
     + [...state.nats].map((n) => `<button type="button" class="who-chip" data-nat="${escapeHtml(n)}" title="Remove">
        ${flagImg(n) || `<span class="kind">Nat</span>`}${escapeHtml(n)}<span class="x" aria-hidden="true">×</span></button>`).join("");
   box.querySelector("[data-who-clear]").hidden = !state.clubs.size && !state.nats.size;
@@ -1817,7 +1835,7 @@ function renderWhoMenu(input) {
   const opt = (attrs, on, inner) => `<button type="button" class="who-opt" role="option" tabindex="-1" ${attrs}
     aria-selected="${on}"><span class="tick" aria-hidden="true">${on ? "✓" : ""}</span>${inner}</button>`;
   const clubOpt = (c, sub) => opt(`data-club="${c.id}"`, state.clubs.has(c.id),
-    `<img class="club-logo" src="${teamLogo(c.id)}" alt="" loading="lazy"><span class="nm">${escapeHtml(c.name)}</span>${sub ? `<span class="sub">${escapeHtml(sub)}</span>` : ""}`);
+    `${clubCrest(c.id, "club-logo")}<span class="nm">${escapeHtml(c.name)}</span>${sub ? `<span class="sub">${escapeHtml(sub)}</span>` : ""}`);
   const natOpt = (n) => opt(`data-nat="${escapeHtml(n.name)}"`, state.nats.has(n.name),
     `${flagImg(n.name)}<span class="nm">${escapeHtml(n.name)}</span>`);
   const lgName = new Map(leagues.map((l) => [l.id, l.name]));
@@ -2319,9 +2337,13 @@ function signed(x, d = 1, suffix = "") {
   return `<span class="${cls}">${x > 0 ? "+" : ""}${x.toFixed(d)}${suffix}</span>`;
 }
 
+// On both betting tabs, above the numbers: age, what the bets are for, and where to get help
+const GAMBLING_NOTE = `<div class="sim-banner gamble-note"><span class="age-18" title="For over-18s only">18+</span>
+  Paper bets for testing the model, not betting advice. If gambling is causing you problems, free confidential help is at
+  <a href="https://www.begambleaware.org/" rel="noopener">BeGambleAware.org</a>.</div>`;
 function renderBets() {
   const body = $("#bets-body");
-  if (!state.bets) { body.innerHTML = `<div class="empty-state">No simulated paper bets yet.</div>`; return; }
+  if (!state.bets) { body.innerHTML = GAMBLING_NOTE + `<div class="empty-state">No simulated paper bets yet.</div>`; return; }
   const stake = betStake(), bank = betBank();
   const scope = betScope();
   const ids = filterLeagueIds(state.betFilter, betCountries());
@@ -2355,7 +2377,7 @@ function renderBets() {
     const res = b.result === "win" ? `<span class="pos">Won +${gbp(stake * b.profit)}</span>`
       : b.result === "loss" ? `<span class="neg">Lost −${gbp(stake)}</span>`
       : b.result === "void" ? "Void, stake back" : `<span class="dim">To win ${gbp(stake * (b.odds - 1))}</span>`;
-    return `<div class="bet-row ${b.result || ""}">
+    return `<div class="bet-row ${["win", "loss", "void"].includes(b.result) ? b.result : ""}">
       <div class="bet-top"><span>${escapeHtml(fmtDay(b.kickoff))} ${escapeHtml(fmtTime(b.kickoff))} · ${escapeHtml(compLabel(b.league))}</span><span>${b.strategy === "early" ? "Night before" : "Pre-kickoff"}</span></div>
       <div class="bet-match">${escapeHtml(b.home)} v ${escapeHtml(b.away)}${b.score ? ` <span style="color:var(--text-muted)">(${escapeHtml(b.score)})</span>` : ""}</div>
       <div class="bet-pick"><span>${betBadges(b)}${gbp(stake)} on ${escapeHtml(SEL_LABELS[b.selection] || b.selection)} @ <b>${b.odds.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:11px">${escapeHtml(b.bookmaker || "")}</span></span><span>${res}</span></div>
@@ -2363,6 +2385,7 @@ function renderBets() {
     </div>`;
   };
   body.innerHTML = `
+    ${GAMBLING_NOTE}
     <div class="sim-banner">Simulated: paper bets only, no real money staked. Every figure here is a simulation at recorded prices.</div>
     <div class="stats-grid">
       ${card("Simulated bank", gbp(bank + s.profit), `Started with ${gbp(bank)}${s.pending ? ` · ${gbp(s.atRisk)} on ${s.pending} pending` : ""}`)}
@@ -2452,7 +2475,7 @@ function renderTips() {
   const now = Date.now();
   const tips = onePerPick(state.bets?.bets || []).filter((b) => !b.result && new Date(b.kickoff) > now)
     .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff) || a.fixture - b.fixture || a.id - b.id);
-  $("#tips-top").innerHTML = tipsOverview();
+  $("#tips-top").innerHTML = GAMBLING_NOTE + tipsOverview();
   $("#tips-stake").textContent = gbp(stake);
   const total = stake * tips.length;
   $("#tips-total").textContent = !tips.length ? "No open selections"
@@ -2514,7 +2537,7 @@ function xiBlock(teamId) {
   const recent = m ? (home ? m.home_recent_xi : m.away_recent_xi) : null;
   const opp = m ? `${home ? "v" : "@"} ${teamName(home ? m.away : m.home)}` : "next match";
   return `<div class="modal-section">Predicted XI, ${escapeHtml(opp)}${rating != null ? ` · rating ${Math.round(rating)}${recent != null ? ` (recent ${Math.round(recent)})` : ""}` : ""}</div>
-    ${xi.players.map(([pid, name, pos, rank]) => `<div class="team-row"><span class="team-row-date">${POS_LABEL[pos] || pos || ""}</span>
+    ${xi.players.map(([pid, name, pos, rank]) => `<div class="team-row"><span class="team-row-date">${POS_LABEL[pos] || escapeHtml(pos || "")}</span>
       <span class="team-row-opp">${playerLink(pid, name)}</span><span class="team-row-res">${rankChipSmall(rank)}</span></div>`).join("")}`;
 }
 
@@ -2661,7 +2684,7 @@ function clubMiniTable(id) {
         <th title="Goal difference">GD</th><th title="Points">Pts</th><th class="lt-formcol" title="Last five league games, newest first: green won, grey drawn, red lost">Form</th></tr></thead>
       <tbody>${rows.slice(start, start + 5).map((t) => `<tr${t === me ? ' class="lt-me"' : ""}>
         <td class="lt-pos" style="border-left-color:${zones.get(t.description) || "transparent"}">${t.rank}</td>
-        <td class="lt-badge"><img class="club-logo" data-club="${t.team}" src="${teamLogo(t.team)}" alt="" loading="lazy"></td>
+        <td class="lt-badge">${clubCrest(t.team, "club-logo", `data-club="${t.team}"`)}</td>
         <td class="lt-club lt-clubname"><span>${t === me ? `<b>${escapeHtml(lg.teams[t.team] || teamName(t.team))}</b>` : clubLink(t.team, lg.teams[t.team] || teamName(t.team))}</span></td>
         <td class="lt-wdl">${t.played ?? ""}</td><td>${t.gd > 0 ? "+" : ""}${t.gd ?? ""}</td><td><b>${t.points ?? ""}</b></td><td class="lt-formcol">${formChips(t.form)}</td></tr>`).join("")}</tbody>
     </table></div></div>`;
@@ -2678,7 +2701,7 @@ function clubBestPlayers(id) {
       <thead><tr><th class="cmt-head" colspan="2"><a class="cmt-link" href="#/players?club=${id}" title="All ${escapeHtml(teamName(id))} players in the Players ranking">Best players<span class="cmt-full"> · by Ability</span> ›</a></th><th title="${escapeHtml(ABILITY_TIP)}"><span class="cmt-full">Ability</span><span class="cmt-short">Abil.</span></th>
         <th title="Goals this season, all his clubs">G</th><th title="Assists this season, all his clubs">A</th></tr></thead>
       <tbody>${list.map((p) => `<tr>
-        <td class="lt-badge"><img class="player-photo" src="${playerPhoto(p.id)}" alt="" loading="lazy"></td>
+        <td class="lt-badge">${personChip(p.name)}</td>
         <td class="lt-club"><a class="player-link" href="#/player/${p.id}"><span class="cmt-full">${escapeHtml(p.name)}</span><span class="cmt-short">${escapeHtml(shortName(p.name))}</span></a>${p.position ? ` <span class="bp-pos">${escapeHtml(p.position)}</span>` : ""}</td>
         <td>${rankChipSmall(p.rank)}</td><td>${p.season?.[2] ?? "–"}</td><td>${p.season?.[3] ?? "–"}</td></tr>`).join("")}</tbody>
     </table></div></div>`;
@@ -2723,11 +2746,11 @@ function renderClubPage() {
   const top = clubMiniTable(id) + clubBestPlayers(id);      // side by side, half the width each
   $("#club-body").innerHTML = `
     <div class="pl-hero">
-      <img class="club-logo-lg" src="${teamLogo(id)}" alt="">
+      ${clubCrest(id, "club-logo-lg")}
       <div class="pl-hero-main">
         <h2>${escapeHtml(teamName(id))}</h2>
         ${comp ? `<div class="pl-hero-club">${flagLink(comp.country)}<span class="pl-league">${leagueLink(r.league)}</span></div>` : ""}
-        ${state.club.data?.coach?.name || r ? `<div class="pl-hero-club pl-hero-nat">${state.club.data?.coach?.name ? `${safeMediaUrl(state.club.data.coach.photo) ? `<img class="player-photo coach-photo" src="${safeMediaUrl(state.club.data.coach.photo)}" alt="" data-broken="remove">` : ""}<span class="pl-meta">${escapeHtml(state.club.data.coach.name)}</span>` : ""}${
+        ${state.club.data?.coach?.name || r ? `<div class="pl-hero-club pl-hero-nat">${state.club.data?.coach?.name ? `${personChip(state.club.data.coach.name, "player-photo coach-photo")}<span class="pl-meta">${escapeHtml(state.club.data.coach.name)}</span>` : ""}${
           state.club.data?.coach?.name && r ? `<span class="dim-sep">·</span>` : ""}${r ? `<a class="team-link" href="#" data-rank-team="${id}" data-rank-sort="current"
             title="Place among every ranked club by Current Strength, as the Club Rankings are ordered. Opens the Rankings at this club">#${clubPlace("current", r.current).toLocaleString()}</a>` : ""}</div>` : ""}
       </div>
@@ -2765,9 +2788,9 @@ function clubOverviewTab() {
       <div class="form-row form-hdr"><span></span><span></span><span></span><span></span><span>xG</span><span title="How far each result moved Current Strength">Elo ±</span></div>
       ${form.map(({ m, move }) => `<div class="form-row" title="${escapeHtml(`${fmtShortDate(m.date)} ${m.home ? "v" : "@"} ${clubOpp(m.opponent)}${m.home === 2 ? " (neutral)" : ""} · ${compLabel(m.league)}`)}">
         <span class="rel-chip rel-${m.gf > m.ga ? 4 : m.gf === m.ga ? 3 : 1}">${m.gf}–${m.ga}</span>
-        <img class="club-logo" data-club="${m.opponent}" src="${teamLogo(m.opponent)}" alt="${escapeHtml(clubOpp(m.opponent))}" loading="lazy">
+        ${clubCrest(m.opponent, "club-logo", `data-club="${m.opponent}"`, clubOpp(m.opponent))}
         <span class="form-ha">${m.home === 2 ? "N" : m.home ? "H" : "A"}</span>
-        <img class="next5-comp" data-league="${m.league}" src="${leagueLogo(m.league)}" alt="${escapeHtml(compLabel(m.league))}" title="${escapeHtml(compLabel(m.league))}" loading="lazy">
+        ${leagueCrest(m.league, "next5-comp", `data-league="${m.league}" title="${escapeHtml(compLabel(m.league))}"`, compLabel(m.league))}
         <span class="form-xg${m.xg_est ? " est" : ""}" title="${m.xg_est ? "Estimated from shots (API-Football has no xG for this match): for – against" : "Expected goals: for – against"}">${
           m.xgf != null && m.xga != null ? `${m.xg_est ? "≈" : ""}${m.xgf.toFixed(1)}–${m.xga.toFixed(1)}` : "–"}</span>
         <span class="form-move">${moveHtml(move)}</span></div>`).join("")}
@@ -2785,9 +2808,9 @@ function clubOverviewTab() {
         const comp = SHORT_NAMES[m.league] || state.data.competitions[m.league]?.name || "";
         return `<div class="next5-row" title="${escapeHtml(`${fmtDay(m.kickoff)} ${fmtTime(m.kickoff)} · ${home ? "v" : "@"} ${teamName(opp)} · ${compLabel(m.league)}`)}">
           <span class="next5-date">${escapeHtml(fmtShortDate(m.kickoff))}</span>
-          <img class="club-logo" data-club="${opp}" src="${teamLogo(opp)}" alt="${escapeHtml(teamName(opp))}" loading="lazy">
+          ${clubCrest(opp, "club-logo", `data-club="${opp}"`, teamName(opp))}
           <span class="form-ha">${home ? "H" : "A"}</span>
-          <img class="next5-comp" data-league="${m.league}" src="${leagueLogo(m.league)}" alt="${escapeHtml(comp)}" title="${escapeHtml(comp)}" loading="lazy">
+          ${leagueCrest(m.league, "next5-comp", `data-league="${m.league}" title="${escapeHtml(comp)}"`, comp)}
           <span class="next5-num">${gf != null ? gf.toFixed(1) : ""}</span>
           <span class="next5-num">${cs != null ? `${cs}%` : ""}</span>
           <span class="next5-num strong">${win != null ? `${win}%` : ""}</span></div>`;
@@ -2842,7 +2865,7 @@ function clubNextCard() {
   return `<div class="next-card">
     <div class="next-top"><span class="next-label">${LIVE.has(m.status) ? "Live now" : "Next match"}</span>
       <span>${escapeHtml(fmtDay(m.kickoff))} · ${escapeHtml(fmtTime(m.kickoff))}</span></div>
-    <div class="next-opp"><img class="club-logo" data-club="${opp}" src="${teamLogo(opp)}" alt="">
+    <div class="next-opp">${clubCrest(opp, "club-logo", `data-club="${opp}"`)}
       <span class="next-opp-name">${home ? "v" : "@"} ${clubLink(opp)}</span></div>
     <div class="next-meta"><span>${escapeHtml(compLabel(m.league))}</span>${win != null ? `<span>${win}% win</span>` : ""}${proj ? `<span>projected ${proj}</span>` : ""}
       ${xiRating != null ? `<span>XI rating ${Math.round(xiRating)}</span>` : ""}</div>
@@ -3448,7 +3471,7 @@ function clubFormationsTab() {
   const same = sinceRows.length === seasonRows.length && sinceRows[0] === seasonRows[0];
   return `
     ${coach ? `<div class="next-card coach-card">
-      <img class="coach-photo" src="${safeMediaUrl(coach.photo)}" alt="">
+      ${personChip(coach.name, "coach-photo")}
       <div><div class="next-label">Manager</div><div class="coach-name">${escapeHtml(coach.name || "")}</div>
         <div class="next-meta">${coach.since ? `<span>Since ${escapeHtml(fmtLongDate(coach.since))}</span>` : ""}${sinceRows.length ? `<span>${sinceRows.length} matches · ${wdl(sinceRows)}</span>` : ""}</div></div>
     </div>` : ""}
@@ -3657,10 +3680,10 @@ function renderPlayerPage() {
   const tab = state.playerTab || "overview";
   $("#club-body").innerHTML = `
     <div class="pl-hero">
-      <img class="player-photo-lg" src="${playerPhoto(p.id)}" alt="">
+      ${personChip(p.name, "player-photo-lg")}
       <div class="pl-hero-main">
         <h2>${escapeHtml(p.name)}</h2>
-        <div class="pl-hero-club">${p.team ? `<img class="club-logo" data-club="${p.team}" src="${teamLogo(p.team)}" alt="">` : ""}
+        <div class="pl-hero-club">${p.team ? clubCrest(p.team, "club-logo", `data-club="${p.team}"`) : ""}
           <span>${playerClub(p)}${league ? `<span class="dim-sep"> · </span><a class="pl-league team-link" href="${leagueHref(p.league)}">${escapeHtml(league)}</a>` : ""}</span></div>
         <div class="pl-hero-club pl-hero-nat">${p.nationality ? `${flagImg(p.nationality)}<span>${natLink(p.nationality)}</span><span class="dim-sep">·</span>` : ""}
           <span class="pl-meta">${escapeHtml(p.position || "")}</span>${p.age != null ? `<span class="dim-sep">·</span>
@@ -3848,7 +3871,7 @@ function nextMatchCard() {
   return `<div class="next-card">
     <div class="next-top"><span class="next-label">${LIVE.has(m.status) ? "Live now" : "Next match"}</span>
       <span>${escapeHtml(fmtDay(m.kickoff))} · ${escapeHtml(fmtTime(m.kickoff))}</span></div>
-    <div class="next-opp"><img class="club-logo" data-club="${opp}" src="${teamLogo(opp)}" alt="">
+    <div class="next-opp">${clubCrest(opp, "club-logo", `data-club="${opp}"`)}
       <span class="next-opp-name">${home ? "v" : "@"} ${clubLink(opp)}</span></div>
     <div class="next-meta"><span>${escapeHtml(compLabel(m.league))}</span>${win != null ? `<span>${win}% win</span>` : ""}${proj ? `<span>projected ${proj}</span>` : ""}</div>
     ${status ? `<div class="next-status ${status[0]}">${escapeHtml(status[1])}</div>` : ""}
@@ -3959,7 +3982,7 @@ function playerStatsTab() {
       <div class="seg">${[["0", "Totals"], ["1", "Per 90"]].map(([k, l]) =>
         `<button type="button" data-per90="${k}" aria-pressed="${String(per90) === (k === "1" ? "true" : "false")}">${l}</button>`).join("")}</div>
     </div>
-    <div class="season-clubs">${rows.map((r) => `<div class="season-club"><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy">
+    <div class="season-clubs">${rows.map((r) => `<div class="season-club">${clubCrest(r.team, "club-logo", `data-club="${r.team}"`)}
       ${clubLink(r.team, pageTeamName(r.team))}<span class="dim"> · ${escapeHtml(compLabel(r.league))} · ${r.apps} apps · ${r.minutes.toLocaleString()}′</span></div>`).join("")}</div>
     <div class="team-stats compact">
       ${tile("Apps", s.apps, s.starts != null && !partial ? `${s.starts} started` : "")}
@@ -3988,7 +4011,7 @@ function playerMatchesTab() {
     ].filter(Boolean);
     return `<div class="match-row">
       <div class="mr-date">${escapeHtml(fmtShortDate(m.date))}</div>
-      <div class="mr-opp"><img class="club-logo" data-club="${m.opponent}" src="${teamLogo(m.opponent)}" alt="" loading="lazy">
+      <div class="mr-opp">${clubCrest(m.opponent, "club-logo", `data-club="${m.opponent}"`)}
         <span>${m.home ? "v" : "@"} ${clubLink(m.opponent, pageTeamName(m.opponent))}</span></div>
       <div class="mr-res ${resClass(m)}">${m.gf}–${m.ga}</div>
       <div class="mr-rating">${ratingChip(m.rating)}</div>
@@ -4104,13 +4127,12 @@ async function openNationPage(nat) {
   $("#nat-coach").innerHTML = nationCoachHtml();
   renderNationTab();
 }
-// The head coach under the nation's name: his photo and name, once the team's file has loaded
+// The head coach under the nation's name: his initials and name, once the team's file has loaded
 function nationCoachHtml() {
   if (!state.nation?.team?.matchRows?.length) return "";
   const spell = nationSpell();
   if (!spell.coach) return "";
-  const photo = safeMediaUrl(spell.photo) || (spell.coachId != null ? mediaUrl("coachs", spell.coachId) : "");
-  return `<div class="pl-hero-club pl-hero-nat">${photo ? `<img class="player-photo coach-photo" src="${photo}" alt="" data-broken="remove">` : ""}<span class="pl-meta" title="Head coach">${escapeHtml(spell.coach)}</span></div>`;
+  return `<div class="pl-hero-club pl-hero-nat">${personChip(spell.coach, "player-photo coach-photo")}<span class="pl-meta" title="Head coach">${escapeHtml(spell.coach)}</span></div>`;
 }
 
 function renderNationPage() {
@@ -4235,7 +4257,7 @@ const venueLabel = { H: "Home", A: "Away", N: "Neutral ground" };
 function nationMatchCells(m) {
   return `<span class="team-row-date">${escapeHtml(fmtDateShortYear(m.date))}</span>
     <span class="team-row-opp">${flagImg(m.opp)} <a class="nat-link" href="#/nation/${encodeURIComponent(m.opp)}">${escapeHtml(m.opp)}</a>
-      <span class="club-sub" style="display:inline" title="${escapeHtml(venueLabel[m.venue] || "")}">${m.venue} · ${escapeHtml(m.tournament || "")}</span></span>
+      <span class="club-sub" style="display:inline" title="${escapeHtml(venueLabel[m.venue] || "")}">${escapeHtml(m.venue)} · ${escapeHtml(m.tournament || "")}</span></span>
     <span class="rel-chip rel-${m.gf > m.ga ? 4 : m.gf === m.ga ? 3 : 1}">${m.gf}–${m.ga}</span>`;
 }
 // A starting XI as one line per unit, keeper first: "GK Pickford · RB Walker ..."
@@ -4328,7 +4350,7 @@ function nationXiTab() {
   const order = (r) => ROLE_ORDER.indexOf(r) + 1 || 99;
   const picks = pred.picks.slice().sort((a, b) => order(a.role) - order(b.role));
   const xi = picks.map((c) => ({ b: { label: c.role }, p: { id: c.pid, name: name(c.pid) }, rank: playerById(c.pid)?.rank ?? null }));
-  const who = (pid) => `<img class="player-photo" src="${playerPhoto(pid)}" alt="" loading="lazy" data-broken="remove">${
+  const who = (pid) => `${personChip(name(pid))}${
     playerById(pid) ? playerLink(pid, shortName(name(pid))) : `<span title="${escapeHtml(name(pid))}">${escapeHtml(shortName(name(pid)))}</span>`}`;
   const side = `
     ${pred.out.length ? `<div class="next-card"><div class="next-top"><span class="next-label">Out injured</span></div>
@@ -4343,9 +4365,8 @@ function nationFormationsTab() {
   const spell = nationSpell();
   const list = spell.rows;
   const known = list.filter((m) => m.formation);
-  const coachPhoto = safeMediaUrl(spell.photo) || (spell.coachId != null ? mediaUrl("coachs", spell.coachId) : "");
   return `
-    ${spell.coach ? `<div class="next-card coach-card">${coachPhoto ? `<img class="coach-photo" src="${coachPhoto}" alt="" data-broken="remove">` : ""}
+    ${spell.coach ? `<div class="next-card coach-card">${personChip(spell.coach, "coach-photo")}
       <div><div class="next-label">Head coach</div><div class="coach-name">${escapeHtml(spell.coach)}</div>
       <div class="next-meta"><span>${spell.since ? `Since ${escapeHtml(fmtLongDate(spell.since))}` : `First match ${escapeHtml(fmtLongDate(list[0].date))}${spell.full ? "" : " (or before)"}`}</span><span>${list.length} matches${
         spell.since && !spell.full ? ` from ${escapeHtml(fmtLongDate(list[0].date))}` : ""} · ${wdl(list)}</span></div></div></div>` : ""}
@@ -4405,8 +4426,8 @@ function nationPlayersTab() {
         const site = playerById(p.id);
         return `<tr>
           <td>${i + 1}</td>
-          <td><div class="club-cell"><img class="player-photo" src="${playerPhoto(p.id)}" alt="" loading="lazy" data-broken="remove">${site ? playerLink(p.id, shortName(p.name)) : `<span title="${escapeHtml(p.name)}">${escapeHtml(shortName(p.name))}</span>`}${
-            site?.team ? `<a class="pl-badge-link nat-badge" href="${clubHref(site.team)}" title="${escapeHtml(teamName(site.team))}" aria-label="${escapeHtml(teamName(site.team))}"><img class="club-logo" src="${teamLogo(site.team)}" alt="" loading="lazy"></a>` : ""}</div></td>
+          <td><div class="club-cell">${personChip(p.name)}${site ? playerLink(p.id, shortName(p.name)) : `<span title="${escapeHtml(p.name)}">${escapeHtml(shortName(p.name))}</span>`}${
+            site?.team ? `<a class="pl-badge-link nat-badge" href="${clubHref(site.team)}" title="${escapeHtml(teamName(site.team))}" aria-label="${escapeHtml(teamName(site.team))}">${clubCrest(site.team, "club-logo")}</a>` : ""}</div></td>
           <td>${escapeHtml(p.role)}</td>
           <td class="num">${p.apps}</td>
           <td class="num"${p.noMins ? ` title="Minutes not known for ${p.noMins} of his matches"` : ""}>${p.noMins === p.apps ? "–" : `${p.minutes}${p.noMins ? "*" : ""}`}</td>
@@ -4492,7 +4513,7 @@ function renderLeaguePage() {
   const avg = avgRating(leagueClubs(id));
   $("#club-body").innerHTML = `
     <div class="pl-hero">
-      <img class="club-logo-lg" src="${leagueLogo(id)}" alt="">
+      ${leagueCrest(id, "club-logo-lg")}
       <div class="pl-hero-main">
         <h2>${escapeHtml(comp.name)}</h2>
         <div class="pl-hero-club">${flagImg(countryDisplay(comp.country))}<span>${countryLink(comp.country)}</span></div>
@@ -4535,7 +4556,7 @@ function leagueZones(rows) {
 }
 // API-Football's form string (newest first, as the club page's results) as W/D/L chips
 const formChips = (f) => f ? `<span class="lt-form">${[...f].map((c) =>
-  `<i class="${c === "W" ? "res-w" : c === "D" ? "res-d" : "res-l"}">${c}</i>`).join("")}</span>` : "";
+  `<i class="${c === "W" ? "res-w" : c === "D" ? "res-d" : "res-l"}">${escapeHtml(c)}</i>`).join("")}</span>` : "";
 const zoneLegend = (zones) => zones.size ? `<div class="lt-legend">${[...zones].map(([d, c]) =>
   `<span><i style="background:${c}"></i>${escapeHtml(d)}</span>`).join("")}</div>` : "";
 // Sortable league tables (Standings, Strength ranking): the viewer's column per tab, kept on
@@ -4589,7 +4610,7 @@ function leagueTableTab() {
       <tbody>${sortLeagueRows(rows.filter((r) => r.group === g), s, STANDINGS_COLS).map((r) => {
         const rk = state.rankByTeam.get(r.team);
         return `<tr><td class="lt-pos" style="border-left-color:${zones.get(r.description) || "transparent"}">${r.rank}</td>
-          <td class="lt-badge"><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy"></td>
+          <td class="lt-badge">${clubCrest(r.team, "club-logo", `data-club="${r.team}"`)}</td>
           <td class="lt-club">${clubLink(r.team, r.name)}</td>
           <td>${r.played ?? ""}</td><td class="lt-wdl">${r.win ?? ""}</td><td class="lt-wdl">${r.draw ?? ""}</td><td class="lt-wdl">${r.lose ?? ""}</td>
           <td class="lt-wide">${r.gf ?? ""}</td><td class="lt-wide">${r.ga ?? ""}</td><td class="lt-gd">${r.gd > 0 ? "+" : ""}${r.gd ?? ""}</td><td><b>${r.points ?? ""}</b></td>
@@ -4705,7 +4726,7 @@ function leagueProjectedTab() {
         <th class="lt-gd" title="Projected goal difference">GD</th><th title="Projected points: points so far plus the average over the simulated seasons">Pts</th>
         <th class="lt-chance" title="Chance of finishing top">1st</th>${cols.map(([d, c]) => `<th title="${escapeHtml(d)}"><i class="lt-zone" style="background:${c}"></i></th>`).join("")}</tr></thead>
       <tbody>${list.map((x, i) => `<tr><td class="lt-pos" style="border-left-color:${zones.get(byRank.get(i + 1)) || "transparent"}">${i + 1}</td>
-          <td class="lt-badge"><img class="club-logo" data-club="${x.r.team}" src="${teamLogo(x.r.team)}" alt="" loading="lazy"></td>
+          <td class="lt-badge">${clubCrest(x.r.team, "club-logo", `data-club="${x.r.team}"`)}</td>
           <td class="lt-club">${clubLink(x.r.team, data.teams[x.r.team] || teamName(x.r.team))}</td>
           <td class="lt-wide">${x.left}</td><td class="lt-wdl">${Math.round(x.w)}</td><td class="lt-wdl">${Math.round(x.d)}</td><td class="lt-wdl">${Math.round(x.l)}</td>
           <td class="lt-gd">${x.gd >= 0.5 ? "+" : ""}${Math.round(x.gd)}</td><td><b>${Math.round(x.pts)}</b></td>
@@ -4734,7 +4755,7 @@ function leagueMatchesTab() {
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day).push(f);
   }
-  const logo = (t) => `<img class="club-logo" data-club="${t}" src="${teamLogo(t)}" alt="" loading="lazy">`;
+  const logo = (t) => clubCrest(t, "club-logo", `data-club="${t}"`);
   const row = (f) => {
     const done = f.hg != null && (FINISHED.has(f.status) || LIVE.has(f.status));
     const p = preds.get(f.id);
@@ -4788,7 +4809,7 @@ function clubRatingTable(rows, pos, names = {}, meta = null, sort = null, limit 
       ${th("lt", BASELINE_TH, "Baseline Strength: long-term Elo", "num")}${th("trend", "Gap", "Current minus Baseline", "num col-gap")}${th("current", "Current", "Current Strength: Elo now", "num")}${th("form", "Last 6", "Elo change over the last 6 matches", "num col-recent")}</tr></thead>
     <tbody>${list.map(({ r, i, name, pos: p }) => `<tr>
       <td>${i}</td>
-      <td><img class="club-logo" data-club="${r.team}" src="${teamLogo(r.team)}" alt="" loading="lazy"></td>
+      <td>${clubCrest(r.team, "club-logo", `data-club="${r.team}"`)}</td>
       <td>${clubLink(r.team, name)}${meta ? meta(r) : ""}</td>
       <td class="num" style="color:var(--text-muted)">${pos ? p : r.played}</td>
       <td class="num">${eloChip(r.lt)}</td>
@@ -4847,7 +4868,7 @@ function openCountryPage(country) {
   const clubs = leagues.flatMap((c) => c.clubs).sort((a, b) => b.lt - a.lt);
   const avg = avgRating(clubs.slice(0, 15));   // the country's level: its 15 best clubs
   const card = (c) => `<a class="lg-card" href="${leagueHref(c.lid)}">
-      <img class="club-logo" src="${leagueLogo(c.lid)}" alt="" loading="lazy">
+      ${leagueCrest(c.lid)}
       <span class="lg-main"><span class="lg-name">${escapeHtml(c.name)}</span>
         ${c.clubs?.length ? `<span class="lg-sub">${c.clubs.length} clubs · top rated ${escapeHtml(teamName(c.clubs[0].team))}</span>` : ""}</span>
       ${c.avg != null ? `<span class="rel-chip rel-${ratingTierOf(c.avg)}" title="Average Baseline Strength of its clubs">${Math.round(c.avg)}</span>` : ""}</a>`;
@@ -4917,7 +4938,7 @@ function renderLeagues() {
       <tbody>${leagues.map((c, i) => `
         <tr>
           <td>${i + 1}</td>
-          <td><a href="${leagueHref(c.lid)}"><img class="club-logo" src="${leagueLogo(c.lid)}" alt="" loading="lazy"></a></td>
+          <td><a href="${leagueHref(c.lid)}">${leagueCrest(c.lid)}</a></td>
           <td><div class="club-cell"><a class="team-link" href="${leagueHref(c.lid)}">${escapeHtml(c.name)}</a>
             ${FLAG_CODES[countryDisplay(c.country)] ? `<span class="club-meta">${flagLink(c.country)}</span>` : ""}</div></td>
           <td class="num" style="color:var(--text-muted)">${c.clubs}</td>
@@ -5007,8 +5028,8 @@ function renderNations() {
         return `
         <tr title="${escapeHtml(tip)}">
           <td>${i + 1}</td>
-          <td>${n.flag ? `<img class="flag" src="https://flagcdn.com/w40/${n.flag}.png" alt="" loading="lazy" data-broken="remove">` : ""}</td>
-          <td><div class="club-cell">${name}${n.confed ? ` <span class="club-meta">${n.confed}</span>` : ""}</div></td>
+          <td>${/^[a-z]{2}(-[a-z]{3})?$/.test(n.flag) ? `<img class="flag" src="https://flagcdn.com/w40/${n.flag}.png" alt="" loading="lazy" data-broken="remove">` : ""}</td>
+          <td><div class="club-cell">${name}${n.confed ? ` <span class="club-meta">${escapeHtml(n.confed)}</span>` : ""}</div></td>
           <td class="num"><span class="rel-chip rel-${tier(n.current)}">${Math.round(n.current)}</span></td>
           <td class="num">${formHtml(n.change)}</td>
         </tr>`; }).join("")}
@@ -5220,10 +5241,10 @@ function renderFplNext() {
     return t ? ` <span class="bet-tag warn" title="${p.fpl_status && p.fpl_status !== "a" ? "FPL status" : "On the injury list"}">${t}</span>` : "";
   };
   const opp = (c) => c.home ? code(c.opponent) : code(c.opponent).toLowerCase();
-  // photo with the club badge on its corner; surname (full name on hover) · position · price
-  const meta = (r) => `<span class="fpl-meta"><span title="${FPL_POS[r.p.pos]}">${r.p.pos}${r.p.fpl_position ? "" : '<span title="Not matched to FPL yet: our position">*</span>'}</span>${r.price > 0 ? ` · £${r.price.toFixed(1)}` : ""}</span>`;
-  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><span class="fpl-face"><img class="player-photo" src="${playerPhoto(r.p.player)}" alt="" loading="lazy">
-      <img class="club-logo" data-club="${r.p.team}" src="${teamLogo(r.p.team)}" alt="${escapeHtml(team(r.p.team))}" title="${escapeHtml(team(r.p.team))}" loading="lazy"></span>
+  // initials with the club's chip on its corner; surname (full name on hover) · position · price
+  const meta = (r) => `<span class="fpl-meta"><span title="${FPL_POS[r.p.pos]}">${escapeHtml(r.p.pos)}${r.p.fpl_position ? "" : '<span title="Not matched to FPL yet: our position">*</span>'}</span>${r.price > 0 ? ` · £${r.price.toFixed(1)}` : ""}</span>`;
+  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><span class="fpl-face">${personChip(r.p.name)}
+      ${clubCrest(r.p.team, "club-logo", `data-club="${r.p.team}" title="${escapeHtml(team(r.p.team))}"`, team(r.p.team))}</span>
       <div class="fpl-name"><div class="fpl-line"><span class="fpl-nm" title="${escapeHtml(r.p.name)}">${playerById(r.p.player) ? playerLink(r.p.player, shortName(r.p.name)) : escapeHtml(shortName(r.p.name))}</span>${meta(r)}${tag(r.p)}</div>
       <div class="fpl-match">${fp.mode === "gw" ? (r.cells.length ? r.cells.map((c) => `v ${escapeHtml(team(c.opponent))} ${c.home ? "H" : "A"}`).join(" · ") : "No match (blank)") : escapeHtml(team(r.p.team))}</div></div></div></td>`;
   // the points open a row below with where they come from, summed over the gameweeks shown
@@ -5661,10 +5682,10 @@ function renderEfl() {
       return { p, cells, xp: sum("xp"), minutes: sum("minutes"), goals: sum("goals"), assists: sum("assists") };
     }).sort((a, b) => b[v.sort] - a[v.sort] || b.xp - a.xp);
   const list = v.all ? rows : rows.slice(0, EFL_SHOWN);
-  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><span class="fpl-face"><img class="player-photo" src="${playerPhoto(r.p.player)}" alt="" loading="lazy">
-      <img class="club-logo" data-club="${r.p.team}" src="${teamLogo(r.p.team)}" alt="${escapeHtml(team(r.p.team))}" title="${escapeHtml(team(r.p.team))}" loading="lazy"></span>
+  const who = (r) => `<td class="fpl-player"><div class="fpl-who"><span class="fpl-face">${personChip(r.p.name)}
+      ${clubCrest(r.p.team, "club-logo", `data-club="${r.p.team}" title="${escapeHtml(team(r.p.team))}"`, team(r.p.team))}</span>
       <div class="fpl-name"><div class="fpl-line"><span class="fpl-nm" title="${escapeHtml(r.p.name)}">${nameOf(r.p)}</span>
-        <span class="fpl-meta"><span title="${FPL_POS[r.p.position]}${r.p.corrected ? "" : ": guessed from match data"}">${r.p.position}${r.p.corrected ? "" : "*"}</span> · ${EFL_LEAGUE_SHORT[r.p.league] || ""}</span>${tag(r.p)}</div>
+        <span class="fpl-meta"><span title="${FPL_POS[r.p.position]}${r.p.corrected ? "" : ": guessed from match data"}">${escapeHtml(r.p.position)}${r.p.corrected ? "" : "*"}</span> · ${EFL_LEAGUE_SHORT[r.p.league] || ""}</span>${tag(r.p)}</div>
       <div class="fpl-match">${v.mode === "gw" ? vs(r.cells) : escapeHtml(team(r.p.team))}</div></div></div></td>`;
   const pts = (r) => `<button type="button" class="fpl-pts" data-efl-break="${r.p.player}" aria-expanded="${v.open === r.p.player}" title="Where the points come from"><b>${r.xp.toFixed(1)}</b></button>`;
   const line = (label, figure, x) => `<div class="fpl-part"><span>${label}</span><span>${figure ?? ""}</span>
@@ -5722,7 +5743,7 @@ function renderEfl() {
   const clubHead = v.mode === "gw" ? `<th>#</th><th>Club</th><th>Pts</th><th title="Chance of winning">Win</th><th title="Chance of a clean sheet">CS</th>`
     : `<th>#</th><th>Club</th><th>Total</th>${span.map((id) => `<th>GW${id}</th>`).join("")}`;
   const clubRow = (r, i) => {
-    const name = `<td class="fpl-player"><div class="fpl-who"><img class="efl-club-logo" src="${teamLogo(r.c.team)}" alt="" loading="lazy">
+    const name = `<td class="fpl-player"><div class="fpl-who">${clubCrest(r.c.team, "efl-club-logo")}
       <div class="fpl-name"><div class="fpl-line"><span class="fpl-nm">${escapeHtml(team(r.c.team))}</span><span class="fpl-meta">${EFL_LEAGUE_SHORT[r.c.league] || ""}</span></div>
       ${v.mode === "gw" ? `<div class="fpl-match">${vs(r.cells)}</div>` : ""}</div></div></td>`;
     if (v.mode !== "gw") return `<tr><td>${i + 1}</td>${name}<td><b>${r.xp.toFixed(1)}</b></td>${span.map((id) => gwCell(r.cells.filter((c) => c.gw === id))).join("")}</tr>`;

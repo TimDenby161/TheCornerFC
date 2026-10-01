@@ -1,3 +1,6 @@
 {
-  "_note": "Position corrections for the EFL Fantasy tab: API-Football player id -> G, D, M or F. Everyone else keeps the position guessed from match data."
+  "_note": "Position corrections for the EFL Fantasy tab: API-Football player id -> G, D, M or F. Everyone else keeps the position guessed from match data.",
+  "283351": "M",
+  "17844": "F",
+  "138893": "F"
 }

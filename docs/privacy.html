@@ -13,7 +13,7 @@
 <body>
 <p class="back"><a href="./">‹ The Corner FC</a></p>
 <h1>Privacy, corrections and security</h1>
-<p class="updated">Last updated 27 September 2026</p>
+<p class="updated">Last updated 30 September 2026</p>
 
 <h2 id="privacy">Privacy</h2>
 <p>The Corner FC is a static website. It has no accounts, sign-up forms, cookies, advertising or
@@ -23,26 +23,32 @@ analytics, and it doesn't collect or store anything about you on a server of its
     receives your IP address and browser details when you load a page. See the
     <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub
     General Privacy Statement</a>.</li>
-  <li><strong>Images from other sites.</strong> Club badges, player and manager photos and competition
-    logos load directly from API-Football's image server (<code>media.api-sports.io</code>). Country
-    flags load from <code>flagcdn.com</code>. Your browser contacts those servers, so they receive your
-    IP address, browser details and the site's address (<code>thecornerfc.com</code>, not the page
-    you're on). Their own privacy policies apply to those requests.</li>
+  <li><strong>Images from other sites.</strong> Country flags load from <code>flagcdn.com</code>. Your
+    browser contacts that server, so it receives your IP address, browser details and the site's
+    address (<code>thecornerfc.com</code>, not the page you're on). Its own privacy policy applies to
+    those requests. The site doesn't show club badges, competition logos or player and manager photos:
+    initials stand in for them, so no images load from API-Football.</li>
   <li><strong>Settings kept in your browser.</strong> The paper bank and stake size you enter on
     Model vs Market, and whether to show players' seasons by year, are saved in your browser's
     local storage (<code>fc.balance</code>, <code>fc.stakePct</code>, <code>fc.playerYears</code>) so
     they're still there next time. They never leave your device. Clear them by clearing this site's
     data in your browser.</li>
-  <li><strong>My FPL team.</strong> This page shows the site owner's own Fantasy Premier League team.
+  <li><strong>My FPL team.</strong> This page shows the site owner's own Fantasy Premier League team,
+    taken from the game's public data for that team, and a transfer plan worked out in your browser.
     Opening it asks the site's Supabase database (<code>supabase.co</code>) which weeks the owner has
-    locked in, so Supabase receives your IP address and browser details. The owner's passphrase is
-    kept in that browser's local storage (<code>fc.fplKey</code>) after it's used, and nothing about
-    visitors is stored. See the <a href="https://supabase.com/privacy">Supabase Privacy Policy</a>.</li>
+    locked in, so Supabase receives your IP address and browser details. Only the owner can lock in a
+    week: the passphrase is sent to Supabase to check it and is then kept in that browser's local
+    storage (<code>fc.fplKey</code>). Nothing about visitors is stored. See the
+    <a href="https://supabase.com/privacy">Supabase Privacy Policy</a>.</li>
+  <li><strong>EFL Fantasy.</strong> This tab shows expected Fantasy EFL points for Championship,
+    League One and League Two players, worked out from the same API-Football data as the rest of the
+    site. It doesn't connect to the Fantasy EFL game or any other site, and it stores nothing in your
+    browser.</li>
 </ul>
 <p>The site shows information about professional footballers and managers (names, clubs, ages,
-nationalities, match statistics, injuries and ratings computed from those). It comes from API-Football
-and the Fantasy Premier League game's public data. If something about you is wrong or you want it
-removed, use the corrections route below.</p>
+nationalities, match statistics, injuries and ratings and expected fantasy points computed from
+those). It comes from API-Football and the Fantasy Premier League game's public data. If something
+about you is wrong or you want it removed, use the corrections route below.</p>
 
 <h2 id="corrections">Corrections</h2>
 <p>If you spot a wrong result, player, club, injury or other data error, please
@@ -50,7 +56,7 @@ removed, use the corrections route below.</p>
 page address and what's wrong. Issues are public, so don't include anything private. Ratings,
 projections and probabilities are model output. They're estimates, not facts, and aren't
 betting advice. <a href="methodology.html">How the models work</a> explains them and how accurate
-they've been.</p>
+they've been, and the <a href="terms.html">terms of use</a> cover what the site is and isn't.</p>
 
 <h2 id="security">Security</h2>
 <p>Please report security problems privately through

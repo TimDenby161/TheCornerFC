@@ -23,6 +23,7 @@ jobs:
     permissions:
       actions: read        # to list this workflow's earlier runs
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run: ${{ steps.check.outputs.run }}
     steps:
@@ -30,7 +31,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "${{ github.event_name }}" != "schedule" ]; then
+          if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           done_today=$(gh run list -R "$GITHUB_REPOSITORY" --workflow nightly.yml --status success \
@@ -50,8 +51,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       API_DAILY_RESERVE: "200"
       THECORNERFC_MODE: production
       THECORNERFC_READ_ONLY: "false"
@@ -89,6 +88,9 @@ jobs:
           restore-keys: db-cache-
 
       - name: Sync API-Football into Supabase
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc nightly
 
       # FPL prices, positions and gameweeks for the FPL tab, and last gameweek's points. Enabled by
@@ -97,6 +99,8 @@ jobs:
       - name: Capture FPL state
         continue-on-error: true
         env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           FPL_CAPTURE_ENABLED: "true"
         run: |
           python -m thecornerfc fpl capture
@@ -105,12 +109,17 @@ jobs:
       # Publication only happens after a fully successful critical pipeline run.
       # If nightly fails, the workflow stays red and the last committed docs/data remains live.
       - name: Export website data
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc export
 
       # The owner's team for My FPL team (owner's decision, 2026-09-30; README). Not critical.
       - name: My FPL team
         continue-on-error: true
         env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           FPL_CAPTURE_ENABLED: "true"
         run: python -m thecornerfc fpl team
 
@@ -134,10 +143,16 @@ jobs:
 
       - name: Report API usage
         if: always()
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc usage
 
       - name: Report pipeline and dataset health
         if: always()
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc health
 
       - name: Save API usage ledger
