@@ -133,6 +133,9 @@ class LockMigrationTests(unittest.TestCase):
         self.assertEqual(sql.count('SECURITY DEFINER SET search_path = public, extensions, pg_temp'), 3)
         self.assertIn("REVOKE ALL ON upcoming_predictions FROM %I", sql)
 
+    def test_schema_contains_owner_migration(self):
+        self.assertIn(OWNER_MIGRATION.read_text(), (ROOT / 'db/schema.sql').read_text())
+
     def test_owner_data_needs_the_passphrase_and_anon_reads_no_table(self):
         sql = OWNER_MIGRATION.read_text()
         self.assertIn('ALTER TABLE fpl_owner_docs ENABLE ROW LEVEL SECURITY', sql)
