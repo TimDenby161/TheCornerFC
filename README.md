@@ -1263,9 +1263,8 @@ entered in that browser.
      `INSERT INTO fpl_team_keys VALUES (3996593, extensions.crypt('your passphrase', extensions.gen_salt('bf'))) ON CONFLICT (entry_id) DO UPDATE SET key_hash = EXCLUDED.key_hash;`
   3. Put the project's anon (or publishable) key from Supabase → Project Settings → API Keys into
      `SUPABASE.key` in `docs/assets/app.js`.
-  4. Run `db/migrations/20261003_fpl_owner_docs.sql` (owner-only FPL data), then append it to
-     `db/schema.sql`. Until it's applied the export logs "Fantasy predictions export skipped" and
-     the owner-only pages are empty.
+  4. Run `db/migrations/20261003_fpl_owner_docs.sql` (owner-only FPL data; applied 2026-10-03,
+     also in `db/schema.sql`).
 
 ### Fantasy expected points (v1.1, evidence only)
 

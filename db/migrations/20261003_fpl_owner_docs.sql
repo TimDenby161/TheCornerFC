@@ -1,5 +1,4 @@
--- Additive and repeatable. NOT APPLIED YET: run it in the Supabase SQL editor, then append it to
--- db/schema.sql as the other migrations are.
+-- Additive and repeatable. Applied 2026-10-03.
 -- FPL data for the owner only (audit/findings.md L3, decision P2 (a), owner's decision 2026-10-02).
 -- FPL's terms (cl. 28(d), 29) don't allow its data to be republished, so the FPL predictions
 -- (FPL prices, positions, status, gameweeks) and the owner's team are no longer in docs/data. The
