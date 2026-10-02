@@ -33,12 +33,11 @@ analytics, and it doesn't collect or store anything about you on a server of its
     local storage (<code>fc.balance</code>, <code>fc.stakePct</code>, <code>fc.playerYears</code>) so
     they're still there next time. They never leave your device. Clear them by clearing this site's
     data in your browser.</li>
-  <li><strong>My FPL team.</strong> This page shows the site owner's own Fantasy Premier League team,
-    taken from the game's public data for that team, and a transfer plan worked out in your browser.
-    Opening it asks the site's Supabase database (<code>supabase.co</code>) which weeks the owner has
-    locked in, so Supabase receives your IP address and browser details. Only the owner can lock in a
-    week: the passphrase is sent to Supabase to check it and is then kept in that browser's local
-    storage (<code>fc.fplKey</code>). Nothing about visitors is stored. See the
+  <li><strong>FPL predictions and My FPL team.</strong> These are for the site owner only. Entering
+    the passphrase sends it to the site's Supabase database (<code>supabase.co</code>) to check it,
+    so Supabase receives your IP address and browser details; the owner's browser then keeps it in
+    local storage (<code>fc.fplKey</code>). Visitors who don't enter one connect to nothing. Nothing
+    about visitors is stored. See the
     <a href="https://supabase.com/privacy">Supabase Privacy Policy</a>.</li>
   <li><strong>EFL Fantasy.</strong> This tab shows expected Fantasy EFL points for Championship,
     League One and League Two players, worked out from the same API-Football data as the rest of the

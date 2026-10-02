@@ -1,5 +1,6 @@
-"""My FPL team: fpl_team.json from FPL's manager responses, the export keeping it, the lock-in
-migration's grants, and the browser planner's own tests (tests/fpl_planner.test.mjs) under node."""
+"""My FPL team: fpl_team from FPL's manager responses, FPL data kept off the public site (owner
+only, audit L3), the lock-in and owner-data migrations' grants, and the browser planner's own tests
+(tests/fpl_planner.test.mjs) under node."""
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -13,6 +14,7 @@ from thecornerfc import export, fpl_team
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / 'db/migrations/20260930_fpl_team_locks.sql'
+OWNER_MIGRATION = ROOT / 'db/migrations/20261003_fpl_owner_docs.sql'
 NOW = datetime(2026, 10, 1, 12, tzinfo=timezone.utc)
 BOOTSTRAP = {
     'events': [{'id': 5, 'deadline_time': '2026-09-18T17:30:00Z', 'finished': True},
@@ -81,16 +83,39 @@ class TeamTests(unittest.TestCase):
         self.assertEqual(p['history'][1], {'event': 2, 'points': 65, 'rank': None, 'transfers': 2, 'hits': 4, 'bench': None})
         json.dumps(p, allow_nan=False)
 
-    def test_export_keeps_the_team_file_written_by_fpl_team(self):
+    def test_export_drops_the_old_public_fpl_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / 'data'
             out.mkdir()
             (out / 'fpl_team.json').write_text('{"entry": 1}')
-            (out / 'old.json').write_text('{}')
+            (out / 'fpl_predictions.json').write_text('{}')
             with mock.patch.object(export, 'validate_export'):
                 export._publish_export(lambda staged: (staged / 'matches.json').write_text('{}'), out)
-            self.assertEqual(sorted(f.name for f in out.iterdir()), ['fpl_team.json', 'matches.json'])
-            self.assertEqual(json.loads((out / 'fpl_team.json').read_text()), {'entry': 1})
+            self.assertEqual(sorted(f.name for f in out.iterdir()), ['matches.json'])
+
+    def test_team_is_stored_for_the_owner_not_published(self):
+        conn = mock.MagicMock()
+        with mock.patch.object(export.config, 'require_db_write'):
+            export.store_owner_doc(conn, 'fpl_team', {'entry': 1, 'name': 'É'})
+        sql, (name, doc) = conn.execute.call_args.args
+        self.assertIn('insert into fpl_owner_docs', sql)
+        self.assertEqual((name, json.loads(doc)), ('fpl_team', {'entry': 1, 'name': 'É'}))
+        conn.commit.assert_called_once()
+
+    def test_owner_docs_are_not_written_from_a_read_only_run(self):
+        conn = mock.MagicMock()
+        with mock.patch.object(export.config, 'READ_ONLY', True), self.assertRaises(Exception):
+            export.store_owner_doc(conn, 'fpl_team', {})
+        conn.execute.assert_not_called()
+
+    def test_site_has_no_public_fpl_data(self):
+        self.assertFalse((ROOT / 'docs/data/fpl_predictions.json').exists())
+        self.assertFalse((ROOT / 'docs/data/fpl_team.json').exists())
+        app = (ROOT / 'docs/assets/app.js').read_text()
+        self.assertNotIn('data/fpl_predictions.json', app)
+        self.assertNotIn('data/fpl_team.json', app)
+        self.assertNotIn('fpl_team_locks?', app)          # lock-ins come back with fpl_owner_data
+        self.assertIn('rpc/fpl_owner_data', app)
 
 
 class LockMigrationTests(unittest.TestCase):
@@ -107,6 +132,20 @@ class LockMigrationTests(unittest.TestCase):
         self.assertNotIn('GRANT EXECUTE ON FUNCTION fpl_team_key_check', sql)
         self.assertEqual(sql.count('SECURITY DEFINER SET search_path = public, extensions, pg_temp'), 3)
         self.assertIn("REVOKE ALL ON upcoming_predictions FROM %I", sql)
+
+    def test_owner_data_needs_the_passphrase_and_anon_reads_no_table(self):
+        sql = OWNER_MIGRATION.read_text()
+        self.assertIn('ALTER TABLE fpl_owner_docs ENABLE ROW LEVEL SECURITY', sql)
+        self.assertIn("why text := fpl_team_key_check(p_entry, p_key);", sql)
+        self.assertIn('SECURITY DEFINER SET search_path = public, extensions, pg_temp', sql)
+        self.assertIn("REVOKE ALL ON fpl_owner_docs FROM %I", sql)
+        self.assertIn("REVOKE ALL ON fpl_team_locks FROM %I", sql)
+        self.assertIn('DROP POLICY IF EXISTS fpl_team_locks_read ON fpl_team_locks', sql)
+        self.assertEqual(sql.count('GRANT '), 1)
+        self.assertIn("GRANT EXECUTE ON FUNCTION fpl_owner_data(integer, text) TO %I", sql)
+        grants = (ROOT / 'db/migrations/20261001_anon_grants.sql').read_text()
+        self.assertNotIn("GRANT SELECT ON fpl_team_locks", grants)
+        self.assertIn("GRANT EXECUTE ON FUNCTION fpl_owner_data(integer, text) TO %I", grants)
 
     def test_page_allows_only_this_supabase_project(self):
         page = (ROOT / 'docs/index.html').read_text()

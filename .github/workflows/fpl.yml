@@ -65,8 +65,8 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc export
 
-      # The owner's team for My FPL team (owner's decision, 2026-09-30; README). After the export,
-      # which keeps the file it writes. Not critical.
+      # The owner's team for My FPL team (owner's decision, 2026-09-30; README). Stored in the
+      # database for the owner only, not in docs/data (2026-10-02, audit L3). Not critical.
       - name: My FPL team
         continue-on-error: true
         env:

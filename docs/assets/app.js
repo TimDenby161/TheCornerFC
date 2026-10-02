@@ -5244,8 +5244,64 @@ function renderFpl() {
   renderFplNext();
 }
 
-// Predictions: each player's expected points by gameweek (fpl_predictions.json, loaded when the
-// FPL tab first opens). One gameweek at a time (◀ ▶) or totals over the next 2 / 5 / 10.
+// ------------------------------------------------------------------ owner-only FPL data
+// FPL's terms don't allow its data to be republished (audit L3; owner's decision 2026-10-02), so the
+// predictions (FPL prices, positions, status, gameweeks) and the owner's team aren't in data/. They're
+// in Supabase, read through fpl_owner_data, which checks the owner's passphrase (the lock-in one) and
+// returns the lock-ins too. The key below is Supabase's public anon key: the database lets it call
+// fpl_owner_data and lock/unlock_fpl_transfers only (db/migrations/20261003_fpl_owner_docs.sql).
+const SUPABASE = { url: "https://bookkurhdabdeccckjbn.supabase.co", key: "sb_publishable_JZ_oJVHIO75SFbFc95LQew_3wmKuvM7" };
+const FPL_ENTRY = 3996593;   // the owner's FPL entry (FPL_TEAM_ENTRY)
+const storedText = (k) => { try { return localStorage.getItem(`fc.${k}`) || ""; } catch { return ""; } };
+const storeText = (k, v) => { try { if (v) localStorage.setItem(`fc.${k}`, v); else localStorage.removeItem(`fc.${k}`); } catch { /* not stored */ } };
+
+async function supabase(path, body) {
+  const headers = { apikey: SUPABASE.key, "Content-Type": "application/json" };
+  if (SUPABASE.key.startsWith("eyJ")) headers.Authorization = `Bearer ${SUPABASE.key}`;   // a legacy anon key (a JWT)
+  const r = await fetch(`${SUPABASE.url}/rest/v1/${path}`,
+    body ? { method: "POST", headers, body: JSON.stringify(body) } : { headers, cache: "no-store" });
+  if (!r.ok) throw new Error(`Supabase ${r.status}`);
+  return r.json();
+}
+// state.owner: undefined = not asked yet; { busy } while asking; { ok: true, key, docs, locks }; { ok: false, error }.
+// Asked once a visit; the passphrase form asks again.
+function loadOwnerData(key = storedText("fplKey")) {
+  if (state.owner) return;
+  if (!key) { state.owner = { ok: false }; ownerChanged(); return; }
+  state.owner = { busy: true };
+  ownerChanged();
+  supabase("rpc/fpl_owner_data", { p_entry: FPL_ENTRY, p_key: key })
+    .then((res) => {
+      if (res.ok) { storeText("fplKey", key); state.owner = { ok: true, key, docs: res.docs || {}, locks: res.locks || [] }; }
+      else { storeText("fplKey", ""); state.owner = { ok: false, error: res.error }; }
+    })
+    .catch(() => { state.owner = { ok: false, error: "Couldn't reach the database just now." }; })
+    .finally(ownerChanged);
+}
+function ownerChanged() {
+  $("#myteam-tab").hidden = !state.owner?.ok && !storedText("fplKey");
+  if (state.tab === "fpl") { loadFplPredictions(); renderFplNext(); }
+  if (state.tab === "myteam") loadMyTeam();
+}
+// What the owner-only parts show anyone else: a short why, and the passphrase box
+function ownerGate(label) {
+  const o = state.owner;
+  if (!o || o.busy) return `<div class="stats-label">${label}</div><div class="stats-note">Loading…</div>`;
+  return `<div class="stats-label">${label}</div>
+    <div class="stats-note">Shown to the site owner only: it's built on FPL's own data (prices, positions, availability and gameweeks), which FPL's terms don't allow us to republish.</div>
+    <form class="mt-lock owner-gate"><input type="password" class="table-search" name="key" placeholder="Passphrase" aria-label="Passphrase" autocomplete="current-password" required>
+      <button type="submit" class="mt-btn">Unlock</button></form>
+    ${o.error ? `<div class="stats-note mt-warn" role="alert">${escapeHtml(o.error)}</div>` : ""}`;
+}
+document.addEventListener("submit", (e) => {
+  if (!e.target.classList.contains("owner-gate")) return;
+  e.preventDefault();
+  state.owner = undefined;
+  loadOwnerData(e.target.elements.key.value);
+});
+
+// Predictions: each player's expected points by gameweek (fpl_predictions, owner only, loaded when
+// the FPL tab first opens). One gameweek at a time (◀ ▶) or totals over the next 2 / 5 / 10.
 const FPL_STATUS = { i: "Injured", s: "Suspended", u: "Unavailable", n: "Not in squad" };
 const FPL_SHOWN = 30;
 // Where a player's points come from (part_fields in the predictions file)
@@ -5254,8 +5310,9 @@ const FPL_PARTS = { appearance: "Minutes", goal: "Goals", penalty: "Penalties", 
   dc: "Defensive contributions" };
 function loadFplPredictions() {
   if (state.fplPred !== undefined) return;
+  if (!state.owner?.ok) { loadOwnerData(); return; }
   state.fplPred = null;
-  Promise.all([getJsonOrNull("data/fpl_predictions.json"), loadPlayers()]).then(([d]) => { state.fplPred = d || false; renderFplNext(); });
+  loadPlayers().then(() => { state.fplPred = state.owner.docs.fpl_predictions || false; renderFplNext(); });
 }
 function fplRows() {
   const d = state.fplPred;
@@ -5272,8 +5329,9 @@ function renderFplNext() {
   const el = $("#fpl-next");
   if (!el) return;
   const d = state.fplPred;
-  if (d == null) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">Loading…</div>`; return; }
-  if (!d || !d.players.length) { el.innerHTML = `<div class="stats-label">Predictions</div>${loadFailed("fpl_predictions") ? loadError("the predictions") : `<div class="stats-note">No upcoming Premier League gameweeks yet.</div>`}`; return; }
+  if (d === undefined) { el.innerHTML = ownerGate("Predictions"); return; }
+  if (d === null) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">Loading…</div>`; return; }
+  if (!d || !d.players.length) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">No upcoming Premier League gameweeks yet.</div>`; return; }
   const fp = state.fplView ||= { pos: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0 };
   const gws = d.gameweeks, n = fp.mode === "gw" ? 1 : Math.min(+fp.mode, gws.length);
   fp.gw = Math.max(0, Math.min(fp.gw, gws.length - 1));
@@ -5398,44 +5456,21 @@ $("#fpl-body").addEventListener("input", (e) => {
 });
 
 // ------------------------------------------------------------------ My FPL team
-// The owner's FPL team (fpl_team.json, from `fpl team`) with a transfer plan and chip advice worked
-// out here in the browser by assets/fpl-planner.js. "I've made these transfers" saves a lock for the
-// gameweek in Supabase (README: My FPL team), and the plan then starts from the squad after them,
-// until an FPL update reads the transfers from FPL itself. The key below is Supabase's public anon
-// key: the database lets it read the locks and call lock/unlock_fpl_transfers, which check the
-// owner's passphrase. Empty = locking not set up; the plan still shows.
-const SUPABASE = { url: "https://bookkurhdabdeccckjbn.supabase.co", key: "sb_publishable_JZ_oJVHIO75SFbFc95LQew_3wmKuvM7" };
+// The owner's FPL team (fpl_team, from `fpl team`; owner only, as above) with a transfer plan and
+// chip advice worked out here in the browser by assets/fpl-planner.js. "I've made these transfers"
+// saves a lock for the gameweek in Supabase (README: My FPL team), and the plan then starts from the
+// squad after them, until an FPL update reads the transfers from FPL itself.
 const CHIP_NAMES = { wildcard: "Wildcard", freehit: "Free Hit", bboost: "Bench Boost", "3xc": "Triple Captain" };
 const CHIP_GAIN = { wildcard: "over the plan's weeks, against the plan", freehit: "that week, against the planned squad",
   bboost: "from the bench", "3xc": "from the extra captaincy" };
-const storedText = (k) => { try { return localStorage.getItem(`fc.${k}`) || ""; } catch { return ""; } };
-const storeText = (k, v) => { try { if (v) localStorage.setItem(`fc.${k}`, v); else localStorage.removeItem(`fc.${k}`); } catch { /* not stored */ } };
-
-async function supabase(path, body) {
-  const headers = { apikey: SUPABASE.key, "Content-Type": "application/json" };
-  if (SUPABASE.key.startsWith("eyJ")) headers.Authorization = `Bearer ${SUPABASE.key}`;   // a legacy anon key (a JWT)
-  const r = await fetch(`${SUPABASE.url}/rest/v1/${path}`,
-    body ? { method: "POST", headers, body: JSON.stringify(body) } : { headers, cache: "no-store" });
-  if (!r.ok) throw new Error(`Supabase ${r.status}`);
-  return r.json();
-}
 function loadMyTeam() {
   if (state.myTeam) return;
-  const mt = state.myTeam = { team: undefined, pred: undefined, locks: null, ft: null, key: storedText("fplKey"), note: "", msg: "" };
-  Promise.all([getJsonOrNull("data/fpl_team.json"), getJsonOrNull("data/fpl_predictions.json")]).then(([team, pred]) => {
-    mt.team = team || false;
-    mt.pred = pred || false;
-    if (team && pred) loadMyLocks();
-    else renderMyTeam();
-  });
-}
-function loadMyLocks() {
-  const mt = state.myTeam, t = mt.team;
-  if (!SUPABASE.key) { mt.locks = new Map(); mt.note = "Locking in isn't set up yet (README: My FPL team)."; replan(); return; }
-  supabase(`fpl_team_locks?entry_id=eq.${t.entry}&season=eq.${t.season}&select=event_id,transfers,locked_at`)
-    .then((rows) => { mt.locks = new Map(rows.map((x) => [x.event_id, x])); mt.note = ""; })
-    .catch(() => { mt.locks = new Map(); mt.note = "Couldn't read saved lock-ins just now: planning without them."; })
-    .finally(replan);
+  if (!state.owner?.ok) { loadOwnerData(); renderMyTeam(); return; }
+  const { docs, locks, key } = state.owner;
+  const mt = state.myTeam = { team: docs.fpl_team || false, pred: docs.fpl_predictions || false, locks: null, ft: null, key, note: "", msg: "" };
+  if (!mt.team || !mt.pred) { renderMyTeam(); return; }
+  mt.locks = new Map(locks.filter((x) => x.season === mt.team.season).map((x) => [x.event_id, x]));
+  replan();
 }
 // The search takes a moment: "Planning…" is drawn first
 function replan() {
@@ -5468,8 +5503,7 @@ function renderMyTeam() {
   const body = $("#myteam-body");
   const mt = state.myTeam;
   const note = (text) => `<div class="stats-card"><div class="stats-note">${text}</div></div>`;
-  if (!mt || mt.team === undefined) { body.innerHTML = note("Loading…"); return; }
-  if (loadFailed("fpl_team", "fpl_predictions")) { body.innerHTML = loadError("the team"); return; }
+  if (!mt) { body.innerHTML = `<div class="stats-card">${ownerGate("My FPL team")}</div>`; return; }
   if (!mt.team) { body.innerHTML = note("The team appears after the next FPL update."); return; }
   if (!mt.pred) { body.innerHTML = note("No predictions for the coming gameweeks yet."); return; }
   const t = mt.team, d = mt.pred, r = mt.result;
@@ -5514,13 +5548,13 @@ function renderMyTeam() {
   let lock;
   if (r.lock) {
     lock = `<div class="mt-locked"><span>✓ Locked in ${escapeHtml(fmtDay(r.lock.locked_at))}, ${escapeHtml(fmtTime(r.lock.locked_at))}</span>
-      ${SUPABASE.key && !passed ? `${storedText("fplKey") ? "" : `<input type="password" id="mt-key" class="table-search" placeholder="Passphrase" aria-label="Passphrase" autocomplete="current-password" value="${escapeHtml(mt.key)}">`}
+      ${!passed ? `${mt.askKey ? `<input type="password" id="mt-key" class="table-search" placeholder="Passphrase" aria-label="Passphrase" autocomplete="current-password" value="${escapeHtml(mt.key)}">` : ""}
         <button type="button" class="filter-chip" id="mt-unlock"${mt.busy ? " disabled" : ""}>Undo</button>` : ""}</div>`;
-  } else if (!SUPABASE.key || passed) {
+  } else if (passed) {
     lock = "";
   } else {
     lock = `<div class="mt-lock">
-      <input type="password" id="mt-key" class="table-search" placeholder="Passphrase" aria-label="Passphrase" autocomplete="current-password" value="${escapeHtml(mt.key)}">
+      ${mt.askKey ? `<input type="password" id="mt-key" class="table-search" placeholder="Passphrase" aria-label="Passphrase" autocomplete="current-password" value="${escapeHtml(mt.key)}">` : ""}
       <button type="button" class="mt-btn" id="mt-lock"${mt.busy ? " disabled" : ""}>${w0.moves.length ? "I've made these transfers" : "Lock in: no transfers"}</button></div>
       <div class="stats-note">Made different ones? Lock in anyway: the next FPL update (07:00, 13:00 and 19:00 UTC) reads what you actually did.</div>`;
   }
@@ -5614,7 +5648,7 @@ async function lockMyTransfers(undo) {
   try {
     const args = { p_entry: t.entry, p_season: t.season, p_event: t.next_event, p_key: mt.key };
     const res = await supabase(`rpc/${undo ? "unlock" : "lock"}_fpl_transfers`, undo ? args : { ...args, p_transfers: transfers });
-    if (!res.ok) { mt.msg = res.error; storeText("fplKey", ""); }
+    if (!res.ok) { mt.msg = res.error; mt.key = ""; mt.askKey = true; storeText("fplKey", ""); }
     else {
       storeText("fplKey", mt.key);
       if (undo) mt.locks.delete(t.next_event);
@@ -6221,4 +6255,5 @@ document.addEventListener("keydown", (e) => {
 // Until the data is in, the header names the tab the address asks for
 $("#app-title").textContent = document.querySelector(`nav.tabs [data-tab="${ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]] || ""}"]`)?.textContent
   ?? (/^#\/players/.test(location.hash) ? "Players" : location.hash.startsWith("#/") && !location.hash.startsWith("#/clubs") ? "" : "Clubs");
+$("#myteam-tab").hidden = !storedText("fplKey");
 loadData();
