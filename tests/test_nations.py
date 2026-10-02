@@ -93,7 +93,7 @@ class NationsTests(unittest.TestCase):
                 (1, 10, 11, 20, False, 0, 1, Decimal("7.0"), 1, None, "J. Bellingham"),
                 (2, 10, 9, 90, True, 0, 0, Decimal("6.5"), None, None, "H. Kane")],
             "from players": [(9, "Harry Kane")],
-            "from team_coaches": [(10, 5, "T. Tuchel", "https://media.api-sports.io/football/coachs/5.png", date(2025, 1, 1))],
+            "from team_coaches": [(10, 5, "T. Tuchel", date(2025, 1, 1))],
         }
 
         class Conn:
@@ -106,7 +106,7 @@ class NationsTests(unittest.TestCase):
         self.assertEqual(set(pages), {10, 20})
         eng = pages[10]
         self.assertEqual(eng["name"], "England")
-        self.assertEqual(eng["coach"]["since"], "2025-01-01")
+        self.assertEqual(eng["coach"], {"id": 5, "name": "T. Tuchel", "since": "2025-01-01"})   # no photo URL
         self.assertIsNone(pages[20]["coach"])
         self.assertEqual(eng["matches"], [["2026-06-20", "Czechia", "N", 2, 1, "World Cup", "4-2-3-1", "T. Tuchel", 5],
                                           ["2026-09-05", "Czechia", "A", 0, 0, "Friendlies", "3-4-2-1", "T. Tuchel", 5]])

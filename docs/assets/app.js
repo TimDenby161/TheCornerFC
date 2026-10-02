@@ -39,7 +39,7 @@ const state = {
   lineupRec: undefined, lineupHist: undefined, lineupSource: "live", lineupRange: "all", lineupFilter: "all", lineupShown: 50,
   lineupCountries: {},
   bets: null, betStrategy: "all", betMarket: "all", betView: "all", betFilter: "all", tipsCollapsed: new Set(),
-  players: null, tableView: "clubs", playerSort: null, ranges: {}, playerYears: storedFlag("playerYears"), ageMin: null, ageMax: null,
+  players: undefined, drawn: new Set(), tableView: "clubs", playerSort: null, ranges: {}, playerYears: storedFlag("playerYears"), ageMin: null, ageMax: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -66,22 +66,25 @@ function rowsToObjects(fields, rows) {
 const inflight = new Map();
 function getJson(path) {
   if (!inflight.has(path)) inflight.set(path, fetch(path, { cache: "no-cache" })
-    .then((r) => { if (!r.ok) throw new Error(`${path}: ${r.status}`); return r.json(); })
+    .then((r) => { if (!r.ok) throw Object.assign(new Error(`${path}: ${r.status}`), { status: r.status }); return r.json(); })
     .finally(() => inflight.delete(path)));
   return inflight.get(path);
 }
-const getJsonOrNull = (path) => getJson(path).catch(() => null);
+// A file that isn't published yet (404) is "nothing yet"; any other failure (offline, a server
+// error) is remembered, so the view says it couldn't load and offers a reload, not "check back tomorrow"
+const failedLoads = new Set();
+const getJsonOrNull = (path) => getJson(path).then((d) => { failedLoads.delete(path); return d; },
+  (err) => { if (err.status !== 404) failedLoads.add(path); return null; });
+const loadFailed = (...paths) => paths.some((p) => failedLoads.has(`data/${p}.json`));
+const loadError = (what) => `<div class="empty-state" role="alert">Couldn't load ${what}. Check your connection, then <button type="button" class="link-btn" data-reload>reload the page</button>.</div>`;
+document.addEventListener("click", (e) => { if (e.target.closest("[data-reload]")) location.reload(); });
 
-async function loadData() {
-  try {
-    // all at once: the players file is the largest, so it isn't left waiting behind the rest
-    const [m, r, st, bets, pj, fpl] = await Promise.all([
-      getJson("data/matches.json"), getJson("data/rankings.json"), getJsonOrNull("data/stats.json"),
-      getJsonOrNull("data/bets.json"), getJsonOrNull("data/players.json"), getJsonOrNull("data/fpl.json"),
-    ]);
-    state.stats = st;
-    state.fpl = fpl;
-    state.bets = bets;
+// players.json is the largest file by far, so it's fetched the first time a view needs it (the
+// Players table, club, player and nationality pages, line-ups and squad ratings on match cards,
+// the team pop-up's predicted XI, and the player links on Nations and the fantasy tabs), not on
+// every visit. state.players: undefined until then, null if the file couldn't be loaded
+function loadPlayers() {
+  return state.playersLoading ||= getJsonOrNull("data/players.json").then((pj) => {
     if (pj) {        // API-Football sends some names HTML-encoded ("O&apos;Reilly")
       for (const r of pj.players) r[1] = decodeEntities(r[1]);
       for (const xi of Object.values(pj.next_xi || {})) for (const r of xi.players) r[1] = decodeEntities(r[1]);
@@ -90,6 +93,22 @@ async function loadData() {
     }
     state.players = pj ? { list: rowsToObjects(pj.fields, pj.players), nextXi: pj.next_xi, fixtureXi: pj.fixture_xi || {},
       actualXi: pj.actual_xi || {}, prematchXi: pj.prematch_xi || {}, seasons: pj.seasons || [], futureSeasons: pj.future_seasons || [], teams: pj.teams || {} } : null;
+  });
+}
+
+async function loadData() {
+  try {
+    // A page that opens on a view needing players.json asks for it alongside the rest, so the
+    // largest file isn't left waiting behind them. The Players table waits for it, to be drawn once
+    const hash = location.hash;
+    const players = /^#\/(players|club\/|player\/|nation|fpl$|efl-fantasy$)/.test(hash) ? loadPlayers() : null;
+    const [m, r, st, bets, fpl] = await Promise.all([
+      getJson("data/matches.json"), getJson("data/rankings.json"), getJsonOrNull("data/stats.json"),
+      getJsonOrNull("data/bets.json"), getJsonOrNull("data/fpl.json"), hash.startsWith("#/players") ? players : null,
+    ]);
+    state.stats = st;
+    state.fpl = fpl;
+    state.bets = bets;
     state.data = { ...m, matches: rowsToObjects(m.fields, m.matches) };
     state.rankings = rowsToObjects(r.fields, r.rankings);
     // Gap: Current Strength less Baseline Strength (as shown, so the sum adds up), how far a club's
@@ -103,19 +122,12 @@ async function loadData() {
     renderTableFilters();
     renderStatsFilters();
     renderBetFilters();
-    renderMatches();
-    renderTable();
     loadEuroCups();
-    renderStats();
-    renderBets();
-    renderTips();
-    renderFpl();
-    route();
-    loadExplanations();
+    route();          // draws the tab that's open; the others are drawn when first opened (showTab)
+    document.body.classList.remove("booting");
   } catch (err) {
     console.error(err);
-    $("#matches-list").innerHTML = `<div class="empty-state">Couldn't load match data.</div>`;
-    $("#table-wrap").innerHTML = `<div class="empty-state">Couldn't load the rankings. Try reloading the page.</div>`;
+    $("#boot-status").outerHTML = loadError("the site's data");
   }
 }
 
@@ -798,7 +810,8 @@ function probBars(m, diff = true) {
 }
 
 // ---- Why the model says what it says. Everything below formats predictions.explain() output
-// from data/explanations.json (loaded after the matches); none of it is worked out here.
+// from data/explanations.json (loaded when the first match card with key reasons is drawn, or a
+// card's model detail is opened); none of it is worked out here.
 function loadExplanations() {
   state.explainLoading ||= getJsonOrNull("data/explanations.json")
     .then((j) => { state.explain = j?.matches || {}; state.explainModels = j?.models || {}; fillReasons(); });
@@ -1000,7 +1013,7 @@ function matchCard(m, { lineups = true } = {}) {
     <div class="match-card${cls}" data-fixture="${m.id}">
       ${matchHead(m, `${badge}${statusTag(m)}`)}
       ${probBars(m, false)}
-      ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${reasonsHtml(m)}</div>` : ""}
+      ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${loadExplanations() && reasonsHtml(m)}</div>` : ""}
       ${upcoming && !m.intl ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
       ${toggles ? `<div class="card-toggles">${toggles}</div>` : ""}
       ${m.p_home != null ? `<div class="why-detail" hidden></div>` : ""}
@@ -1087,7 +1100,9 @@ const squadObserver = "IntersectionObserver" in window ? new IntersectionObserve
 }, { rootMargin: "200px" }) : null;
 async function fillSquadLine(el) {
   const m = state.data.matches.find((x) => x.id === Number(el.dataset.fixture));
-  if (!m || !state.players) return;
+  if (!m) return;
+  await loadPlayers();
+  if (!state.players) return;
   state.injuries ||= await getJsonOrNull("data/injuries.json");
   const [h, a] = await Promise.all([loadClub(m.home), loadClub(m.away)]);
   const sh = h && squadStrength(m.home, h, m), sa = a && squadStrength(m.away, a, m);
@@ -1112,6 +1127,7 @@ function observeSquadLines() {
 }
 new MutationObserver(observeSquadLines).observe($("#matches-list"), { childList: true, subtree: true });
 function renderMatches(menu = true) {
+  state.drawn.add("matches");
   const container = $("#matches-list");
   $("#date-input").value = state.date;
   if (menu) renderMatchFilters();
@@ -1142,8 +1158,8 @@ function renderMatches(menu = true) {
       const key = `d:${d}`, collapsed = state.collapsed.has(key);
       return `
       <div class="comp-group${collapsed ? " collapsed" : ""}" data-comp="${key}">
-        <div class="comp-group-header">
-          <span class="comp-group-caret">${collapsed ? "&#9656;" : "&#9662;"}</span>
+        <div class="comp-group-header" role="button" tabindex="0" aria-expanded="${!collapsed}">
+          <span class="comp-group-caret" aria-hidden="true">${collapsed ? "&#9656;" : "&#9662;"}</span>
           <span class="comp-group-name">${escapeHtml(fmtDay(parseDateInput(d)))}</span>
           <span class="comp-group-count">${list.length}</span>
         </div>
@@ -1177,8 +1193,8 @@ function renderMatches(menu = true) {
     const collapsed = state.collapsed.has(id);
     return `
       <div class="comp-group${collapsed ? " collapsed" : ""}" data-comp="${id}">
-        <div class="comp-group-header">
-          <span class="comp-group-caret">${collapsed ? "&#9656;" : "&#9662;"}</span>
+        <div class="comp-group-header" role="button" tabindex="0" aria-expanded="${!collapsed}">
+          <span class="comp-group-caret" aria-hidden="true">${collapsed ? "&#9656;" : "&#9662;"}</span>
           <span class="comp-group-name">${escapeHtml(compLabel(id))}</span>
           <span class="comp-group-count">${list.length}</span>
         </div>
@@ -1270,6 +1286,13 @@ function loadPlayerSeasons() {
   if (state.playerSeasons || state.playerSeasonsLoading) return;
   state.playerSeasonsLoading = getJson("data/player_seasons.json").then((d) => { state.playerSeasons = d; }).catch(() => {});
 }
+// Club and player files carry their own rows of the season detail (positions). One exported
+// before they did has none, so the whole file is loaded for it as before
+function seasonsFor(...files) {
+  if (!files.some((f) => f && !f.positions)) return null;
+  loadPlayerSeasons();
+  return state.playerSeasonsLoading;
+}
 // Hover text for a season cell: his age that season (his age now for the current season, one
 // less for each season before), then per club "Team – club rank" and
 // "minutes – match rating – goals G, assists A"
@@ -1295,8 +1318,7 @@ function playerCellTip(pid, key) {
 
 function renderPlayers() {
   const wrap = $("#table-wrap");
-  if (!state.players) { wrap.innerHTML = `<div class="empty-state">No player ranks yet.</div>`; return; }
-  loadPlayerSeasons();
+  if (!state.players) { wrap.innerHTML = `<div class="empty-state">${state.players === undefined ? "Loading players…" : "No player ranks yet."}</div>`; if (loadFailed("players")) wrap.innerHTML = loadError("the players"); return; }
   const ids = tableLeagueIds();
   const q = state.tableSearch.trim().toLowerCase();
   const all = tableFilterIsWide();
@@ -1326,7 +1348,7 @@ function renderPlayers() {
     ? rows.slice().sort((a, b) => (a.age ?? 999) - (b.age ?? 999))
     : rows.slice().sort((a, b) => (val(b) ?? -1) - (val(a) ?? -1));
   const th = (k, label, tip, cls = "") =>
-    `<th class="num sortable${key === k ? " active" : ""}${cls}" data-sort="${k}" data-tip="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
+    `<th class="num sortable${key === k ? " active" : ""}${cls}" tabindex="0"${key === k ? ` aria-sort="${k === "age" ? "ascending" : "descending"}"` : ""} data-sort="${k}" data-tip="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   const seasonName = (y) => `${y}/${String(y + 1).slice(2)}`;
   // With a position filter, "As ST" takes Ability's place (Ability is his rank in his own position)
   // the + / − (other seasons) sits in the Ability (or "As ST") heading, and the values centre under both
@@ -1671,11 +1693,13 @@ function openTableView(view, query) {
     state.clubs = new Set((p.get("club") || "").split(",").map(Number).filter((n) => n > 0));
     state.nats = new Set((p.get("nat") || "").split("|").filter(Boolean));
   } else state.tableSort = CLUB_SORTS.has(sort) ? sort : CLUB_SORT_DEFAULT;
+  state.drawn.add("table");          // setTableView draws it
   showTab("table");
   setTableView(view);
 }
 
 function renderTable() {
+  state.drawn.add("table");
   syncTableUrl();
   if (state.tableView === "players") return renderPlayers();
   const wrap = $("#table-wrap");
@@ -1699,7 +1723,7 @@ function renderTable() {
   rows = rows.slice().sort((a, b) => (b[key] ?? -1e9) - (a[key] ?? -1e9));
   if (!rows.length) { wrap.innerHTML = `<div class="empty-state">No clubs ${state.excluded.size ? "match these filters" : "found"}.</div>`; return; }
   const th = (k, label, tip, cls = "") =>
-    `<th class="num sortable${key === k ? " active" : ""}${cls}" data-sort="${k}" data-tip="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
+    `<th class="num sortable${key === k ? " active" : ""}${cls}" tabindex="0"${key === k ? ` aria-sort="${k === "age" ? "ascending" : "descending"}"` : ""} data-sort="${k}" data-tip="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   wrap.innerHTML = `
     <div class="table-scroll"><table class="leaderboard clubs">
       <thead><tr>
@@ -1989,11 +2013,12 @@ function mergeStats(parts) {
 }
 
 function renderStats() {
+  state.drawn.add("stats");
   const body = $("#stats-body");
   const range = state.stats?.ranges?.[state.statsRange];
   const ids = filterLeagueIds(state.statsFilter, statsCountries());
   const s = !range ? null : ids ? mergeStats(ids.map((id) => range[id]).filter(Boolean)) : range.all;
-  if (!s) { body.innerHTML = `<div class="empty-state">No finished matches with a projection in this range.</div>`; return; }
+  if (!s) { body.innerHTML = loadFailed("stats") ? loadError("the stats") : `<div class="empty-state">No finished matches with a projection in this range.</div>`; return; }
   const card = (label, value, note = "") =>
     `<div class="stats-card"><div class="stats-label">${label}</div><div class="stats-value">${value}</div>${note ? `<div class="stats-note">${note}</div>` : ""}</div>`;
   const liveNote = s.live === s.n ? "All recorded before kickoff"
@@ -2162,7 +2187,7 @@ function renderLineupRecord() {
   const d = lineupData(), live = state.lineupSource === "live";
   if (d === null || d === undefined) { body.innerHTML = `<div class="empty-state">Loading line-ups…</div>`; return; }
   if (!d || d.available === false) {
-    body.innerHTML = `<div class="empty-state">The ${live ? "line-up record" : "reconstructed history"} is built by the nightly data run. Check back tomorrow.</div>`;
+    body.innerHTML = loadFailed("lineups", "lineups_history") ? loadError("the line-up record") : `<div class="empty-state">The ${live ? "line-up record" : "reconstructed history"} is built by the nightly data run. Check back tomorrow.</div>`;
     return;
   }
   const ids = filterLeagueIds(state.lineupFilter, lineupCountries());
@@ -2342,8 +2367,9 @@ const GAMBLING_NOTE = `<div class="sim-banner gamble-note"><span class="age-18" 
   Paper bets for testing the model, not betting advice. If gambling is causing you problems, free confidential help is at
   <a href="https://www.begambleaware.org/" rel="noopener">BeGambleAware.org</a>.</div>`;
 function renderBets() {
+  state.drawn.add("bets");
   const body = $("#bets-body");
-  if (!state.bets) { body.innerHTML = GAMBLING_NOTE + `<div class="empty-state">No simulated paper bets yet.</div>`; return; }
+  if (!state.bets) { body.innerHTML = GAMBLING_NOTE + (loadFailed("bets") ? loadError("the paper bets") : `<div class="empty-state">No simulated paper bets yet.</div>`); return; }
   const stake = betStake(), bank = betBank();
   const scope = betScope();
   const ids = filterLeagueIds(state.betFilter, betCountries());
@@ -2470,6 +2496,7 @@ function tipStake() {
 }
 
 function renderTips() {
+  state.drawn.add("tips");
   const body = $("#tips-body");
   const { stake, bal } = tipStake(), book = state.bets?.rules?.bookmaker || "Bet365";
   const now = Date.now();
@@ -2481,7 +2508,7 @@ function renderTips() {
   $("#tips-total").textContent = !tips.length ? "No open selections"
     : `${tips.length} open selection${tips.length === 1 ? "" : "s"}: ${gbp(total)} simulated in total${bal ? ` (${Math.round(100 * total / bal)}% of paper bank)` : ". Enter a paper bank to size it"}`;
   const intro = `<div class="sim-banner">Model probability against market fair probability for the paper simulation's open selections. A difference is a disagreement with the market, not proven value. Simulated ${gbp(stake)} stake each at ${escapeHtml(book)}'s recorded price; no real money. More can appear up to 75 minutes before kickoff, after late team news.</div>`;
-  if (!tips.length) { body.innerHTML = intro + `<div class="empty-state">No open selections right now. New ones are added the night before and shortly before kickoff.</div>`; return; }
+  if (!tips.length) { body.innerHTML = intro + (loadFailed("bets") ? loadError("the open selections") : `<div class="empty-state">No open selections right now. New ones are added the night before and shortly before kickoff.</div>`); return; }
   // by day, then competition (the Matches tab's order), then match; days and competitions fold
   const days = [];
   for (const b of tips) {
@@ -2491,7 +2518,8 @@ function renderTips() {
   }
   const orderOf = (id) => { const i = GROUP_ORDER.indexOf(id); return i === -1 ? 999 : i; };
   const folded = state.tipsCollapsed;
-  const caret = (key) => `<span class="comp-group-caret">${folded.has(key) ? "&#9656;" : "&#9662;"}</span>`;
+  const fold = (key) => `data-fold="${escapeHtml(key)}" role="button" tabindex="0" aria-expanded="${!folded.has(key)}"`;
+  const caret = (key) => `<span class="comp-group-caret" aria-hidden="true">${folded.has(key) ? "&#9656;" : "&#9662;"}</span>`;
   const group = (list, key) => { const m = new Map(); for (const b of list) { const k = b[key]; if (!m.has(k)) m.set(k, []); m.get(k).push(b); } return m; };
   // the top of each card is the match as on the Matches tab (badges, ranks, projected and likely
   // score, model and market probabilities), then the selections
@@ -2510,11 +2538,11 @@ function renderTips() {
     const comps = group(d.tips, "league");
     const ordered = [...comps.keys()].sort((a, b) => orderOf(a) - orderOf(b) || compLabel(a).localeCompare(compLabel(b)));
     const dk = `d:${d.day}`;
-    return `<div class="tip-day" data-fold="${escapeHtml(dk)}">${caret(dk)}<span>${escapeHtml(d.day)}</span><span class="comp-group-count">${d.tips.length} · ${gbp(stake * d.tips.length)}</span></div>
+    return `<div class="tip-day" ${fold(dk)}>${caret(dk)}<span>${escapeHtml(d.day)}</span><span class="comp-group-count">${d.tips.length} · ${gbp(stake * d.tips.length)}</span></div>
       <div class="tip-day-body${folded.has(dk) ? " collapsed" : ""}">${ordered.map((id) => {
         const ck = `c:${d.day}|${id}`;
         return `<div class="comp-group${folded.has(ck) ? " collapsed" : ""}">
-          <div class="comp-group-header" data-fold="${escapeHtml(ck)}">${caret(ck)}<span class="comp-group-name">${escapeHtml(compLabel(id))}</span><span class="comp-group-count">${comps.get(id).length}</span></div>
+          <div class="comp-group-header" ${fold(ck)}>${caret(ck)}<span class="comp-group-name">${escapeHtml(compLabel(id))}</span><span class="comp-group-count">${comps.get(id).length}</span></div>
           <div class="card-list">${[...group(comps.get(id), "fixture").values()].map(matchCard).join("")}</div>
         </div>`;
       }).join("")}</div>`;
@@ -2544,11 +2572,11 @@ function xiBlock(teamId) {
 async function renderMatchLineups(m, panel) {
   const finished = FINISHED.has(m.status) && m.hg != null;
   panel.innerHTML = `<div class="empty-state">Loading ${finished ? "actual line-ups" : "predicted line-ups"}…</div>`;
+  const [homeData, awayData] = await Promise.all([loadClub(m.home), loadClub(m.away), loadPlayers()]);
   const exact = (finished ? state.players?.actualXi : state.players?.fixtureXi)?.[String(m.id)] || {};
-  const [homeData, awayData] = await Promise.all([loadClub(m.home), loadClub(m.away)]);
   if (!finished && (!exact[String(m.home)] || !exact[String(m.away)])) {
     state.injuries ||= await getJsonOrNull("data/injuries.json");
-    if (!state.playerSeasons) { loadPlayerSeasons(); await state.playerSeasonsLoading; }
+    await seasonsFor(homeData, awayData);
   }
   const side = (teamId, data, home) => {
     const rating = home ? m.home_xi : m.away_xi;
@@ -2595,7 +2623,11 @@ function markPredicted(xi, predicted) {
 // ------------------------------------------------------------------ club page
 const clubCache = new Map();
 
-function showPage() {            // club, player and nationality pages share one panel
+// The browser tab's title (also what a bookmark, the history list and a screen reader get): the
+// tab or page name, then the site's
+function setTitle(name) { document.title = name ? `${name} · The Corner FC` : "The Corner FC"; }
+function showPage(name = "") {            // club, player and nationality pages share one panel
+  setTitle(name);
   document.body.dataset.tab = "club";
   state.nation = null;
   document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", "false"));
@@ -2605,18 +2637,17 @@ function showPage() {            // club, player and nationality pages share one
 }
 
 async function openClubPage(id) {
-  showPage();
+  showPage(teamName(id));
   const body = $("#club-body");
   body.innerHTML = `<div class="empty-state">Loading ${escapeHtml(teamName(id))}…</div>`;
   const r = state.rankByTeam.get(id);
   // its league's file too, for the domestic table position
-  const [club] = await Promise.all([loadClub(id), r?.in_league ? loadLeague(r.league) : null]);
+  const [club] = await Promise.all([loadClub(id), r?.in_league ? loadLeague(r.league) : null, loadPlayers()]);
   state.injuries ||=await getJsonOrNull("data/injuries.json");
   state.club = { id, data: club };
   renderClubPage();
-  if (!state.playerSeasons) {        // position minutes for the overview pitch: redraw once loaded
-    loadPlayerSeasons();
-    await state.playerSeasonsLoading;
+  if (club && !club.positions && !state.playerSeasons) {   // position minutes for the overview pitch: redraw once loaded
+    await seasonsFor(club);
     if (state.club?.id === id && (state.clubTab || "overview") === "overview") renderClubTab();
   }
 }
@@ -2832,6 +2863,10 @@ function availabilityNote(id) {
 }
 
 const BAN_REASONS = new Set(["Red Card", "Yellow Cards", "Suspended"]);
+// A player page's injury entry ([fixture, type, ban]) in words: "Doubtful", "Suspended" or "Out".
+// The injury itself is never shown
+const availabilityWord = ([, type, ban]) => type === "Questionable" ? "Doubtful"
+  : type === "Suspended" || BAN_REASONS.has(ban) ? "Suspended" : "Out";
 // Injured (and suspended or doubtful) players, with how many matches in a row he has missed and
 // his rank (the injury itself isn't shown, only "Doubtful" or the ban), from the club's injury
 // list: the next match's, or its latest one if the next match's isn't out yet (bans already served are left out of that)
@@ -2844,11 +2879,11 @@ function injuredCard(id) {
   return `<div class="next-card inj-card">
     <div class="next-top"><span class="next-label">Injured &amp; Suspended</span><span>${when}</span></div>
     ${inj.players.map((row) => [row, playerById(row[0])?.rank ?? row[5] ?? -1]).sort((a, b) => b[1] - a[1]).map(([row]) => row)
-      .map(([pid, name, type, reason, missed, seasonRank]) => `<div class="inj-row">
+      .map(([pid, name, type, ban, missed, seasonRank]) => `<div class="inj-row">
       <div class="inj-top"><span class="inj-name" title="${escapeHtml(`${name}: missed his club's last ${missed} match${missed === 1 ? "" : "es"}`)}"><span class="inj-surname">${playerById(pid) ? playerLink(pid, shortName(name)) : escapeHtml(shortName(name))}</span>${missed ? `<span class="inj-missed">&nbsp;– ${missed}</span>` : ""}</span>
         ${(playerById(pid)?.rank ?? seasonRank) != null ? rankChipSmall(playerById(pid)?.rank ?? seasonRank) : `<span class="rel-chip rating-none" title="No rating: no minutes in the leagues with player data">–</span>`}</div>
       ${type === "Questionable" ? `<span class="inj-reason doubt">Doubtful</span>`
-        : type === "Suspended" || BAN_REASONS.has(reason) ? `<span class="inj-reason susp">${escapeHtml(reason === "Suspended" ? reason : `Suspended · ${reason}`)}</span>` : ""}</div>`).join("")}
+        : type === "Suspended" || BAN_REASONS.has(ban) ? `<span class="inj-reason susp">${escapeHtml(BAN_REASONS.has(ban) && ban !== "Suspended" ? `Suspended · ${ban}` : "Suspended")}</span>` : ""}</div>`).join("")}
   </div>`;
 }
 
@@ -3025,7 +3060,8 @@ function clubFormationRows(data = state.club?.data) {
   return rows.filter((m) => seasonOf(m) === season);
 }
 function canPlay(p) {
-  const rows = state.playerSeasons?.positions?.[String(p.id)]?.["12m"];
+  const own = clubCache.get(p.team)?.positions;      // his club's file: {player: [[role, minutes], ...]}
+  const rows = own ? own[String(p.id)] : state.playerSeasons?.positions?.[String(p.id)]?.["12m"];
   if (!rows) return playsAt(p);
   return new Set([p.position, ...rows.filter(([r, m]) => r !== "SUB" && m >= DEPTH_MINUTES).map(([r]) => r)]);
 }
@@ -3582,7 +3618,7 @@ function niceTicks(lo, hi, count) {
 // ------------------------------------------------------------------ team modal
 function openTeam(teamId) {
   const r = state.rankByTeam.get(teamId);
-  $("#team-modal-title").innerHTML = `${escapeHtml(teamName(teamId))} <a class="team-link" style="font-size:12px;color:var(--series-blue);margin-left:6px" href="${clubHref(teamId)}">Club page ›</a>`;
+  $("#team-modal-title").innerHTML = `${escapeHtml(teamName(teamId))} <a class="team-link" style="font-size:12px;color:var(--blue-text);margin-left:6px" href="${clubHref(teamId)}">Club page ›</a>`;
   $("#team-modal-sub").textContent = r ? compLabel(r.league) : "";
   const games = state.data.matches.filter((m) => m.home === teamId || m.away === teamId);
   const results = games.filter((m) => FINISHED.has(m.status) && m.hg != null).reverse();
@@ -3614,6 +3650,10 @@ function openTeam(teamId) {
     (upcoming.length ? `<div class="modal-section">Next matches</div>${upcoming.map((m) => row(m, false)).join("")}` : "") +
     (results.length ? `<div class="modal-section">Recent results</div>${results.slice(0, 8).map((m) => row(m, true)).join("")}` : "");
   $("#team-modal").hidden = false;
+  state.modalTeam = teamId;
+  // the predicted XI comes from players.json: drawn again with it if the pop-up is still on this club
+  if (state.players === undefined)
+    loadPlayers().then(() => { if (!$("#team-modal").hidden && state.modalTeam === teamId) openTeam(teamId); });
 }
 
 // ------------------------------------------------------------------ player page
@@ -3631,18 +3671,31 @@ async function openPlayerPage(id) {
   showPage();
   state.club = null;
   const body = $("#club-body");
+  if (state.players === undefined) {
+    body.innerHTML = `<div class="empty-state">Loading…</div>`;
+    await loadPlayers();
+    if (location.hash !== `#/player/${id}`) return;      // moved on while loading
+  }
   const p = state.players && playerById(id);
-  if (!p) { body.innerHTML = `<div class="empty-state">This player isn't in the current ranks.</div>`; return; }
+  if (!p) { body.innerHTML = loadFailed("players") ? loadError("the players") : `<div class="empty-state">This player isn't in the current ranks.</div>`; return; }
+  setTitle(p.name);
   body.innerHTML = `<div class="empty-state">Loading ${escapeHtml(p.name)}…</div>`;
-  loadPlayerSeasons();
   if (!playerPages.has(id)) {
     const d = await getJsonOrNull(`data/players/${id}.json`);
     if (d) playerPages.set(id, { ...d, seasonRows: rowsToObjects(d.season_fields, d.seasons), matchRows: rowsToObjects(d.match_fields, d.matches) });
   }
-  await state.playerSeasonsLoading;
+  const page = playerPages.get(id) || null;
+  if (!page?.positions) { loadPlayerSeasons(); await state.playerSeasonsLoading; }   // no page file, or an older one
   if (location.hash !== `#/player/${id}`) return;      // moved on while loading
-  state.player = { p, page: playerPages.get(id) || null, season: null };
+  state.player = { p, page, detail: playerDetail(p, page), season: null };
   renderPlayerPage();
+}
+// His season detail (birth date, clubs by season, starting minutes by position): from his page
+// file, else his rows of player_seasons.json
+function playerDetail(p, page) {
+  if (page?.positions) return { born: page.born, spells: page.spells || {}, positions: page.positions };
+  const d = state.playerSeasons, k = String(p.id);
+  return { born: d?.born?.[k], spells: d?.players?.[k] || {}, positions: d?.positions?.[k] || {} };
 }
 const POS_WORD = { G: "GK", D: "DEF", M: "MID", F: "FWD", SUB: "Sub" };
 const GROUP_SINGLE = { GK: "goalkeeper", CB: "centre-back", FB: "full-back", DM: "defensive mid", CM: "central mid",
@@ -3675,7 +3728,7 @@ const PLAYER_TABS = [["overview", "Overview"], ["stats", "Stats"], ["matches", "
 
 function renderPlayerPage() {
   const { p } = state.player;
-  const born = state.playerSeasons?.born?.[String(p.id)];
+  const born = state.player.detail.born;
   const league = p.team && p.league ? SHORT_NAMES[p.league] || state.data.competitions[p.league]?.name : "";
   const tab = state.playerTab || "overview";
   $("#club-body").innerHTML = `
@@ -3721,7 +3774,7 @@ function playerSeasonNow(p, page) {
     const s = sumSeason(page.seasonRows.filter((r) => r.season === y));
     return s ? { ...s, full: true } : { minutes: 0, full: true };
   }
-  const sp = state.playerSeasons?.players?.[String(p.id)]?.[String(y)];
+  const sp = state.player?.detail?.spells?.[String(y)];
   if (!sp) return null;
   const minutes = sp.reduce((a, x) => a + (x[1] || 0), 0);
   const rated = sp.filter((x) => x[3] != null && x[1]);
@@ -3808,7 +3861,7 @@ function playerOverviewTab() {
       </div>`;
   } else {
     seasonBody = `<div class="pl-callout">No league minutes in ${y != null ? seasonName(y) : "this season"} yet${
-      injury ? ` · listed ${injury[1] === "Questionable" ? "doubtful" : "out"}${injury[2] ? ` (${escapeHtml(injury[2])})` : ""}` : ""}.
+      injury ? ` · listed ${availabilityWord(injury).toLowerCase()}` : ""}.
       His Ability of ${Math.round(p.rank)} comes from earlier seasons and his age curve, not from current form.</div>`;
   }
   const seasonNote = now?.minutes && now.minutes < 900
@@ -3826,7 +3879,7 @@ const resClass = (m) => m.gf > m.ga ? "res-w" : m.gf === m.ga ? "res-d" : "res-l
 // stats scored as that position, so LB and RB share the full-back rank) and his share of starting
 // minutes there. Keepers have no position_ranks: their keeper rank is their rank.
 function positionRow(p) {
-  const pos = state.playerSeasons?.positions?.[String(p.id)] || {};
+  const pos = state.player.detail.positions;
   const group = GROUP_OF[p.position];
   const rankIn = (g) => p.position_ranks?.[g] ?? (g === group ? p.rank : null);
   const ranked = Object.keys(GROUP_NAME).filter((g) => rankIn(g) != null);
@@ -3861,9 +3914,9 @@ function nextMatchCard() {
   const xi = state.players.nextXi?.[String(p.team)];
   const xiHere = xi && xi.fixture === m.id;
   const inXi = xiHere && xi.players.find(([pid]) => pid === p.id);
-  const inj = page?.injury;                      // [fixture, type, reason]
+  const inj = page?.injury;                      // [fixture, type, ban]
   const status = inj && inj[0] === m.id
-    ? (inj[1] === "Questionable" ? ["warn", `Doubtful${inj[2] ? ` · ${inj[2]}` : ""}`] : ["bad", `Out${inj[2] ? ` · ${inj[2]}` : ""}`])
+    ? [inj[1] === "Questionable" ? "warn" : "bad", availabilityWord(inj)]
     : inXi ? ["good", `In the predicted XI${inXi[2] ? ` as ${inXi[2]}` : ""}`]
     : xiHere ? ["muted", "Not in the predicted XI"] : null;
   const win = m.p_home != null ? Math.round(100 * (home ? m.p_home : m.p_away)) : null;
@@ -4027,10 +4080,9 @@ function playerCareerTab() {
   const { p } = state.player;
   const seasons = state.players.seasons || [];
   const hasSeasons = seasons.filter((y, k) => p.seasons?.[k] != null).length >= 2;
-  const detail = state.playerSeasons?.players?.[String(p.id)] || {};
-  const posBySeason = state.playerSeasons?.positions?.[String(p.id)] || {};
+  const { spells: detail, positions: posBySeason } = state.player.detail;
   const spellHtml = (sp) => sp.map(([team, mins, clubRank, rating, goals, assists]) =>
-    `<div class="spell">${clubLink(team, state.playerSeasons?.teams?.[team] || teamName(team))}
+    `<div class="spell">${clubLink(team, pageTeamName(team))}
       <span class="dim"> · club ${clubRank ?? "–"} · ${mins ? `${mins.toLocaleString()}′` : "no minutes here"}${rating != null ? ` · rating ${rating.toFixed(2)}` : ""}${mins ? ` · ${goals} G, ${assists} A` : ""}</span></div>`).join("");
   const rows = seasons.map((y, k) => {
     const v = p.seasons?.[k];
@@ -4104,8 +4156,14 @@ $("#club-body").addEventListener("click", (e) => {
 // found through the ranking (loaded for the Elo in the corner anyway).
 const NATION_TABS = [["overview", "Overview"], ["xi", "Predicted XI"], ["formations", "Formations"], ["players", "Players"]];
 async function openNationPage(nat) {
-  showPage();
+  showPage(nat);
   state.club = null;
+  if (state.players === undefined) {
+    const at = location.hash;
+    $("#club-body").innerHTML = `<div class="empty-state">Loading ${escapeHtml(nat)}…</div>`;
+    await loadPlayers();
+    if (location.hash !== at) return;                    // moved on while loading
+  }
   const list = (state.players?.list || []).filter((p) => p.nationality === nat).sort((a, b) => b.rank - a.rank);
   state.nation = { name: nat, list, team: undefined, allPlayers: false };
   renderNationPage();
@@ -4240,7 +4298,7 @@ function nationSpell() {
   const last = rows[rows.length - 1];
   if (head?.since && head.name && (last.coach_id == null || last.coach_id === head.id)) {
     const list = rows.filter((m) => m.date >= head.since);
-    if (list.length) return { coach: head.name, coachId: head.id, photo: head.photo, since: head.since, rows: list,
+    if (list.length) return { coach: head.name, coachId: head.id, since: head.since, rows: list,
       full: rows[0].date <= head.since };
   }
   const coach = last.coach;
@@ -4289,13 +4347,12 @@ const NAT_XI_RECENT = 6;        // his latest team sheets weighed
 const NAT_XI_DECAY = 0.75;      // each older sheet counts this much of the one after it
 const ROLE_NEAR = { GK: [], CB: [], RB: ["RWB"], LB: ["LWB"], RWB: ["RB", "RM"], LWB: ["LB", "LM"], DM: ["CM"],
   CM: ["DM", "AM"], AM: ["CM", "ST"], RM: ["RW", "RWB"], LM: ["LW", "LWB"], RW: ["RM", "ST"], LW: ["LM", "ST"], ST: ["AM"] };
-const INJURY = /injur|illness|knock|surgery|fracture|virus|muscle/i;
-// {player: reason} for players their club's latest injury list has missing through injury
+// players their club's latest injury list has missing through injury (the list's "injured" flag)
 function injuredPlayers() {
-  const out = new Map(), fields = state.injuries?.fields || [];
-  const [pi, ti, ri] = ["player", "type", "reason"].map((f) => fields.indexOf(f));
+  const out = new Set(), fields = state.injuries?.fields || [];
+  const [pi, ii] = ["player", "injured"].map((f) => fields.indexOf(f));
   for (const t of Object.values(state.injuries?.teams || {}))
-    for (const r of t.players || []) if (r[ti] === "Missing Fixture" && INJURY.test(r[ri] || "")) out.set(r[pi], r[ri]);
+    for (const r of t.players || []) if (r[ii]) out.add(r[pi]);
   return out;
 }
 // The team's usual shape: its most used formation in the current coach's last 5 team sheets (ties:
@@ -4339,7 +4396,7 @@ function nationPredictedXi() {
       picks.push({ ...c, starts: starts.get(c.pid) || 0 });
     });
   // regulars (2+ starts in these sheets) missing through injury
-  const out = [...starts].filter(([pid, n]) => n >= 2 && injured.has(pid)).map(([pid]) => ({ pid, reason: injured.get(pid) }));
+  const out = [...starts].filter(([pid, n]) => n >= 2 && injured.has(pid)).map(([pid]) => ({ pid }));
   return { formation: template.formation, sheets, template, picks, out, spell };
 }
 function nationXiTab() {
@@ -4354,7 +4411,7 @@ function nationXiTab() {
     playerById(pid) ? playerLink(pid, shortName(name(pid))) : `<span title="${escapeHtml(name(pid))}">${escapeHtml(shortName(name(pid)))}</span>`}`;
   const side = `
     ${pred.out.length ? `<div class="next-card"><div class="next-top"><span class="next-label">Out injured</span></div>
-      ${pred.out.map((o) => `<div class="nat-xi-row"><span class="nat-xi-who">${who(o.pid)}</span><span class="nat-xi-n dim">${escapeHtml(o.reason)}</span></div>`).join("")}</div>` : ""}`;
+      ${pred.out.map((o) => `<div class="nat-xi-row"><span class="nat-xi-who">${who(o.pid)}</span></div>`).join("")}</div>` : ""}`;
   const pitch = xiPitch(xi, {}, { note: "" });
   return side.trim() ? `<div class="ov-top"><div class="ov-side">${side}</div>${pitch}</div>` : pitch;
 }
@@ -4416,7 +4473,7 @@ function nationPlayersTab() {
   const key = state.nationPlayerSort || "minutes";
   const val = (p) => key === "last" ? p.last : p[key] ?? -Infinity;
   players.sort((a, b) => (val(b) > val(a) ? 1 : val(b) < val(a) ? -1 : 0) || b.apps - a.apps || b.minutes - a.minutes);
-  const th = ([k, label, tip]) => `<th class="num sortable${key === k ? " active" : ""}" data-natpsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
+  const th = ([k, label, tip]) => `<th class="num sortable${key === k ? " active" : ""}" tabindex="0"${key === k ? ` aria-sort="descending"` : ""} data-natpsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   const anyNoMins = players.some((p) => p.noMins);
   return `<div class="modal-section nat-spell">${escapeHtml(spellLabel(spell))}${spell.since ? ` (since ${escapeHtml(fmtLongDate(spell.since))})` : ""} · ${list.length} match${list.length === 1 ? "" : "es"}${
     spell.full ? "" : ` from ${escapeHtml(fmtLongDate(list[0].date))}`}</div>
@@ -4491,7 +4548,7 @@ function seasonLabel(lg) {
 }
 
 async function openLeaguePage(lid, want = null) {
-  showPage();
+  showPage(compLabel(lid));
   state.club = null;
   const comp = state.data.competitions[lid];
   $("#club-body").innerHTML = `<div class="empty-state">Loading ${escapeHtml(comp?.name || "competition")}…</div>`;
@@ -4523,7 +4580,7 @@ function renderLeaguePage() {
     </div>
     ${data ? `<div class="page-tabs" role="tablist">${state.league.tabs.map(([k, label]) =>
       `<button type="button" role="tab" data-ltab="${k}" aria-selected="${k === state.league.tab}">${label}</button>`).join("")}</div>
-    <div id="league-tab"></div>` : `<div class="empty-state">No data for this competition this season.</div>`}`;
+    <div id="league-tab"></div>` : loadFailed(`leagues/${state.league.id}`) ? loadError("this competition") : `<div class="empty-state">No data for this competition this season.</div>`}`;
   if (data) renderLeagueTab();
 }
 
@@ -4577,7 +4634,7 @@ function sortLeagueRows(rows, s, cols) {
 // a sortable header cell: tab and key go in data-lsort; the active one is marked and shows its direction
 function sortTh(tab, s, key, label, title, cls = "") {
   const on = s.key === key;
-  return `<th class="${cls}${cls ? " " : ""}sortable${on ? " active" : ""}" data-lsort="${tab}:${key}" title="${escapeHtml(title + ". Click to sort.")}"${on ? ` aria-sort="${s.dir > 0 ? "ascending" : "descending"}"` : ""}>${label}${on ? `<span class="sort-dir">${s.dir > 0 ? "▲" : "▼"}</span>` : ""}</th>`;
+  return `<th class="${cls}${cls ? " " : ""}sortable${on ? " active" : ""}" tabindex="0" data-lsort="${tab}:${key}" title="${escapeHtml(title + ". Click to sort.")}"${on ? ` aria-sort="${s.dir > 0 ? "ascending" : "descending"}"` : ""}>${label}${on ? `<span class="sort-dir">${s.dir > 0 ? "▲" : "▼"}</span>` : ""}</th>`;
 }
 const FORM_PTS = { W: 3, D: 1, L: 0 };
 const STANDINGS_COLS = {
@@ -4852,7 +4909,7 @@ $("#club-body").addEventListener("change", (e) => {
 
 // ---- Country: its leagues (strongest first), cups and clubs
 function openCountryPage(country) {
-  showPage();
+  showPage(countryDisplay(country));
   state.club = null;
   const body = $("#club-body");
   const name = countryDisplay(country);
@@ -4923,7 +4980,7 @@ function renderLeagues() {
   }).filter(Boolean).sort((a, b) => b[key] - a[key] || b.lt - a.lt);
   if (!leagues.length) { body.innerHTML = `<div class="empty-state">No leagues yet.</div>`; return; }
   const th = (k, label, tip, cls = "") =>
-    `<th class="num sortable${key === k ? " active" : ""}${cls}" data-lgsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
+    `<th class="num sortable${key === k ? " active" : ""}${cls}" tabindex="0"${key === k ? ` aria-sort="descending"` : ""} data-lgsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   body.innerHTML = `
     <div class="table-scroll"><table class="leaderboard clubs">
       <thead><tr>
@@ -4938,7 +4995,7 @@ function renderLeagues() {
       <tbody>${leagues.map((c, i) => `
         <tr>
           <td>${i + 1}</td>
-          <td><a href="${leagueHref(c.lid)}">${leagueCrest(c.lid)}</a></td>
+          <td><a href="${leagueHref(c.lid)}" aria-label="${escapeHtml(c.name)}">${leagueCrest(c.lid)}</a></td>
           <td><div class="club-cell"><a class="team-link" href="${leagueHref(c.lid)}">${escapeHtml(c.name)}</a>
             ${FLAG_CODES[countryDisplay(c.country)] ? `<span class="club-meta">${flagLink(c.country)}</span>` : ""}</div></td>
           <td class="num" style="color:var(--text-muted)">${c.clubs}</td>
@@ -4998,8 +5055,8 @@ function nationPageName(n, aliases) {
 function renderNations() {
   const body = $("#nations-body");
   const d = state.nations;
-  if (d == null) { body.innerHTML = `<div class="empty-state">Loading nations…</div>`; return; }
-  if (!d) { body.innerHTML = `<div class="empty-state">No national team ranking yet.</div>`; return; }
+  if (d == null || (d && state.players === undefined)) { body.innerHTML = `<div class="empty-state">Loading nations…</div>`; return; }
+  if (!d) { body.innerHTML = loadFailed("nations") ? loadError("the nations ranking") : `<div class="empty-state">No national team ranking yet.</div>`; return; }
   const key = state.nationsSort ||= "current";
   const confed = state.nationsConfed ||= "all";
   const worldRank = new Map([...d.nations].sort((a, b) => b.current - a.current).map((n, i) => [n.name, i + 1]));
@@ -5009,7 +5066,7 @@ function renderNations() {
   const tier = (v) => nationTier(d, v);
   const chip = (value, label) => `<button type="button" class="filter-chip" data-confed="${value}" aria-pressed="${confed === value}">${label}</button>`;
   const th = (k, label, tip, cls = "") =>
-    `<th class="num sortable${key === k ? " active" : ""}${cls}" data-natsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
+    `<th class="num sortable${key === k ? " active" : ""}${cls}" tabindex="0"${key === k ? ` aria-sort="descending"` : ""} data-natsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   const score = (l) => `${l.gf}–${l.ga} v ${l.opp}`;
   body.innerHTML = `
     <div class="filter-row" style="margin-bottom:10px">${chip("all", "World")}${CONFEDS.map((c) => chip(c, c)).join("")}</div>
@@ -5054,6 +5111,7 @@ const FPL_POS = { G: "GK", D: "DEF", M: "MID", F: "FWD" };
 const FPL_NAMES = { model: "Our model", recent5: "Last-5 average", ppg: "Points per game",
   flat_team_goals: "Our model, no match model", v1_1: "v1.1 (next version)" };
 function renderFpl() {
+  state.drawn.add("fpl");
   const body = $("#fpl-body");
   const f = state.fpl;
   if (!f) { body.innerHTML = `<div class="empty-state">No FPL findings yet.</div>`; return; }
@@ -5081,7 +5139,7 @@ function renderFpl() {
       return `<tr><td>${fmt(g)}</td><td>${x.model.n.toLocaleString()}</td><td class="${better ? "gap-ok" : "gap-off"}">${n3(x.model.mae)}</td>
         <td>${n3(x.recent5.mae)}</td><td>${n3(x.ppg.mae)}</td><td>${n2(x.model.spearman)}</td><td>${n2(x.recent5.spearman)}</td></tr>`;
     }).join("");
-    return `<div class="fpl-scroll"><table class="calib-table"><thead><tr><th>${label}</th><th>Rows</th><th>Model err</th><th>Last-5 err</th><th>PPG err</th><th>Model rank</th><th>Last-5 rank</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `<div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table"><thead><tr><th>${label}</th><th>Rows</th><th>Model err</th><th>Last-5 err</th><th>PPG err</th><th>Model rank</th><th>Last-5 rank</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   };
   const posTop = ["G", "D", "M", "F"].map((p) => {
     const key = `${p}_top${p === "G" || p === "F" ? 5 : 10}`;
@@ -5121,7 +5179,7 @@ function renderFpl() {
     </div>
     <div class="stats-card">
       <div class="stats-label">Against simple benchmarks</div>
-      <div class="fpl-scroll"><table class="calib-table">
+      <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table">
         <thead><tr><th>Predictor</th><th>Avg error</th><th>RMSE</th><th>Rank corr.</th><th>Top-10 hit</th><th>Top-10 pts</th></tr></thead>
         <tbody>${benchRows}</tbody></table></div>
       <div class="stats-note">Average error is points per player per match (lower is better). Rank correlation: 1 = perfect ordering.
@@ -5131,7 +5189,7 @@ function renderFpl() {
     <div class="stats-card">
       <div class="stats-label">By position</div>
       ${segTable(f.segments.position, "Position", ["G", "D", "M", "F"], (g) => FPL_POS[g])}
-      <div class="fpl-scroll"><table class="calib-table" style="margin-top:10px">
+      <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table" style="margin-top:10px">
         <thead><tr><th>Best picks each round</th><th>Model</th><th>Last-5</th><th>PPG</th><th>No match model</th></tr></thead>
         <tbody>${posTop}</tbody></table></div>
       <div class="stats-note">Green error: the model beat the last-5 average. The match model helps most for defenders and goalkeepers, whose points depend on the opponent.</div>
@@ -5197,7 +5255,7 @@ const FPL_PARTS = { appearance: "Minutes", goal: "Goals", penalty: "Penalties", 
 function loadFplPredictions() {
   if (state.fplPred !== undefined) return;
   state.fplPred = null;
-  getJsonOrNull("data/fpl_predictions.json").then((d) => { state.fplPred = d || false; renderFplNext(); });
+  Promise.all([getJsonOrNull("data/fpl_predictions.json"), loadPlayers()]).then(([d]) => { state.fplPred = d || false; renderFplNext(); });
 }
 function fplRows() {
   const d = state.fplPred;
@@ -5215,7 +5273,7 @@ function renderFplNext() {
   if (!el) return;
   const d = state.fplPred;
   if (d == null) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">Loading…</div>`; return; }
-  if (!d || !d.players.length) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">No upcoming Premier League gameweeks yet.</div>`; return; }
+  if (!d || !d.players.length) { el.innerHTML = `<div class="stats-label">Predictions</div>${loadFailed("fpl_predictions") ? loadError("the predictions") : `<div class="stats-note">No upcoming Premier League gameweeks yet.</div>`}`; return; }
   const fp = state.fplView ||= { pos: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0 };
   const gws = d.gameweeks, n = fp.mode === "gw" ? 1 : Math.min(+fp.mode, gws.length);
   fp.gw = Math.max(0, Math.min(fp.gw, gws.length - 1));
@@ -5298,7 +5356,7 @@ function renderFplNext() {
     <div class="fpl-filters">${modes}${pager}</div>
     <div class="fpl-filters">${chips}
       <input type="search" class="table-search fpl-search" id="fpl-q" placeholder="Search players or clubs" aria-label="Search players or clubs" value="${escapeHtml(fp.q)}"></div>
-    <div class="fpl-scroll"><table class="calib-table fpl-table${fp.mode === "gw" ? "" : " multi"}">
+    <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table fpl-table${fp.mode === "gw" ? "" : " multi"}">
       <thead><tr>${head}</tr></thead>
       <tbody>${body || `<tr><td colspan="${cols}">No players match.</td></tr>`}</tbody></table></div>
     ${rows.length > FPL_SHOWN ? `<button type="button" class="show-all" id="fpl-more">${fp.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}
@@ -5411,6 +5469,7 @@ function renderMyTeam() {
   const mt = state.myTeam;
   const note = (text) => `<div class="stats-card"><div class="stats-note">${text}</div></div>`;
   if (!mt || mt.team === undefined) { body.innerHTML = note("Loading…"); return; }
+  if (loadFailed("fpl_team", "fpl_predictions")) { body.innerHTML = loadError("the team"); return; }
   if (!mt.team) { body.innerHTML = note("The team appears after the next FPL update."); return; }
   if (!mt.pred) { body.innerHTML = note("No predictions for the coming gameweeks yet."); return; }
   const t = mt.team, d = mt.pred, r = mt.result;
@@ -5436,7 +5495,7 @@ function renderMyTeam() {
   const fix = (p, k) => p.fixtures[k].length ? p.fixtures[k].map((f) => f.home ? code(f.opponent) : code(f.opponent).toLowerCase()).join(" ") : "–";
   const tag = (p) => {
     const s = p.status && p.status !== "a" ? (p.status === "d" ? `${p.chance ?? 50}%` : FPL_STATUS[p.status] || "Doubtful") : p.missing ? "No prediction" : "";
-    return s ? ` <span class="bet-tag warn"${p.news ? ` title="${escapeHtml(p.news)}"` : ""}>${escapeHtml(s)}</span>` : "";
+    return s ? ` <span class="bet-tag warn">${escapeHtml(s)}</span>` : "";
   };
   const before = (k) => k === 0 ? r.prep.start : r.plan.weeks[k - 1];
   const moveLine = (m, k) => {
@@ -5491,7 +5550,7 @@ function renderMyTeam() {
       <td>${w.hits ? `−${w.hits}` : ""}</td><td>${nm(P(w.lineup.captain))}</td><td><b>${w.points.toFixed(1)}</b></td></tr>`).join("");
   const plan = `<div class="stats-card">
       <div class="stats-label">Plan · next ${H} gameweeks</div>
-      <div class="fpl-scroll"><table class="calib-table mt-plan"><thead><tr><th>GW</th><th title="Free transfers that week">Free</th><th>Transfers</th><th>Hit</th><th>Captain</th><th>Pts</th></tr></thead>
+      <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table mt-plan"><thead><tr><th>GW</th><th title="Free transfers that week">Free</th><th>Transfers</th><th>Hit</th><th>Captain</th><th>Pts</th></tr></thead>
         <tbody>${planRows}</tbody></table></div>
       <div class="stats-note">${r.plan.total.toFixed(1)} expected points over GW${r.plan.weeks[0].gw}–${r.plan.weeks[H - 1].gw},
         ${(r.plan.total - r.plan.hold).toFixed(1)} more than making no transfers. Later weeks are a sketch: each week the plan is worked out again with the latest predictions.</div>
@@ -5534,7 +5593,7 @@ function renderMyTeam() {
       ${ctx.weeks.slice(0, H).map((_, k) => `<td class="fpl-gw${p.fixtures[k].length > 1 ? " double" : ""}">${p.fixtures[k].length ? p.xp[k].toFixed(1) : "–"}<span>${escapeHtml(fix(p, k))}</span></td>`).join("")}</tr>`).join("");
   const table = `<div class="stats-card">
       <div class="stats-label">Your squad · expected points</div>
-      <div class="fpl-scroll"><table class="calib-table mt-squad"><thead><tr><th>Player</th><th>Pos</th><th>Price</th>${weeksHead}</tr></thead><tbody>${squadRows}</tbody></table></div>
+      <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table mt-squad"><thead><tr><th>Player</th><th>Pos</th><th>Price</th>${weeksHead}</tr></thead><tbody>${squadRows}</tbody></table></div>
     </div>`;
 
   body.innerHTML = head + week + pitch + plan + chips + table + `<div class="stats-note mt-foot">
@@ -5593,7 +5652,7 @@ function loadEfl() {
   if (state.efl !== undefined) return;
   state.efl = null;
   renderEfl();
-  getJsonOrNull("data/efl_predictions.json").then((d) => { state.efl = d || false; renderEfl(); });
+  Promise.all([getJsonOrNull("data/efl_predictions.json"), loadPlayers()]).then(([d]) => { state.efl = d || false; renderEfl(); });
 }
 function eflData() {
   const d = state.efl;
@@ -5634,7 +5693,7 @@ function renderEfl() {
   const body = $("#efl-body");
   const note = (text) => `<div class="stats-card"><div class="stats-note">${text}</div></div>`;
   if (state.efl == null) { body.innerHTML = note("Loading…"); return; }
-  if (!state.efl || !state.efl.players.length) { body.innerHTML = note("No upcoming EFL gameweeks yet."); return; }
+  if (!state.efl || !state.efl.players.length) { body.innerHTML = loadFailed("efl_predictions") ? loadError("the predictions") : note("No upcoming EFL gameweeks yet."); return; }
   const d = eflData();
   const v = state.eflView ||= { pos: "all", league: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0, open: null, clubsAll: false };
   const gws = d.gameweeks;
@@ -5728,7 +5787,7 @@ function renderEfl() {
     <div class="stats-label">Predicted points</div>
     <div class="fpl-filters">${posChips}
       <input type="search" class="table-search fpl-search" id="efl-q" placeholder="Search players or clubs" aria-label="Search players or clubs" value="${escapeHtml(v.q)}"></div>
-    <div class="fpl-scroll"><table class="calib-table fpl-table${v.mode === "gw" ? "" : " multi"}">
+    <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table fpl-table${v.mode === "gw" ? "" : " multi"}">
       <thead><tr>${head}</tr></thead>
       <tbody>${tbody || `<tr><td colspan="${cols}">No players match.</td></tr>`}</tbody></table></div>
     ${rows.length > EFL_SHOWN ? `<button type="button" class="show-all" id="efl-more">${v.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}
@@ -5753,7 +5812,7 @@ function renderEfl() {
   };
   const clubCard = `<div class="stats-card">
     <div class="stats-label">Club picks</div>
-    <div class="fpl-scroll"><table class="calib-table fpl-table${v.mode === "gw" ? "" : " multi"}">
+    <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table fpl-table${v.mode === "gw" ? "" : " multi"}">
       <thead><tr>${clubHead}</tr></thead><tbody>${clubList.map(clubRow).join("") || `<tr><td colspan="5">No clubs match.</td></tr>`}</tbody></table></div>
     ${clubs.length > 12 ? `<button type="button" class="show-all" id="efl-clubs-more">${v.clubsAll ? "Show fewer" : `Show all ${clubs.length}`}</button>` : ""}
     </div>`;
@@ -5800,16 +5859,21 @@ $("#efl-body").addEventListener("input", (e) => {
 });
 
 // ------------------------------------------------------------------ wiring
+// The tabs drawn from the start-up files: each is drawn the first time it's opened
+const TAB_DRAW = { matches: renderMatches, table: renderTable, stats: renderStats, bets: renderBets, tips: renderTips, fpl: renderFpl };
 function showTab(tab) {
+  // on screen first, so a first draw measures its rows; and drawn before state.tab changes, so a
+  // first draw of the table doesn't put its filters in the address
+  document.body.dataset.tab = tab;
+  document.querySelectorAll(".panel").forEach((p) => p.dataset.active = String(p.dataset.tab === tab));
+  if (TAB_DRAW[tab] && !state.drawn.has(tab)) TAB_DRAW[tab]();
   state.tab = tab;
   if (tab === "fpl") loadFplPredictions();
   if (tab === "myteam") loadMyTeam();
   if (tab === "efl") loadEfl();
   if (tab === "leagues") renderLeagues();
-  if (tab === "nations") { loadNations(); renderNations(); }
+  if (tab === "nations") { loadNations(); if (state.players === undefined) loadPlayers().then(renderNations); renderNations(); }
   if (tab === "lineups") { loadLineupRecord(); renderLineupRecord(); }
-  document.body.dataset.tab = tab;
-  document.querySelectorAll(".panel").forEach((p) => p.dataset.active = String(p.dataset.tab === tab));
   syncMenu();
 }
 function syncMenu() {
@@ -5820,6 +5884,7 @@ function syncMenu() {
     if (on) title = b.textContent;
   });
   $("#app-title").textContent = title;
+  setTitle(title);
 }
 // Each tab other than the tables has its own address, so a reload (or a shared link) stays on it
 const TAB_ROUTES = { leagues: "leagues", nations: "nations", matches: "matches", stats: "stats", lineups: "lineups", tips: "model-vs-market", bets: "simulation", fpl: "fpl", myteam: "my-fpl-team", efl: "efl-fantasy" };
@@ -5827,8 +5892,10 @@ const ROUTE_TABS = Object.fromEntries(Object.entries(TAB_ROUTES).map(([t, r]) =>
 document.querySelectorAll("nav.tabs button").forEach((btn) => btn.addEventListener("click", () => {
   const to = TAB_ROUTES[btn.dataset.tab] ? `#/${TAB_ROUTES[btn.dataset.tab]}` : location.pathname + location.search;
   if (TAB_ROUTES[btn.dataset.tab] ? location.hash !== to : location.hash.startsWith("#/")) history.pushState(null, "", to);
+  const view = btn.dataset.view && btn.dataset.view !== state.tableView ? btn.dataset.view : null;
+  if (view) state.drawn.add("table");          // setTableView draws it
   showTab(btn.dataset.tab);
-  if (btn.dataset.view && btn.dataset.view !== state.tableView) setTableView(btn.dataset.view);
+  if (view) setTableView(view);
   else if (btn.dataset.tab === "table") syncTableUrl();
   setMenu(false);
 }));
@@ -6013,6 +6080,9 @@ for (const id of ["#age-min", "#age-max"]) {
 // Clubs or Players, picked from the menu
 function setTableView(view) {
   state.tableView = view;
+  // Players: drawn again, filters and all, once players.json is in
+  if (view === "players" && state.players === undefined)
+    loadPlayers().then(() => { if (state.tableView === "players") setTableView("players"); });
   renderExcludeFilter();
   renderRangeFilter();
   renderAgeFilter();
@@ -6081,6 +6151,7 @@ $("#matches-list").addEventListener("click", (e) => {
     state.collapsed.has(id) ? state.collapsed.delete(id) : state.collapsed.add(id);
     group.classList.toggle("collapsed");
     header.querySelector(".comp-group-caret").innerHTML = group.classList.contains("collapsed") ? "&#9656;" : "&#9662;";
+    header.setAttribute("aria-expanded", String(!group.classList.contains("collapsed")));
   }
 });
 // Column explanations: hover a header in the Rankings table
@@ -6093,12 +6164,22 @@ $("#table-wrap").addEventListener("mouseover", (e) => {
   if (!CAN_HOVER.matches) return;
   const h = e.target.closest("th[data-tip], td.tip-cell");
   if (!h) return;
-  colTip.textContent = h.dataset.tip || playerCellTip(h.closest("tr").dataset.player, h.dataset.key);
-  if (!colTip.textContent) return;
-  colTip.hidden = false;
-  const b = h.getBoundingClientRect(), w = colTip.offsetWidth;
-  colTip.style.left = `${Math.max(8, Math.min(b.left + b.width / 2 - w / 2, innerWidth - w - 8))}px`;
-  colTip.style.top = `${b.bottom + 6}px`;
+  const show = () => {
+    colTip.textContent = h.dataset.tip || playerCellTip(h.closest("tr").dataset.player, h.dataset.key);
+    if (!colTip.textContent) return;
+    colTip.hidden = false;
+    colTip.cell = h;
+    const b = h.getBoundingClientRect(), w = colTip.offsetWidth;
+    colTip.style.left = `${Math.max(8, Math.min(b.left + b.width / 2 - w / 2, innerWidth - w - 8))}px`;
+    colTip.style.top = `${b.bottom + 6}px`;
+  };
+  show();
+  // a player's season detail (player_seasons.json, the largest file after the line-up history) is
+  // fetched on the first hover: "Loading…" until it's in, then the text if the tip is still on this cell
+  if (!h.dataset.tip && !state.playerSeasons) {
+    loadPlayerSeasons();
+    state.playerSeasonsLoading.then(() => { if (!colTip.hidden && colTip.cell === h && h.isConnected) show(); });
+  }
 });
 $("#table-wrap").addEventListener("mouseout", (e) => {
   const tip = "th[data-tip], td.tip-cell";
@@ -6125,5 +6206,19 @@ $("#team-modal").addEventListener("click", (e) => {
   if (e.target.id === "team-modal" || e.target.closest(".modal-close")) $("#team-modal").hidden = true;
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#team-modal").hidden = true; });
+// Sortable column headers and folding group headers from the keyboard: Enter or Space is a click.
+// Most of them are redrawn by it, so focus goes back to the same header afterwards
+document.addEventListener("keydown", (e) => {
+  const el = e.target;
+  if ((e.key !== "Enter" && e.key !== " ") || !el.matches?.("th.sortable, .comp-group-header, .tip-day")) return;
+  e.preventDefault();
+  const attr = [...el.attributes].find((a) => /^data-\w*(sort|fold)$/.test(a.name));
+  const again = attr && `.panel[data-active="true"] [${attr.name}="${CSS.escape(attr.value)}"]`;
+  el.click();
+  if (again && !el.isConnected) document.querySelector(again)?.focus();
+});
 
+// Until the data is in, the header names the tab the address asks for
+$("#app-title").textContent = document.querySelector(`nav.tabs [data-tab="${ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]] || ""}"]`)?.textContent
+  ?? (/^#\/players/.test(location.hash) ? "Players" : location.hash.startsWith("#/") && !location.hash.startsWith("#/clubs") ? "" : "Clubs");
 loadData();

@@ -220,7 +220,7 @@ def payload(conn, now=None, doc=None, gameweeks=GAMEWEEKS):
             if pid not in players:
                 players[pid] = [pid, None, team, position, int(pid in overrides), inputs['availability'].get(str(pid))]
             cells[pid].append([gw_of[fid], away if team == home else home, team == home, _r(sum(parts.values())),
-                               round(p['exp_minutes']), _r(p['p_start']), _r(p['exp_goals']), _r(p['exp_assists']),
+                               round(p['exp_minutes']), _r(p['exp_goals']), _r(p['exp_assists']),
                                _r(p['p_clean_sheet']), [_r(parts[k]) for k in PARTS]])
     # players with no real chance of playing in any gameweek shown are left out
     players = {pid: v for pid, v in players.items() if max(c[4] for c in cells[pid]) >= 5}
@@ -249,7 +249,7 @@ def payload(conn, now=None, doc=None, gameweeks=GAMEWEEKS):
             'leagues': {str(k): v for k, v in LEAGUE_NAMES.items()},
             'teams': {str(t): v for t, v in team_info.items()},
             'fields': ['player', 'name', 'team', 'position', 'corrected', 'availability'],
-            'cell_fields': ['gw', 'opponent', 'home', 'xp', 'minutes', 'p_start', 'goals', 'assists', 'p_clean_sheet', 'parts'],
+            'cell_fields': ['gw', 'opponent', 'home', 'xp', 'minutes', 'goals', 'assists', 'p_clean_sheet', 'parts'],
             'part_fields': list(PARTS),
             'players': [players[pid] for pid in order], 'cells': [sorted(cells[pid]) for pid in order],
             'club_fields': ['gw', 'opponent', 'home', 'xp', 'p_win', 'p_clean_sheet', 'parts'],

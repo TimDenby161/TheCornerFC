@@ -82,7 +82,7 @@ def team_payload(bootstrap, entry, history, transfers, picks, api_players, api_t
         return {'fpl': fid, 'api': api_players.get(fid), 'name': e.get('web_name'),
                 'pos': POSITIONS.get(e.get('element_type')), 'fpl_team': e.get('team'), 'team': api_teams.get(e.get('team')),
                 'price': price, 'bought': paid, 'sell': selling_price(price, paid),
-                'status': e.get('status'), 'chance': e.get('chance_of_playing_next_round'), 'news': e.get('news') or None}
+                'status': e.get('status'), 'chance': e.get('chance_of_playing_next_round')}
 
     ft = free_transfers(history, entry.get('started_event') or 1)
     return {

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-from thecornerfc.export import (ExportValidationError, _kit_colors, _media_url, _publish_export,
+from thecornerfc.export import (ExportValidationError, _ban, _club_positions, _injured, _kit_colors, _publish_export,
                                 export_player_seasons)
 from thecornerfc.workflow_inputs import parse_int_list
 
@@ -56,13 +56,15 @@ class ExportSafetyTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmp:
             live = Path(tmp) / "data"
+            returned = []
 
             def build(staged):
                 write_valid_export(staged, "new")
-                export_player_seasons(conn, staged)
+                returned.append(export_player_seasons(conn, staged))
 
             _publish_export(build, live)
             players = json.loads((live / "player_seasons.json").read_text())["players"]
+            self.assertEqual(returned[0]["players"], players)     # what it wrote, for the page files
             self.assertEqual(len(players), 100)
             self.assertEqual(players["0"]["2026"], [[1, 90, 50, 7, 0, 0]])
 
@@ -148,13 +150,25 @@ class MarkupValueTests(unittest.TestCase):
     def test_bad_number_colour_is_dropped_but_shirt_kept(self):
         self.assertEqual(_kit_colors("123abc", "red"), ["123abc", None])
 
-    def test_media_urls_only_from_api_football_host(self):
-        ok = "https://media.api-sports.io/football/coachs/1234.png"
-        self.assertEqual(_media_url(ok), ok)
-        for bad in ("javascript:alert(1)", "http://media.api-sports.io/football/coachs/1.png",
-                    "https://media.api-sports.io.evil.test/football/coachs/1.png",
-                    'https://media.api-sports.io/football/coachs/1.png" onerror="x', "", None, 5):
-            self.assertIsNone(_media_url(bad), bad)
+    def test_only_ban_reasons_are_published(self):
+        for ban in ("Red Card", "Yellow Cards", "Suspended"):
+            self.assertEqual(_ban(ban), ban)
+        for medical in ("Knee Injury", "Illness", "Heart Problems", "Surgery", "Doping", "Manual injury", "", None):
+            self.assertIsNone(_ban(medical), medical)
+
+    def test_injured_flag_carries_no_reason(self):
+        self.assertEqual(_injured("Missing Fixture", "Knee Injury"), 1)
+        self.assertEqual(_injured("Missing Fixture", "Illness"), 1)
+        self.assertEqual(_injured("Questionable", "Knee Injury"), 0)       # doubtful, not out
+        self.assertEqual(_injured("Missing Fixture", "International duty"), 0)
+        self.assertEqual(_injured("Missing Fixture", "Red Card"), 0)
+        self.assertEqual(_injured("Missing Fixture", None), 0)
+
+    def test_club_positions_are_each_clubs_current_players_last_12_months(self):
+        positions = {"1": {"2026": [["ST", 900]], "12m": [["ST", 1200], ["LW", 300]]},
+                     "2": {"12m": [["GK", 2000]]}, "3": {"2024": [["CB", 90]]}}
+        self.assertEqual(_club_positions({1: 10, 2: 10, 3: 10, 4: 11, 5: None}, positions),
+                         {10: {"1": [["ST", 1200], ["LW", 300]], "2": [["GK", 2000]]}})
 
 
 if __name__ == "__main__":

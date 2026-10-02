@@ -401,9 +401,9 @@ def team_pages(conn, today=None):
         apps[fid, pid] = [team, mins, bool(started), role, g, a, float(rating) if rating is not None else None, y, r]
         if name:
             names[pid] = name
-    coaches = {t: {"id": c, "name": n, "photo": ph, "since": since.isoformat() if since else None}
-               for t, c, n, ph, since in conn.execute(
-                   "select team_id, coach_id, name, photo, since from team_coaches where team_id = any(%s)",
+    coaches = {t: {"id": c, "name": n, "since": since.isoformat() if since else None}
+               for t, c, n, since in conn.execute(
+                   "select team_id, coach_id, name, since from team_coaches where team_id = any(%s)",
                    [list({t for f in fixtures for t in f[2:4]})])}
     # the site's name for a player where we have him (as on his player page)
     pids = list({pid for _, pid in apps})

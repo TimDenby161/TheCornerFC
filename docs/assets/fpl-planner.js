@@ -56,7 +56,7 @@
       const id = s.api ?? -s.fpl;
       const known = players.get(id);
       const p = { ...(known || { id, pos: s.pos, team: s.team ?? `fpl${s.fpl_team}`, missing: true, ...blank() }),
-        name: s.name, fpl: s.fpl, price: s.price, status: s.status, chance: s.chance, news: s.news };
+        name: s.name, fpl: s.fpl, price: s.price, status: s.status, chance: s.chance };
       players.set(id, p);
       squad.push(id);
       sell[id] = s.sell;
