@@ -23,8 +23,8 @@ from .predictions import GOAL_LINES, UPCOMING_STATUSES, goal_lines
 log = logging.getLogger(__name__)
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "docs" / "data"
-# Written by other commands, not the export (fpl_team.json: `fpl team`): kept across a full export
-CARRIED_FILES = ("fpl_team.json",)
+# Written by other commands, not the export: kept across a full export
+CARRIED_FILES = ()
 PAST_DAYS = 21       # recent results shown on the site
 FUTURE_DAYS = 60     # upcoming fixtures shown on the site
 FORM_GAMES = 6       # rank change over this many recent games = "form"
@@ -195,6 +195,19 @@ def _read_json(path):
         raise ExportValidationError(f"Invalid JSON in {path}: {exc}") from exc
 
 
+def store_owner_doc(conn, name, payload):
+    """Owner-only FPL data (audit L3, owner's decision 2026-10-02): FPL's terms don't allow its data
+    to be republished, so fpl_predictions and fpl_team go to fpl_owner_docs, never docs/data. The
+    site reads them through fpl_owner_data, which checks the owner's passphrase
+    (db/migrations/20261003_fpl_owner_docs.sql). Raises if the table is missing or the connection
+    is read-only: callers treat that as a skipped export."""
+    config.require_db_write(f"store {name}")
+    conn.execute("""insert into fpl_owner_docs (name, doc, updated_at) values (%s, %s::jsonb, now())
+                    on conflict (name) do update set doc = excluded.doc, updated_at = excluded.updated_at""",
+                 [name, json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"))])
+    conn.commit()
+
+
 def _write_json_file(path, payload, *, ensure_ascii=True):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -363,7 +376,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     export_leagues(conn, out_dir)
     export_player_pages(conn, out_dir, detail)
     export_fantasy(conn, out_dir)
-    export_fantasy_predictions(conn, out_dir)
+    export_fantasy_predictions(conn)
     export_efl_fantasy(conn, out_dir)
     export_nations(conn, out_dir)
 
@@ -1901,11 +1914,11 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
             "players": [players[pid] for pid in order], "cells": [sorted(cells[pid]) for pid in order]}
 
 
-def export_fantasy_predictions(conn, out_dir=OUT_DIR, doc=None, filename="fpl_predictions.json"):
-    """fpl_predictions.json: every player's expected points for the next PREDICTION_GWS gameweeks
+def export_fantasy_predictions(conn, doc=None):
+    """fpl_predictions: every player's expected points for the next PREDICTION_GWS gameweeks
     (FPL's gameweeks once FPL is captured, else API-Football rounds), with FPL position and price.
     Same code as the fantasy snapshots, with v1.6's frozen parameters (the version the site shows)
-    unless doc is given. Not critical: a failure skips it."""
+    unless doc is given. Owner only (store_owner_doc). Not critical: a failure skips it."""
     try:
         from . import fantasy_snapshots
         now = datetime.now(timezone.utc)
@@ -1932,7 +1945,7 @@ def export_fantasy_predictions(conn, out_dir=OUT_DIR, doc=None, filename="fpl_pr
         team_ids = sorted({t for v in fixtures.values() for t in v[1:3]})
         team_info = {t: [n, c] for t, n, c in conn.execute(
             "select team_id, name, code from teams where team_id = any(%s)", [team_ids])}
-        _write_json_file(Path(out_dir) / filename, fantasy_prediction_payload(
+        store_owner_doc(conn, "fpl_predictions", fantasy_prediction_payload(
             fixtures, teams_out, doc, fpl_players, names, team_info, source=source, captured=captured))
     except Exception:
         conn.rollback()

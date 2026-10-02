@@ -259,9 +259,9 @@ class PredictionPayloadTests(unittest.TestCase):
     def test_prediction_export_failure_is_skipped(self):
         conn = MagicMock()
         conn.execute.side_effect = RuntimeError('db down')
-        with tempfile.TemporaryDirectory() as out, self.assertLogs(export.log, 'ERROR'):
-            export.export_fantasy_predictions(conn, out)
-            self.assertFalse((Path(out) / 'fpl_predictions.json').exists())
+        with self.assertLogs(export.log, 'ERROR'):
+            export.export_fantasy_predictions(conn)
+        self.assertFalse(any('fpl_owner_docs' in str(c.args[0]) for c in conn.execute.call_args_list))
 
 
 if __name__ == '__main__':

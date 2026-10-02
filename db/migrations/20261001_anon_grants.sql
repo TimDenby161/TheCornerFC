@@ -1,11 +1,12 @@
 -- Repeatable. NOT APPLIED YET (audit/findings.md S1; public-API audit of 2026-10-01).
--- The site's public key (anon) should hold exactly what docs/assets/app.js uses: SELECT on
--- fpl_team_locks, and lock_fpl_transfers / unlock_fpl_transfers. Today anon and authenticated
--- hold every privilege on almost every table, so row level security with no policies is the only
+-- The site's public key (anon) should hold exactly what docs/assets/app.js uses:
+-- lock_fpl_transfers / unlock_fpl_transfers, and fpl_owner_data once 20261003_fpl_owner_docs.sql
+-- is applied (that migration also took away anon's read of fpl_team_locks; L3, 2026-10-02).
+-- Today anon and authenticated hold every privilege on almost every table, so row level security with no policies is the only
 -- barrier, and a new table gets the same grants the moment it is created.
 -- 1. Row level security on the eight tables that db/schema.sql never gave it (live already has it).
 -- 2. Take every table, view, sequence and function grant in public away from anon, authenticated
---    and PUBLIC, then give back the three things the site uses.
+--    and PUBLIC, then give back the functions the site uses.
 -- 3. New tables, sequences and functions made by the role running this (postgres) start closed.
 -- The pipeline (DATABASE_URL, postgres) and local_readonly are not touched. After this, anon
 -- reads of the other tables answer 401 instead of 200 with no rows.
@@ -35,7 +36,9 @@ DO $$ DECLARE r text; f regprocedure; BEGIN
         IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
             EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', r);      -- views too
             EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', r);
-            EXECUTE format('GRANT SELECT ON fpl_team_locks TO %I', r);
+            IF to_regprocedure('fpl_owner_data(integer, text)') IS NOT NULL THEN
+                EXECUTE format('GRANT EXECUTE ON FUNCTION fpl_owner_data(integer, text) TO %I', r);
+            END IF;
             EXECUTE format('GRANT EXECUTE ON FUNCTION lock_fpl_transfers(integer, integer, integer, jsonb, text) TO %I', r);
             EXECUTE format('GRANT EXECUTE ON FUNCTION unlock_fpl_transfers(integer, integer, integer, text) TO %I', r);
             EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
@@ -55,8 +58,7 @@ ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 --   select relname from pg_class where relnamespace='public'::regnamespace and relkind in ('r','p')
 --     and not relrowsecurity;
 --   select grantee, table_name, privilege_type from information_schema.role_table_grants
---     where table_schema='public' and grantee in ('anon','authenticated','PUBLIC')
---     and not (table_name='fpl_team_locks' and privilege_type='SELECT');
+--     where table_schema='public' and grantee in ('anon','authenticated','PUBLIC');
 --   select p.oid::regprocedure from pg_proc p where p.pronamespace='public'::regnamespace
 --     and has_function_privilege('anon', p.oid, 'execute')
---     and p.proname not in ('lock_fpl_transfers','unlock_fpl_transfers');
+--     and p.proname not in ('lock_fpl_transfers','unlock_fpl_transfers','fpl_owner_data');

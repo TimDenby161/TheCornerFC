@@ -1140,10 +1140,17 @@ by JavaScript and was not retrievable for review. Consequences here:
   guards (`THECORNERFC_NO_API` blocks it; local runs need the override token).
 - **Owner's decision (2026-09-27):** the owner chose to turn capture on and show FPL data
   publicly, accepting the risk from the terms above.
+- **Owner's decision (2026-10-02, audit L3 / P2 (a)):** FPL data is no longer public. FPL's own
+  terms (cl. 28(d), 29) forbid republishing it. The FPL predictions and My FPL team are shown to
+  the owner only. The export and `fpl team` write them to `fpl_owner_docs` in Supabase (never
+  `docs/data`), and the page reads them through `fpl_owner_data`, which checks the owner's
+  passphrase (`db/migrations/20261003_fpl_owner_docs.sql`). The FPL tab's model validation
+  (`fpl.json`) stays public: it uses no FPL data. Fetching FPL still breaches cl. 28(d); the
+  `FPL_CAPTURE_ENABLED` kill switch remains.
   - The nightly workflow sets `FPL_CAPTURE_ENABLED=true` for its "Capture FPL state" step
     (`fpl capture` then `fpl results`). That step may fail without stopping the export.
   - The FPL tab shows each player's FPL position, price and status, and FPL's gameweeks,
-    through `docs/data/fpl_predictions.json`.
+    through `fpl_predictions` (owner only since 2026-10-02).
   - The owner also approved (2026-09-29) using FPL's squad lists to leave out predicted players
     FPL doesn't list at their club, e.g. players who have left since last season.
   - The owner also approved (2026-09-29) using FPL's captured gameweek results (defensive
@@ -1218,17 +1225,18 @@ suggests this week's transfers, plans the next six gameweeks, sets the line-up a
 says when to play each chip left. **Owner's decision, 2026-09-30:** read FPL's manager endpoints
 for this entry (`entry/{id}/`, `entry/{id}/history/`, `entry/{id}/transfers/`,
 `entry/{id}/event/{gw}/picks/`) and show the squad, plan and chip advice publicly. It's a new FPL
-source under the licensing notes above, and no other entry is read.
+source under the licensing notes above, and no other entry is read. Since 2026-10-02 the page is
+for the owner only (see the licensing notes): its menu entry appears once the passphrase has been
+entered in that browser.
 
 - `python -m thecornerfc fpl team` (in the FPL update and nightly workflows, after the export)
-  writes `docs/data/fpl_team.json`: the squad after any transfers already made for the next
+  stores `fpl_team` in `fpl_owner_docs`: the squad after any transfers already made for the next
   deadline, each player's selling price (bought at FPL's start price, or at `element_in_cost` for
   later buys, keeping half of any rise), bank, free transfers (1 a week up to 5, less those used;
   a Wildcard or Free Hit week keeps them), chips with their windows from `bootstrap-static`, and
-  the season's history. API-Football ids come from `fpl_id_map_current`. The full export keeps
-  this file (`export.CARRIED_FILES`).
+  the season's history. API-Football ids come from `fpl_id_map_current`.
 - The planning runs in the browser (`docs/assets/fpl-planner.js`, tested by
-  `tests/fpl_planner.test.mjs`) from `fpl_predictions.json`. It's a beam search over six weeks.
+  `tests/fpl_planner.test.mjs`) from `fpl_predictions`. It's a beam search over six weeks.
   Each week it rolls the free transfer or makes the best one, two or three moves, and a move
   beyond the free ones costs 4 points. A squad scores its best legal XI with the captain doubled,
   plus 0.1 of the bench. Each later week is weighted 0.9 of the one before, and a free transfer
@@ -1242,8 +1250,9 @@ source under the licensing notes above, and no other entry is read.
   week's moves. The page then plans from the squad after them, until the next FPL update reads
   the real transfers from FPL (FPL's squad wins). The page carries Supabase's public anon key
   (`SUPABASE` in `app.js`), and CSP `connect-src` allows only this project.
-  `db/migrations/20260930_fpl_team_locks.sql` limits anon to reading `fpl_team_locks` and calling
-  `lock_fpl_transfers` / `unlock_fpl_transfers`. Both are SECURITY DEFINER and check a bcrypt
+  `db/migrations/20260930_fpl_team_locks.sql` limits anon to calling
+  `lock_fpl_transfers` / `unlock_fpl_transfers` (and, until `20261003_fpl_owner_docs.sql`, reading
+  `fpl_team_locks`; the lock-ins now come back with `fpl_owner_data`). Both are SECURITY DEFINER and check a bcrypt
   hash of the owner's passphrase; 10 wrong passphrases lock the entry out for an hour. The same
   migration revokes anon's read of the `upcoming_predictions` view, since views skip RLS.
 
@@ -1253,7 +1262,10 @@ source under the licensing notes above, and no other entry is read.
   2. Set the passphrase there, with one you choose:
      `INSERT INTO fpl_team_keys VALUES (3996593, extensions.crypt('your passphrase', extensions.gen_salt('bf'))) ON CONFLICT (entry_id) DO UPDATE SET key_hash = EXCLUDED.key_hash;`
   3. Put the project's anon (or publishable) key from Supabase → Project Settings → API Keys into
-     `SUPABASE.key` in `docs/assets/app.js`. Without it the page still plans, but can't lock in.
+     `SUPABASE.key` in `docs/assets/app.js`.
+  4. Run `db/migrations/20261003_fpl_owner_docs.sql` (owner-only FPL data), then append it to
+     `db/schema.sql`. Until it's applied the export logs "Fantasy predictions export skipped" and
+     the owner-only pages are empty.
 
 ### Fantasy expected points (v1.1, evidence only)
 

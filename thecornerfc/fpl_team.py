@@ -1,20 +1,19 @@
 """The owner's own FPL team (entry FPL_TEAM_ENTRY) for the My FPL team page: squad, selling
-prices, bank, free transfers and chips left, written to docs/data/fpl_team.json. The page plans
-transfers and chips from it and fpl_predictions.json in the browser (assets/fpl-planner.js).
+prices, bank, free transfers and chips left, stored as fpl_team in fpl_owner_docs. The page plans
+transfers and chips from it and fpl_predictions in the browser (assets/fpl-planner.js).
 
-Owner approved reading the manager endpoints for this entry and showing the result publicly on
-2026-09-30 (README: My FPL team). Parsing is separate from IO, as in fpl.py.
+Owner approved reading the manager endpoints for this entry on 2026-09-30 (README: My FPL team);
+since 2026-10-02 the result is shown to the owner only (audit L3, export.store_owner_doc). Parsing
+is separate from IO, as in fpl.py.
 """
 from datetime import datetime, timezone
 import logging
-from pathlib import Path
 
 from . import fpl
-from .export import OUT_DIR, _write_json_file
+from .export import store_owner_doc
 
 log = logging.getLogger(__name__)
 
-FILENAME = 'fpl_team.json'
 POSITIONS = {1: 'G', 2: 'D', 3: 'M', 4: 'F'}
 MAX_FREE_TRANSFERS = 5
 # Chips that keep banked free transfers (FPL rules since 2024/25): the week counts as no transfers
@@ -56,7 +55,7 @@ def chip_windows(bootstrap, history):
 
 
 def team_payload(bootstrap, entry, history, transfers, picks, api_players, api_teams, now=None):
-    """fpl_team.json from FPL's responses. picks: the latest gameweek's picks (the one before a
+    """fpl_team from FPL's responses. picks: the latest gameweek's picks (the one before a
     Free Hit, whose squad reverts); transfers already made for the next deadline are applied, as
     FPL has. api_players / api_teams: {fpl id: API-Football id} from fpl_id_map_current."""
     now = now or datetime.now(timezone.utc)
@@ -107,8 +106,9 @@ def _mapping(conn, season, kind):
                                 where kind = %s and season = %s and api_id is not null''', [kind, season]).fetchall())
 
 
-def export_team(client, conn, entry_id, out_dir=OUT_DIR):
-    """Read the entry from FPL and write fpl_team.json. Reads the database only (the ID map)."""
+def export_team(client, conn, entry_id):
+    """Read the entry from FPL and store fpl_team for the owner. Reads the ID map; writes only
+    fpl_owner_docs."""
     bootstrap = client.get('bootstrap-static/')
     entry = client.get(f'entry/{entry_id}/')
     current = entry.get('current_event')
@@ -123,7 +123,7 @@ def export_team(client, conn, entry_id, out_dir=OUT_DIR):
     season = fpl.season_of(fpl.gameweeks(bootstrap))
     payload = team_payload(bootstrap, entry, history, transfers, picks,
                            _mapping(conn, season, 'player'), _mapping(conn, season, 'team'))
-    _write_json_file(Path(out_dir) / FILENAME, payload, ensure_ascii=False)
+    store_owner_doc(conn, 'fpl_team', payload)
     unmapped = [p['name'] for p in payload['squad'] if p['api'] is None]
     log.info('FPL team %d: GW%s, %d free transfers, bank £%.1fm%s', entry_id, payload['next_event'],
              payload['free_transfers'], payload['bank'] / 10,
