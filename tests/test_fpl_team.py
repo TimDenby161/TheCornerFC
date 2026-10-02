@@ -74,7 +74,8 @@ class TeamTests(unittest.TestCase):
         self.assertEqual([s['fpl'] for s in p['squad']], [1, 12, 300])   # pick order, Stach in for Dango
         raya, saka, stach = p['squad']
         self.assertEqual((raya['bought'], raya['sell'], raya['api'], raya['team'], raya['pos']), (60, 60, 19465, 42, 'G'))
-        self.assertEqual((saka['bought'], saka['sell'], saka['chance'], saka['news']), (95, 96, 75, 'Knock'))
+        self.assertEqual((saka['bought'], saka['sell'], saka['chance']), (95, 96, 75))
+        self.assertNotIn('news', saka)             # FPL's free-text injury news isn't published
         self.assertEqual((stach['api'], stach['team'], stach['sell']), (177665, 63, 60))
         self.assertEqual(p['made'], [{'out': 95, 'in': 300, 'out_cost': 63, 'in_cost': 60, 'out_name': 'Dango', 'in_name': 'Stach'}])
         self.assertEqual(p['history'][1], {'event': 2, 'points': 65, 'rank': None, 'transfers': 2, 'hits': 4, 'bench': None})

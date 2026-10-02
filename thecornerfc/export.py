@@ -85,20 +85,14 @@ def _r(x, n=2):
     return None if x is None else round(float(x), n)
 
 
-# API-derived values that the site puts into markup: kit colours go into a style attribute and
-# coach photos into an img src, so only a plain hex colour and API-Football's own image host pass
+# API-derived values that the site puts into markup: kit colours go into a style attribute, so
+# only a plain hex colour passes
 HEX_COLOR = re.compile(r"[0-9a-fA-F]{6}")
-MEDIA_URL = re.compile(r"https://media\.api-sports\.io/football/[a-z]+/\d+\.(?:png|jpg|svg)")
 
 
 def _hex_color(v):
     """A six-digit hex colour without the '#', lower-cased, or None."""
     return v.lower() if isinstance(v, str) and HEX_COLOR.fullmatch(v) else None
-
-
-def _media_url(v):
-    """An API-Football media URL, or None for anything else."""
-    return v if isinstance(v, str) and MEDIA_URL.fullmatch(v) else None
 
 
 def _kit_colors(shirt, number):
@@ -264,11 +258,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
                       p.rating_margin, p.rating_clean_sheets, p.rating_shape, p.rating_goals,
                       p.home_missing, p.away_missing, p.p_over25, p.p_btts,
                       coalesce(rh.actual_xi_rating, rh.predicted_xi_rating), rh.recent_xi_rating,
-                      coalesce(ra.actual_xi_rating, ra.predicted_xi_rating), ra.recent_xi_rating,
-                      coalesce(rh.actual_gk, rh.predicted_gk), coalesce(rh.actual_def, rh.predicted_def),
-                      coalesce(rh.actual_mid, rh.predicted_mid), coalesce(rh.actual_fwd, rh.predicted_fwd),
-                      coalesce(ra.actual_gk, ra.predicted_gk), coalesce(ra.actual_def, ra.predicted_def),
-                      coalesce(ra.actual_mid, ra.predicted_mid), coalesce(ra.actual_fwd, ra.predicted_fwd)
+                      coalesce(ra.actual_xi_rating, ra.predicted_xi_rating), ra.recent_xi_rating
                from fixtures f left join fixture_predictions p using (fixture_id)
                left join fixture_team_ratings rh on rh.fixture_id = f.fixture_id and rh.team_id = f.home_team_id
                left join fixture_team_ratings ra on ra.fixture_id = f.fixture_id and ra.team_id = f.away_team_id
@@ -277,17 +267,15 @@ def _write_site_data(conn, out_dir=OUT_DIR):
             [now - timedelta(days=PAST_DAYS), now + timedelta(days=FUTURE_DAYS)]):
         (fid, kickoff, lid, rnd, home, away, status, hg, ag, ph, pa_, p_h, p_d, p_a,
          hxg, axg, likely, hr, ar, source, *ratings, h_miss, a_miss, p_over, p_btts,
-         h_xi, h_recent, a_xi, a_recent) = row[:-8]
-        lines = row[-8:]            # home then away XI average by line (GK, DEF, MID, FWD)
+         h_xi, h_recent, a_xi, a_recent) = row
         team_ids.update((home, away))
         matches.append([
             fid, kickoff.isoformat(), lid, rnd, home, away, status, hg, ag, ph, pa_,
             _r(p_h, 3), _r(p_d, 3), _r(p_a, 3), _r(hxg), _r(axg), likely, _r(hr, 0), _r(ar, 0),
             source, *ratings,
-            *[_r(x, 3) for x in market.get(fid, (None, None, None))],
+            *[_r(x, 3) for x in market.get(fid, (None, None))[:2]],     # the away share is the rest
             _r(h_miss), _r(a_miss), _r(p_over, 3), _r(p_btts, 3),
             _r(h_xi, 1), _r(h_recent, 1), _r(a_xi, 1), _r(a_recent, 1),
-            _xi_lines(lines[:4]), _xi_lines(lines[4:]),
             0,
         ])
 
@@ -300,7 +288,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
                                       "country": "World", "type": "International"})
         teams_extra[home], teams_extra[away] = html.unescape(h_name), html.unescape(a_name)
         matches.append([fid, kickoff.isoformat(), lid, rnd, home, away, status, hg, ag, None, None,
-                        *[None] * 28, 1])
+                        *[None] * 25, 1])
     matches.sort(key=lambda m: (m[1], m[0]))
     nation_pages = {t: nat for t, nat in national_nationalities(conn, list(teams_extra)).items()
                     if nat != teams_extra[t]}
@@ -327,13 +315,13 @@ def _write_site_data(conn, out_dir=OUT_DIR):
            order by team_id, kickoff desc""").fetchall())
 
     rankings = []
-    for team, lid, cur, st, lt, rel, played, last, att, dfn, home_r, away_r in conn.execute(
-            """select team_id, league_id, current_rank, st_algo, lt_algo, reliability, played,
-                      last_match, attack, defence, home_rating, away_rating
+    for team, lid, cur, st, lt, played, att, dfn, home_r, away_r in conn.execute(
+            """select team_id, league_id, current_rank, st_algo, lt_algo, played,
+                      attack, defence, home_rating, away_rating
                from team_rankings order by lt_algo desc"""):
         team_ids.add(team)
-        rankings.append([team, current_league.get(team, lid), _r(cur, 1), _r(st, 1), _r(lt, 1), _r(rel, 0),
-                         played, last.isoformat() if last else None, _r(form.get(team), 1),
+        rankings.append([team, current_league.get(team, lid), _r(cur, 1), _r(st, 1), _r(lt, 1),
+                         played, _r(form.get(team), 1),
                          1 if team in current_league else 0,
                          _r(att, 1), _r(dfn, 1), _r(home_r, 1), _r(away_r, 1)])
 
@@ -349,10 +337,9 @@ def _write_site_data(conn, out_dir=OUT_DIR):
         "fields": ["id", "kickoff", "league", "round", "home", "away", "status", "hg", "ag",
                    "pen_h", "pen_a", "p_home", "p_draw", "p_away", "home_xg", "away_xg",
                    "likely", "home_rank", "away_rank", "source", "rating", "r_winner",
-                   "r_margin", "r_clean_sheets", "r_shape", "r_goals", "m_home", "m_draw", "m_away",
+                   "r_margin", "r_clean_sheets", "r_shape", "r_goals", "m_home", "m_draw",
                    "home_missing", "away_missing", "p_over25", "p_btts",
-                   "home_xi", "home_recent_xi", "away_xi", "away_recent_xi", "home_lines", "away_lines",
-                   "intl"],
+                   "home_xi", "home_recent_xi", "away_xi", "away_recent_xi", "intl"],
         "matches": matches,
         "competitions": competitions,
         "teams": teams,
@@ -360,7 +347,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     }, separators=(",", ":")), encoding="utf-8")
     (out_dir / "rankings.json").write_text(json.dumps({
         "generated_at": generated,
-        "fields": ["team", "league", "current", "st", "lt", "reliability", "played", "last_match",
+        "fields": ["team", "league", "current", "st", "lt", "played",
                    "form", "in_league", "attack", "defence", "home", "away"],
         "rankings": rankings,
     }, separators=(",", ":")), encoding="utf-8")
@@ -370,11 +357,11 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     export_explanations(conn, out_dir, now)
     export_methodology(conn, out_dir, now)
     export_injuries(conn, out_dir)
-    export_players(conn, out_dir)
-    export_player_seasons(conn, out_dir)
-    export_clubs(conn, out_dir)
+    player_team = export_players(conn, out_dir)
+    detail = export_player_seasons(conn, out_dir)
+    export_clubs(conn, out_dir, _club_positions(player_team, detail["positions"]))
     export_leagues(conn, out_dir)
-    export_player_pages(conn, out_dir)
+    export_player_pages(conn, out_dir, detail)
     export_fantasy(conn, out_dir)
     export_fantasy_predictions(conn, out_dir)
     export_efl_fantasy(conn, out_dir)
@@ -895,6 +882,21 @@ INJURY_LOOKBACK_DAYS = 21
 # reasons that only cover the match they were listed for: left out of a past match's list
 ONE_MATCH_REASONS = {"Red Card", "Yellow Cards", "Suspended", "Coach's decision", "Rest", "International duty",
                      "Transfer negotiations", "Personal Reasons"}
+# The only reasons published. Anything else is a medical reason (or "Doping") from a third-party
+# feed: health data, which stays in the database for availability.py and never reaches the site
+BAN_REASONS = {"Red Card", "Yellow Cards", "Suspended"}
+# reasons that mean he is out injured or ill (published as a yes/no, for the national teams' XI)
+INJURY_REASON = re.compile(r"injur|illness|knock|surgery|fracture|virus|muscle", re.I)
+
+
+def _ban(reason):
+    """The reason if it is a ban, else None."""
+    return reason if reason in BAN_REASONS else None
+
+
+def _injured(kind, reason):
+    """1 when he is listed out (not doubtful) with an injury or illness, else 0."""
+    return 1 if kind == "Missing Fixture" and INJURY_REASON.search(reason or "") else 0
 
 
 def export_injuries(conn, out_dir=OUT_DIR):
@@ -904,9 +906,10 @@ def export_injuries(conn, out_dir=OUT_DIR):
     the one-match reasons (a ban already served). Upcoming fixtures use the backend
     availability merge; past red cards alone are not treated as confirmed current bans.
 
+    ban: the reason when it is a ban (BAN_REASONS), else null: medical reasons aren't published.
     missed: how many of the club's played matches in a row he has been on its list, back from its
     latest (matches with no list for the club, e.g. cups, are skipped). season_rank: his latest
-    season rank, for players off the current players list.
+    season rank, for players off the current players list. injured: 1 when he is out injured or ill.
     """
     teams = {}
     for team, fid, kickoff, upcoming, player, name, kind, reason in conn.execute(
@@ -924,7 +927,7 @@ def export_injuries(conn, out_dir=OUT_DIR):
             continue
         entry = teams.setdefault(str(team), {"fixture": fid, "kickoff": kickoff.isoformat(), "upcoming": upcoming,
                                              "players": []})
-        entry["players"].append([player, html.unescape(name or ""), kind, reason])
+        entry["players"].append([player, html.unescape(name or ""), kind, reason])   # reason: replaced below
     # Upcoming display uses the exact same fixture-scoped merge as lineup selection.
     upcoming_fixtures = availability.next_fixtures(conn)
     merged = availability.load(conn, upcoming_fixtures)
@@ -966,9 +969,12 @@ def export_injuries(conn, out_dir=OUT_DIR):
     for entry in teams.values():
         for row in entry["players"]:
             row.append(season_rank.get(row[0]))
+            kind, reason = row[2], row[3]
+            row[3] = _ban(reason)
+            row.append(_injured(kind, reason))
     _write_json_file(out_dir / "injuries.json", {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "fields": ["player", "name", "type", "reason", "missed", "season_rank"], "teams": teams,
+        "fields": ["player", "name", "type", "ban", "missed", "season_rank", "injured"], "teams": teams,
     }, ensure_ascii=False)
     log.info("Exported injury lists for %d clubs", len(teams))
 
@@ -1232,6 +1238,7 @@ def export_players(conn, out_dir=OUT_DIR):
             "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])},
     }, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
     log.info("Exported %d player ranks and %d predicted XIs", len(players), len(next_xi))
+    return {r[0]: r[5] for r in players}       # {player: his club}, for the club files' positions
 
 
 def _club_spells(rows):
@@ -1248,8 +1255,12 @@ def _club_spells(rows):
     return out
 
 
+SPELL_FIELDS = ["team", "minutes", "club_rank", "rating", "goals", "assists"]
+
+
 def export_player_seasons(conn, out_dir=OUT_DIR):
-    """Hover detail for the Players table (player_seasons.json, loaded when that view opens).
+    """Hover detail for the Players table (player_seasons.json, loaded on the first hover there).
+    Returns what it wrote: each player's own rows also go in his page file and his club's file.
 
     For each exported player and each season in PLAYER_SEASONS, and for "now" (his last 20
     appearances, the ones the current rank is built from): the clubs he played for, his minutes
@@ -1317,15 +1328,29 @@ def export_player_seasons(conn, out_dir=OUT_DIR):
             positions[player].setdefault(key, []).append([role, int(mins)])
     team_ids = {x[0] for p in spells.values() for v in p.values() for x in v}
     names = dict(conn.execute("select team_id, name from teams where team_id = any(%s)", [list(team_ids)]))
-    (out_dir / "player_seasons.json").write_text(json.dumps({
-        "fields": ["team", "minutes", "club_rank", "rating", "goals", "assists"],
+    detail = {
+        "fields": SPELL_FIELDS,
         "teams": {str(t): names.get(t) for t in team_ids},
         "born": {str(p): b.isoformat() for p, b in conn.execute(
             "select player_id, birth_date from players where player_id = any(%s) and birth_date is not null", [ids])},
         "players": {str(p): {str(k): v for k, v in d.items()} for p, d in spells.items()},
         "positions": {str(p): d for p, d in positions.items()},   # {player: {season: [[role, minutes], ...]}}
-    }, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+    }
+    (out_dir / "player_seasons.json").write_text(
+        json.dumps(detail, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
     log.info("Exported season detail for %d players", len(spells))
+    return detail
+
+
+def _club_positions(player_team, positions):
+    """{team: {player: [[role, minutes], ...]}}: each club's current players' starting minutes by
+    position over the last 12 months (the "12m" rows of the season detail), for its club file."""
+    out = defaultdict(dict)
+    for player, team in player_team.items():
+        rows = positions.get(str(player), {}).get("12m")
+        if team is not None and rows:
+            out[team][str(player)] = rows
+    return out
 
 
 PLAYER_MATCHES = 20      # match log on a player's page: his last this-many appearances
@@ -1413,10 +1438,12 @@ def _player_movement(conn, ids):
     return out
 
 
-def export_player_pages(conn, out_dir=OUT_DIR):
+def export_player_pages(conn, out_dir=OUT_DIR, detail=None):
     """One small file per listed player for his page: docs/data/players/<player_id>.json, with his
     stats per season and club, his last PLAYER_MATCHES appearances (with his rank going into each)
-    and his injury status for his next fixture. Built from the query cache (cache.py), so the
+    and his injury status for his next fixture ([fixture, type, ban]: no medical reason), plus his
+    own rows of the season detail (born, spells, positions) so his page needn't load
+    player_seasons.json. Built from the query cache (cache.py), so the
     only database reads are the per-match ranks and injuries for those few rows."""
     from .cache import finished_fixtures
     from .player_ratings import _appearances, _other_seasons
@@ -1434,7 +1461,7 @@ def export_player_pages(conn, out_dir=OUT_DIR):
         for team in (home,away):
             for player,state in resolved[(fid,team)].items():
                 item = state['evidence'][-1]
-                injuries.setdefault(player,[fid,'Suspended' if state['state']=='suspended' else item.get('type'),item.get('reason')])
+                injuries.setdefault(player,[fid,'Suspended' if state['state']=='suspended' else item.get('type'),_ban(item.get('reason'))])
     movement = _player_movement(conn, ids)
     for pid, page in pages.items():
         for m in page["matches"]:
@@ -1442,7 +1469,15 @@ def export_player_pages(conn, out_dir=OUT_DIR):
         page["injury"] = injuries.get(pid)
         if pid in movement:
             page["movement"] = movement[pid]
-    team_ids = {x for p in pages.values() for x in [s[1] for s in p["seasons"]] + [m[4] for m in p["matches"]]}
+    # his own rows of the season detail (export_player_seasons), so his page needs only this file
+    detail = detail or {}
+    for pid, page in pages.items():
+        page["born"] = detail.get("born", {}).get(str(pid))
+        page["spell_fields"] = SPELL_FIELDS
+        page["spells"] = detail.get("players", {}).get(str(pid), {})
+        page["positions"] = detail.get("positions", {}).get(str(pid), {})
+    team_ids = {x for p in pages.values() for x in [s[1] for s in p["seasons"]] + [m[4] for m in p["matches"]]
+                + [sp[0] for v in p["spells"].values() for sp in v]}
     names = dict(conn.execute("select team_id, name from teams where team_id = any(%s)", [list(team_ids)]))
     player_dir = out_dir / "players"
     player_dir.mkdir(parents=True, exist_ok=True)
@@ -1450,7 +1485,8 @@ def export_player_pages(conn, out_dir=OUT_DIR):
         if int(old.stem) not in pages:
             old.unlink()
     for pid, page in pages.items():
-        teams = {s[1] for s in page["seasons"]} | {m[4] for m in page["matches"]}
+        teams = ({s[1] for s in page["seasons"]} | {m[4] for m in page["matches"]}
+                 | {sp[0] for v in page["spells"].values() for sp in v})
         payload = json.dumps({"id": pid, "season_fields": SEASON_FIELDS, "match_fields": MATCH_FIELDS, **page,
                               "teams": {str(t): names.get(t) for t in sorted(teams)}},
                              separators=(",", ":"), ensure_ascii=False)
@@ -1494,7 +1530,7 @@ NEUTRAL_SQL = """
                                and hc.c = lower(trim(split_part(f.venue_city, ',', 1))))))"""
 
 
-def export_clubs(conn, out_dir=OUT_DIR):
+def export_clubs(conn, out_dir=OUT_DIR, positions=None):
     """One small file per active club for its club page: docs/data/clubs/<team_id>.json.
 
     history: every match since 2020 as [date, rank after, opponent, home (1, 0 away, 2 neutral), goals for, against,
@@ -1503,7 +1539,9 @@ def export_clubs(conn, out_dir=OUT_DIR):
     averages, the current manager and the home kit colours. starts: this season's matches with a
     line-up (games), each player's starts by position in them, each match's starters (xi) and
     competition (xi_league) and formation (xi_formation), and per player his starts, substitute appearances and minutes in
-    them over the last 12 months (mins, out of mins_matches).
+    them over the last 12 months (mins, out of mins_matches). positions: its current players'
+    starting minutes by position over the last 12 months, wherever they played
+    ({player: [[role, minutes], ...]}, from export_player_seasons).
     Loaded only when the page opens.
     """
     now = datetime.now(timezone.utc)
@@ -1516,8 +1554,8 @@ def export_clubs(conn, out_dir=OUT_DIR):
             select {WEEK.format('f.kickoff')} as part, ff.fixture_id, ff.team_id, ff.formation
             from fixture_formations ff join fixtures f using (fixture_id) where ff.formation is not null""",
             order_by="fixture_id, team_id")}
-    coaches = {t: {"id": c, "name": n, "photo": _media_url(p), "since": s.isoformat() if s else None}
-               for t, c, n, p, s in conn.execute("select team_id, coach_id, name, photo, since from team_coaches")}
+    coaches = {t: {"id": c, "name": n, "since": s.isoformat() if s else None}
+               for t, c, n, s in conn.execute("select team_id, coach_id, name, since from team_coaches")}
     colors = {t: _kit_colors(s, n) for t, s, n in conn.execute("select team_id, shirt, number from team_colors")}
     xi_lines = {(f, t): _xi_lines(rest) for f, t, *rest in cached_rows(conn, "xi_lines", f"""
             select {WEEK.format('f.kickoff')} as part, r.fixture_id, r.team_id,
@@ -1621,6 +1659,7 @@ def export_clubs(conn, out_dir=OUT_DIR):
                               "attack", "defence", "xi_lines", "xgf", "xga", "xg_est"],
                    "matches": h["matches"], "goal_averages": stats.get(team), "coach": coaches.get(team),
                    "colors": colors.get(team), "starts": starts.get(team),
+                   "positions": (positions or {}).get(team, {}),
                    "teams": {o: names.get(o) for o in opponents}}
         (club_dir / f"{team}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     log.info("Exported %d club pages", len(active))
@@ -1846,7 +1885,7 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
                                 fpl[1] if fpl else None, fpl[2] if fpl else None, fpl[3] if fpl else None,
                                 inputs["availability"].get(str(pid))]
             cells.setdefault(pid, []).append([index[gw], away if team == home else home, team == home,
-                                              _r(p["expected_points"]), round(p["exp_minutes"]), _r(p["p_start"]),
+                                              _r(p["expected_points"]), round(p["exp_minutes"]),
                                               _r(p["exp_goals"]), _r(p["exp_assists"]), _r(p["p_clean_sheet"]),
                                               [_r(p[k]) for k in parts],
                                               *([_r(p[k]) for k in PENALTY_CELLS] if pens else [])])
@@ -1856,7 +1895,7 @@ def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, tea
             "gameweeks": [{"id": g, "first_kickoff": first[g].isoformat()} for g in gws],
             "teams": {str(t): v for t, v in team_info.items()},
             "fields": ["player", "name", "team", "position", "fpl_position", "price", "fpl_status", "fpl_chance", "availability"],
-            "cell_fields": ["gw", "opponent", "home", "xp", "minutes", "p_start", "goals", "assists", "p_clean_sheet", "parts",
+            "cell_fields": ["gw", "opponent", "home", "xp", "minutes", "goals", "assists", "p_clean_sheet", "parts",
                             *([k.removeprefix("exp_") for k in PENALTY_CELLS] if pens else [])],
             "part_fields": [k.removesuffix("_points") for k in parts],
             "players": [players[pid] for pid in order], "cells": [sorted(cells[pid]) for pid in order]}
