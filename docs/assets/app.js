@@ -2406,7 +2406,7 @@ function renderBets() {
     return `<div class="bet-row ${["win", "loss", "void"].includes(b.result) ? b.result : ""}">
       <div class="bet-top"><span>${escapeHtml(fmtDay(b.kickoff))} ${escapeHtml(fmtTime(b.kickoff))} · ${escapeHtml(compLabel(b.league))}</span><span>${b.strategy === "early" ? "Night before" : "Pre-kickoff"}</span></div>
       <div class="bet-match">${escapeHtml(b.home)} v ${escapeHtml(b.away)}${b.score ? ` <span style="color:var(--text-muted)">(${escapeHtml(b.score)})</span>` : ""}</div>
-      <div class="bet-pick"><span>${betBadges(b)}${gbp(stake)} on ${escapeHtml(SEL_LABELS[b.selection] || b.selection)} @ <b>${b.odds.toFixed(2)}</b> <span style="color:var(--text-muted);font-size:11px">${escapeHtml(b.bookmaker || "")}</span></span><span>${res}</span></div>
+      <div class="bet-pick"><span>${betBadges(b)}${gbp(stake)} on ${escapeHtml(SEL_LABELS[b.selection] || b.selection)} @ <b>${b.odds.toFixed(2)}</b></span><span>${res}</span></div>
       <div class="bet-sub">${betProbs(b)}${b.closing_odds != null ? ` · closed ${b.closing_odds.toFixed(2)}` : ""}${bankAfter[b.id] != null ? ` · simulated bank ${gbp(bankAfter[b.id])}` : ""}</div>
     </div>`;
   };
@@ -2427,7 +2427,7 @@ function renderBets() {
     ${marketRows ? `<div class="stats-card" style="margin-bottom:12px">
       <div class="stats-label">By market</div>
       <table class="calib-table">${head("Market")}<tbody>${marketRows}</tbody></table>
-      <div class="stats-note">Paper bets, no real money: ${gbp(stake)} on every bet from a ${gbp(bank)} bank. A match gets at most one bet of each kind (result, goal line, both teams score): of several, the best is kept, judged as if the true chance were halfway between the model's and the bookmakers'. If both the night-before and pre-kickoff runs bet the same kind on a match, All counts only the night-before bet. All bets are simulated at ${escapeHtml(rules.bookmaker || "Bet365")}'s recorded odds. A paper bet is taken when the model's probability × that price is at least ${Math.round(rules.min_edge * 100)}% better than even, at odds up to ${rules.max_odds}: a disagreement with the market, which the results below test rather than assume. Return = profit ÷ staked. Profit needs a few hundred settled bets before it means much.</div>
+      <div class="stats-note">Paper bets, no real money: ${gbp(stake)} on every bet from a ${gbp(bank)} bank. A match gets at most one bet of each kind (result, goal line, both teams score): of several, the best is kept, judged as if the true chance were halfway between the model's and the bookmakers'. If both the night-before and pre-kickoff runs bet the same kind on a match, All counts only the night-before bet. All bets are simulated at a UK bookmaker's recorded odds. A paper bet is taken when the model's probability × that price is at least ${Math.round(rules.min_edge * 100)}% better than even, at odds up to ${rules.max_odds}: a disagreement with the market, which the results below test rather than assume. Return = profit ÷ staked. Profit needs a few hundred settled bets before it means much.</div>
     </div>` : ""}
     ${settled.length ? `<div class="modal-section">Settled (${settled.length})</div><div class="bets-list">${settled.slice(0, 300).map(row).join("")}</div>` : ""}
     ${!all.length ? `<div class="empty-state">No bets match this filter yet.</div>` : ""}
@@ -2475,39 +2475,17 @@ function tipsOverview() {
   return `<div class="tips-overview">${tiles.join("")}</div>`;
 }
 
-// The paper bank box: the viewer's simulated bank and stake size, kept in this browser only.
-// With no bank entered the selections show the simulation's flat stake.
-const readStored = (k) => { try { return localStorage.getItem(`fc.${k}`); } catch { return null; } };
-const writeStored = (k, v) => { try { v == null ? localStorage.removeItem(`fc.${k}`) : localStorage.setItem(`fc.${k}`, v); } catch { /* not stored */ } };
-function tipStake() {
-  const bal = parseFloat($("#tips-balance").value), frac = parseFloat($("#tips-pct").value);
-  if (!(bal > 0)) return { stake: betStake(), bal: null };
-  const raw = bal * frac;
-  // to the 50p from £5, else to the 10p
-  return { stake: raw >= 5 ? Math.round(raw * 2) / 2 : Math.max(0.1, Math.round(raw * 10) / 10), bal };
-}
-{
-  const bal = readStored("balance"), frac = readStored("stakePct");
-  if (bal) $("#tips-balance").value = bal;
-  if (frac && [...$("#tips-pct").options].some((o) => o.value === frac)) $("#tips-pct").value = frac;
-  const changed = () => { writeStored("balance", $("#tips-balance").value || null); writeStored("stakePct", $("#tips-pct").value); if (state.bets) renderTips(); };
-  $("#tips-balance").addEventListener("input", changed);
-  $("#tips-pct").addEventListener("change", changed);
-}
+// The paper bank box was removed on 2026-10-04: clear what it kept in this browser.
+try { localStorage.removeItem("fc.balance"); localStorage.removeItem("fc.stakePct"); } catch { /* nothing stored */ }
 
 function renderTips() {
   state.drawn.add("tips");
   const body = $("#tips-body");
-  const { stake, bal } = tipStake(), book = state.bets?.rules?.bookmaker || "Bet365";
   const now = Date.now();
   const tips = onePerPick(state.bets?.bets || []).filter((b) => !b.result && new Date(b.kickoff) > now)
     .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff) || a.fixture - b.fixture || a.id - b.id);
   $("#tips-top").innerHTML = GAMBLING_NOTE + tipsOverview();
-  $("#tips-stake").textContent = gbp(stake);
-  const total = stake * tips.length;
-  $("#tips-total").textContent = !tips.length ? "No open selections"
-    : `${tips.length} open selection${tips.length === 1 ? "" : "s"}: ${gbp(total)} simulated in total${bal ? ` (${Math.round(100 * total / bal)}% of paper bank)` : ". Enter a paper bank to size it"}`;
-  const intro = `<div class="sim-banner">Model probability against market fair probability for the paper simulation's open selections. A difference is a disagreement with the market, not proven value. Simulated ${gbp(stake)} stake each at ${escapeHtml(book)}'s recorded price; no real money. More can appear up to 75 minutes before kickoff, after late team news.</div>`;
+  const intro = `<div class="sim-banner">Model probability against market fair probability for the paper simulation's open selections. A difference is a disagreement with the market, not proven value. The price shown is a UK bookmaker's recorded price; no real money. More can appear up to 75 minutes before kickoff, after late team news.</div>`;
   if (!tips.length) { body.innerHTML = intro + (loadFailed("bets") ? loadError("the open selections") : `<div class="empty-state">No open selections right now. New ones are added the night before and shortly before kickoff.</div>`); return; }
   // by day, then competition (the Matches tab's order), then match; days and competitions fold
   const days = [];
@@ -2526,19 +2504,19 @@ function renderTips() {
   const byId = new Map(state.data.matches.map((m) => [m.id, m]));
   const matchCard = (bs) => {
     const m = byId.get(bs[0].fixture);
-    const count = bs.length > 1 ? `<span class="match-meta">${bs.length} selections · ${gbp(stake * bs.length)}</span>` : "";
+    const count = bs.length > 1 ? `<span class="match-meta">${bs.length} selections</span>` : "";
     const head = m ? matchHead(m, count) + probBars(m)
       : `<div class="bet-top"><span>${escapeHtml(fmtTime(bs[0].kickoff))}</span>${count}</div>
          <div class="bet-match">${escapeHtml(bs[0].home)} v ${escapeHtml(bs[0].away)}</div>`;
     return `<div class="match-card">${head}<div class="tip-picks">
-      ${bs.map((b) => `<div class="tip-pick"><span class="tip-left">${betBadges(b)}<span><span class="sel">${escapeHtml(tipLabel(b))}</span><span class="win">${betProbs(b)}</span><span class="win">Simulated ${gbp(stake)} would win ${gbp(stake * (b.odds - 1))}</span></span></span><span class="odds">${b.odds.toFixed(2)}</span></div>`).join("")}
+      ${bs.map((b) => `<div class="tip-pick"><span class="tip-left">${betBadges(b)}<span><span class="sel">${escapeHtml(tipLabel(b))}</span><span class="win">${betProbs(b)}</span></span></span><span class="odds">${b.odds.toFixed(2)}</span></div>`).join("")}
     </div></div>`;
   };
   body.innerHTML = intro + days.map((d) => {
     const comps = group(d.tips, "league");
     const ordered = [...comps.keys()].sort((a, b) => orderOf(a) - orderOf(b) || compLabel(a).localeCompare(compLabel(b)));
     const dk = `d:${d.day}`;
-    return `<div class="tip-day" ${fold(dk)}>${caret(dk)}<span>${escapeHtml(d.day)}</span><span class="comp-group-count">${d.tips.length} · ${gbp(stake * d.tips.length)}</span></div>
+    return `<div class="tip-day" ${fold(dk)}>${caret(dk)}<span>${escapeHtml(d.day)}</span><span class="comp-group-count">${d.tips.length}</span></div>
       <div class="tip-day-body${folded.has(dk) ? " collapsed" : ""}">${ordered.map((id) => {
         const ck = `c:${d.day}|${id}`;
         return `<div class="comp-group${folded.has(ck) ? " collapsed" : ""}">

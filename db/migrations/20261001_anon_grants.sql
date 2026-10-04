@@ -1,10 +1,10 @@
--- Repeatable. NOT APPLIED YET (audit/findings.md S1; public-API audit of 2026-10-01).
+-- Repeatable. Applied 2026-10-04 (audit/findings.md S1; public-API audit of 2026-10-01).
 -- The site's public key (anon) should hold nothing, and signed-in visitors (authenticated)
 -- exactly what docs/assets/app.js calls for them: fpl_owner_data and lock_fpl_transfers /
 -- unlock_fpl_transfers, which answer only the owner (20261004_fpl_owner_login.sql), and
 -- delete_my_account. Until 2026-10-04 this file gave the passphrase versions of the first three
 -- to anon as well; that is how it was first run.
--- Today anon and authenticated hold every privilege on almost every table, so row level security with no policies is the only
+-- Before it, anon and authenticated held every privilege on almost every table, so row level security with no policies is the only
 -- barrier, and a new table gets the same grants the moment it is created.
 -- 1. Row level security on the eight tables that db/schema.sql never gave it (live already has it).
 -- 2. Take every table, view, sequence and function grant in public away from anon, authenticated
