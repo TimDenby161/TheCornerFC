@@ -1287,6 +1287,14 @@ signed in in that browser (README: Accounts).
   4. Run `db/migrations/20261004_fpl_owner_login.sql` (applied 2026-10-04, also in `db/schema.sql`), then say whose sign-in is the owner's:
      `INSERT INTO fpl_team_owners VALUES (3996593, 'owner@example.com') ON CONFLICT (entry_id) DO UPDATE SET email = EXCLUDED.email;`
 
+### The site's data in the database (step 1)
+
+`site.docs` holds a copy of every file in `docs/data`, one row per file, keyed by its path without `.json` (`matches`, `clubs/42`). `export.mirror_site_docs` writes it after every export, `nations` and `matchday` run: only rows whose file changed are written, rows whose file has gone are deleted, in one transaction. A read-only run, or a database without the table, skips it with a log line.
+
+- The table is in the `site` schema, which the Data API doesn't expose. The only way to read it is `site_doc(key)`, which returns one row's JSON and never a row marked `paid`.
+- **The site still reads the files.** Nothing calls `site_doc` yet.
+- Run `db/migrations/20261004_site_docs.sql` in the SQL editor (not applied yet; also in `db/schema.sql`). The checks are at the bottom of the file.
+
 ### Accounts
 
 Visitors can sign in with Google or with an email and password (Supabase Auth; **Sign in** in the
