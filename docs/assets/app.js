@@ -6109,30 +6109,58 @@ function route() {
 const pressOne = (wrap, attr, value) => document.querySelectorAll(`${wrap} [data-${attr}]`)
   .forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === value)));
 const oneOf = (wrap, attr, value) => value != null && [...document.querySelectorAll(`${wrap} [data-${attr}]`)].some((b) => b.dataset[attr] === value);
+// A competition-menu choice from a link (c=39, c=c:England, c=r:Scandinavia, c=e:all): a league,
+// country, region or cup group this site has. groups: the cup groups the tab's menu offers
+function knownFilter(f, groups) {
+  if (!f) return false;
+  const comps = state.data.competitions;
+  if (/^\d+$/.test(f)) return !!comps[f];
+  const kind = f[0], rest = f.slice(2);
+  if (f[1] !== ":") return false;
+  if (kind === "c") return Object.values(comps).some((c) => c.country.replace(/-/g, " ") === rest);
+  if (kind === "r") return REGIONS.includes(rest);
+  return groups.includes(kind) && (rest === "all" || (/^\d+$/.test(rest) && !!comps[rest]));
+}
+const filterQuery = (f) => (f !== "all" ? { c: f } : {});
 const TAB_QUERY = {
   matches: {
-    get: () => (state.date && state.date !== defaultDate() ? { d: state.date } : {}),
-    set: (q) => { if (/^\d{4}-\d\d-\d\d$/.test(q.d || "")) state.date = q.d; },
+    get: () => ({ ...filterQuery(state.matchFilter), ...(state.date && state.date !== defaultDate() ? { d: state.date } : {}) }),
+    set: (q) => {
+      if (knownFilter(q.c, "ei")) state.matchFilter = q.c;
+      if (!/^\d{4}-\d\d-\d\d$/.test(q.d || "")) return;
+      state.date = q.d;
+      // one competition is shown by round: the round on that day (or the next one after it)
+      const lid = matchSingleLeague();
+      const round = lid == null ? null : matchRounds(lid).find((r) => localDateStr(new Date(r.last)) >= q.d);
+      if (round) state.round = round.key;
+    },
     draw: () => renderMatches() },
   stats: {
-    get: () => (state.statsRange !== "30d" ? { r: state.statsRange } : {}),
-    set: (q) => { if (oneOf("#stats-ranges", "range", q.r)) state.statsRange = q.r; pressOne("#stats-ranges", "range", state.statsRange); },
+    get: () => ({ ...filterQuery(state.statsFilter), ...(state.statsRange !== "30d" ? { r: state.statsRange } : {}) }),
+    set: (q) => {
+      if (oneOf("#stats-ranges", "range", q.r)) state.statsRange = q.r;
+      pressOne("#stats-ranges", "range", state.statsRange);
+      if (knownFilter(q.c, "e")) { state.statsFilter = q.c; renderStatsFilters(); }
+    },
     draw: () => renderStats() },
   lineups: {
-    get: () => ({ ...(state.lineupSource !== "live" ? { src: state.lineupSource } : {}), ...(state.lineupRange !== "all" ? { r: state.lineupRange } : {}) }),
+    get: () => ({ ...filterQuery(state.lineupFilter), ...(state.lineupSource !== "live" ? { src: state.lineupSource } : {}), ...(state.lineupRange !== "all" ? { r: state.lineupRange } : {}) }),
     set: (q) => {
       if (oneOf("#lineup-source", "source", q.src)) state.lineupSource = q.src;
       if (oneOf("#lineup-ranges", "range", q.r)) state.lineupRange = q.r;
       pressOne("#lineup-source", "source", state.lineupSource); pressOne("#lineup-ranges", "range", state.lineupRange);
+      if (knownFilter(q.c, "e")) { state.lineupFilter = q.c; renderLineupFilters(); }
     } },
   bets: {
-    get: () => ({ ...(state.betStrategy !== "all" ? { s: state.betStrategy } : {}), ...(state.betMarket !== "all" ? { m: state.betMarket } : {}),
+    get: () => ({ ...filterQuery(state.betFilter), ...(state.betStrategy !== "all" ? { s: state.betStrategy } : {}), ...(state.betMarket !== "all" ? { m: state.betMarket } : {}),
       ...(state.betView !== "all" ? { v: state.betView } : {}) }),
     set: (q) => {
+      if (knownFilter(q.c, "e")) state.betFilter = q.c;
       if (oneOf("#bet-strategy", "strategy", q.s)) state.betStrategy = q.s;
       if (oneOf("#bet-market", "market", q.m)) state.betMarket = q.m;
       if (oneOf("#bet-view", "view", q.v)) state.betView = q.v;
       pressOne("#bet-strategy", "strategy", state.betStrategy); pressOne("#bet-market", "market", state.betMarket); pressOne("#bet-view", "view", state.betView);
+      renderBetFilters();
     },
     draw: () => { renderBetFilters(); renderBets(); } },
   nations: {
