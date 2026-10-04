@@ -1266,7 +1266,7 @@ signed in in that browser (README: Accounts).
      `SUPABASE.key` in `docs/assets/app.js`.
   3. Run `db/migrations/20261003_fpl_owner_docs.sql` (owner-only FPL data; applied 2026-10-03,
      also in `db/schema.sql`).
-  4. Run `db/migrations/20261004_fpl_owner_login.sql`, then say whose sign-in is the owner's:
+  4. Run `db/migrations/20261004_fpl_owner_login.sql` (applied 2026-10-04, also in `db/schema.sql`), then say whose sign-in is the owner's:
      `INSERT INTO fpl_team_owners VALUES (3996593, 'owner@example.com') ON CONFLICT (entry_id) DO UPDATE SET email = EXCLUDED.email;`
 
 ### Accounts
