@@ -112,6 +112,7 @@ def _xi_lines(vals):
 def export_site_data(conn, out_dir=OUT_DIR):
     """Build, validate and publish the static site export without clobbering old data."""
     _publish_export(lambda staged: _write_site_data(conn, staged), out_dir)
+    mirror_site_docs(conn, out_dir)
 
 
 MANIFEST = "manifest.json"
@@ -225,6 +226,44 @@ def store_owner_doc(conn, name, payload):
                     on conflict (name) do update set doc = excluded.doc, updated_at = excluded.updated_at""",
                  [name, json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"))])
     conn.commit()
+
+
+def mirror_site_docs(conn, out_dir=OUT_DIR):
+    """site.docs: a row for every published data file, keyed by its path without ".json"
+    (audit/db-api-plan.md, db/migrations/20261004_site_docs.sql). Step 1 of moving the site's data
+    off docs/data: the files are still what the site reads. Only rows whose file changed are
+    written, rows whose file has gone are deleted, and it is one transaction. Never fatal: a
+    read-only run, a database without the table or a failed write is logged and skipped.
+    Returns (written, deleted), or None when skipped."""
+    out_dir = Path(out_dir)
+    try:
+        config.require_db_write("mirror site docs")
+        files = {p.relative_to(out_dir).with_suffix("").as_posix(): p for p in sorted(out_dir.rglob("*.json"))}
+        if not files:
+            return None
+        stored = dict(conn.execute("select key, sha256 from site.docs").fetchall())
+        changed = []
+        for key, path in files.items():
+            raw = path.read_bytes()
+            sha = hashlib.sha256(raw).hexdigest()
+            if stored.get(key) != sha:
+                changed.append((key, raw.decode("utf-8"), sha))
+        gone = sorted(set(stored) - set(files))
+        with conn.cursor() as cur:
+            cur.executemany("""insert into site.docs (key, body, sha256, updated_at) values (%s, %s::jsonb, %s, now())
+                               on conflict (key) do update set body = excluded.body, sha256 = excluded.sha256,
+                                                               updated_at = excluded.updated_at""", changed)
+            if gone:
+                cur.execute("delete from site.docs where key = any(%s)", [gone])
+        conn.commit()
+        log.info("site.docs: %d written, %d deleted, %d in all", len(changed), len(gone), len(files))
+        return len(changed), len(gone)
+    except config.SafetyError as exc:
+        log.info("site.docs mirror skipped: %s", exc)
+    except Exception:
+        conn.rollback()         # leave the caller's connection usable
+        log.exception("site.docs mirror skipped")
+    return None
 
 
 def _write_json_file(path, payload, *, ensure_ascii=True):

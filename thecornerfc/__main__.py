@@ -159,6 +159,7 @@ def _execute(args):
         if args.command == "nations":
             export.export_nations(conn)
             export.write_manifest()
+            export.mirror_site_docs(conn)
             return 0
         if args.command == "suppress":
             from . import suppression
@@ -193,6 +194,7 @@ def _execute(args):
                 export.export_bets(conn)
                 export.export_injuries(conn)
                 export.write_manifest()
+                export.mirror_site_docs(conn)
                 return 0
             if args.command == "nightly":
                 failures = ingest.sync_nightly(api, conn, args.leagues)
