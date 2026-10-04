@@ -97,6 +97,17 @@
     padding: calc(env(safe-area-inset-top) + 8px) 14px 8px;
   }
   .app-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  /* One-off adjustments from app.js templates, which can't write style="" (the page's policy has
+     no 'unsafe-inline'). !important: they override the component's own rule, as style="" did. */
+  .u-mt0 { margin-top: 0 !important; } .u-mt4 { margin-top: 4px !important; } .u-mt6 { margin-top: 6px !important; }
+  .u-mt8 { margin-top: 8px !important; } .u-mt10 { margin-top: 10px !important; } .u-mt12 { margin-top: 12px !important; }
+  .u-mb8 { margin-bottom: 8px !important; } .u-mb10 { margin-bottom: 10px !important; } .u-mb12 { margin-bottom: 12px !important; }
+  .u-muted { color: var(--text-muted) !important; }
+  .u-sub { font-size: 14px !important; color: var(--text-muted) !important; }
+  .u-sidelink { font-size: 12px !important; color: var(--blue-text) !important; margin-left: 6px !important; }
+  .u-left { text-align: left !important; } .u-center { text-align: center !important; }
+  .u-inline { display: inline !important; } .u-w70 { width: 70px !important; }
+  .u-bold { font-weight: 700 !important; } .u-pointer { cursor: pointer !important; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .skip-link { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 8px 12px; border-radius: 8px;
     background: var(--surface-1); color: var(--blue-text); border: 1px solid var(--border); font-size: 14px; font-weight: 600;
@@ -421,7 +432,7 @@
   .dist-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 4px 0; font-variant-numeric: tabular-nums; }
   .dist-label { width: 88px; flex-shrink: 0; font-weight: 700; }
   .dist-bar-wrap { flex: 1; background: var(--chip-bg); border-radius: 4px; height: 10px; overflow: hidden; }
-  .dist-bar { height: 100%; border-radius: 4px; }
+  .dist-bar { display: block; height: 100%; border-radius: 4px; }
   .dist-pct { width: 44px; text-align: right; color: var(--text-secondary); font-weight: 600; }
 
   table.leaderboard { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
