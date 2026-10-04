@@ -608,7 +608,7 @@
   .bet-tag.warn { border-color: #f08a5a; color: #f08a5a; }
   .pos { color: var(--good-text); font-weight: 700; } .neg { color: var(--critical-text); font-weight: 700; }
   .bets-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-  #tips-top, #tips-bank, #tips-body { max-width: 640px; margin: 0 auto; }
+  #tips-top, #tips-body { max-width: 640px; margin: 0 auto; }
 
   #fpl-body, #efl-body { max-width: 760px; margin: 0 auto; }
   #fpl-body .stats-card, #efl-body .stats-card { margin-bottom: 12px; }
@@ -737,18 +737,6 @@
   .mt-details .mt-move { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); font-size: 13px; padding: 4px 0; }
   .mt-nm-cell { white-space: nowrap; }
   .mt-foot { margin: 0 2px 12px; }
-  .tips-bank { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 12px; align-items: end; margin-bottom: 10px !important;
-    padding: 12px 14px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; }
-  .tb-field, .tb-out { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-  .tb-input { display: flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; background: var(--page, var(--surface-1)); }
-  .tb-input:focus-within { border-color: var(--series-blue); }
-  .tb-input span { color: var(--text-muted); font-weight: 600; }
-  .tips-bank input, .tips-bank select { font: inherit; font-size: 14px; color: var(--text-primary); min-width: 0; height: 32px; }
-  .tips-bank input { border: 0; background: none; outline: none; width: 100%; font-variant-numeric: tabular-nums; }
-  .tips-bank select { border: 1px solid var(--border); border-radius: 6px; background: var(--surface-1); padding: 0 6px; }
-  .tb-stake { font-size: 22px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .tb-total { font-size: 11px; color: var(--text-secondary); }
-  @media (max-width: 520px) { .tips-bank { grid-template-columns: 1fr 1fr; } .tb-out { grid-column: 1 / -1; } }
   .tip-day { display: flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 800; margin: 22px 0 2px;
     cursor: pointer; user-select: none; }
   .tip-day:first-of-type { margin-top: 6px; }

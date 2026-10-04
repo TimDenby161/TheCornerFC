@@ -1009,7 +1009,7 @@ def export_bets(conn, out_dir=OUT_DIR):
     bets = [{
         "id": r[0], "strategy": r[1], "fixture": r[2], "kickoff": r[3].isoformat(), "league": r[4],
         "market": r[5], "selection": r[6], "model_prob": _r(r[7], 3), "fair_prob": _r(r[8], 3),
-        "odds": float(r[9]), "bookmaker": r[10], "edge": _r(r[11], 3),
+        "odds": float(r[9]), "edge": _r(r[11], 3),
         "closing_odds": float(r[12]) if r[12] is not None else None, "clv": _r(r[13], 4),
         "result": r[14], "profit": float(r[15]) if r[15] is not None else None,
         "home": r[18], "away": r[19], "home_id": r[23], "away_id": r[24], "score": f"{r[20]}-{r[21]}" if r[20] is not None else None,
@@ -1029,7 +1029,7 @@ def export_bets(conn, out_dir=OUT_DIR):
     # No generation timestamp, so the file only changes (and gets committed) when bets do
     _write_json_file(out_dir / "bets.json", {
         "last_change": last.isoformat() if last else None,
-        "rules": {"min_edge": MIN_EDGE, "max_odds": MAX_ODDS, "bookmaker": "Bet365", "stake": 1, "stake_gbp": BET_STAKE_GBP, "bank": BET_BANK_GBP, "cautious_rule": CAUTIOUS_RULE},
+        "rules": {"min_edge": MIN_EDGE, "max_odds": MAX_ODDS, "stake": 1, "stake_gbp": BET_STAKE_GBP, "bank": BET_BANK_GBP, "cautious_rule": CAUTIOUS_RULE},
         "summary": summary, "bets": bets,
     })
     log.info("Exported %d paper bets", len(bets))
