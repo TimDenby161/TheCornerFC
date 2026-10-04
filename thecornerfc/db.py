@@ -2,7 +2,7 @@ from pathlib import Path
 
 import psycopg
 
-from . import config
+from . import config, suppression
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "db" / "schema.sql"
 
@@ -34,6 +34,7 @@ def upsert(conn, table, rows, key_cols, update_cols=None, touch_updated_at=True)
 
     Pass update_cols=[] to do nothing on conflict.
     """
+    rows = suppression.keep_rows(rows)      # people removed on request are never stored again
     if not rows:
         return 0
     config.require_db_write(f"upsert into {table}")

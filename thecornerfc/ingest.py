@@ -7,7 +7,7 @@ from psycopg.types.json import Jsonb
 from .lineup_snapshots import capture_official
 from .paper_evidence import record_odds
 from .health import monitored, CURRENT
-from . import betting, config, fantasy_snapshots, positions, squad_evidence
+from . import betting, config, fantasy_snapshots, positions, squad_evidence, suppression
 from .api import QuotaExhausted
 from .db import upsert
 from .player_ratings import compute_player_ratings
@@ -640,7 +640,7 @@ def sync_lineup_coaches(api, conn, batch_size=20):
             capture_official(conn, f)
             for lu in f.get("lineups") or []:
                 coach, team = (lu.get("coach") or {}).get("id"), (lu.get("team") or {}).get("id")
-                if coach and team:
+                if coach and team and coach not in suppression.load()["coaches"]:
                     rows.append((coach, f["fixture"]["id"], team))
         if rows:
             with conn.cursor() as cur:

@@ -62,6 +62,11 @@ def main(argv=None):
     sub.add_parser("nations", help="Rebuild the national team ranking (docs/data/nations.json) only")
     sub.add_parser("player-ratings", help="Recalculate player ranks and team XI ratings (backdated)")
     sub.add_parser("matchday", help="Pre-kickoff odds and injuries, late paper bets, settle bets")
+    suppress = sub.add_parser("suppress", help="Remove a person on request and keep them out (README: Removing a person)")
+    who = suppress.add_mutually_exclusive_group(required=True)
+    who.add_argument("--player", type=int, help="API-Football player id")
+    who.add_argument("--coach", type=int, help="API-Football coach id")
+    suppress.add_argument("--apply", action="store_true", help="Delete and add to suppressed.json (without it: count only)")
     sub.add_parser("fantasy", help="Snapshot fantasy v1.1 expected points for upcoming Premier League fixtures")
 
     fpl = sub.add_parser("fpl", help="Fantasy Premier League evidence (off unless FPL_CAPTURE_ENABLED)")
@@ -152,6 +157,16 @@ def _execute(args):
             return 0
         if args.command == "nations":
             export.export_nations(conn)
+            export.write_manifest()
+            return 0
+        if args.command == "suppress":
+            from . import suppression
+            kind, person = ("player", args.player) if args.player is not None else ("coach", args.coach)
+            if args.apply:
+                config.require_db_write("suppress")
+            for table, count, what in suppression.remove(conn, kind, person, apply=args.apply):
+                print(f"{table}: {count} row(s) {what}")
+            print("Done: now run the export." if args.apply else "Nothing changed. Add --apply to delete and add to suppressed.json.")
             return 0
         if args.command == "fantasy":
             from . import fantasy_snapshots
@@ -176,12 +191,13 @@ def _execute(args):
                 matchday.run_matchday(api, conn)
                 export.export_bets(conn)
                 export.export_injuries(conn)
+                export.write_manifest()
                 return 0
             if args.command == "nightly":
                 failures = ingest.sync_nightly(api, conn, args.leagues)
                 logging.info("Nightly sync finished with %d failed step(s)", failures)
-                from . import accounts
-                accounts.prune_safely(conn)
+                from . import retention
+                retention.run(conn)
                 return 1 if failures else 0
 
             if args.target == "national":

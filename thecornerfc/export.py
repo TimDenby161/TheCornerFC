@@ -4,6 +4,7 @@ The nightly GitHub Action runs this after the sync and commits docs/data/ if it 
 so the site never needs database credentials.
 """
 import html
+import hashlib
 import json
 import logging
 import math
@@ -113,6 +114,22 @@ def export_site_data(conn, out_dir=OUT_DIR):
     _publish_export(lambda staged: _write_site_data(conn, staged), out_dir)
 
 
+MANIFEST = "manifest.json"
+
+
+def write_manifest(out_dir=OUT_DIR):
+    """data/manifest.json: a short content hash of each top-level data file. The site asks for
+    file.json?v=<hash> and keeps its copy until the hash changes, so a deploy that didn't touch a
+    file doesn't make every visitor download it again (GitHub Pages changes every file's ETag on
+    every deploy). Anything that writes a top-level data file must call this afterwards, and the
+    workflow that commits it must commit this file too (tests/test_manifest.py)."""
+    out_dir = Path(out_dir)
+    files = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()[:16]
+             for p in sorted(out_dir.glob("*.json")) if p.name != MANIFEST}
+    _write_json_file(out_dir / MANIFEST, {"files": files})
+    return files
+
+
 def _publish_export(build, out_dir=OUT_DIR):
     out_dir = Path(out_dir)
     parent = out_dir.parent
@@ -123,6 +140,7 @@ def _publish_export(build, out_dir=OUT_DIR):
         for rel in CARRIED_FILES:
             if (out_dir / rel).exists() and not (staged / rel).exists():
                 shutil.copy2(out_dir / rel, staged / rel)
+        write_manifest(staged)
         validate_export(staged, previous_dir=out_dir if out_dir.exists() else None)
         _replace_export(staged, out_dir)
         staged = None

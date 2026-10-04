@@ -11,6 +11,15 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>The Corner FC</title>
 <meta name="description" content="Club strength ratings, projected scores and model win/draw/loss probabilities.">
+<!-- Link previews. One card for the whole site: addresses after # never reach the service that builds it -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="The Corner FC">
+<meta property="og:title" content="The Corner FC">
+<meta property="og:description" content="Club strength ratings, projected scores and model win/draw/loss probabilities.">
+<meta property="og:url" content="https://thecornerfc.com/">
+<meta property="og:image" content="https://thecornerfc.com/icon-512.png">
+<meta property="og:image:alt" content="The Corner FC">
+<meta name="twitter:card" content="summary">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
@@ -22,32 +31,37 @@
 
 </head>
 <body data-tab="table" class="booting">
+<a class="skip-link" href="#main" id="skip-link">Skip to content</a>
 
 <header>
   <div class="app-bar">
     <button type="button" class="menu-btn" id="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="main-menu">&#9776;</button>
-    <h1><span class="brand-mark" aria-hidden="true"></span><span>The Corner FC</span></h1>
-    <span class="app-title" id="app-title">Clubs</span>
+    <p class="brand"><span class="brand-mark" aria-hidden="true"></span><span>The Corner FC</span></p>
+    <h1 class="app-title" id="app-title">Clubs</h1>
     <button type="button" class="account-btn" id="account-btn" aria-haspopup="dialog">Sign in</button>
   </div>
-  <nav class="tabs" id="main-menu" role="tablist" aria-orientation="vertical">
-    <button role="tab" data-tab="table" data-view="clubs" aria-selected="true">Clubs</button>
-    <button role="tab" data-tab="table" data-view="players" aria-selected="false">Players</button>
-    <button role="tab" data-tab="leagues" aria-selected="false">Leagues</button>
-    <button role="tab" data-tab="nations" aria-selected="false">Nations</button>
-    <button role="tab" data-tab="matches" aria-selected="false">Matches</button>
-    <button role="tab" data-tab="stats" aria-selected="false">Stats</button>
-    <button role="tab" data-tab="lineups" aria-selected="false">Line-up record</button>
-    <button role="tab" data-tab="tips" aria-selected="false">Model vs Market</button>
-    <button role="tab" data-tab="bets" aria-selected="false">Paper Simulation</button>
-    <button role="tab" data-tab="fpl" id="fpl-tab" aria-selected="false" hidden>FPL</button>
-    <button role="tab" data-tab="myteam" id="myteam-tab" aria-selected="false" hidden>My FPL team</button>
-    <button role="tab" data-tab="efl" aria-selected="false">EFL Fantasy</button>
+  <nav class="tabs" id="main-menu" aria-label="Main">
+    <button type="button" data-tab="table" data-view="clubs" aria-current="page">Clubs</button>
+    <button type="button" data-tab="table" data-view="players">Players</button>
+    <button type="button" data-tab="leagues">Leagues</button>
+    <button type="button" data-tab="nations">Nations</button>
+    <button type="button" data-tab="matches">Matches</button>
+    <button type="button" data-tab="stats">Stats</button>
+    <button type="button" data-tab="lineups">Line-up record</button>
+    <button type="button" data-tab="tips">Model vs Market</button>
+    <button type="button" data-tab="bets">Paper Simulation</button>
+    <button type="button" data-tab="fpl" id="fpl-tab" hidden>FPL</button>
+    <button type="button" data-tab="myteam" id="myteam-tab" hidden>My FPL team</button>
+    <button type="button" data-tab="efl">EFL Fantasy</button>
   </nav>
   <div class="menu-backdrop" id="menu-backdrop" hidden></div>
 </header>
 
-<main>
+<main id="main" tabindex="-1">
+  <div class="tab-head" id="tab-head" hidden>
+    <p class="tab-intro" id="tab-intro"></p>
+    <details class="tab-key" id="tab-key"><summary>What the numbers mean</summary><dl id="tab-key-list"></dl></details>
+  </div>
   <div class="empty-state" id="boot-status" role="status">Loading…</div>
   <section class="panel" data-tab="matches" data-active="false">
     <div class="match-bar">
