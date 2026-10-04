@@ -27,6 +27,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Corner FC">
+<script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/styles.css">
 
 </head>
@@ -53,6 +54,13 @@
     <button type="button" data-tab="fpl" id="fpl-tab" hidden>FPL</button>
     <button type="button" data-tab="myteam" id="myteam-tab" hidden>My FPL team</button>
     <button type="button" data-tab="efl" id="efl-tab" hidden>EFL Fantasy</button>
+    <label class="theme-pick">Theme
+      <select id="theme-select">
+        <option value="">Device</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
   </nav>
   <div class="menu-backdrop" id="menu-backdrop" hidden></div>
 </header>

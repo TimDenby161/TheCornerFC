@@ -1,5 +1,16 @@
 "use strict";
 
+// GitHub Pages can't send frame-ancestors, so the page checks for itself: inside another site's frame
+// it draws a link to the real site and nothing else, so no sign-in box or owner control can be clicked there
+if (window.top !== window.self) {
+  const link = Object.assign(document.createElement("a"), { href: "https://thecornerfc.com/", target: "_top", rel: "noopener", textContent: "Open The Corner FC" });
+  const p = document.createElement("p");
+  p.className = "framed";
+  p.append(link);
+  document.body.replaceChildren(p);
+  throw new Error("The Corner FC doesn't run inside another site's frame");
+}
+
 // Competition ids from API-Football. Chips shown on the first row; the rest go under "more".
 const PRIMARY_COMPS = [
   { id: "eng", label: "English", ids: [39, 40, 41, 42, 43, 50, 51, 45, 46, 47, 48, 528] },
@@ -2442,7 +2453,7 @@ function renderBets() {
   };
   body.innerHTML = `
     ${GAMBLING_NOTE}
-    <div class="sim-banner">Simulated: paper bets only, no real money staked. Every figure here is a simulation at recorded prices.</div>
+    <div class="sim-banner">Simulated: paper bets only, no real money staked. Every figure here is a simulation at recorded prices. Past simulated results don't predict future results.</div>
     <div class="stats-grid">
       ${card("Simulated bank", gbp(bank + s.profit), `Started with ${gbp(bank)}${s.pending ? ` · ${gbp(s.atRisk)} on ${s.pending} pending` : ""}`)}
       ${card("Simulated profit", s.settled ? gbp(s.profit, true) : "–", s.staked ? `${gbp(s.staked)} staked · return ${(s.roi > 0 ? "+" : "") + (100 * s.roi).toFixed(1)}%` : `${gbp(stake)} on every bet`)}
@@ -2502,7 +2513,7 @@ function tipsOverview() {
   tiles.push(tile(s.settled ? s.profit >= 0 : null, s.settled ? `${s.roi > 0 ? "+" : ""}${(100 * s.roi).toFixed(1)}% return` : "No data",
     "Simulated profit", s.settled ? `${s.profit >= 0 ? "+" : "−"}${gbp(Math.abs(s.profit))}` : "–",
     [["Won", s.settled ? `${s.wins} of ${s.settled}` : "–"], ["Strike rate", s.settled ? pct(s.wins / s.settled) : "–"]]));
-  return `<div class="tips-overview">${tiles.join("")}</div>`;
+  return `<div class="tips-overview">${tiles.join("")}</div><div class="stats-note past-note">Past simulated results don't predict future results.</div>`;
 }
 
 // The paper bank box was removed on 2026-10-04: clear what it kept in this browser.
@@ -6058,6 +6069,13 @@ function setMenu(open) {
 $("#menu-btn").addEventListener("click", () => setMenu(!document.body.classList.contains("menu-open")));
 $("#menu-backdrop").addEventListener("click", () => setMenu(false));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
+// Theme: Device (nothing stored), Light or Dark. assets/theme.js applies the stored choice before the page draws
+$("#theme-select").value = ["light", "dark"].includes(storedText("theme")) ? storedText("theme") : "";
+$("#theme-select").addEventListener("change", (e) => {
+  storeText("theme", e.target.value);
+  if (e.target.value) document.documentElement.dataset.theme = e.target.value;
+  else delete document.documentElement.dataset.theme;
+});
 function route() {
   const club = location.hash.match(/^#\/club\/(\d+)(?:\/(\w+))?$/);
   const player = location.hash.match(/^#\/player\/(\d+)(?:\/(\w+))?$/);

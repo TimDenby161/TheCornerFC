@@ -62,6 +62,16 @@ class UsageTests(unittest.TestCase):
             with self.assertRaises(config.SafetyError):
                 client.get('fixtures')
 
+    def test_prune_drops_only_calls_older_than_the_window(self):
+        usage.record('fixtures', {}, 200, 1, 500, 0.1, True, None)
+        with usage.connect() as conn:
+            conn.execute("INSERT INTO api_calls SELECT NULL,'2026-01-01T00:00:00+00:00',endpoint,parameter_hash,workflow,"
+                         "run_id,process_id,command,http_status,records_returned,quota_remaining,duration_ms,success,error_type FROM api_calls")
+        self.assertEqual(usage.prune(), 1)
+        self.assertEqual(usage.prune(), 0)
+        with usage.connect() as conn:
+            self.assertEqual(conn.execute('SELECT count(*) FROM api_calls').fetchone()[0], 1)
+
     def test_pagination_counts_each_page(self):
         client = api.ApiFootball(api_key='secret', min_interval=0)
         client.session.get = Mock(side_effect=[
