@@ -180,6 +180,8 @@ def _execute(args):
             if args.command == "nightly":
                 failures = ingest.sync_nightly(api, conn, args.leagues)
                 logging.info("Nightly sync finished with %d failed step(s)", failures)
+                from . import accounts
+                accounts.prune_safely(conn)
                 return 1 if failures else 0
 
             if args.target == "national":
