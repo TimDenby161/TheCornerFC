@@ -475,7 +475,9 @@ A line-up adjustment (the strength of the starting XI against normal) was backte
 
 ## EFL Fantasy
 
-The **EFL Fantasy** tab predicts [Fantasy EFL](https://fantasy.efl.com) points for Championship, League One and League Two players and clubs over the next six gameweeks (`thecornerfc/efl_fantasy.py`, exported nightly as `docs/data/efl_predictions.json`). Nothing is read from the Fantasy EFL site.
+The **EFL Fantasy** tab predicts [Fantasy EFL](https://fantasy.efl.com) points for Championship, League One and League Two players and clubs over the next six gameweeks (`thecornerfc/efl_fantasy.py`). Nothing is read from the Fantasy EFL site.
+
+**Owner only since 2026-10-04 (audit L11, owner's decision).** Fantasy EFL's terms bar commercial use of the game (cl. 2.5, 8.1.7), so the tab is shown only to the signed-in owner, like the FPL tabs. The nightly export writes `efl_predictions` to `fpl_owner_docs` in Supabase, never `docs/data`, and the page reads it through `fpl_owner_data`. Older copies of `docs/data/efl_predictions.json` remain in git history.
 
 - **The football** is the FPL model's (v1.6 parameters) run on these three leagues' own matches, without FPL's inputs: expected minutes, goals, penalties, assists, clean sheets, goals conceded, saves and cards.
 - **Fantasy EFL's extra actions** (tackles, blocks, interceptions, key passes and shots on target) use each player's own rates per 90 over the last year, pulled toward his role group's. API-Football has no clearances, so defenders get a fixed rate for their role.

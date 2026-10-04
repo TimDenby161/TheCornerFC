@@ -25,7 +25,7 @@ secret is in the site's files.
 | `API_FOOTBALL_KEY` | nightly, match day and both backfill workflows | API-Football requests on the paid plan (quota and billing) |
 | `DATABASE_URL` | all five workflows | Write access to the Supabase Postgres database |
 | `GITHUB_TOKEN` | all workflows (automatic) | Push to this repo: each job gets only `contents: write`, and the workflow default is no permissions |
-| The owner's sign-in (Google account or site password) | the owner, through Sign in | Reading the owner-only FPL pages, and saving or undoing that FPL entry's locked-in transfers. Nothing else |
+| The owner's sign-in (Google account or site password) | the owner, through Sign in | Reading the owner-only FPL and EFL Fantasy pages, and saving or undoing that FPL entry's locked-in transfers. Nothing else |
 
 Locally, `.env` holds the same names and is git-ignored. Local runs default to a read-only
 database role and no API calls (README: Local development safety).

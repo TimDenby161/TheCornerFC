@@ -4,8 +4,11 @@ import math
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
-from thecornerfc import efl_fantasy as ef
+from thecornerfc import efl_fantasy as ef, export
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def comps(**kw):
@@ -88,6 +91,28 @@ class EflInputTests(unittest.TestCase):
         self.assertEqual(rates[1]['clearances'], ef.CLEARANCES_PER_90['CB'])
         self.assertGreater(rates[2]['tackles'], 0)                     # pulled up from his 0
         self.assertLess(rates[2]['tackles'], priors['CB']['tackles'])
+
+
+class OwnerOnlyTest(unittest.TestCase):
+    """Audit L11 (owner's decision 2026-10-04): the predictions go to fpl_owner_docs, never docs/data."""
+
+    def test_export_stores_the_predictions_for_the_owner_and_writes_no_file(self):
+        conn = mock.MagicMock()
+        doc = {'players': [[1]], 'clubs': []}
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(ef, 'payload', return_value=doc), \
+                mock.patch.object(export, 'store_owner_doc') as store:
+            export.export_efl_fantasy(conn, Path(d))
+            self.assertEqual(list(Path(d).iterdir()), [])
+        store.assert_called_once_with(conn, 'efl_predictions', doc)
+
+    def test_site_has_no_public_efl_predictions(self):
+        self.assertFalse((ROOT / 'docs/data/efl_predictions.json').exists())
+        self.assertNotIn('efl_predictions.json', (ROOT / 'docs/data/manifest.json').read_text())
+        app = (ROOT / 'docs/assets/app.js').read_text()
+        self.assertNotIn('data/efl_predictions.json', app)
+        self.assertIn('const OWNER_TABS = new Set(["fpl", "myteam", "efl"]);', app)
+        self.assertIn('state.owner.docs.efl_predictions', app)
+        self.assertIn('<button type="button" data-tab="efl" id="efl-tab" hidden>', (ROOT / 'docs/index.html').read_text())
 
 
 if __name__ == '__main__':

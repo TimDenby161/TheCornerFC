@@ -179,7 +179,7 @@ def _r(x, n=2):
 
 
 def payload(conn, now=None, doc=None, gameweeks=GAMEWEEKS):
-    """efl_predictions.json: expected points for every player and club in the next gameweeks, or
+    """efl_predictions (owner only, export.store_owner_doc): expected points for every player and club in the next gameweeks, or
     None when no fixtures are coming up. SELECT only."""
     from .predictions import UPCOMING_STATUSES
     now = now or datetime.now(timezone.utc)

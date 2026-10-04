@@ -214,8 +214,9 @@ def _read_json(path):
 
 
 def store_owner_doc(conn, name, payload):
-    """Owner-only FPL data (audit L3, owner's decision 2026-10-02): FPL's terms don't allow its data
-    to be republished, so fpl_predictions and fpl_team go to fpl_owner_docs, never docs/data. The
+    """Owner-only fantasy data (audit L3, owner's decision 2026-10-02): FPL's terms don't allow its
+    data to be republished, so fpl_predictions and fpl_team go to fpl_owner_docs, never docs/data.
+    efl_predictions joined them on 2026-10-04 (audit L11, owner's decision). The
     site reads them through fpl_owner_data, which answers only the signed-in owner
     (db/migrations/20261004_fpl_owner_login.sql). Raises if the table is missing or the connection
     is read-only: callers treat that as a skipped export."""
@@ -1971,13 +1972,14 @@ def export_fantasy_predictions(conn, doc=None):
 
 
 def export_efl_fantasy(conn, out_dir=OUT_DIR):
-    """efl_predictions.json: expected Fantasy EFL points for Championship, League One and League Two
-    players and clubs (efl_fantasy.py). Not critical: a failure skips it."""
+    """efl_predictions: expected Fantasy EFL points for Championship, League One and League Two
+    players and clubs (efl_fantasy.py). Owner only (store_owner_doc): nothing is written to out_dir.
+    Not critical: a failure skips it."""
     try:
         from . import efl_fantasy
         doc = efl_fantasy.payload(conn)
         if doc:
-            _write_json_file(Path(out_dir) / "efl_predictions.json", doc)
+            store_owner_doc(conn, "efl_predictions", doc)
     except Exception:
         conn.rollback()
         log.exception("EFL fantasy export skipped")
