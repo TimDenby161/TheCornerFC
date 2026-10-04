@@ -1291,6 +1291,9 @@ answer only the sign-in named in `fpl_team_owners` (My FPL team, below). The cod
 - **Deleting an account.** Account → Delete account calls `delete_my_account()`
   (`db/migrations/20261004_delete_my_account.sql`), which removes the caller's own row from
   Supabase Auth and nothing else.
+- **Retention.** The nightly run deletes email sign-ups never confirmed within 7 days
+  (`thecornerfc/accounts.py`; the privacy page promises the same). Confirmed accounts are kept
+  until their owner deletes them.
 - **Local preview.** `python3 -m http.server 8000 --directory docs`, then `http://localhost:8000`.
 
 ### Fantasy expected points (v1.1, evidence only)
