@@ -126,7 +126,15 @@
     appearance: none; border: none; background: transparent; cursor: pointer; color: var(--text-primary);
     font-size: 20px; line-height: 1; padding: 4px 6px; margin: -4px 0 -4px -6px; border-radius: 6px;
   }
-  .app-title { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+  .app-title { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text-secondary);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .account-btn {
+    appearance: none; flex: none; border: 1px solid var(--border); background: var(--chip-bg); cursor: pointer;
+    color: var(--text-secondary); font-family: inherit; font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+  }
+  .account-btn:hover { color: var(--text-primary); }
+  .account-btn:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
   .menu-backdrop { position: fixed; inset: 0; z-index: 1; background: rgba(0,0,0,0.45); }
   .menu-backdrop[hidden] { display: none; }
   @media (min-width: 760px) {
@@ -135,7 +143,8 @@
       border-bottom: none; border-right: 1px solid var(--border);
       padding: calc(env(safe-area-inset-top) + 16px) 12px 16px; overflow-y: auto;
     }
-    header .app-bar { margin: 2px 4px 16px; }
+    header .app-bar { margin: 2px 4px 16px; flex-wrap: wrap; }
+    .account-btn { flex: 1 0 100%; margin-top: 6px; border-radius: 8px; padding: 8px 12px; }
     .menu-btn, .app-title, .menu-backdrop { display: none; }
     body { padding-left: 220px; }
   }
@@ -528,6 +537,22 @@
     font-weight: 700; font-size: 15px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .modal-close { appearance: none; border: none; background: transparent; color: var(--text-muted);
     font-size: 22px; line-height: 1; padding: 0 4px; cursor: pointer; }
+  /* Account box: Google's button keeps Google's own colours in both themes */
+  .google-btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; cursor: pointer;
+    font: inherit; font-size: 14px; font-weight: 600; padding: 9px 14px; border-radius: 8px;
+    background: #fff; color: #1f1f1f; border: 1px solid #747775; }
+  .google-btn:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
+  .account-or { display: flex; align-items: center; gap: 10px; margin: 12px 0; color: var(--text-muted); font-size: 12px; }
+  .account-or::before, .account-or::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+  .account-form label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .account-form .table-search { display: block; margin-top: 4px; }
+  .account-form .mt-btn, .account-out { width: 100%; }
+  .account-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: 12px; font-size: 13px; }
+  .account-text { font-size: 14px; line-height: 1.45; margin: 0 0 12px; overflow-wrap: anywhere; }
+  .mt-btn.account-danger { background: #b3261e; }
+  #account-msg { font-size: 13px; margin-top: 10px; }
+  #account-msg:empty { display: none; }
+  #account-msg.bad { color: var(--critical-text); }
   .team-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; margin-bottom: 12px; }
   .team-stat { background: var(--chip-bg); border-radius: 8px; padding: 8px; text-align: center; }
   .team-stat-label { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }

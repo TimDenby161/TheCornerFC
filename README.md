@@ -1143,9 +1143,11 @@ by JavaScript and was not retrievable for review. Consequences here:
 - **Owner's decision (2026-10-02, audit L3 / P2 (a)):** FPL data is no longer public. FPL's own
   terms (cl. 28(d), 29) forbid republishing it. The FPL predictions and My FPL team are shown to
   the owner only. The export and `fpl team` write them to `fpl_owner_docs` in Supabase (never
-  `docs/data`), and the page reads them through `fpl_owner_data`, which checks the owner's
-  passphrase (`db/migrations/20261003_fpl_owner_docs.sql`). The FPL tab's model validation
-  (`fpl.json`) stays public: it uses no FPL data. Fetching FPL still breaches cl. 28(d); the
+  `docs/data`), and the page reads them through `fpl_owner_data`, which answers only when
+  the visitor is signed in as the owner (`db/migrations/20261004_fpl_owner_login.sql`; a
+  passphrase until 2026-10-04). The FPL tab's model validation
+  (`fpl.json`) uses no FPL data and is still published, but since 2026-10-04 the FPL and My FPL
+  team tabs are in the menu for the signed-in owner only. Fetching FPL still breaches cl. 28(d); the
   `FPL_CAPTURE_ENABLED` kill switch remains.
   - The nightly workflow sets `FPL_CAPTURE_ENABLED=true` for its "Capture FPL state" step
     (`fpl capture` then `fpl results`). That step may fail without stopping the export.
@@ -1226,8 +1228,8 @@ says when to play each chip left. **Owner's decision, 2026-09-30:** read FPL's m
 for this entry (`entry/{id}/`, `entry/{id}/history/`, `entry/{id}/transfers/`,
 `entry/{id}/event/{gw}/picks/`) and show the squad, plan and chip advice publicly. It's a new FPL
 source under the licensing notes above, and no other entry is read. Since 2026-10-02 the page is
-for the owner only (see the licensing notes): its menu entry appears once the passphrase has been
-entered in that browser.
+for the owner only (see the licensing notes): its menu entry, and the FPL tab's, appear once the owner has
+signed in in that browser (README: Accounts).
 
 - `python -m thecornerfc fpl team` (in the FPL update and nightly workflows, after the export)
   stores `fpl_team` in `fpl_owner_docs`: the squad after any transfers already made for the next
@@ -1250,21 +1252,46 @@ entered in that browser.
   week's moves. The page then plans from the squad after them, until the next FPL update reads
   the real transfers from FPL (FPL's squad wins). The page carries Supabase's public anon key
   (`SUPABASE` in `app.js`), and CSP `connect-src` allows only this project.
-  `db/migrations/20260930_fpl_team_locks.sql` limits anon to calling
-  `lock_fpl_transfers` / `unlock_fpl_transfers` (and, until `20261003_fpl_owner_docs.sql`, reading
-  `fpl_team_locks`; the lock-ins now come back with `fpl_owner_data`). Both are SECURITY DEFINER and check a bcrypt
-  hash of the owner's passphrase; 10 wrong passphrases lock the entry out for an hour. The same
-  migration revokes anon's read of the `upcoming_predictions` view, since views skip RLS.
+  `lock_fpl_transfers` / `unlock_fpl_transfers` and `fpl_owner_data` (which returns the lock-ins)
+  are SECURITY DEFINER, can be called by signed-in visitors only, and do nothing unless the
+  caller's confirmed email address is the one in `fpl_team_owners` for the entry
+  (`db/migrations/20261004_fpl_owner_login.sql`; before 2026-10-04 they checked a passphrase).
+  `20260930_fpl_team_locks.sql` also revokes anon's read of the `upcoming_predictions` view,
+  since views skip RLS.
 
   One-time setup:
   1. Run `db/migrations/20260930_fpl_team_locks.sql` in the Supabase SQL editor (it's also in
      `db/schema.sql`).
-  2. Set the passphrase there, with one you choose:
-     `INSERT INTO fpl_team_keys VALUES (3996593, extensions.crypt('your passphrase', extensions.gen_salt('bf'))) ON CONFLICT (entry_id) DO UPDATE SET key_hash = EXCLUDED.key_hash;`
-  3. Put the project's anon (or publishable) key from Supabase → Project Settings → API Keys into
+  2. Put the project's anon (or publishable) key from Supabase → Project Settings → API Keys into
      `SUPABASE.key` in `docs/assets/app.js`.
-  4. Run `db/migrations/20261003_fpl_owner_docs.sql` (owner-only FPL data; applied 2026-10-03,
+  3. Run `db/migrations/20261003_fpl_owner_docs.sql` (owner-only FPL data; applied 2026-10-03,
      also in `db/schema.sql`).
+  4. Run `db/migrations/20261004_fpl_owner_login.sql`, then say whose sign-in is the owner's:
+     `INSERT INTO fpl_team_owners VALUES (3996593, 'owner@example.com') ON CONFLICT (entry_id) DO UPDATE SET email = EXCLUDED.email;`
+
+### Accounts
+
+Visitors can sign in with Google or with an email and password (Supabase Auth; **Sign in** in the
+header). The only thing an account unlocks is the owner's: the FPL predictions and My FPL team
+answer only the sign-in named in `fpl_team_owners` (My FPL team, below). The code is the "accounts" section of `docs/assets/app.js`.
+
+- **Library.** `docs/assets/lib/supabase-js-2.117.2.js` is `dist/umd/supabase.js` from the npm
+  package `@supabase/supabase-js` 2.117.2, unchanged (the page's policy allows scripts from this
+  site only). It is fetched only when the sign-in box is opened or a visitor is already signed
+  in. To update it: `npm pack @supabase/supabase-js@<version>`, copy that file in under the new
+  name, and change `AUTH_LIB` in `app.js` and the name and hash in `tests/test_accounts.py`.
+- **Supabase settings** (Authentication): Google and Email providers on, with Confirm email;
+  Site URL `https://thecornerfc.com`; Redirect URLs `https://thecornerfc.com/**` and the local
+  preview address; custom SMTP for the emails. Google's OAuth client lives in the Google Cloud
+  project "The Corner FC"; its secret is held by Supabase only.
+- **Email links.** Supabase's default links only work in the browser that asked for them. To
+  make them work anywhere, set these in Authentication → Emails → Templates:
+  Confirm signup `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email`,
+  Reset password `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery`.
+- **Deleting an account.** Account → Delete account calls `delete_my_account()`
+  (`db/migrations/20261004_delete_my_account.sql`), which removes the caller's own row from
+  Supabase Auth and nothing else.
+- **Local preview.** `python3 -m http.server 8000 --directory docs`, then `http://localhost:8000`.
 
 ### Fantasy expected points (v1.1, evidence only)
 
