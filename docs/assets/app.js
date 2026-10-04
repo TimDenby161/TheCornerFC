@@ -60,14 +60,39 @@ function rowsToObjects(fields, rows) {
   return rows.map((r) => Object.fromEntries(fields.map((f, i) => [f, r[i]])));
 }
 
-// Every data file: revalidated with the server each time ("no-cache": a 304 when it hasn't
-// changed, so the data is always current without downloading it again), and a file already on
-// its way is shared rather than fetched twice
+// Every data file is checked with the server each time, so the data is always current. GitHub
+// Pages changes every file's ETag on each deploy, so that check alone downloads everything again
+// after any deploy, changed or not. The top-level files are therefore asked for by content hash
+// (data/manifest.json, written by the export: file.json?v=<hash>) and the browser's copy is kept
+// for as long as the hash stands. The copy is hashed before it's trusted: one that doesn't match
+// (a deploy caught half way) is fetched afresh. Club, player, league and nation files aren't in
+// the manifest and are revalidated as before. A file already on its way is shared, not fetched twice.
 const inflight = new Map();
+let manifest = null;
+const dataManifest = () => manifest ||= fetch("data/manifest.json", { cache: "no-cache" })
+  .then((r) => (r.ok ? r.json() : null)).then((m) => m?.files || {}, () => ({}));
+const httpError = (path, r) => Object.assign(new Error(`${path}: ${r.status}`), { status: r.status });
+async function sha16(buf) {
+  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", buf));
+  return [...d.slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+async function fetchJson(path) {
+  const hash = (await dataManifest())[path.replace(/^data\//, "")];
+  if (!hash || !globalThis.crypto?.subtle) {
+    const r = await fetch(path, { cache: "no-cache" });
+    if (!r.ok) throw httpError(path, r);
+    return r.json();
+  }
+  for (const cache of ["force-cache", "reload"]) {
+    const r = await fetch(`${path}?v=${hash}`, { cache });
+    if (!r.ok) throw httpError(path, r);
+    const buf = await r.arrayBuffer();
+    // the second answer is the server's own, whatever its hash (the manifest was the stale one)
+    if (cache === "reload" || await sha16(buf) === hash) return JSON.parse(new TextDecoder().decode(buf));
+  }
+}
 function getJson(path) {
-  if (!inflight.has(path)) inflight.set(path, fetch(path, { cache: "no-cache" })
-    .then((r) => { if (!r.ok) throw Object.assign(new Error(`${path}: ${r.status}`), { status: r.status }); return r.json(); })
-    .finally(() => inflight.delete(path)));
+  if (!inflight.has(path)) inflight.set(path, fetchJson(path).finally(() => inflight.delete(path)));
   return inflight.get(path);
 }
 // A file that isn't published yet (404) is "nothing yet"; any other failure (offline, a server
@@ -1128,6 +1153,7 @@ function observeSquadLines() {
 new MutationObserver(observeSquadLines).observe($("#matches-list"), { childList: true, subtree: true });
 function renderMatches(menu = true) {
   state.drawn.add("matches");
+  syncTabUrl("matches");
   const container = $("#matches-list");
   $("#date-input").value = state.date;
   if (menu) renderMatchFilters();
@@ -1178,7 +1204,8 @@ function renderMatches(menu = true) {
   if (!shown.length) {
     const upcoming = matchesTab()
       .filter((m) => (!ids || ids.includes(m.league)) && localDateStr(new Date(m.kickoff)) > day)[0];
-    container.innerHTML = `<div class="empty-state">No matches on ${escapeHtml(fmtDay(parseDateInput(day)))}.${upcoming
+    const on = parseDateInput(day);            // the year too, when it isn't this one
+    container.innerHTML = `<div class="empty-state">No matches on ${escapeHtml(fmtDay(on))}${on.getFullYear() === new Date().getFullYear() ? "" : ` ${on.getFullYear()}`}.${upcoming
       ? `<br><br><button type="button" class="filter-chip" data-goto="${localDateStr(new Date(upcoming.kickoff))}">Next: ${escapeHtml(fmtDay(upcoming.kickoff))}</button>` : ""}</div>`;
     return;
   }
@@ -2014,6 +2041,7 @@ function mergeStats(parts) {
 
 function renderStats() {
   state.drawn.add("stats");
+  syncTabUrl("stats");
   const body = $("#stats-body");
   const range = state.stats?.ranges?.[state.statsRange];
   const ids = filterLeagueIds(state.statsFilter, statsCountries());
@@ -2183,6 +2211,7 @@ function lrBar(label, value, max, text, tip) {
     <span class="dist-pct">${text}</span></div>`;
 }
 function renderLineupRecord() {
+  syncTabUrl("lineups");
   const body = $("#lineup-body");
   const d = lineupData(), live = state.lineupSource === "live";
   if (d === null || d === undefined) { body.innerHTML = `<div class="empty-state">Loading line-ups…</div>`; return; }
@@ -2368,6 +2397,7 @@ const GAMBLING_NOTE = `<div class="sim-banner gamble-note"><span class="age-18" 
   <a href="https://www.begambleaware.org/" rel="noopener">BeGambleAware.org</a>.</div>`;
 function renderBets() {
   state.drawn.add("bets");
+  syncTabUrl("bets");
   const body = $("#bets-body");
   if (!state.bets) { body.innerHTML = GAMBLING_NOTE + (loadFailed("bets") ? loadError("the paper bets") : `<div class="empty-state">No simulated paper bets yet.</div>`); return; }
   const stake = betStake(), bank = betBank();
@@ -2603,18 +2633,31 @@ const clubCache = new Map();
 
 // The browser tab's title (also what a bookmark, the history list and a screen reader get): the
 // tab or page name, then the site's
-function setTitle(name) { document.title = name ? `${name} · The Corner FC` : "The Corner FC"; }
+function setTitle(name) {
+  document.title = name ? `${name} · The Corner FC` : "The Corner FC";
+  if (document.body.dataset.tab === "club") $("#app-title").textContent = name;
+}
 function showPage(name = "") {            // club, player and nationality pages share one panel
   setTitle(name);
   document.body.dataset.tab = "club";
   state.nation = null;
-  document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", "false"));
-  $("#app-title").textContent = "";
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.removeAttribute("aria-current"));
+  $("#app-title").textContent = name;        // the page's h1 (the name is drawn again, larger, on the page)
+  $("#tab-head").hidden = true;
   document.querySelectorAll(".panel").forEach((p) => p.dataset.active = String(p.dataset.tab === "club"));
   window.scrollTo(0, 0);
 }
 
-async function openClubPage(id) {
+// An address that names no page: say so (not Clubs without a word, or a page for "Team 99999999")
+function showNotFound() {
+  showPage("Page not found");
+  state.club = null;
+  $("#club-body").innerHTML = `<div class="empty-state" role="status">There's no page at this address. <a class="team-link" href="#/clubs">Go to Clubs</a></div>`;
+}
+const knownTeam = (id) => state.data.teams[id] != null || state.rankByTeam.has(id);
+
+async function openClubPage(id, want = null) {
+  if (CLUB_TABS.some(([k]) => k === want)) state.clubTab = want;
   showPage(teamName(id));
   const body = $("#club-body");
   body.innerHTML = `<div class="empty-state">Loading ${escapeHtml(teamName(id))}…</div>`;
@@ -2622,6 +2665,9 @@ async function openClubPage(id) {
   // its league's file too, for the domestic table position
   const [club] = await Promise.all([loadClub(id), r?.in_league ? loadLeague(r.league) : null, loadPlayers()]);
   state.injuries ||=await getJsonOrNull("data/injuries.json");
+  if (Number(location.hash.match(/^#\/club\/(\d+)/)?.[1]) !== id) return;      // moved on while loading
+  if (!club && loadFailed(`clubs/${id}`)) { body.innerHTML = loadError("this club's page"); return; }
+  if (!club && !knownTeam(id)) return showNotFound();
   state.club = { id, data: club };
   renderClubPage();
   if (club && !club.positions && !state.playerSeasons) {   // position minutes for the overview pitch: redraw once loaded
@@ -3578,7 +3624,7 @@ function clubHistoryTab() {
 $("#club-body").addEventListener("click", (e) => {
   if (!state.club) return;
   const t = e.target.closest("[data-ctab]");
-  if (t) { state.clubTab = t.dataset.ctab; return renderClubTab(); }
+  if (t) { state.clubTab = t.dataset.ctab; syncPageTab(clubHref(state.club.id), CLUB_TABS, state.clubTab); return renderClubTab(); }
   const matchView = e.target.closest("[data-club-match-view]");
   if (matchView) { state.club.matchView = matchView.dataset.clubMatchView; state.club.allResults = false; return renderClubTab(); }
   if (e.target.closest("[data-club-more]")) { state.club.allResults = true; renderClubTab(); }
@@ -3627,7 +3673,7 @@ function openTeam(teamId) {
     xiBlock(teamId) +
     (upcoming.length ? `<div class="modal-section">Next matches</div>${upcoming.map((m) => row(m, false)).join("")}` : "") +
     (results.length ? `<div class="modal-section">Recent results</div>${results.slice(0, 8).map((m) => row(m, true)).join("")}` : "");
-  $("#team-modal").hidden = false;
+  showDialog($("#team-modal"));
   state.modalTeam = teamId;
   // the predicted XI comes from players.json: drawn again with it if the pop-up is still on this club
   if (state.players === undefined)
@@ -3645,14 +3691,16 @@ function playerById(id) {
   return (state.playersById ||= new Map(state.players.list.map((x) => [String(x.id), x]))).get(String(id));
 }
 const playerPages = new Map();     // player id -> his page file (data/players/<id>.json)
-async function openPlayerPage(id) {
+async function openPlayerPage(id, want = null) {
+  if (PLAYER_TABS.some(([k]) => k === want)) state.playerTab = want;
+  const here = () => Number(location.hash.match(/^#\/player\/(\d+)/)?.[1]) === id;
   showPage();
   state.club = null;
   const body = $("#club-body");
   if (state.players === undefined) {
     body.innerHTML = `<div class="empty-state">Loading…</div>`;
     await loadPlayers();
-    if (location.hash !== `#/player/${id}`) return;      // moved on while loading
+    if (!here()) return;      // moved on while loading
   }
   const p = state.players && playerById(id);
   if (!p) { body.innerHTML = loadFailed("players") ? loadError("the players") : `<div class="empty-state">This player isn't in the current ranks.</div>`; return; }
@@ -3664,7 +3712,7 @@ async function openPlayerPage(id) {
   }
   const page = playerPages.get(id) || null;
   if (!page?.positions) { loadPlayerSeasons(); await state.playerSeasonsLoading; }   // no page file, or an older one
-  if (location.hash !== `#/player/${id}`) return;      // moved on while loading
+  if (!here()) return;      // moved on while loading
   state.player = { p, page, detail: playerDetail(p, page), season: null };
   renderPlayerPage();
 }
@@ -4122,7 +4170,7 @@ $("#club-body").addEventListener("click", (e) => {
 $("#club-body").addEventListener("click", (e) => {
   const b = e.target.closest("[data-ptab], [data-pseason], [data-per90]");
   if (!b || !state.player) return;
-  if (b.dataset.ptab) state.playerTab = b.dataset.ptab;
+  if (b.dataset.ptab) { state.playerTab = b.dataset.ptab; syncPageTab(`#/player/${state.player.p.id}`, PLAYER_TABS, state.playerTab); }
   if (b.dataset.pseason) state.player.season = Number(b.dataset.pseason);
   if (b.dataset.per90) state.playerPer90 = b.dataset.per90 === "1";
   renderPlayerTab();
@@ -4133,7 +4181,8 @@ $("#club-body").addEventListener("click", (e) => {
 // matches, line-ups and stat lines from API-Football (data/nations/<team id>.json, nations.py),
 // found through the ranking (loaded for the Elo in the corner anyway).
 const NATION_TABS = [["overview", "Overview"], ["xi", "Predicted XI"], ["formations", "Formations"], ["players", "Players"]];
-async function openNationPage(nat) {
+async function openNationPage(nat, want = null) {
+  if (NATION_TABS.some(([k]) => k === want)) state.nationTab = want;
   showPage(nat);
   state.club = null;
   if (state.players === undefined) {
@@ -4148,6 +4197,7 @@ async function openNationPage(nat) {
   fillNationRating(nat);
   await loadNations();
   const n = state.nations && nationFor(state.nations, nat);
+  if (state.nation?.name === nat && !list.length && state.nations && state.players && !n) return showNotFound();
   const [team] = await Promise.all([n?.team_id ? getJsonOrNull(`data/nations/${n.team_id}.json`) : null,
     state.injuries ? null : getJsonOrNull("data/injuries.json").then((d) => { state.injuries ||= d; })]);
   if (state.nation?.name !== nat) return;              // moved on while it loaded
@@ -4479,7 +4529,7 @@ $("#club-body").addEventListener("click", (e) => {
   if (!state.nation) return;
   const t = e.target.closest("[data-ntab]");
   const th = e.target.closest("th[data-natpsort]");
-  if (t) state.nationTab = t.dataset.ntab;
+  if (t) { state.nationTab = t.dataset.ntab; syncPageTab(`#/nation/${encodeURIComponent(state.nation.name)}`, NATION_TABS, state.nationTab); }
   else if (th) state.nationPlayerSort = th.dataset.natpsort;
   else if (e.target.closest("[data-nat-more]")) state.nation.allPlayers = true;
   else return;
@@ -4532,6 +4582,7 @@ async function openLeaguePage(lid, want = null) {
   $("#club-body").innerHTML = `<div class="empty-state">Loading ${escapeHtml(comp?.name || "competition")}…</div>`;
   const lg = await loadLeague(lid);
   if (Number(location.hash.match(/^#\/league\/(\d+)/)?.[1]) !== lid) return;      // moved on while loading
+  if (!lg && !comp && !loadFailed(`leagues/${lid}`)) return showNotFound();
   const tabs = LEAGUE_TABS.filter(([k]) => (k !== "table" && k !== "projected") || lg?.tableRows.length);
   const has = (k) => tabs.some(([t]) => t === k);
   const keep = state.league?.id === lid && has(state.league.tab);
@@ -5037,6 +5088,7 @@ function renderNations() {
   if (!d) { body.innerHTML = loadFailed("nations") ? loadError("the nations ranking") : `<div class="empty-state">No national team ranking yet.</div>`; return; }
   const key = state.nationsSort ||= "current";
   const confed = state.nationsConfed ||= "all";
+  syncTabUrl("nations");
   const worldRank = new Map([...d.nations].sort((a, b) => b.current - a.current).map((n, i) => [n.name, i + 1]));
   const rows = d.nations.filter((n) => confed === "all" || n.confed === confed)
     .sort((a, b) => (b[key] ?? -Infinity) - (a[key] ?? -Infinity) || b.current - a.current);
@@ -5871,6 +5923,78 @@ $("#efl-body").addEventListener("input", (e) => {
   const box = $("#efl-q"); box.focus(); box.setSelectionRange(at, at);
 });
 
+// ------------------------------------------------------------------ what each tab is
+// One sentence under the tab's name, a link to the matching part of the methodology page, and a
+// key to the terms a fan wouldn't know (the hover tips say the same, but phones and keyboards
+// never see those). Keyed by tab, or by the Rankings view.
+const TAB_INFO = {
+  clubs: { intro: "Every club ranked by strength, on a scale where 100 points is worth about a goal a game.", more: "terms", key: [
+    ["Baseline (Base)", "A club's long-term level: its rating averaged over roughly its last 100 matches. Slow to move."],
+    ["Current", "Its rating after its latest match. It rises when the club does better than expected, and falls when it does worse."],
+    ["Gap", "Current minus Baseline. Green: playing above its usual level. Red: below it."],
+    ["Last 6", "How far its rating has moved over its last 6 matches."],
+    ["World", "Its place among every ranked club, by Baseline."],
+    ["In lg", "Its place among the clubs in its own league, by Baseline. This is the site's ranking, not the league table."]] },
+  players: { intro: "Players ranked by Ability, the model's 0 to 100 estimate of how good each one is now.", more: "terms", key: [
+    ["Ability", "A 0 to 100 estimate of his level, from the clubs he plays for and his own statistics. An average Premier League regular is about 75. The + shows past and projected seasons."],
+    ["Pos", "The role he has started in most over his last 20 appearances."],
+    ["World", "His place by Ability among every listed player."],
+    ["Lg", "His place by Ability among the listed players in his club's league."],
+    ["G/A", "Goals and assists this season, for all his clubs."],
+    ["Rtg", "His average match rating this season, out of 10 (API-Football's rating)."]] },
+  leagues: { intro: "Leagues ranked by the average strength of their clubs this season.", more: "terms", key: [
+    ["Baseline (Base)", "The average long-term rating of the league's clubs."],
+    ["Current", "The average of its clubs' ratings now."],
+    ["Gap", "Current minus Baseline. Green: its clubs are rated above their long-term level. Red: below it."]] },
+  nations: { intro: "National teams ranked by strength, worked out from every men's full international since 1872.", more: "terms", key: [
+    ["Current", "The team's rating now. 100 points is about one goal a game on a neutral ground."],
+    ["1 yr", "How far its rating has moved over the last 12 months."],
+    ["UEFA, CAF …", "The confederation it plays in. The buttons above the table show one at a time."]] },
+  matches: { intro: "Fixtures and results, with the model's chance of a home win, a draw and an away win for each match.", more: "terms", key: [
+    ["The bar", "The model's chances of a home win, a draw and an away win, as percentages."],
+    ["Market", "The bookmakers' chances for the same match: their odds with the bookmaker's margin taken out, averaged across bookmakers."],
+    ["Projected goals", "The goals the model expects each side to score, such as 1.6–0.9. An average over many possible games, not a score prediction."],
+    ["The number by each club", "Its Current Strength."]] },
+  stats: { intro: "How accurate the model's match predictions have been, and how they compare with the bookmakers'.", more: "glossary", key: [
+    ["Log loss", "Punishes the model for being confident and wrong. Lower is better. Giving every result a one-in-three chance scores 1.099."],
+    ["Brier score", "The average squared gap between the chances given and what happened. Lower is better. One-in-three for everything scores 0.667."],
+    ["Goal error", "How many goals out the projected score was, on average, for each team."],
+    ["Market fair", "The bookmakers' chances with their margin taken out, averaged across bookmakers, from the last odds before kick-off."],
+    ["Gap", "The model's log loss minus the market's. Green (below zero): the model was more accurate. Red: the market was."],
+    ["Gap at opening", "The same comparison against the first odds recorded for each match, with the number of matches in brackets."]] },
+  lineups: { intro: "How often the line-ups the model predicted matched the team sheets.", more: "lineups", key: [
+    ["Saved before kick-off", "Predictions stored before the team sheet came out. The only fair test."],
+    ["Reconstructed history", "The model run again on past matches, using what was known before each one. A guide, not proof."],
+    ["Perfect XIs", "Line-ups where all 11 starters were predicted."]] },
+  tips: { intro: "Upcoming selections where the model and the bookmakers disagree most. A disagreement isn't a tip: so far the bookmakers have been right more often.", more: "market", key: [
+    ["Markets", "The kinds of bet compared: the result, over or under a number of goals, and both teams to score."],
+    ["Market fair", "The bookmakers' chance for the selection, with their margin taken out."],
+    ["Beat closing price", "The share of selections recorded at better odds than the last price before kick-off."],
+    ["Strike rate", "The share of settled selections that won."]] },
+  bets: { intro: "A record of those selections as if each had been backed with the same paper stake. No real money is involved.", more: "market", key: [
+    ["Night before", "Selections recorded by the nightly update."],
+    ["Pre-kickoff", "Selections recorded shortly before kick-off, after late team news."],
+    ["Cautious", "The same record without result bets on outsiders."],
+    ["O/U 2.5", "Over or under 2.5 goals in the match. 1.5, 3.5 and 4.5 work the same way."],
+    ["Both score", "Whether both teams score."]] },
+  efl: { intro: "Expected Fantasy EFL points for Championship, League One and League Two players and clubs.", more: "", key: [
+    ["Pts", "The points the model expects in that gameweek."],
+    ["CS", "The chance of a clean sheet."],
+    ["G, D, M, F", "Goalkeeper, defender, midfielder, forward. A * means the position is the site's guess from match data."],
+    ["Ch, L1, L2", "Championship, League One, League Two."],
+    ["1-2-3-1", "A team's shape: one goalkeeper, then defenders, midfielders and forwards."]] },
+  fpl: { intro: "Expected Fantasy Premier League points. Shown to the site owner only.", more: "", key: [] },
+  myteam: { intro: "The site owner's own Fantasy Premier League team and transfer plan.", more: "", key: [] },
+};
+function renderTabHead(key) {
+  const info = TAB_INFO[key];
+  $("#tab-head").hidden = !info;
+  if (!info) return;
+  $("#tab-intro").innerHTML = escapeHtml(info.intro) + (info.more ? ` <a href="methodology.html#${info.more}">How it works</a>` : "");
+  $("#tab-key").hidden = !info.key.length;
+  $("#tab-key-list").innerHTML = info.key.map(([t, d]) => `<dt>${escapeHtml(t)}</dt><dd>${escapeHtml(d)}</dd>`).join("");
+}
+
 // ------------------------------------------------------------------ wiring
 // The tabs drawn from the start-up files: each is drawn the first time it's opened
 const TAB_DRAW = { matches: renderMatches, table: renderTable, stats: renderStats, bets: renderBets, tips: renderTips, fpl: renderFpl };
@@ -5888,16 +6012,18 @@ function showTab(tab) {
   if (tab === "nations") { loadNations(); if (state.players === undefined) loadPlayers().then(renderNations); renderNations(); }
   if (tab === "lineups") { loadLineupRecord(); renderLineupRecord(); }
   syncMenu();
+  syncTabUrl(tab);
 }
 function syncMenu() {
   let title = "";
   document.querySelectorAll("nav.tabs button").forEach((b) => {
     const on = b.dataset.tab === state.tab && (!b.dataset.view || b.dataset.view === state.tableView);
-    b.setAttribute("aria-selected", String(on));
+    if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     if (on) title = b.textContent;
   });
   $("#app-title").textContent = title;
   setTitle(title);
+  renderTabHead(state.tab === "table" ? state.tableView : state.tab);
 }
 // Each tab other than the tables has its own address, so a reload (or a shared link) stays on it
 const TAB_ROUTES = { leagues: "leagues", nations: "nations", matches: "matches", stats: "stats", lineups: "lineups", tips: "model-vs-market", bets: "simulation", fpl: "fpl", myteam: "my-fpl-team", efl: "efl-fantasy" };
@@ -5914,21 +6040,29 @@ document.querySelectorAll("nav.tabs button").forEach((btn) => btn.addEventListen
 }));
 // Phones: the menu slides in from the left behind the menu button
 function setMenu(open) {
+  const was = document.body.classList.contains("menu-open");
   document.body.classList.toggle("menu-open", open);
   $("#menu-btn").setAttribute("aria-expanded", String(open));
   $("#menu-backdrop").hidden = !open;
+  if (open === was) return;
+  // open: focus goes into the menu and the page behind can't be reached; closed: back to the button
+  $("#main").inert = open;
+  // (a moment later: the menu is still invisible, and so can't take focus, until its slide-in starts)
+  if (open) setTimeout(() => { if (document.body.classList.contains("menu-open")) ($("#main-menu [aria-current]") || $("#main-menu button:not([hidden])")).focus(); }, 60);
+  else if ($("#main-menu").contains(document.activeElement)) $("#menu-btn").focus();
 }
 $("#menu-btn").addEventListener("click", () => setMenu(!document.body.classList.contains("menu-open")));
 $("#menu-backdrop").addEventListener("click", () => setMenu(false));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
 function route() {
-  const club = location.hash.match(/^#\/club\/(\d+)/);
-  const player = location.hash.match(/^#\/player\/(\d+)/);
-  const nation = location.hash.match(/^#\/nation\/(.+)/);
+  const club = location.hash.match(/^#\/club\/(\d+)(?:\/(\w+))?$/);
+  const player = location.hash.match(/^#\/player\/(\d+)(?:\/(\w+))?$/);
+  const nation = location.hash.match(/^#\/nation\/([^/]+)(?:\/(\w+))?$/);
   const country = location.hash.match(/^#\/country\/(.+)/);
   const league = location.hash.match(/^#\/league\/(\d+)(?:\/(\w+))?/);
   const tableView = location.hash.match(/^#\/(clubs|players)(?:\?(.*))?$/);
-  let tab = ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]];
+  const tabRoute = location.hash.match(/^#\/([\w-]+)(?:\?(.*))?$/);
+  let tab = ROUTE_TABS[tabRoute?.[1]];
   if (!state.data) return;
   if (OWNER_TABS.has(tab) && $("#fpl-tab").hidden) {            // not the owner: as if the address named no tab
     history.replaceState(null, "", location.pathname + location.search);
@@ -5936,15 +6070,72 @@ function route() {
   }
   if (club || player || nation || country || league || tableView) $("#team-modal").hidden = true;
   if (!league) state.league = null;
-  if (club) openClubPage(Number(club[1]));
-  else if (player) openPlayerPage(Number(player[1]));
-  else if (nation) openNationPage(decodeURIComponent(nation[1]));
+  if (club) openClubPage(Number(club[1]), club[2]);
+  else if (player) openPlayerPage(Number(player[1]), player[2]);
+  else if (nation) openNationPage(decodeURIComponent(nation[1]), nation[2]);
   else if (country) openCountryPage(decodeURIComponent(country[1]));
   else if (league) openLeaguePage(Number(league[1]), league[2]);
   else if (tableView) openTableView(tableView[1], tableView[2]);
-  else if (tab) { showTab(tab); window.scrollTo(0, 0); }
+  else if (tab) { applyTabQuery(tab, tabRoute[2]); showTab(tab); window.scrollTo(0, 0); }
+  else if (location.hash.startsWith("#/")) showNotFound();
   else showTab(state.tab || "table");
 }
+// Shareable choices: a tab's filters ride in its address (#/matches?d=2026-10-11, #/stats?r=90d),
+// as the Rankings' do, so a pasted link opens on what its sender saw. Defaults are left out.
+// get: the choices now; set: take them from a link (anything not recognised is ignored); draw:
+// redraw a tab that was already drawn.
+const pressOne = (wrap, attr, value) => document.querySelectorAll(`${wrap} [data-${attr}]`)
+  .forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === value)));
+const oneOf = (wrap, attr, value) => value != null && [...document.querySelectorAll(`${wrap} [data-${attr}]`)].some((b) => b.dataset[attr] === value);
+const TAB_QUERY = {
+  matches: {
+    get: () => (state.date && state.date !== defaultDate() ? { d: state.date } : {}),
+    set: (q) => { if (/^\d{4}-\d\d-\d\d$/.test(q.d || "")) state.date = q.d; },
+    draw: () => renderMatches() },
+  stats: {
+    get: () => (state.statsRange !== "30d" ? { r: state.statsRange } : {}),
+    set: (q) => { if (oneOf("#stats-ranges", "range", q.r)) state.statsRange = q.r; pressOne("#stats-ranges", "range", state.statsRange); },
+    draw: () => renderStats() },
+  lineups: {
+    get: () => ({ ...(state.lineupSource !== "live" ? { src: state.lineupSource } : {}), ...(state.lineupRange !== "all" ? { r: state.lineupRange } : {}) }),
+    set: (q) => {
+      if (oneOf("#lineup-source", "source", q.src)) state.lineupSource = q.src;
+      if (oneOf("#lineup-ranges", "range", q.r)) state.lineupRange = q.r;
+      pressOne("#lineup-source", "source", state.lineupSource); pressOne("#lineup-ranges", "range", state.lineupRange);
+    } },
+  bets: {
+    get: () => ({ ...(state.betStrategy !== "all" ? { s: state.betStrategy } : {}), ...(state.betMarket !== "all" ? { m: state.betMarket } : {}),
+      ...(state.betView !== "all" ? { v: state.betView } : {}) }),
+    set: (q) => {
+      if (oneOf("#bet-strategy", "strategy", q.s)) state.betStrategy = q.s;
+      if (oneOf("#bet-market", "market", q.m)) state.betMarket = q.m;
+      if (oneOf("#bet-view", "view", q.v)) state.betView = q.v;
+      pressOne("#bet-strategy", "strategy", state.betStrategy); pressOne("#bet-market", "market", state.betMarket); pressOne("#bet-view", "view", state.betView);
+    },
+    draw: () => { renderBetFilters(); renderBets(); } },
+  nations: {
+    get: () => (state.nationsConfed && state.nationsConfed !== "all" ? { c: state.nationsConfed } : {}),
+    set: (q) => { if (CONFEDS.includes(q.c)) state.nationsConfed = q.c; } },
+};
+function applyTabQuery(tab, query) {
+  const def = TAB_QUERY[tab];
+  if (!def || !query) return;
+  def.set(Object.fromEntries(new URLSearchParams(query)));
+  if (def.draw && state.drawn.has(tab)) def.draw();
+}
+// After a choice changes on the open tab: its address follows, without a history entry
+function syncTabUrl(tab) {
+  if (state.tab !== tab || document.body.dataset.tab !== tab || !TAB_QUERY[tab]) return;
+  const qs = new URLSearchParams(TAB_QUERY[tab].get()).toString();
+  const to = `#/${TAB_ROUTES[tab]}${qs ? `?${qs}` : ""}`;
+  if (location.hash !== to) history.replaceState(null, "", to);
+}
+// A page's sub-tab in its address: #/club/42/matches (the first tab is left out)
+function syncPageTab(base, tabs, tab) {
+  const to = tab && tab !== tabs[0][0] ? `${base}/${tab}` : base;
+  if (location.hash !== to) history.replaceState(null, "", to);
+}
+$("#skip-link").addEventListener("click", (e) => { e.preventDefault(); $("#main").focus(); });
 window.addEventListener("hashchange", route);
 window.addEventListener("popstate", route);
 $("#match-filters").addEventListener("click", (e) => {
@@ -6177,8 +6368,8 @@ colTip.setAttribute("role", "tooltip");
 document.body.appendChild(colTip);
 // (not on touch screens: a tap sends mouseover too, and the tip would stay up)
 const CAN_HOVER = matchMedia("(hover: hover)");
-$("#table-wrap").addEventListener("mouseover", (e) => {
-  if (!CAN_HOVER.matches) return;
+const showColTip = (e) => {
+  if (e.type === "mouseover" && !CAN_HOVER.matches) return;
   const h = e.target.closest("th[data-tip], td.tip-cell");
   if (!h) return;
   const show = () => {
@@ -6197,7 +6388,11 @@ $("#table-wrap").addEventListener("mouseover", (e) => {
     loadPlayerSeasons();
     state.playerSeasonsLoading.then(() => { if (!colTip.hidden && colTip.cell === h && h.isConnected) show(); });
   }
-});
+};
+$("#table-wrap").addEventListener("mouseover", showColTip);
+// the same tip when a sortable header is reached with the keyboard (phones: the key under the tab's name)
+$("#table-wrap").addEventListener("focusin", (e) => { if (e.target.matches?.(":focus-visible")) showColTip(e); });
+$("#table-wrap").addEventListener("focusout", () => { colTip.hidden = true; });
 $("#table-wrap").addEventListener("mouseout", (e) => {
   const tip = "th[data-tip], td.tip-cell";
   if (e.target.closest(tip) && e.relatedTarget?.closest?.(tip) !== e.target.closest(tip)) colTip.hidden = true;
@@ -6219,10 +6414,71 @@ $("#table-wrap").addEventListener("click", (e) => {
   const tr = e.target.closest("tr[data-team]");
   if (tr) openTeam(Number(tr.dataset.team));
 });
-$("#team-modal").addEventListener("click", (e) => {
-  if (e.target.id === "team-modal" || e.target.closest(".modal-close")) $("#team-modal").hidden = true;
+// Pop-ups (the club's and the account's): focus moves in when one opens, Tab stays inside it,
+// and focus goes back to whatever opened it
+function showDialog(overlay) {
+  if (overlay.hidden) overlay.opener = document.activeElement;
+  overlay.hidden = false;
+  if (!overlay.contains(document.activeElement)) overlay.querySelector(".modal-close").focus();
+}
+function hideDialog(overlay) {
+  if (overlay.hidden) return;
+  overlay.hidden = true;
+  if (overlay.opener?.isConnected && overlay.opener !== document.body) overlay.opener.focus();
+  overlay.opener = null;
+}
+document.addEventListener("keydown", (e) => {
+  const overlay = e.key === "Tab" && document.querySelector(".modal-overlay:not([hidden])");
+  if (!overlay) return;
+  const stops = [...overlay.querySelectorAll("a[href], button:not([disabled]), input:not([disabled]), select, [tabindex='0']")]
+    .filter((el) => el.offsetParent !== null);
+  if (!stops.length) return;
+  const first = stops[0], last = stops[stops.length - 1];
+  if (!overlay.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#team-modal").hidden = true; });
+$("#team-modal").addEventListener("click", (e) => {
+  if (e.target.id === "team-modal" || e.target.closest(".modal-close")) hideDialog($("#team-modal"));
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideDialog($("#team-modal")); });
+// Every table, however it was drawn: a name (the tab's, and the heading above it), column headers
+// marked as such, the badge and bar columns named, and the club, player or league cell as the row's
+// header, so a screen reader says "Barcelona, Baseline, 1083" and not "1083". Rows that filter when
+// clicked (a competition on Line-up record, a league on Paper Simulation) take focus too.
+const HEADING_LIKE = "h2, h3, h4, .modal-section, .stats-label, .card-title, .section-title, .fpl-title";
+function tableName(table) {
+  let el = table.closest(".table-scroll, .fpl-scroll") || table, text = "";
+  for (let hops = 0; el && el.id !== "main" && hops < 4 && !text; el = el.parentElement, hops++)
+    for (let sib = el.previousElementSibling; sib && !text; sib = sib.previousElementSibling)
+      text = (sib.matches(HEADING_LIKE) ? sib : sib.querySelector?.(HEADING_LIKE))?.textContent.trim() || "";
+  const page = $("#app-title").textContent;
+  return text && text !== page ? `${page}: ${text}` : page;
+}
+function describeTables() {
+  for (const table of document.querySelectorAll("#main table, .modal-card table")) {
+    if (!table.hasAttribute("aria-label")) {
+      table.setAttribute("aria-label", tableName(table));
+      for (const th of table.querySelectorAll("thead th")) {
+        th.scope = "col";
+        if (th.querySelector(".th-club")) th.setAttribute("aria-label", "Badge");
+        else if (!th.textContent.trim() && !th.hasAttribute("aria-label")) th.setAttribute("aria-label", "Bar");
+      }
+    }
+    for (const tr of table.querySelectorAll("tbody tr:not([data-rh])")) {     // rows are added as lists grow
+      tr.dataset.rh = "";
+      const name = tr.querySelector(".club-cell, .team-link, .player-link, a[href^='#/']")?.closest("td");
+      if (name) name.setAttribute("role", "rowheader");
+      if (tr.dataset.league != null) { tr.tabIndex = 0; tr.dataset.rowbtn = ""; tr.setAttribute("aria-description", "Press Enter to show only this competition"); }
+    }
+  }
+}
+let describing = 0;
+new MutationObserver(() => { describing ||= requestAnimationFrame(() => { describing = 0; describeTables(); }); })
+  .observe(document.body, { childList: true, subtree: true });
+document.addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("tr[data-rowbtn]")) { e.preventDefault(); e.target.click(); }
+});
 // Sortable column headers and folding group headers from the keyboard: Enter or Space is a click.
 // Most of them are redrawn by it, so focus goes back to the same header afterwards
 document.addEventListener("keydown", (e) => {

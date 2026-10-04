@@ -91,7 +91,7 @@ class TeamTests(unittest.TestCase):
             (out / 'fpl_predictions.json').write_text('{}')
             with mock.patch.object(export, 'validate_export'):
                 export._publish_export(lambda staged: (staged / 'matches.json').write_text('{}'), out)
-            self.assertEqual(sorted(f.name for f in out.iterdir()), ['matches.json'])
+            self.assertEqual(sorted(f.name for f in out.iterdir()), ['manifest.json', 'matches.json'])   # + the content hashes
 
     def test_team_is_stored_for_the_owner_not_published(self):
         conn = mock.MagicMock()

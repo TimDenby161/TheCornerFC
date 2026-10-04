@@ -549,6 +549,22 @@ Result cards show `proj` for live projections and `recon` for backfilled ones. T
 
 The weighted total is rounded, and a 0 counts as 1. The overall rating and the five factor scores are stored on `fixture_predictions` (`rating`, `rating_winner` and so on). Result cards show the rating as a coloured badge, and tapping a card shows the breakdown. The Stats tab shows the average rating, the spread of 1s to 5s and each factor's average. New results are rated nightly, and the last 14 days are re-rated in case a score was corrected.
 
+Conventions in `docs/assets/app.js` added with the 2026-10 audit:
+
+- **What each tab is.** `TAB_INFO` holds one sentence per tab, a link into `methodology.html`
+  and a key to its terms, drawn under the tab's name. A new column or term goes in the key.
+- **Addresses.** A tab's choices ride in its address (`#/matches?d=2026-10-11`, `#/stats?r=90d`,
+  `#/simulation?m=OU25`, `#/nations?c=UEFA`; `TAB_QUERY`), and a page's sub-tab too
+  (`#/club/42/matches`). An address that names no page says so (`showNotFound`).
+- **Data files by content hash.** `export.write_manifest` writes `docs/data/manifest.json`, a
+  short hash of each top-level data file. The site asks for `file.json?v=<hash>` and keeps the
+  browser's copy until the hash changes, checking the copy's hash before trusting it. Anything
+  that writes a top-level data file must rewrite the manifest, and the workflow must commit it
+  (`tests/test_manifest.py`).
+- **Tables and focus.** `describeTables` names every table and marks its headers for screen
+  readers; the menu and the pop-ups move focus in and back. The open tab is at least a screen
+  tall, so the footer isn't pushed down when the data arrives.
+
 ## Tables
 
 `leagues`, `league_seasons`, `venues`, `teams`, `team_seasons`, `fixtures`, `fixture_team_stats`, `standings`, `bookmakers`, `bet_types`, `odds`, `team_rank_history`, `team_rankings`, `fixture_predictions` (and the view `upcoming_predictions`), `players`, `player_seasons`, `injuries`, `fixture_players`, `paper_bets`. See `db/schema.sql`.
@@ -1294,6 +1310,27 @@ answer only the sign-in named in `fpl_team_owners` (My FPL team, below). The cod
 - **Retention.** The nightly run deletes email sign-ups never confirmed within 7 days
   (`thecornerfc/accounts.py`; the privacy page promises the same). Confirmed accounts are kept
   until their owner deletes them.
+
+### Retention and removing a person
+
+What the privacy page promises, and where it is kept (`thecornerfc/retention.py`, run at the end
+of the nightly sync; a failure is logged and never fails the run):
+
+- Sign-ups left unconfirmed for 7 days are deleted.
+- The medical reason on `injuries` rows is blanked once the row is two seasons old. Bans, rest
+  and the other non-medical reasons are kept, and so is the fact that he missed the match.
+- FPL news text (`fpl_player_states.news`, and the copy in the fantasy snapshots) has no job:
+  both tables are append-only evidence. Review it each July.
+
+To remove a player or manager who asks (privacy page, "People the site covers"):
+
+1. `python -m thecornerfc suppress --player <API-Football id>` (or `--coach <id>`) lists the
+   tables that hold rows for them. Nothing changes yet.
+2. Add `--apply`: their rows are deleted, and the id goes into `thecornerfc/suppressed.json`,
+   which `db.upsert` reads, so no later sync stores them again. Append-only evidence tables refuse
+   the delete and are listed as kept; those rows are never published by name.
+3. Run the export, then commit `suppressed.json` and the data.
+4. Old copies stay in git history. Offer to rewrite it for their files if they ask.
 - **Local preview.** `python3 -m http.server 8000 --directory docs`, then `http://localhost:8000`.
 
 ### Fantasy expected points (v1.1, evidence only)

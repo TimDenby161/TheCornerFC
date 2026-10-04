@@ -97,7 +97,38 @@
     padding: calc(env(safe-area-inset-top) + 8px) 14px 8px;
   }
   .app-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  header h1 {
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .skip-link { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 8px 12px; border-radius: 8px;
+    background: var(--surface-1); color: var(--blue-text); border: 1px solid var(--border); font-size: 14px; font-weight: 600;
+    transform: translateY(-200%); }
+  .skip-link:focus { transform: none; }
+  main:focus { outline: none; }
+  /* Under each tab's name: what the tab is, and what its columns mean */
+  .tab-head { margin: 0 0 12px; }
+  .tab-head[hidden] { display: none; }
+  body[data-tab="matches"] .tab-head { padding-top: 12px; }
+  tr[data-rowbtn] { cursor: pointer; }
+  tr[data-rowbtn]:focus-visible { outline: 2px solid var(--series-blue); outline-offset: -2px; }
+  /* Touch screens: links and buttons in the tables are at least 24px tall, and the small flag
+     beside a club's name isn't a second link a finger hits by mistake */
+  @media (pointer: coarse) {
+    table.leaderboard .team-link, table.leaderboard .player-link { display: inline-block; padding: 6px 0; min-height: 24px; box-sizing: border-box; }
+    .club-cell .flag-link, .club-meta .flag-link { pointer-events: none; }
+    .years-btn { position: relative; }
+    .years-btn::after { content: ""; position: absolute; inset: -4px; }   /* a 26px tap area; the button stays 18px so the heading fits */
+    .fpl-table th.sortable { min-width: 24px; padding-top: 8px; padding-bottom: 8px; }
+  }
+  .tab-intro { margin: 0 0 6px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
+  .tab-intro a, .tab-key a { color: var(--blue-text); }
+  .tab-key { font-size: 12.5px; color: var(--text-secondary); }
+  .tab-key[hidden] { display: none; }
+  .tab-key summary { cursor: pointer; color: var(--blue-text); width: fit-content; padding: 4px 0; }
+  .tab-key summary:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; border-radius: 4px; }
+  .tab-key dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
+  .tab-key dt { font-weight: 600; color: var(--text-primary); }
+  .tab-key dd { margin: 0; line-height: 1.4; }
+  @media (max-width: 480px) { .tab-key dl { grid-template-columns: 1fr; gap: 0; } .tab-key dd { margin-bottom: 6px; } }
+  header .brand {
     display: inline-flex; align-items: center; gap: 7px; margin: 0;
     font-size: 18px; line-height: 1; font-weight: 800; white-space: nowrap;
   }
@@ -119,14 +150,14 @@
   }
   nav.tabs button:hover { background: var(--chip-bg); color: var(--text-primary); }
   nav.tabs button:focus-visible { outline: 2px solid var(--series-blue); outline-offset: -2px; }
-  nav.tabs button[aria-selected="true"] {
+  nav.tabs button[aria-current="page"] {
     background: color-mix(in srgb, var(--series-blue) 14%, transparent); color: var(--blue-text);
   }
   .menu-btn {
     appearance: none; border: none; background: transparent; cursor: pointer; color: var(--text-primary);
     font-size: 20px; line-height: 1; padding: 4px 6px; margin: -4px 0 -4px -6px; border-radius: 6px;
   }
-  .app-title { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  .app-title { margin: 0 0 0 auto; font-size: 13px; font-weight: 600; color: var(--text-secondary);
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .account-btn {
     appearance: none; flex: none; border: 1px solid var(--border); background: var(--chip-bg); cursor: pointer;
@@ -145,7 +176,8 @@
     }
     header .app-bar { margin: 2px 4px 16px; flex-wrap: wrap; }
     .account-btn { flex: 1 0 100%; margin-top: 6px; border-radius: 8px; padding: 8px 12px; }
-    .menu-btn, .app-title, .menu-backdrop { display: none; }
+    .menu-btn, .menu-backdrop { display: none; }
+    .app-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }  /* the page's h1: read out, not shown beside the menu */
     body { padding-left: 220px; }
   }
   @media (max-width: 759px) {
@@ -174,6 +206,9 @@
   }
   .panel { display: none; }
   .panel[data-active="true"] { display: block; }
+  /* The open tab fills the screen before its data arrives, so the footer starts below the fold
+     and isn't pushed down the page when the content is drawn (layout shift) */
+  .panel[data-active="true"], #boot-status { min-height: 100vh; }
   /* until the first data files are in: one "Loading…" line, not an empty panel */
   body.booting main > .panel, body.booting main > .freshness, body:not(.booting) #boot-status { display: none; }
   .link-btn { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--blue-text); text-decoration: underline; cursor: pointer; }
@@ -1461,7 +1496,7 @@
 
   @media (max-width: 480px) {
     header { padding: calc(env(safe-area-inset-top) + 6px) 10px 7px; }
-    header h1 { font-size: 16px; }
+    header .brand { font-size: 16px; }
     main { padding: 10px 12px 32px; }
     .match-bar { margin: 0 -12px 10px; padding: 10px 12px 8px; }
     .filter-chip { padding: 5px 8px; font-size: 11px; }
