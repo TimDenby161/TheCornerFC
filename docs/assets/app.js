@@ -5274,11 +5274,12 @@ function renderFpl() {
   renderFplNext();
 }
 
-// ------------------------------------------------------------------ owner-only FPL data
+// ------------------------------------------------------------------ owner-only FPL and EFL Fantasy data
 // FPL's terms don't allow its data to be republished (audit L3; owner's decision 2026-10-02), so the
 // predictions (FPL prices, positions, status, gameweeks) and the owner's team aren't in data/. They're
 // in Supabase, read through fpl_owner_data, which answers only when the visitor is signed in as the
-// owner (the accounts section below) and returns the lock-ins too. The key below is Supabase's public
+// owner (the accounts section below) and returns the lock-ins too. The EFL Fantasy predictions are
+// kept the same way (audit L11; owner's decision 2026-10-04). The key below is Supabase's public
 // key: on its own the database lets it call nothing (db/migrations/20261004_fpl_owner_login.sql).
 const SUPABASE = { url: "https://bookkurhdabdeccckjbn.supabase.co", key: "sb_publishable_JZ_oJVHIO75SFbFc95LQew_3wmKuvM7" };
 const FPL_ENTRY = 3996593;   // the owner's FPL entry (FPL_TEAM_ENTRY)
@@ -5286,7 +5287,7 @@ const storedText = (k) => { try { return localStorage.getItem(`fc.${k}`) || ""; 
 const storeText = (k, v) => { try { if (v) localStorage.setItem(`fc.${k}`, v); else localStorage.removeItem(`fc.${k}`); } catch { /* not stored */ } };
 
 // state.owner: undefined = not asked yet; { busy } while asking; { ok: true, docs, locks }; { ok: false, error }.
-// Asked when a visitor is signed in (ownerReset), and by the two tabs when they open.
+// Asked when a visitor is signed in (ownerReset), and by the three tabs when they open.
 function loadOwnerData() {
   if (state.owner) return;
   if (!storedText("auth")) { storeFlag("fplOwner", false); state.owner = { ok: false }; ownerChanged(); return; }      // not signed in: nothing to ask
@@ -5301,12 +5302,12 @@ function loadOwnerData() {
     .catch(() => { state.owner = { ok: false, error: "Couldn't reach the database just now." }; })
     .finally(ownerChanged);
 }
-// The FPL and My FPL team tabs are in the menu only for the owner (fc.fplOwner remembers the last
+// The FPL, My FPL team and EFL Fantasy tabs are in the menu only for the owner (fc.fplOwner remembers the last
 // answer in this browser, so they don't appear late on each visit). Anyone else on one is moved off.
-const OWNER_TABS = new Set(["fpl", "myteam"]);
+const OWNER_TABS = new Set(["fpl", "myteam", "efl"]);
 function ownerChanged() {
   const shut = !state.owner?.ok && !storedFlag("fplOwner");
-  $("#fpl-tab").hidden = $("#myteam-tab").hidden = shut;
+  $("#fpl-tab").hidden = $("#myteam-tab").hidden = $("#efl-tab").hidden = shut;
   if (shut && OWNER_TABS.has(state.tab)) {
     history.replaceState(null, "", location.pathname + location.search);
     showTab("table");
@@ -5315,20 +5316,21 @@ function ownerChanged() {
   }
   if (state.tab === "fpl") { loadFplPredictions(); renderFplNext(); }
   if (state.tab === "myteam") loadMyTeam();
+  if (state.tab === "efl") { loadEfl(); renderEfl(); }
 }
 // A different visitor (signed in or out): what the last one was shown goes, and the question is asked again
 function ownerReset() {
   if (!state.account.user) storeFlag("fplOwner", false);
-  state.owner = state.fplPred = undefined;
+  state.owner = state.fplPred = state.efl = undefined;
   state.myTeam = null;
   if (state.account.user) loadOwnerData(); else ownerChanged();
 }
 // What the owner-only parts show anyone else: a short why, and a way to sign in
-function ownerGate(label) {
+function ownerGate(label, why = "it's built on FPL's own data (prices, positions, availability and gameweeks), which FPL's terms don't allow us to republish") {
   const o = state.owner;
   if (!o || o.busy) return `<div class="stats-label">${label}</div><div class="stats-note">Loading…</div>`;
   return `<div class="stats-label">${label}</div>
-    <div class="stats-note">Shown to the site owner only: it's built on FPL's own data (prices, positions, availability and gameweeks), which FPL's terms don't allow us to republish.</div>
+    <div class="stats-note">Shown to the site owner only: ${why}.</div>
     ${state.account.user ? "" : `<div class="mt-lock"><button type="button" class="mt-btn owner-signin">Sign in</button></div>`}
     ${o.error && state.account.user ? `<div class="stats-note mt-warn" role="alert">${escapeHtml(o.error)}</div>` : ""}`;
 }
@@ -5703,7 +5705,7 @@ $("#myteam-body").addEventListener("change", (e) => {
 
 // ------------------------------------------------------------------ EFL Fantasy
 // Expected Fantasy EFL points for Championship, League One and League Two players and clubs
-// (efl_predictions.json, from thecornerfc/efl_fantasy.py; loaded when the tab first opens). Nothing
+// (efl_predictions, from thecornerfc/efl_fantasy.py; owner only, loaded when the tab first opens). Nothing
 // comes from the Fantasy EFL site: positions are guessed from match data (efl_positions.json corrects them).
 const EFL_SHOWN = 30;
 const EFL_FORMATIONS = [[2, 2, 2], [2, 3, 1], [3, 2, 1]];      // DEF-MID-FWD behind one goalkeeper
@@ -5715,9 +5717,10 @@ const EFL_CLUB_PARTS = { win: "Win", draw: "Draw", away_win: "Away win", clean_s
 const EFL_LEAGUE_SHORT = { 40: "Champ", 41: "L1", 42: "L2" };
 function loadEfl() {
   if (state.efl !== undefined) return;
+  if (!state.owner?.ok) { loadOwnerData(); return; }
   state.efl = null;
   renderEfl();
-  Promise.all([getJsonOrNull("data/efl_predictions.json"), loadPlayers()]).then(([d]) => { state.efl = d || false; renderEfl(); });
+  loadPlayers().then(() => { state.efl = state.owner.docs.efl_predictions || false; renderEfl(); });
 }
 function eflData() {
   const d = state.efl;
@@ -5757,8 +5760,9 @@ function eflBestTeam(rows, clubs, gw) {
 function renderEfl() {
   const body = $("#efl-body");
   const note = (text) => `<div class="stats-card"><div class="stats-note">${text}</div></div>`;
-  if (state.efl == null) { body.innerHTML = note("Loading…"); return; }
-  if (!state.efl || !state.efl.players.length) { body.innerHTML = loadFailed("efl_predictions") ? loadError("the predictions") : note("No upcoming EFL gameweeks yet."); return; }
+  if (state.efl === undefined) { body.innerHTML = `<div class="stats-card">${ownerGate("Predictions", "Fantasy EFL's terms don't allow the game to be used commercially, so this is kept off the public site")}</div>`; return; }
+  if (state.efl === null) { body.innerHTML = note("Loading…"); return; }
+  if (!state.efl || !state.efl.players.length) { body.innerHTML = note("No upcoming EFL gameweeks yet."); return; }
   const d = eflData();
   const v = state.eflView ||= { pos: "all", league: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0, open: null, clubsAll: false };
   const gws = d.gameweeks;
@@ -6689,7 +6693,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAccou
 
 // Until the data is in, the header names the tab the address asks for
 if (!storedText("auth")) storeFlag("fplOwner", false);          // signed out since the owner was last here
-$("#fpl-tab").hidden = $("#myteam-tab").hidden = !storedFlag("fplOwner");
+$("#fpl-tab").hidden = $("#myteam-tab").hidden = $("#efl-tab").hidden = !storedFlag("fplOwner");
 $("#app-title").textContent = document.querySelector(`nav.tabs [data-tab="${ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]] || ""}"]:not([hidden])`)?.textContent
   ?? (/^#\/players/.test(location.hash) ? "Players" : location.hash.startsWith("#/") && !location.hash.startsWith("#/clubs") ? "" : "Clubs");
 storeText("fplKey", "");          // the passphrase older versions of the page kept here
