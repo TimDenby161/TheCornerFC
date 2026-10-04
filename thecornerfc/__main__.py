@@ -100,6 +100,7 @@ def main(argv=None):
     if args.command == "health":
         return health.publish()
 
+    usage.prune()
     with health.pipeline(os.environ["API_PROCESS_LABEL"]) as run:
         result = _execute(args)
         run['exit_code'] = result or 0

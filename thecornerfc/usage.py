@@ -7,11 +7,12 @@ from pathlib import Path
 import sqlite3
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import config
 
 PROCESS_ID = str(uuid.uuid4())
+KEEP_DAYS = 30
 
 
 def run_id():
@@ -50,6 +51,17 @@ def record(endpoint, params, status, records, quota, duration, success, error):
             datetime.now(timezone.utc).isoformat(), endpoint.split('?')[0], digest,
             os.getenv("GITHUB_WORKFLOW", "local"), run_id(), PROCESS_ID, command,
             status, records, quota, round(duration * 1000), int(success), error))
+
+
+def prune(days=KEEP_DAYS):
+    """Drop calls older than `days`: the ledger is cached and archived on every run, and reports only read today's."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with connect() as conn:
+        removed = conn.execute("DELETE FROM api_calls WHERE timestamp < ?", (cutoff,)).rowcount
+        if removed:
+            conn.commit()
+            conn.execute("VACUUM")          # hand the space back, so the saved file shrinks too
+    return removed
 
 
 def report():

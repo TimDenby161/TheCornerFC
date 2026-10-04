@@ -12,7 +12,7 @@
   --warn-bg: #fff6e0;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
     --page-plane: #0d0d0d;
     --text-primary: #ffffff;
@@ -24,6 +24,19 @@
     --hist: #e0b050;
     --warn-bg: #2a2412;
   }
+}
+/* Dark chosen in the site menu (assets/theme.js sets data-theme) */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page-plane: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --border: rgba(255,255,255,0.10);
+  --link: #448ee6;
+  --surface: #181817;
+  --live: #5cc08c;
+  --hist: #e0b050;
+  --warn-bg: #2a2412;
 }
 html, body { margin: 0; background: var(--page-plane); color: var(--text-primary); }
 body {

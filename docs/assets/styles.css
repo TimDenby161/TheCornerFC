@@ -60,7 +60,7 @@
     --series-aqua:    #199e70;
     --status-good:    #0ca30c;
     --status-critical:#e66767;
-    --status-warning: #e0b636;
+    --status-warning: #f5c518;
     --chip-bg:        #26261f;
     --blue-text:      #73aaed;
     --good-text:      #0ec20e;
@@ -153,6 +153,16 @@
   nav.tabs button[aria-current="page"] {
     background: color-mix(in srgb, var(--series-blue) 14%, transparent); color: var(--blue-text);
   }
+  .theme-pick {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px;
+    padding: 10px 12px 0; border-top: 1px solid var(--border);
+    color: var(--text-secondary); font-size: 13px; font-weight: 600;
+  }
+  .theme-pick select {
+    font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--chip-bg); color: var(--text-primary);
+  }
+  .theme-pick select:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
   .menu-btn {
     appearance: none; border: none; background: transparent; cursor: pointer; color: var(--text-primary);
     font-size: 20px; line-height: 1; padding: 4px 6px; margin: -4px 0 -4px -6px; border-radius: 6px;
@@ -166,6 +176,8 @@
   }
   .account-btn:hover { color: var(--text-primary); }
   .account-btn:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
+  .framed { margin: 24px 16px; font-size: 15px; }
+  .framed a { color: var(--blue-text); }
   .menu-backdrop { position: fixed; inset: 0; z-index: 1; background: rgba(0,0,0,0.45); }
   .menu-backdrop[hidden] { display: none; }
   @media (min-width: 760px) {
@@ -781,6 +793,7 @@
   #tips-body .comp-group { margin-top: 10px; }
   .tip-pick + .tip-pick { border-top: 1px solid var(--gridline); padding-top: 5px; margin-top: 5px; }
   .tip-pick { align-items: center; }
+  .past-note { margin: -4px 2px 10px; }
   .tips-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 10px;
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   .kpi { padding: 12px 14px; border-left: 1px solid var(--border); margin-left: -1px; border-top: 1px solid var(--border); margin-top: -1px; }
