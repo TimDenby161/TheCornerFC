@@ -1618,7 +1618,7 @@ ALTER FUNCTION guard_fantasy_fixture_snapshot() SET search_path = public, pg_tem
 
 -- The site's data in the database (db/migrations/20261004_site_docs.sql)
 
--- Additive and repeatable. Not applied yet: run it in the Supabase SQL editor.
+-- Additive and repeatable. Applied 2026-10-04.
 -- The site's data in the database (audit/db-api-plan.md; owner's go-ahead 2026-10-04). Step 1 of
 -- the move away from docs/data: every file the export publishes is also kept here, one row per
 -- file, keyed by its path without ".json" ('matches', 'clubs/42'). The export writes the rows

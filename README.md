@@ -1293,7 +1293,7 @@ signed in in that browser (README: Accounts).
 
 - The table is in the `site` schema, which the Data API doesn't expose. The only way to read it is `site_doc(key)`, which returns one row's JSON and never a row marked `paid`.
 - **The site still reads the files.** Nothing calls `site_doc` yet.
-- Run `db/migrations/20261004_site_docs.sql` in the SQL editor (not applied yet; also in `db/schema.sql`). The checks are at the bottom of the file.
+- The migration is `db/migrations/20261004_site_docs.sql` (applied 2026-10-04; also in `db/schema.sql`). The checks are at the bottom of the file.
 
 ### Accounts
 
