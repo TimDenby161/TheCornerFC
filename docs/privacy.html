@@ -13,11 +13,11 @@
 <body>
 <p class="back"><a href="./">‹ The Corner FC</a></p>
 <h1>Privacy, corrections and security</h1>
-<p class="updated">Last updated 30 September 2026</p>
+<p class="updated">Last updated 4 October 2026</p>
 
 <h2 id="privacy">Privacy</h2>
-<p>The Corner FC is a static website. It has no accounts, sign-up forms, cookies, advertising or
-analytics, and it doesn't collect or store anything about you on a server of its own.</p>
+<p>The Corner FC is a static website with no cookies, advertising or analytics. You can use all of
+it without an account, and it stores nothing about you unless you choose to create one.</p>
 <ul>
   <li><strong>Hosting.</strong> The site is served by GitHub Pages. Like any web host, GitHub
     receives your IP address and browser details when you load a page. See the
@@ -33,12 +33,25 @@ analytics, and it doesn't collect or store anything about you on a server of its
     local storage (<code>fc.balance</code>, <code>fc.stakePct</code>, <code>fc.playerYears</code>) so
     they're still there next time. They never leave your device. Clear them by clearing this site's
     data in your browser.</li>
-  <li><strong>FPL predictions and My FPL team.</strong> These are for the site owner only. Entering
-    the passphrase sends it to the site's Supabase database (<code>supabase.co</code>) to check it,
-    so Supabase receives your IP address and browser details; the owner's browser then keeps it in
-    local storage (<code>fc.fplKey</code>). Visitors who don't enter one connect to nothing. Nothing
-    about visitors is stored. See the
-    <a href="https://supabase.com/privacy">Supabase Privacy Policy</a>.</li>
+  <li><strong>FPL predictions and My FPL team.</strong> These are for the site owner only, and
+    are shown once the owner has signed in. Visitors who don't sign in connect to nothing for
+    them.</li>
+  <li><strong>Accounts (optional).</strong> If you create an account or sign in, the site's
+    Supabase database (<code>supabase.co</code>) stores your email address, the time you signed up
+    and last signed in, and either a scrambled (hashed) copy of your password or, if you use
+    "Continue with Google", the name, email address and profile picture address that Google
+    passes on. Supabase also receives your IP address and browser details when you sign in.
+    Google doesn't share your password with the site, and its own privacy policy
+    covers its sign-in pages. This is used only to sign you in and to send the emails that
+    confirm your address or reset your password, which go out through Resend
+    (<code>resend.com</code>). It isn't shared with anyone else or used for marketing. While
+    you're signed in, your browser keeps the sign-in session in local storage
+    (<code>fc.auth</code>); signing out removes it. To delete your account and everything above,
+    open Account and choose Delete account. For a copy of what's held about you, or any other
+    question about your account, email
+    <a href="mailto:timdenby161@gmail.com">timdenby161@gmail.com</a>. See the
+    <a href="https://supabase.com/privacy">Supabase Privacy Policy</a> and the
+    <a href="https://resend.com/legal/privacy-policy">Resend Privacy Policy</a>.</li>
   <li><strong>EFL Fantasy.</strong> This tab shows expected Fantasy EFL points for Championship,
     League One and League Two players, worked out from the same API-Football data as the rest of the
     site. It doesn't connect to the Fantasy EFL game or any other site, and it stores nothing in your

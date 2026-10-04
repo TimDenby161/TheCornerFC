@@ -5247,58 +5247,62 @@ function renderFpl() {
 // ------------------------------------------------------------------ owner-only FPL data
 // FPL's terms don't allow its data to be republished (audit L3; owner's decision 2026-10-02), so the
 // predictions (FPL prices, positions, status, gameweeks) and the owner's team aren't in data/. They're
-// in Supabase, read through fpl_owner_data, which checks the owner's passphrase (the lock-in one) and
-// returns the lock-ins too. The key below is Supabase's public anon key: the database lets it call
-// fpl_owner_data and lock/unlock_fpl_transfers only (db/migrations/20261003_fpl_owner_docs.sql).
+// in Supabase, read through fpl_owner_data, which answers only when the visitor is signed in as the
+// owner (the accounts section below) and returns the lock-ins too. The key below is Supabase's public
+// key: on its own the database lets it call nothing (db/migrations/20261004_fpl_owner_login.sql).
 const SUPABASE = { url: "https://bookkurhdabdeccckjbn.supabase.co", key: "sb_publishable_JZ_oJVHIO75SFbFc95LQew_3wmKuvM7" };
 const FPL_ENTRY = 3996593;   // the owner's FPL entry (FPL_TEAM_ENTRY)
 const storedText = (k) => { try { return localStorage.getItem(`fc.${k}`) || ""; } catch { return ""; } };
 const storeText = (k, v) => { try { if (v) localStorage.setItem(`fc.${k}`, v); else localStorage.removeItem(`fc.${k}`); } catch { /* not stored */ } };
 
-async function supabase(path, body) {
-  const headers = { apikey: SUPABASE.key, "Content-Type": "application/json" };
-  if (SUPABASE.key.startsWith("eyJ")) headers.Authorization = `Bearer ${SUPABASE.key}`;   // a legacy anon key (a JWT)
-  const r = await fetch(`${SUPABASE.url}/rest/v1/${path}`,
-    body ? { method: "POST", headers, body: JSON.stringify(body) } : { headers, cache: "no-store" });
-  if (!r.ok) throw new Error(`Supabase ${r.status}`);
-  return r.json();
-}
-// state.owner: undefined = not asked yet; { busy } while asking; { ok: true, key, docs, locks }; { ok: false, error }.
-// Asked once a visit; the passphrase form asks again.
-function loadOwnerData(key = storedText("fplKey")) {
+// state.owner: undefined = not asked yet; { busy } while asking; { ok: true, docs, locks }; { ok: false, error }.
+// Asked when a visitor is signed in (ownerReset), and by the two tabs when they open.
+function loadOwnerData() {
   if (state.owner) return;
-  if (!key) { state.owner = { ok: false }; ownerChanged(); return; }
+  if (!storedText("auth")) { storeFlag("fplOwner", false); state.owner = { ok: false }; ownerChanged(); return; }      // not signed in: nothing to ask
   state.owner = { busy: true };
   ownerChanged();
-  supabase("rpc/fpl_owner_data", { p_entry: FPL_ENTRY, p_key: key })
-    .then((res) => {
-      if (res.ok) { storeText("fplKey", key); state.owner = { ok: true, key, docs: res.docs || {}, locks: res.locks || [] }; }
-      else { storeText("fplKey", ""); state.owner = { ok: false, error: res.error }; }
+  auth().then((client) => client.rpc("fpl_owner_data", { p_entry: FPL_ENTRY }))
+    .then(({ data, error }) => {
+      if (error) throw error;
+      state.owner = data.ok ? { ok: true, docs: data.docs || {}, locks: data.locks || [] } : { ok: false, error: data.error };
+      storeFlag("fplOwner", data.ok);
     })
     .catch(() => { state.owner = { ok: false, error: "Couldn't reach the database just now." }; })
     .finally(ownerChanged);
 }
+// The FPL and My FPL team tabs are in the menu only for the owner (fc.fplOwner remembers the last
+// answer in this browser, so they don't appear late on each visit). Anyone else on one is moved off.
+const OWNER_TABS = new Set(["fpl", "myteam"]);
 function ownerChanged() {
-  $("#myteam-tab").hidden = !state.owner?.ok && !storedText("fplKey");
+  const shut = !state.owner?.ok && !storedFlag("fplOwner");
+  $("#fpl-tab").hidden = $("#myteam-tab").hidden = shut;
+  if (shut && OWNER_TABS.has(state.tab)) {
+    history.replaceState(null, "", location.pathname + location.search);
+    showTab("table");
+    syncTableUrl();
+    return;
+  }
   if (state.tab === "fpl") { loadFplPredictions(); renderFplNext(); }
   if (state.tab === "myteam") loadMyTeam();
 }
-// What the owner-only parts show anyone else: a short why, and the passphrase box
+// A different visitor (signed in or out): what the last one was shown goes, and the question is asked again
+function ownerReset() {
+  if (!state.account.user) storeFlag("fplOwner", false);
+  state.owner = state.fplPred = undefined;
+  state.myTeam = null;
+  if (state.account.user) loadOwnerData(); else ownerChanged();
+}
+// What the owner-only parts show anyone else: a short why, and a way to sign in
 function ownerGate(label) {
   const o = state.owner;
   if (!o || o.busy) return `<div class="stats-label">${label}</div><div class="stats-note">Loading…</div>`;
   return `<div class="stats-label">${label}</div>
     <div class="stats-note">Shown to the site owner only: it's built on FPL's own data (prices, positions, availability and gameweeks), which FPL's terms don't allow us to republish.</div>
-    <form class="mt-lock owner-gate"><input type="password" class="table-search" name="key" placeholder="Passphrase" aria-label="Passphrase" autocomplete="current-password" required>
-      <button type="submit" class="mt-btn">Unlock</button></form>
-    ${o.error ? `<div class="stats-note mt-warn" role="alert">${escapeHtml(o.error)}</div>` : ""}`;
+    ${state.account.user ? "" : `<div class="mt-lock"><button type="button" class="mt-btn owner-signin">Sign in</button></div>`}
+    ${o.error && state.account.user ? `<div class="stats-note mt-warn" role="alert">${escapeHtml(o.error)}</div>` : ""}`;
 }
-document.addEventListener("submit", (e) => {
-  if (!e.target.classList.contains("owner-gate")) return;
-  e.preventDefault();
-  state.owner = undefined;
-  loadOwnerData(e.target.elements.key.value);
-});
+document.addEventListener("click", (e) => { if (e.target.closest(".owner-signin")) $("#account-btn").click(); });
 
 // Predictions: each player's expected points by gameweek (fpl_predictions, owner only, loaded when
 // the FPL tab first opens). One gameweek at a time (◀ ▶) or totals over the next 2 / 5 / 10.
@@ -5466,8 +5470,8 @@ const CHIP_GAIN = { wildcard: "over the plan's weeks, against the plan", freehit
 function loadMyTeam() {
   if (state.myTeam) return;
   if (!state.owner?.ok) { loadOwnerData(); renderMyTeam(); return; }
-  const { docs, locks, key } = state.owner;
-  const mt = state.myTeam = { team: docs.fpl_team || false, pred: docs.fpl_predictions || false, locks: null, ft: null, key, note: "", msg: "" };
+  const { docs, locks } = state.owner;
+  const mt = state.myTeam = { team: docs.fpl_team || false, pred: docs.fpl_predictions || false, locks: null, ft: null, note: "", msg: "" };
   if (!mt.team || !mt.pred) { renderMyTeam(); return; }
   mt.locks = new Map(locks.filter((x) => x.season === mt.team.season).map((x) => [x.event_id, x]));
   replan();
@@ -5548,13 +5552,11 @@ function renderMyTeam() {
   let lock;
   if (r.lock) {
     lock = `<div class="mt-locked"><span>✓ Locked in ${escapeHtml(fmtDay(r.lock.locked_at))}, ${escapeHtml(fmtTime(r.lock.locked_at))}</span>
-      ${!passed ? `${mt.askKey ? `<input type="password" id="mt-key" class="table-search" placeholder="Passphrase" aria-label="Passphrase" autocomplete="current-password" value="${escapeHtml(mt.key)}">` : ""}
-        <button type="button" class="filter-chip" id="mt-unlock"${mt.busy ? " disabled" : ""}>Undo</button>` : ""}</div>`;
+      ${!passed ? `<button type="button" class="filter-chip" id="mt-unlock"${mt.busy ? " disabled" : ""}>Undo</button>` : ""}</div>`;
   } else if (passed) {
     lock = "";
   } else {
     lock = `<div class="mt-lock">
-      ${mt.askKey ? `<input type="password" id="mt-key" class="table-search" placeholder="Passphrase" aria-label="Passphrase" autocomplete="current-password" value="${escapeHtml(mt.key)}">` : ""}
       <button type="button" class="mt-btn" id="mt-lock"${mt.busy ? " disabled" : ""}>${w0.moves.length ? "I've made these transfers" : "Lock in: no transfers"}</button></div>
       <div class="stats-note">Made different ones? Lock in anyway: the next FPL update (07:00, 13:00 and 19:00 UTC) reads what you actually did.</div>`;
   }
@@ -5646,11 +5648,11 @@ async function lockMyTransfers(undo) {
   mt.busy = true; mt.msg = "";
   renderMyTeam();
   try {
-    const args = { p_entry: t.entry, p_season: t.season, p_event: t.next_event, p_key: mt.key };
-    const res = await supabase(`rpc/${undo ? "unlock" : "lock"}_fpl_transfers`, undo ? args : { ...args, p_transfers: transfers });
-    if (!res.ok) { mt.msg = res.error; mt.key = ""; mt.askKey = true; storeText("fplKey", ""); }
+    const args = { p_entry: t.entry, p_season: t.season, p_event: t.next_event };
+    const { data: res, error } = await (await auth()).rpc(`${undo ? "unlock" : "lock"}_fpl_transfers`, undo ? args : { ...args, p_transfers: transfers });
+    if (error) throw error;
+    if (!res.ok) mt.msg = res.error;
     else {
-      storeText("fplKey", mt.key);
       if (undo) mt.locks.delete(t.next_event);
       else mt.locks.set(t.next_event, { event_id: t.next_event, transfers, locked_at: res.locked_at });
     }
@@ -5668,7 +5670,6 @@ $("#myteam-body").addEventListener("change", (e) => {
   mt.ft = +e.target.value === mt.result?.ftFpl ? null : +e.target.value;
   replan();
 });
-$("#myteam-body").addEventListener("input", (e) => { if (e.target.id === "mt-key") state.myTeam.key = e.target.value; });
 
 // ------------------------------------------------------------------ EFL Fantasy
 // Expected Fantasy EFL points for Championship, League One and League Two players and clubs
@@ -5949,8 +5950,12 @@ function route() {
   const country = location.hash.match(/^#\/country\/(.+)/);
   const league = location.hash.match(/^#\/league\/(\d+)(?:\/(\w+))?/);
   const tableView = location.hash.match(/^#\/(clubs|players)(?:\?(.*))?$/);
-  const tab = ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]];
+  let tab = ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]];
   if (!state.data) return;
+  if (OWNER_TABS.has(tab) && $("#fpl-tab").hidden) {            // not the owner: as if the address named no tab
+    history.replaceState(null, "", location.pathname + location.search);
+    tab = null;
+  }
   if (club || player || nation || country || league || tableView) $("#team-modal").hidden = true;
   if (!league) state.league = null;
   if (club) openClubPage(Number(club[1]));
@@ -6252,8 +6257,206 @@ document.addEventListener("keydown", (e) => {
   if (again && !el.isConnected) document.querySelector(again)?.focus();
 });
 
+// ------------------------------------------------------------------ accounts
+// Sign in with Google or with an email and password (Supabase Auth). Nothing on the site needs an
+// account yet. The Supabase library is a copy kept in assets/lib (the page's policy allows scripts
+// from this site only; README: Accounts) and is fetched the first time it's needed: when the
+// account box is opened, on coming back from Google or an emailed link, or when the last visit
+// was signed in. The session is kept in this browser's storage by the library, under AUTH_KEY.
+const AUTH_LIB = "assets/lib/supabase-js-2.117.2.js";
+const AUTH_KEY = "fc.auth";
+const AUTH_LINK_TYPES = new Set(["signup", "email", "recovery", "magiclink", "invite", "email_change"]);
+const ACCOUNT_TITLES = { signin: "Sign in", signup: "Create an account", reset: "Reset your password",
+  newpass: "Choose a new password", note: "Check your email", account: "Your account", delete: "Delete your account" };
+const GOOGLE_MARK = `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>`;
+// state.account: user (null when signed out), view (a key of ACCOUNT_TITLES), text (the "note" view's message)
+state.account = { user: null, view: "signin", text: "" };
+let authClient;                               // a promise for the Supabase client, once asked for
+
+function auth() {
+  authClient ||= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = AUTH_LIB;
+    s.onload = resolve;
+    s.onerror = () => { authClient = undefined; s.remove(); reject(new Error("auth-lib")); };
+    document.head.append(s);
+  }).then(() => {
+    const client = window.supabase.createClient(SUPABASE.url, SUPABASE.key, { auth: { flowType: "pkce", storageKey: AUTH_KEY } });
+    client.auth.onAuthStateChange((event, session) => {
+      const was = state.account.user?.id;
+      state.account.user = session?.user || null;
+      // The owner question is asked afresh for a different visitor, and once the stored session has
+      // been read (it may have lapsed). Outside this callback, as the library asks; a question
+      // already on its way is for this visitor
+      const fresh = event === "INITIAL_SESSION" ? !state.owner?.ok : was !== state.account.user?.id;
+      if (fresh && !state.owner?.busy) setTimeout(ownerReset, 0);
+      if (event === "PASSWORD_RECOVERY") openAccount("newpass");
+      else renderAccount();
+    });
+    return client;
+  });
+  return authClient;
+}
+// The address a Google sign-in or an emailed link comes back to: this page, without its #/ part
+const authReturnUrl = () => location.origin + location.pathname;
+function dropAuthParams() {
+  const u = new URL(location.href);
+  ["code", "token_hash", "type", "error", "error_code", "error_description"].forEach((k) => u.searchParams.delete(k));
+  if (!u.hash.startsWith("#/")) u.hash = "";
+  history.replaceState(history.state, "", u);
+}
+function accountError(err) {
+  if (err?.message === "auth-lib" || err?.name === "AuthRetryableFetchError") return "Couldn't reach the sign-in service just now. Check your connection and try again.";
+  if (err?.status === 429) return "Too many tries. Wait a minute, then try again.";
+  return {
+    invalid_credentials: "That email and password don't match an account.",
+    email_not_confirmed: "Confirm your email first: open the link we sent you.",
+    user_already_exists: "There's already an account for that email. Sign in instead.",
+    weak_password: "That password is too easy to guess. Choose a longer one.",
+    same_password: "That's already your password. Choose a different one.",
+    otp_expired: "That link has expired or has already been used. Ask for a new one.",
+    flow_state_not_found: "That link has expired or has already been used. Ask for a new one.",
+    flow_state_expired: "That link has expired or has already been used. Ask for a new one.",
+  }[err?.code] || "Something went wrong. Try again in a moment.";
+}
+function accountMsg(text, bad = false) {
+  const el = $("#account-msg");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle("bad", bad);
+  el.setAttribute("role", bad ? "alert" : "status");
+}
+function openAccount(view, msg = "", bad = false) {
+  if (view) state.account.view = view;
+  $("#account-modal").hidden = false;
+  setMenu(false);
+  renderAccount();
+  accountMsg(msg, bad);
+  $("#account-body").querySelector("input, button")?.focus();
+}
+function closeAccount() {
+  if ($("#account-modal").hidden) return;
+  $("#account-modal").hidden = true;
+  if (["note", "newpass", "delete"].includes(state.account.view)) state.account.view = "signin";
+  $("#account-btn").focus();
+}
+function renderAccount() {
+  const a = state.account;
+  $("#account-btn").textContent = a.user ? "Account" : "Sign in";
+  if ($("#account-modal").hidden) return;
+  const view = !a.user ? (a.view === "delete" ? "signin" : a.view) : ["newpass", "delete"].includes(a.view) ? a.view : "account";
+  const field = (name, label, type, autocomplete, extra = "") =>
+    `<label>${label}<input type="${type}" name="${name}" class="table-search" autocomplete="${autocomplete}" required ${extra}></label>`;
+  const google = `<button type="button" class="google-btn" data-account="google">${GOOGLE_MARK}<span>Continue with Google</span></button><div class="account-or">or</div>`;
+  const link = (to, label) => `<button type="button" class="link-btn" data-account="${to}">${label}</button>`;
+  const form = (fields, submit) => `<form class="account-form" data-view="${view}">${fields}<button type="submit" class="mt-btn">${submit}</button></form>`;
+  $("#account-title").textContent = ACCOUNT_TITLES[view];
+  $("#account-body").innerHTML = ({
+    signin: () => google + form(field("email", "Email", "email", "username") + field("password", "Password", "password", "current-password"), "Sign in")
+      + `<div class="account-links">${link("signup", "Create an account")}${link("reset", "Forgotten your password?")}</div>`,
+    signup: () => google + form(field("email", "Email", "email", "email") + field("password", "Password (8 characters or more)", "password", "new-password", 'minlength="8"'), "Create account")
+      + `<div class="stats-note">By creating an account you agree to the <a href="terms.html">terms of use</a> and the <a href="privacy.html">privacy notice</a>.</div>
+         <div class="account-links">${link("signin", "Already have an account? Sign in")}</div>`,
+    reset: () => `<p class="account-text">Enter your email and we'll send you a link to choose a new password.</p>`
+      + form(field("email", "Email", "email", "username"), "Send the link") + `<div class="account-links">${link("signin", "Back to sign in")}</div>`,
+    newpass: () => form(field("password", "New password (8 characters or more)", "password", "new-password", 'minlength="8"'), "Save password"),
+    note: () => `<p class="account-text">${escapeHtml(a.text)}</p><div class="account-links">${link("signin", "Back to sign in")}</div>`,
+    account: () => `<p class="account-text">Signed in as <b>${escapeHtml(a.user.email)}</b></p>
+      <button type="button" class="mt-btn account-out" data-account="signout">Sign out</button>
+      <div class="account-links">${link("delete", "Delete account")}</div>`,
+    delete: () => `<p class="account-text">This deletes your account (<b>${escapeHtml(a.user.email)}</b>) and its sign-in details for good. It can't be undone.</p>
+      <button type="button" class="mt-btn account-out account-danger" data-account="erase">Delete my account</button>
+      <div class="account-links">${link("account", "Keep my account")}</div>`,
+  })[view]() + `<div class="stats-note" id="account-msg" role="status"></div>`;
+}
+$("#account-btn").addEventListener("click", () => {
+  openAccount();
+  auth().catch((err) => accountMsg(accountError(err), true));
+});
+$("#account-modal").addEventListener("click", async (e) => {
+  if (e.target.id === "account-modal" || e.target.closest(".modal-close")) return closeAccount();
+  const btn = e.target.closest("[data-account]");
+  if (!btn) return;
+  const act = btn.dataset.account;
+  if (ACCOUNT_TITLES[act]) return openAccount(act);
+  btn.disabled = true;
+  try {
+    const client = await auth();
+    if (act === "google") {
+      try { sessionStorage.setItem("fc.authBack", location.hash); } catch { /* comes back to the first tab */ }
+      const { error } = await client.auth.signInWithOAuth({ provider: "google", options: { redirectTo: authReturnUrl() } });
+      if (error) throw error;
+      return;                                   // the browser is on its way to Google
+    }
+    if (act === "erase") {
+      const { error } = await client.rpc("delete_my_account");            // db/migrations/20261004_delete_my_account.sql
+      if (error) throw error;
+      await client.auth.signOut({ scope: "local" });
+      return openAccount("signin", "Your account has been deleted.");
+    }
+    const { error } = await client.auth.signOut({ scope: "local" });      // this browser only
+    if (error) throw error;
+    state.account.view = "signin";
+    closeAccount();
+  } catch (err) {
+    btn.disabled = false;
+    accountMsg(accountError(err), true);
+  }
+});
+$("#account-modal").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const view = e.target.dataset.view, btn = e.target.querySelector("[type=submit]");
+  const email = e.target.elements.email?.value.trim(), password = e.target.elements.password?.value;
+  btn.disabled = true;
+  accountMsg("");
+  try {
+    const client = await auth();
+    const res = view === "signin" ? await client.auth.signInWithPassword({ email, password })
+      : view === "signup" ? await client.auth.signUp({ email, password, options: { emailRedirectTo: authReturnUrl() } })
+      : view === "reset" ? await client.auth.resetPasswordForEmail(email, { redirectTo: authReturnUrl() })
+      : await client.auth.updateUser({ password });
+    if (res.error) throw res.error;
+    // The same answer whether or not the email has an account, so the box can't be used to find out
+    if (view === "signup" && !res.data.session) { state.account.text = `We've sent a link to ${email}. Open it to finish creating your account.`; openAccount("note"); }
+    else if (view === "reset") { state.account.text = `If ${email} has an account, we've sent it a link to choose a new password.`; openAccount("note"); }
+    else if (view === "newpass") { state.account.view = "account"; openAccount("account", "Your password has been changed."); }
+    else { state.account.view = "signin"; closeAccount(); }
+  } catch (err) {
+    btn.disabled = false;
+    accountMsg(accountError(err), true);
+  }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAccount(); });
+// Coming back from Google or an emailed link, or signed in on the last visit
+(function resumeAccount() {
+  const p = new URLSearchParams(location.search), inHash = new URLSearchParams(location.hash.startsWith("#/") ? "" : location.hash.slice(1));
+  let back = "", verifier = "";
+  try { back = sessionStorage.getItem("fc.authBack") || ""; sessionStorage.removeItem("fc.authBack"); } catch { /* none kept */ }
+  try { verifier = localStorage.getItem(`${AUTH_KEY}-code-verifier`) || ""; } catch { /* none kept */ }
+  const fail = (err) => { dropAuthParams(); openAccount("signin", accountError(err), true); };
+  if (p.has("error_description") || inHash.has("error_description")) {
+    fail({ code: p.get("error_code") || inHash.get("error_code") });
+  } else if (p.has("token_hash") && AUTH_LINK_TYPES.has(p.get("type"))) {
+    // An emailed link in the form README: Accounts sets up, which works in any browser
+    const link = { token_hash: p.get("token_hash"), type: p.get("type") };
+    dropAuthParams();
+    auth().then((client) => client.auth.verifyOtp(link)).then(({ error }) => { if (error) throw error; }).catch(fail);
+  } else if (p.has("code") && !verifier) {
+    // Supabase's default emailed link, opened in a browser other than the one that asked for it
+    dropAuthParams();
+    openAccount("signin", "That link was opened in a different browser from the one that asked for it. If you were confirming your email, it's confirmed: sign in here. If you were resetting your password, ask for a new link from this browser.");
+  } else if (p.has("code")) {
+    if (back.startsWith("#/") && !location.hash) history.replaceState(history.state, "", location.search + back);
+    auth().then((client) => client.auth.initialize()).then(({ error }) => { if (error) throw error; }).catch(fail);
+  } else if (storedText("auth")) {
+    auth().catch(() => { /* stays signed out on this visit */ });
+  }
+})();
+
 // Until the data is in, the header names the tab the address asks for
-$("#app-title").textContent = document.querySelector(`nav.tabs [data-tab="${ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]] || ""}"]`)?.textContent
+if (!storedText("auth")) storeFlag("fplOwner", false);          // signed out since the owner was last here
+$("#fpl-tab").hidden = $("#myteam-tab").hidden = !storedFlag("fplOwner");
+$("#app-title").textContent = document.querySelector(`nav.tabs [data-tab="${ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]] || ""}"]:not([hidden])`)?.textContent
   ?? (/^#\/players/.test(location.hash) ? "Players" : location.hash.startsWith("#/") && !location.hash.startsWith("#/clubs") ? "" : "Clubs");
-$("#myteam-tab").hidden = !storedText("fplKey");
+storeText("fplKey", "");          // the passphrase older versions of the page kept here
 loadData();

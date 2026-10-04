@@ -198,8 +198,8 @@ def _read_json(path):
 def store_owner_doc(conn, name, payload):
     """Owner-only FPL data (audit L3, owner's decision 2026-10-02): FPL's terms don't allow its data
     to be republished, so fpl_predictions and fpl_team go to fpl_owner_docs, never docs/data. The
-    site reads them through fpl_owner_data, which checks the owner's passphrase
-    (db/migrations/20261003_fpl_owner_docs.sql). Raises if the table is missing or the connection
+    site reads them through fpl_owner_data, which answers only the signed-in owner
+    (db/migrations/20261004_fpl_owner_login.sql). Raises if the table is missing or the connection
     is read-only: callers treat that as a skipped export."""
     config.require_db_write(f"store {name}")
     conn.execute("""insert into fpl_owner_docs (name, doc, updated_at) values (%s, %s::jsonb, now())

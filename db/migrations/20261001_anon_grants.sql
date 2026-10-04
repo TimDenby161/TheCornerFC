@@ -1,12 +1,14 @@
 -- Repeatable. NOT APPLIED YET (audit/findings.md S1; public-API audit of 2026-10-01).
--- The site's public key (anon) should hold exactly what docs/assets/app.js uses:
--- lock_fpl_transfers / unlock_fpl_transfers, and fpl_owner_data once 20261003_fpl_owner_docs.sql
--- is applied (that migration also took away anon's read of fpl_team_locks; L3, 2026-10-02).
+-- The site's public key (anon) should hold nothing, and signed-in visitors (authenticated)
+-- exactly what docs/assets/app.js calls for them: fpl_owner_data and lock_fpl_transfers /
+-- unlock_fpl_transfers, which answer only the owner (20261004_fpl_owner_login.sql), and
+-- delete_my_account. Until 2026-10-04 this file gave the passphrase versions of the first three
+-- to anon as well; that is how it was first run.
 -- Today anon and authenticated hold every privilege on almost every table, so row level security with no policies is the only
 -- barrier, and a new table gets the same grants the moment it is created.
 -- 1. Row level security on the eight tables that db/schema.sql never gave it (live already has it).
 -- 2. Take every table, view, sequence and function grant in public away from anon, authenticated
---    and PUBLIC, then give back the functions the site uses.
+--    and PUBLIC, then give signed-in visitors back the functions the site uses.
 -- 3. New tables, sequences and functions made by the role running this (postgres) start closed.
 -- The pipeline (DATABASE_URL, postgres) and local_readonly are not touched. After this, anon
 -- reads of the other tables answer 401 instead of 200 with no rows.
@@ -36,16 +38,22 @@ DO $$ DECLARE r text; f regprocedure; BEGIN
         IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
             EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', r);      -- views too
             EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', r);
-            IF to_regprocedure('fpl_owner_data(integer, text)') IS NOT NULL THEN
-                EXECUTE format('GRANT EXECUTE ON FUNCTION fpl_owner_data(integer, text) TO %I', r);
-            END IF;
-            EXECUTE format('GRANT EXECUTE ON FUNCTION lock_fpl_transfers(integer, integer, integer, jsonb, text) TO %I', r);
-            EXECUTE format('GRANT EXECUTE ON FUNCTION unlock_fpl_transfers(integer, integer, integer, text) TO %I', r);
             EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
             EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', r);
             EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', r);
         END IF;
     END LOOP;
+    -- Signed-in visitors only: deleting their own account (20261004_delete_my_account.sql) and the
+    -- owner-only FPL functions (20261004_fpl_owner_login.sql). Each is skipped until it exists.
+    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN
+        FOREACH r IN ARRAY ARRAY['delete_my_account()', 'fpl_owner_data(integer)',
+                                 'lock_fpl_transfers(integer, integer, integer, jsonb)',
+                                 'unlock_fpl_transfers(integer, integer, integer)'] LOOP
+            IF to_regprocedure(r) IS NOT NULL THEN
+                EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated', r);
+            END IF;
+        END LOOP;
+    END IF;
 END; $$;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
 -- PUBLIC's EXECUTE on new functions is a database-wide default, which a per-schema revoke can't
@@ -60,5 +68,4 @@ ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 --   select grantee, table_name, privilege_type from information_schema.role_table_grants
 --     where table_schema='public' and grantee in ('anon','authenticated','PUBLIC');
 --   select p.oid::regprocedure from pg_proc p where p.pronamespace='public'::regnamespace
---     and has_function_privilege('anon', p.oid, 'execute')
---     and p.proname not in ('lock_fpl_transfers','unlock_fpl_transfers','fpl_owner_data');
+--     and has_function_privilege('anon', p.oid, 'execute');

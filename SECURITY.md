@@ -14,8 +14,10 @@ security page is [`docs/privacy.html`](docs/privacy.html).
 
 ## What there is to protect
 
-The website is static files on GitHub Pages with no visitor accounts, cookies or analytics. The
-secrets are two GitHub Actions repository secrets and the owner's My FPL team passphrase. Nothing
+The website is static files on GitHub Pages with no cookies or analytics. Visitors can create an
+optional account (README: Accounts): Supabase Auth holds their email addresses and password hashes,
+and the site's files hold none of it. The
+secrets are two GitHub Actions repository secrets and the owner's own sign-in. Nothing
 secret is in the site's files.
 
 | Secret | Used by | Grants |
@@ -23,7 +25,7 @@ secret is in the site's files.
 | `API_FOOTBALL_KEY` | nightly, match day and both backfill workflows | API-Football requests on the paid plan (quota and billing) |
 | `DATABASE_URL` | all five workflows | Write access to the Supabase Postgres database |
 | `GITHUB_TOKEN` | all workflows (automatic) | Push to this repo: each job gets only `contents: write`, and the workflow default is no permissions |
-| My FPL team passphrase | the owner, typed into the My FPL team page | Saving or undoing that FPL entry's locked-in transfers, which changes the plan every visitor sees. Nothing else |
+| The owner's sign-in (Google account or site password) | the owner, through Sign in | Reading the owner-only FPL pages, and saving or undoing that FPL entry's locked-in transfers. Nothing else |
 
 Locally, `.env` holds the same names and is git-ignored. Local runs default to a read-only
 database role and no API calls (README: Local development safety).
@@ -34,12 +36,14 @@ database role and no API calls (README: Local development safety).
 public on purpose and is not a secret: it only identifies the project to Supabase's API, and the
 database decides what it may do. Secret scanners flag it (see below); that match is expected.
 
-What the key can do, checked against the live project on 2026-10-01:
+What the key can do on its own, once `db/migrations/20261001_anon_grants.sql` and
+`20261004_fpl_owner_login.sql` are applied (last checked against the live project on 2026-10-01,
+before them):
 
-- Read `fpl_team_locks` (the locked-in transfers, which the page shows anyway).
-- Call `lock_fpl_transfers` and `unlock_fpl_transfers`, which do nothing without the passphrase.
-- Nothing else. Every other table has row level security with no policy for the key, so reads
-  return no rows and writes are refused.
+- Sign a visitor up or in through Supabase Auth.
+- Nothing in the database: it holds no grant on any table, view or function. A signed-in visitor
+  can call `delete_my_account` (their own account only) and the three FPL functions, which answer
+  only the owner.
 
 Row level security is the only barrier on most tables, so **every new table or view needs it
 before it exists in production**: `alter table … enable row level security`, and for a view,
@@ -52,15 +56,13 @@ site, the repo or a workflow. The pipeline uses `DATABASE_URL` instead.
 "I've made these transfers" on the My FPL team page is the one place the public site writes to the
 database. How it's protected:
 
-- The page sends the passphrase over HTTPS to one of two database functions. They compare it with
-  a bcrypt hash in `fpl_team_keys`, which the publishable key can't read, and never return it.
+- The two database functions behind it can be called by signed-in visitors only, and do nothing
+  unless the caller's confirmed email address is the one in `fpl_team_owners` for the entry, which
+  neither the publishable key nor a signed-in visitor can read.
 - The functions accept only a list of at most 15 transfers (8 KB) for one entry and gameweek. The
   page uses the player ids in a lock and ignores any that don't fit the squad.
-- After 10 wrong passphrases in an hour, an entry refuses all attempts for the rest of that hour.
-  Use a long random passphrase (20 characters or more) so guessing is pointless.
-- After a lock or undo succeeds, the passphrase is kept in that browser's local storage
-  (`fc.fplKey`) so it isn't asked for again. It is removed when an attempt fails. Use it only on
-  your own device; to clear it, delete the site's data in the browser.
+- The owner's access is as strong as that sign-in: keep two-step verification on the Google
+  account, and sign out on a device that isn't yours.
 - The site's Content-Security-Policy allows connections only to the site itself and this one
   Supabase project.
 
@@ -83,11 +85,11 @@ on a lost machine). Otherwise, rotate about once a year. After each rotation, ru
 3. Update the `DATABASE_URL` repository secret and any local `.env` that has it.
 4. The read-only local role (`READ_ONLY_DATABASE_URL`) is rotated the same way, in `.env` only.
 
-**My FPL team passphrase**
-1. In the Supabase SQL editor, run the `INSERT INTO fpl_team_keys …` statement from README
-   (My FPL team) with a new passphrase. It replaces the stored hash.
-2. On the next lock or undo the page asks for the new one. The old one, if a browser still holds
-   it, is rejected and removed.
+**The owner's sign-in**
+1. If the Google account or site password may be known to someone else, change it there first,
+   then in Supabase → Authentication → Users open the owner's user and sign out all its sessions.
+2. To move the owner pages to a different address, run the `INSERT INTO fpl_team_owners …`
+   statement from README (My FPL team) with the new one.
 
 **Supabase publishable key.** It isn't a secret, so a leak isn't possible. To replace it anyway
 (for example to cut off a script that misuses it): Supabase → Project Settings → API Keys, create

@@ -28,6 +28,7 @@
     <button type="button" class="menu-btn" id="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="main-menu">&#9776;</button>
     <h1><span class="brand-mark" aria-hidden="true"></span><span>The Corner FC</span></h1>
     <span class="app-title" id="app-title">Clubs</span>
+    <button type="button" class="account-btn" id="account-btn" aria-haspopup="dialog">Sign in</button>
   </div>
   <nav class="tabs" id="main-menu" role="tablist" aria-orientation="vertical">
     <button role="tab" data-tab="table" data-view="clubs" aria-selected="true">Clubs</button>
@@ -39,7 +40,7 @@
     <button role="tab" data-tab="lineups" aria-selected="false">Line-up record</button>
     <button role="tab" data-tab="tips" aria-selected="false">Model vs Market</button>
     <button role="tab" data-tab="bets" aria-selected="false">Paper Simulation</button>
-    <button role="tab" data-tab="fpl" aria-selected="false">FPL</button>
+    <button role="tab" data-tab="fpl" id="fpl-tab" aria-selected="false" hidden>FPL</button>
     <button role="tab" data-tab="myteam" id="myteam-tab" aria-selected="false" hidden>My FPL team</button>
     <button role="tab" data-tab="efl" aria-selected="false">EFL Fantasy</button>
   </nav>
@@ -207,6 +208,16 @@
       <button type="button" class="modal-close" aria-label="Close">&times;</button>
     </div>
     <div id="team-modal-body"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="account-modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="account-title">
+    <div class="modal-header">
+      <div id="account-title"></div>
+      <button type="button" class="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="account-body"></div>
   </div>
 </div>
 

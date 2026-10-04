@@ -115,7 +115,7 @@ class TeamTests(unittest.TestCase):
         self.assertNotIn('data/fpl_predictions.json', app)
         self.assertNotIn('data/fpl_team.json', app)
         self.assertNotIn('fpl_team_locks?', app)          # lock-ins come back with fpl_owner_data
-        self.assertIn('rpc/fpl_owner_data', app)
+        self.assertIn('rpc("fpl_owner_data"', app)          # through the signed-in client, never the bare key
 
 
 class LockMigrationTests(unittest.TestCase):
@@ -148,7 +148,23 @@ class LockMigrationTests(unittest.TestCase):
         self.assertIn("GRANT EXECUTE ON FUNCTION fpl_owner_data(integer, text) TO %I", sql)
         grants = (ROOT / 'db/migrations/20261001_anon_grants.sql').read_text()
         self.assertNotIn("GRANT SELECT ON fpl_team_locks", grants)
-        self.assertIn("GRANT EXECUTE ON FUNCTION fpl_owner_data(integer, text) TO %I", grants)
+        self.assertNotIn("TO %I", grants)                  # nothing is given back to anon
+
+    def test_owner_is_checked_by_sign_in_not_a_passphrase(self):
+        sql = (ROOT / 'db/migrations/20261004_fpl_owner_login.sql').read_text()
+        app = (ROOT / 'docs/assets/app.js').read_text()
+        self.assertIn('ALTER TABLE fpl_team_owners ENABLE ROW LEVEL SECURITY', sql)
+        self.assertEqual(sql.count('why text := fpl_team_owner_check(p_entry);'), 3)
+        self.assertIn('u.id = auth.uid()', sql)
+        self.assertIn('u.email_confirmed_at IS NOT NULL', sql)
+        for old in ('fpl_owner_data(integer, text)', 'lock_fpl_transfers(integer, integer, integer, jsonb, text)',
+                    'unlock_fpl_transfers(integer, integer, integer, text)', 'fpl_team_key_check(integer, text)'):
+            self.assertIn(f'DROP FUNCTION IF EXISTS {old};', sql)
+        self.assertEqual(sql.count('GRANT '), 3)
+        self.assertNotRegex(sql, r'GRANT [^;]* TO (anon|PUBLIC|%I)')
+        self.assertNotIn('@', sql)                         # the owner's address is set in the SQL editor
+        for gone in ('p_key', 'fplKey")', 'Passphrase'):
+            self.assertNotIn(gone, app.replace('storeText("fplKey", "")', ''))
 
     def test_page_allows_only_this_supabase_project(self):
         page = (ROOT / 'docs/index.html').read_text()
