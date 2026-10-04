@@ -54,6 +54,25 @@ const state = {
 };
 
 const $ = (sel) => document.querySelector(sel);
+// Computed styles. The page's policy has no 'unsafe-inline' for styles, so a template can't write
+// style="": fixed styles are u- classes in styles.css, and a computed one is a data attribute that
+// is checked and then set through the DOM here, as soon as the element is added to the page.
+const CSS_LENGTH = /^-?\d+(\.\d+)?(%|px)$/, CSS_COLOUR = /^(#[0-9a-f]{3,8}|var\(--[a-z0-9-]+\)|transparent)$/i;
+const DATA_STYLES = {
+  sw: ["width", CSS_LENGTH], sh: ["height", CSS_LENGTH], sx: ["left", CSS_LENGTH], sy: ["top", CSS_LENGTH],
+  sbg: ["background", CSS_COLOUR], sedge: ["border-left-color", CSS_COLOUR],
+  shue: ["--crest-h", /^\d+(\.\d+)?$/], skit: ["--kit", CSS_COLOUR], skit2: ["--kit2", CSS_COLOUR],
+  srow: ["grid-row", /^\d+( \/ span \d+)?$/], scol: ["grid-column", /^\d+( \/ span \d+)?$/],
+};
+const DATA_STYLED = Object.keys(DATA_STYLES).map((k) => `[data-${k}]`).join(",");
+function applyStyles(root) {
+  for (const el of [...(root.matches(DATA_STYLED) ? [root] : []), ...root.querySelectorAll(DATA_STYLED)])
+    for (const [k, [prop, ok]] of Object.entries(DATA_STYLES))
+      if (el.dataset[k] != null && ok.test(el.dataset[k])) el.style.setProperty(prop, el.dataset[k]);
+}
+new MutationObserver((changes) => {
+  for (const c of changes) for (const node of c.addedNodes) if (node.nodeType === 1) applyStyles(node);
+}).observe(document.documentElement, { childList: true, subtree: true });
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -281,9 +300,9 @@ const crestHue = (id) => Math.round((Number(id) || 0) * 137.508 % 360);
 // make it open that page) or a title; a label is read out, otherwise it's hidden from screen readers
 const chip = (text, cls, attrs, label, style = "") => `<span class="${cls}"${style} ${attrs}${label ? ` role="img" aria-label="${escapeHtml(label)}"` : ` aria-hidden="true"`}><b>${escapeHtml(text)}</b></span>`;
 const clubCrest = (id, cls = "club-logo", attrs = "", label = "", name = teamName(id)) =>
-  chip(crestInitials(name, true), `${cls} crest`, attrs, label, ` style="--crest-h:${crestHue(id)}"`);
+  chip(crestInitials(name, true), `${cls} crest`, attrs, label, ` data-shue="${crestHue(id)}"`);
 const leagueCrest = (lid, cls = "club-logo", attrs = "", label = "") =>
-  chip(crestInitials(SHORT_NAMES[lid] || state.data.competitions[lid]?.name || compLabel(lid), false), `${cls} crest`, attrs, label, ` style="--crest-h:${crestHue(Number(lid) + 7)}"`);
+  chip(crestInitials(SHORT_NAMES[lid] || state.data.competitions[lid]?.name || compLabel(lid), false), `${cls} crest`, attrs, label, ` data-shue="${crestHue(Number(lid) + 7)}"`);
 const personChip = (name, cls = "player-photo") => chip(personInitials(name), `${cls} person-chip`, "", "");
 const clubHref = (id) => `#/club/${id}`;
 const clubLink = (id, text = teamName(id)) => `<a class="team-link" href="${clubHref(id)}">${escapeHtml(text)}</a>`;
@@ -820,14 +839,14 @@ function probBar(m, key = "p", labelled = false) {
   return `
     <div class="match-probs${labelled ? " labelled" : ""}">${labelled ? `<span class="prob-name" title="${tip}">${label}</span>` : ""}
       <div class="prob-bar">
-        <span class="prob-home" style="width:${h}%"></span>
-        <span class="prob-draw" style="width:${d}%"></span>
-        <span class="prob-away" style="width:${a}%"></span>
+        <span class="prob-home" data-sw="${h}%"></span>
+        <span class="prob-draw" data-sw="${d}%"></span>
+        <span class="prob-away" data-sw="${a}%"></span>
       </div>
       <div class="prob-labels">
-        <span class="prob-home" style="left:0; width:${h}%">${h}%</span>
-        <span class="prob-draw" style="left:${h}%; width:${d}%">${d}%</span>
-        <span class="prob-away" style="left:${h + d}%; width:${a}%">${a}%</span>
+        <span class="prob-home" data-sx="0%" data-sw="${h}%">${h}%</span>
+        <span class="prob-draw" data-sx="${h}%" data-sw="${d}%">${d}%</span>
+        <span class="prob-away" data-sx="${h + d}%" data-sw="${a}%">${a}%</span>
       </div>
     </div>`;
 }
@@ -1781,7 +1800,7 @@ function renderTable() {
           <td>${clubCrest(r.team, "club-logo", `data-club="${r.team}" title="${escapeHtml(teamName(r.team))}"`)}</td>
           <td><div class="club-cell">${clubLink(r.team)}${q || all ? countryLeague(r.league) : ""}</div></td>
           <td class="num">${places.get(r.team)?.world.toLocaleString() ?? ""}</td>
-          <td class="num col-dom" style="color:var(--text-muted)"${places.get(r.team)?.dom ? ` title="${ordinal(places.get(r.team).dom)} of ${places.get(r.team).domOf} in the ${escapeHtml(leagueShort(r.league))} by Baseline Strength"` : ""}>${places.get(r.team)?.dom ?? ""}</td>
+          <td class="num col-dom u-muted"${places.get(r.team)?.dom ? ` title="${ordinal(places.get(r.team).dom)} of ${places.get(r.team).domOf} in the ${escapeHtml(leagueShort(r.league))} by Baseline Strength"` : ""}>${places.get(r.team)?.dom ?? ""}</td>
           <td class="num">${eloChip(r.lt)}</td>
           <td class="num col-gap">${formHtml(r.trend)}</td>
           <td class="num">${formChip(r.current)}</td>
@@ -2001,7 +2020,7 @@ function renderPosFilter() {
   box.innerHTML = `<div class="pos-head"><span>Position</span>
       <button type="button" class="pos-clear" data-pos-clear${sel.size ? "" : " hidden"}>Clear</button></div>
     <div class="pitch">${PITCH_LINES}${PITCH_SPOTS.map(([pos, x, y]) =>
-      `<button type="button" class="pos" data-pos="${pos}" style="left:${x}%;top:${y}%" aria-pressed="${sel.has(pos)}"
+      `<button type="button" class="pos" data-pos="${pos}" data-sx="${x}%" data-sy="${y}%" aria-pressed="${sel.has(pos)}"
          title="${pos}: ${n[pos] || 0} players">${pos}</button>`).join("")}</div>`;
 }
 $("#pos-filter").addEventListener("click", (e) => {
@@ -2068,7 +2087,7 @@ function renderStats() {
     const gap = Math.abs(hit - avgP);
     return `<tr><td>${i * 10}–${i * 10 + 10}%</td><td>${count.toLocaleString()}</td><td>${pct(avgP)}</td>
       <td class="${gap <= 0.03 ? "gap-ok" : gap > 0.06 ? "gap-off" : ""}">${pct(hit)}</td>
-      <td style="width:70px"><span class="calib-bar" style="width:${Math.round(hit * 60)}px"></span></td></tr>`;
+      <td class="u-w70"><span class="calib-bar" data-sw="${Math.round(hit * 60)}px"></span></td></tr>`;
   }).join("");
   const rc = s.rating_counts || [0, 0, 0, 0, 0];
   const rated = rc.reduce((a, b) => a + b, 0);
@@ -2077,28 +2096,28 @@ function renderStats() {
   const dist = [5, 4, 3, 2, 1].map((r) => {
     const share = rated ? rc[r - 1] / rated : 0;
     return `<div class="dist-row"><span class="dist-label">${r} ${RATING_LABELS[r]}</span>
-      <span class="dist-bar-wrap"><span class="dist-bar" style="display:block;width:${(100 * share).toFixed(1)}%;background:${colours[r]}"></span></span>
+      <span class="dist-bar-wrap"><span class="dist-bar" data-sw="${(100 * share).toFixed(1)}%" data-sbg="${colours[r]}"></span></span>
       <span class="dist-pct">${pct(share, 0)}</span></div>`;
   }).join("");
   const factorRows = s.factor_avgs ? FACTORS.map(([k, label, w]) => {
     const v = s.factor_avgs[k.slice(2)];
     return `<div class="dist-row"><span class="dist-label">${label} <span class="factor-weight">${w}</span></span>
-      <span class="dist-bar-wrap"><span class="dist-bar" style="display:block;width:${(v / 5 * 100).toFixed(1)}%;background:var(--series-blue)"></span></span>
+      <span class="dist-bar-wrap"><span class="dist-bar" data-sw="${(v / 5 * 100).toFixed(1)}%" data-sbg="var(--series-blue)"></span></span>
       <span class="dist-pct">${v.toFixed(2)}</span></div>`;
   }).join("") : "";
   const ratingBlock = rated ? `
-    <div class="stats-card" style="margin-top:12px">
+    <div class="stats-card u-mt12">
       <div class="stats-label">Average rating</div>
-      <div class="stats-value">${s.rating_avg.toFixed(2)}<span style="font-size:14px;color:var(--text-muted)"> / 5 · ${RATING_LABELS[avgTier]}</span></div>
-      <div style="margin-top:10px">${dist}</div>
-      <div class="stats-label" style="margin-top:12px">Average by factor (0–5)</div>
-      <div style="margin-top:4px">${factorRows}</div>
+      <div class="stats-value">${s.rating_avg.toFixed(2)}<span class="u-sub"> / 5 · ${RATING_LABELS[avgTier]}</span></div>
+      <div class="u-mt10">${dist}</div>
+      <div class="stats-label u-mt12">Average by factor (0–5)</div>
+      <div class="u-mt4">${factorRows}</div>
       <div class="stats-note">Each result is rated 1 (terrible) to 5 (excellent) from five factors, weighted as shown. Tap a result on the Matches tab to see its breakdown.</div>
     </div>` : "";
   const mk = s.market;
   const cmp = (a, b, lowerBetter) => (lowerBetter ? a < b : a > b) ? " better" : "";
   const marketBlock = mk ? `
-    <div class="stats-card" style="margin-bottom:12px">
+    <div class="stats-card u-mb12">
       <div class="stats-label">Model vs Market (${mk.n.toLocaleString()} matches with odds)</div>
       <div class="vs-market">
         <span></span><span class="hd">Model</span><span class="hd">Market fair</span>
@@ -2106,7 +2125,7 @@ function renderStats() {
         <span>Log loss</span><span class="num${cmp(mk.model_ll, mk.market_ll, true)}">${mk.model_ll.toFixed(3)}</span><span class="num${cmp(mk.market_ll, mk.model_ll, true)}">${mk.market_ll.toFixed(3)}</span>
       </div>
       <div class="stats-note">Market fair probability: the average across bookmakers with their margin removed, from the last odds before kickoff. Only matches with odds are compared${mk.n < 1000 ? "; the sample is still small, so treat this as a rough guide" : ""}.</div>
-    </div>${marketsTable(s.markets)}` : `<div class="stats-card" style="margin-bottom:12px"><div class="stats-label">Model vs Market</div><div class="stats-note">No finished matches with bookmaker odds in this range yet. Odds are collected nightly for upcoming matches.</div></div>`;
+    </div>${marketsTable(s.markets)}` : `<div class="stats-card u-mb12"><div class="stats-label">Model vs Market</div><div class="stats-note">No finished matches with bookmaker odds in this range yet. Odds are collected nightly for upcoming matches.</div></div>`;
   body.innerHTML = `
     <div class="stats-grid">
       ${card("Matches", s.n.toLocaleString(), liveNote)}
@@ -2138,7 +2157,7 @@ function marketsTable(ms) {
   const rows = keys.map((k) => { const m = ms[k]; return `<tr><td>${MARKET_LABELS[k]}</td><td>${m.n.toLocaleString()}</td>
     <td>${m.model_ll.toFixed(3)}</td><td>${m.close_ll.toFixed(3)}</td><td>${gap(m.model_ll, m.close_ll)}</td>
     <td>${m.open_n ? `${gap(m.model_open_ll, m.open_ll)} <span class="dim">(${m.open_n.toLocaleString()})</span>` : `<span class="dim">–</span>`}</td></tr>`; }).join("");
-  return `<div class="stats-card" style="margin-bottom:12px">
+  return `<div class="stats-card u-mb12">
       <div class="stats-label">Every bet market: Model vs Market</div>
       <table class="calib-table"><thead><tr><th>Market</th><th>Matches</th><th>Model</th><th>Market fair</th><th>Gap</th><th>Gap at opening</th></tr></thead><tbody>${rows}</tbody></table>
       <div class="stats-note">Log loss, lower is better, on the same matches. Gap = model minus market: green means the model was more accurate. "At opening" compares with the first prices seen, only for matches whose odds were collected before kickoff (count in brackets). Beating the opening price over many matches would be the first sign the model adds something the market lacks; a small or short-lived gap proves nothing. The goal lines come from the model's projected goals.</div>
@@ -2218,7 +2237,7 @@ const lrScore = (k) => `<span class="xi-score xi-score-${k >= 9 ? "good" : k >= 
 const lrDate = (t, o = { day: "numeric", month: "short" }) => new Date(t).toLocaleDateString("en-GB", o);
 function lrBar(label, value, max, text, tip) {
   return `<div class="dist-row" title="${escapeHtml(tip)}"><span class="dist-label">${label}</span>
-    <span class="dist-bar-wrap"><span class="dist-bar" style="display:block;width:${(max ? 100 * value / max : 0).toFixed(1)}%;background:var(--series-blue)"></span></span>
+    <span class="dist-bar-wrap"><span class="dist-bar" data-sw="${(max ? 100 * value / max : 0).toFixed(1)}%" data-sbg="var(--series-blue)"></span></span>
     <span class="dist-pct">${text}</span></div>`;
 }
 function renderLineupRecord() {
@@ -2277,14 +2296,14 @@ function renderLineupRecord() {
   const lines = LR_LINES.map((name, i) => {
     const starters = list.reduce((a, r) => a + r.lines[2 * i], 0), hit = list.reduce((a, r) => a + r.lines[2 * i + 1], 0);
     return `<tr><td>${name}</td><td>${starters.toLocaleString()}</td><td>${hit.toLocaleString()}</td><td>${lrShare(hit, starters)}</td>
-      <td style="width:70px"><span class="calib-bar" style="width:${Math.round((starters ? hit / starters : 0) * 60)}px"></span></td></tr>`;
+      <td class="u-w70"><span class="calib-bar" data-sw="${Math.round((starters ? hit / starters : 0) * 60)}px"></span></td></tr>`;
   });
   const timing = LR_HORIZONS.map(([label, a, b]) => {
     const g = lineupTotals(list.filter((r) => r.hours_before >= a && r.hours_before < b));
     return `<tr><td>${label}</td><td>${g.n}</td><td>${g.n ? lrOf11(g.mean) : "–"}</td><td>${lrShare(g.perfect, g.n)}</td></tr>`;
   });
   const comps = lineupGroups(list, (r) => r.league).sort((a, b) => b[2].n - a[2].n || b[2].mean - a[2].mean).map(([id, , g]) =>
-    `<tr data-league="${id}"${String(id) === state.lineupFilter ? ` style="font-weight:700"` : ""}><td>${escapeHtml(compLabel(id))}</td>
+    `<tr data-league="${id}"${String(id) === state.lineupFilter ? ` class="u-bold"` : ""}><td>${escapeHtml(compLabel(id))}</td>
       <td>${g.n}</td><td>${lrOf11(g.mean)}</td><td>${lrShare(g.perfect, g.n)}</td><td>${lrShare(g.rolesRight, g.rolesKnown)}</td></tr>`);
 
   const clubRow = ([id, , g]) => `<tr><td>${clubLink(id, lrTeam(id))}</td><td>${g.n}</td><td>${lrOf11(g.mean)}</td><td>${lrShare(g.perfect, g.n)}</td></tr>`;
@@ -2293,8 +2312,8 @@ function renderLineupRecord() {
   const ranked = clubs.filter(([, , g]) => g.n >= LR_CLUB_MIN).sort((a, b) => b[2].mean - a[2].mean || b[2].n - a[2].n);
   const k = Math.min(10, Math.floor(ranked.length / 2));
   const clubHtml = (k >= 3
-    ? `<div class="stats-label" style="margin-top:8px">Easiest to predict</div>${table(clubHead, ranked.slice(0, k).map(clubRow))}
-       <div class="stats-label" style="margin-top:12px">Hardest to predict</div>${table(clubHead, ranked.slice(-k).reverse().map(clubRow))}`
+    ? `<div class="stats-label u-mt8">Easiest to predict</div>${table(clubHead, ranked.slice(0, k).map(clubRow))}
+       <div class="stats-label u-mt12">Hardest to predict</div>${table(clubHead, ranked.slice(-k).reverse().map(clubRow))}`
     : `<div class="stats-note">The easiest and hardest clubs are listed once enough clubs have ${LR_CLUB_MIN} or more line-ups scored.</div>`)
     + `<details><summary>All ${clubs.length} clubs</summary>${table(clubHead,
       [...clubs].sort((a, b) => lrTeam(a[0]).localeCompare(lrTeam(b[0]))).map(clubRow))}</details>`;
@@ -2309,7 +2328,7 @@ function renderLineupRecord() {
     return [...c.entries()].filter(([, x]) => x.n >= 2)
       .sort((a, b) => b[1].n - a[1].n || lrPlayer(a[0]).localeCompare(lrPlayer(b[0]))).slice(0, 15);
   };
-  const playerTable = (label, items) => `<div class="stats-label" style="margin-top:10px">${label}</div>` + (items.length
+  const playerTable = (label, items) => `<div class="stats-label u-mt10">${label}</div>` + (items.length
     ? table(["Player", "Club", "Times"], items.map(([p, x]) => `<tr><td>${playerLink(p, lrPlayer(p))}</td><td>${escapeHtml(lrTeam(x.team))}</td><td>${x.n}</td></tr>`))
     : `<div class="stats-note">No player more than once yet.</div>`);
   const missedTotal = list.reduce((a, r) => a + r.missed.length, 0);
@@ -2327,7 +2346,7 @@ function renderLineupRecord() {
   const more = newest.length > shown.length
     ? `<button type="button" class="filter-chip lr-more" data-more>Show more (${(newest.length - shown.length).toLocaleString()} left)</button>` : "";
 
-  const about = live ? "" : `<div class="stats-card" style="margin-bottom:12px"><div class="stats-note">
+  const about = live ? "" : `<div class="stats-card u-mb12"><div class="stats-note">
     <b>Reconstructed, not a live record.</b> Today's model re-run on every past match, picking from what it knew before
     kick-off: the last five matches' minutes and formations, and the injury list. It can't know late team news, and older
     matches were never predicted this way at the time, so read it as how the current model does on past matches.
@@ -2339,10 +2358,10 @@ function renderLineupRecord() {
       ${card("Perfect XIs", t.perfect.toLocaleString(), `All 11 right in ${lrShare(t.perfect, t.n)} of line-ups`)}
       ${card("Right position", lrShare(t.rolesRight, t.rolesKnown), "Correct starters also put where they played")}
     </div>`
-    + (sample ? `<div class="stats-card" style="margin-bottom:12px"><div class="stats-note">${sample}</div></div>` : "")
-    + section("Starters named correctly, per line-up", `<div style="margin-top:6px">${spread.join("")}</div>`,
+    + (sample ? `<div class="stats-card u-mb12"><div class="stats-note">${sample}</div></div>` : "")
+    + section("Starters named correctly, per line-up", `<div class="u-mt6">${spread.join("")}</div>`,
       "Number of team line-ups, and their share, by how many of the 11 starters the predicted XI named.")
-    + section(`Over time: average named correctly each ${step}`, `<div style="margin-top:6px">${trend.join("")}</div>`,
+    + section(`Over time: average named correctly each ${step}`, `<div class="u-mt6">${trend.join("")}</div>`,
       "Out of 11, newest first; the number of line-ups is in brackets.")
     + section("By position", table(["Line", "Starters", "Predicted", "Hit rate", ""], lines),
       "Of the players who started in each part of the pitch, how many were in the predicted XI. Lines come from the team sheet.")
@@ -2429,7 +2448,7 @@ function renderBets() {
   const leagueRows = Object.entries(byLeague).map(([id, bs]) => [id, summarise(bs)])
     .sort((a, b) => b[1].settled - a[1].settled || b[1].placed - a[1].placed)
     .map(([id, x]) => tableRow(escapeHtml(compLabel(id)), x,
-      ` data-league="${id}" style="cursor:pointer${id === state.betFilter ? ";font-weight:700" : ""}"`)).join("");
+      ` data-league="${id}" class="u-pointer${id === state.betFilter ? " u-bold" : ""}"`)).join("");
   const marketRows = ["1X2", "OU15", "OU25", "OU35", "OU45", "BTTS"].map((mk) => {
     const x = summarise(all.filter((b) => b.market === mk));
     return x.placed ? tableRow(MARKET_LABELS[mk], x) : "";
@@ -2446,7 +2465,7 @@ function renderBets() {
       : b.result === "void" ? "Void, stake back" : `<span class="dim">To win ${gbp(stake * (b.odds - 1))}</span>`;
     return `<div class="bet-row ${["win", "loss", "void"].includes(b.result) ? b.result : ""}">
       <div class="bet-top"><span>${escapeHtml(fmtDay(b.kickoff))} ${escapeHtml(fmtTime(b.kickoff))} · ${escapeHtml(compLabel(b.league))}</span><span>${b.strategy === "early" ? "Night before" : "Pre-kickoff"}</span></div>
-      <div class="bet-match">${escapeHtml(b.home)} v ${escapeHtml(b.away)}${b.score ? ` <span style="color:var(--text-muted)">(${escapeHtml(b.score)})</span>` : ""}</div>
+      <div class="bet-match">${escapeHtml(b.home)} v ${escapeHtml(b.away)}${b.score ? ` <span class="u-muted">(${escapeHtml(b.score)})</span>` : ""}</div>
       <div class="bet-pick"><span>${betBadges(b)}${gbp(stake)} on ${escapeHtml(SEL_LABELS[b.selection] || b.selection)} @ <b>${b.odds.toFixed(2)}</b></span><span>${res}</span></div>
       <div class="bet-sub">${betProbs(b)}${b.closing_odds != null ? ` · closed ${b.closing_odds.toFixed(2)}` : ""}${bankAfter[b.id] != null ? ` · simulated bank ${gbp(bankAfter[b.id])}` : ""}</div>
     </div>`;
@@ -2457,22 +2476,22 @@ function renderBets() {
     <div class="stats-grid">
       ${card("Simulated bank", gbp(bank + s.profit), `Started with ${gbp(bank)}${s.pending ? ` · ${gbp(s.atRisk)} on ${s.pending} pending` : ""}`)}
       ${card("Simulated profit", s.settled ? gbp(s.profit, true) : "–", s.staked ? `${gbp(s.staked)} staked · return ${(s.roi > 0 ? "+" : "") + (100 * s.roi).toFixed(1)}%` : `${gbp(stake)} on every bet`)}
-      ${card("Won", s.settled ? `${s.wins}<span style="font-size:14px;color:var(--text-muted)"> of ${s.settled}</span>` : "–", s.settled ? `${pct(s.wins / s.settled)} of settled bets` : "Needs settled bets")}
+      ${card("Won", s.settled ? `${s.wins}<span class="u-sub"> of ${s.settled}</span>` : "–", s.settled ? `${pct(s.wins / s.settled)} of settled bets` : "Needs settled bets")}
       ${card("Beat the closing price", s.beat == null ? "–" : pct(s.beat), "Took better odds than the last price before kickoff. Only means something over a large sample, and is not proof of value on its own")}
     </div>
-    ${leagueRows ? `<div class="stats-card" style="margin-bottom:12px">
+    ${leagueRows ? `<div class="stats-card u-mb12">
       <div class="stats-label">By league</div>
       <table class="calib-table">${head("League")}<tbody>${leagueRows}</tbody></table>
       <div class="stats-note">Tap a league to see only its bets (tap again for all). Bets = settled <span class="dim">+ pending</span>. For how accurate the predictions are in a league, pick it on the Stats tab.</div>
     </div>` : ""}
-    ${marketRows ? `<div class="stats-card" style="margin-bottom:12px">
+    ${marketRows ? `<div class="stats-card u-mb12">
       <div class="stats-label">By market</div>
       <table class="calib-table">${head("Market")}<tbody>${marketRows}</tbody></table>
       <div class="stats-note">Paper bets, no real money: ${gbp(stake)} on every bet from a ${gbp(bank)} bank. A match gets at most one bet of each kind (result, goal line, both teams score): of several, the best is kept, judged as if the true chance were halfway between the model's and the bookmakers'. If both the night-before and pre-kickoff runs bet the same kind on a match, All counts only the night-before bet. All bets are simulated at a UK bookmaker's recorded odds. A paper bet is taken when the model's probability × that price is at least ${Math.round(rules.min_edge * 100)}% better than even, at odds up to ${rules.max_odds}: a disagreement with the market, which the results below test rather than assume. Return = profit ÷ staked. Profit needs a few hundred settled bets before it means much.</div>
     </div>` : ""}
     ${settled.length ? `<div class="modal-section">Settled (${settled.length})</div><div class="bets-list">${settled.slice(0, 300).map(row).join("")}</div>` : ""}
     ${!all.length ? `<div class="empty-state">No bets match this filter yet.</div>` : ""}
-    ${s.pending ? `<div class="stats-note" style="margin-top:12px">${s.pending} paper bet${s.pending === 1 ? "" : "s"} still to be played: see Model vs Market.</div>` : ""}`;
+    ${s.pending ? `<div class="stats-note u-mt12">${s.pending} paper bet${s.pending === 1 ? "" : "s"} still to be played: see Model vs Market.</div>` : ""}`;
 }
 
 // ---- Model vs Market: the paper simulation's open selections (where the model and the market
@@ -2749,7 +2768,7 @@ function clubMiniTable(id) {
       <thead><tr><th class="cmt-head" colspan="3"><a class="cmt-link" href="${leagueHref(r.league)}/table">${escapeHtml(title)}<span class="cmt-full"> table</span> ›</a></th><th class="lt-wdl" title="Played">P</th>
         <th title="Goal difference">GD</th><th title="Points">Pts</th><th class="lt-formcol" title="Last five league games, newest first: green won, grey drawn, red lost">Form</th></tr></thead>
       <tbody>${rows.slice(start, start + 5).map((t) => `<tr${t === me ? ' class="lt-me"' : ""}>
-        <td class="lt-pos" style="border-left-color:${zones.get(t.description) || "transparent"}">${t.rank}</td>
+        <td class="lt-pos" data-sedge="${zones.get(t.description) || "transparent"}">${t.rank}</td>
         <td class="lt-badge">${clubCrest(t.team, "club-logo", `data-club="${t.team}"`)}</td>
         <td class="lt-club lt-clubname"><span>${t === me ? `<b>${escapeHtml(lg.teams[t.team] || teamName(t.team))}</b>` : clubLink(t.team, lg.teams[t.team] || teamName(t.team))}</span></td>
         <td class="lt-wdl">${t.played ?? ""}</td><td>${t.gd > 0 ? "+" : ""}${t.gd ?? ""}</td><td><b>${t.points ?? ""}</b></td><td class="lt-formcol">${formChips(t.form)}</td></tr>`).join("")}</tbody>
@@ -2780,7 +2799,7 @@ const spMax = (a, b) => state[`spMax_${a}`] ||= Math.max(1, ...state.rankings.fi
 function spMeter(label, lean, max, text, tip) {
   const x = 50 + 50 * Math.max(-1, Math.min(1, lean / max));
   return `<div class="sp-row" title="${escapeHtml(tip)}"><span class="sp-lbl">${label}</span>
-    <span class="sp-track"><i class="sp-mid"></i><i class="sp-mark" style="left:${x.toFixed(1)}%"></i></span>
+    <span class="sp-track"><i class="sp-mid"></i><i class="sp-mark" data-sx="${x.toFixed(1)}%"></i></span>
     <span class="sp-text">${text}</span></div>`;
 }
 
@@ -3042,7 +3061,7 @@ function xiPitch(xi, data = state.club?.data, opts = {}) {
       const [, predName, , predRank] = instead || [];
       const verdict = !marked ? "" : predicted ? " · predicted to start" : ` · not predicted${instead ? `; the model picked ${predName} (rank ${predRank != null ? Number(predRank).toFixed(1) : "–"})` : ""}`;
       // the square in the start-chance colour (or ringed green / red when marked), the rating in its own
-      return `<a class="pp-spot xi-spot ${cls}" href="#/player/${p.id}" style="left:${x}%;top:${y}%"
+      return `<a class="pp-spot xi-spot ${cls}" href="#/player/${p.id}" data-sx="${x}%" data-sy="${y}%"
           title="${escapeHtml(`${p.name} · ${b.label} · rank ${rank != null ? Number(rank).toFixed(1) : "–"}${hasChance ? ` · ${Math.round(chance)}% to start` : ""}${hasMins ? ` · ${mins}′ expected` : ""}${verdict}`)}">
         <span class="pp-rank rk-${rankTier(rank)}">${rankText}</span><span class="pp-name">${escapeHtml(shortName(p.name))}</span>
         ${meta}${instead ? `<span class="pp-instead"><span class="pp-instead-name">${escapeHtml(shortName(predName))}</span><span class="pp-instead-rank rk-${rankTier(predRank)}">${predRank == null ? "–" : Math.round(predRank)}</span></span>` : ""}</a>`;
@@ -3051,7 +3070,7 @@ function xiPitch(xi, data = state.club?.data, opts = {}) {
   const ranks = xi.map((c) => c.rank).filter((r) => r != null);
   const avg = ranks.reduce((t, r) => t + r, 0) / ranks.length;
   return `<div class="club-section pp-section"><div class="pitch pp-pitch${kitClass(data)}"${kitStyle(data)}>${PITCH_LINES}${spots}</div>
-    ${opts.note === "" ? "" : `<div class="page-note" style="text-align:center">${opts.note || (Number.isFinite(avg) ? `Average rank ${Math.round(avg)}` : "")}</div>`}</div>`;
+    ${opts.note === "" ? "" : `<div class="page-note u-center">${opts.note || (Number.isFinite(avg) ? `Average rank ${Math.round(avg)}` : "")}</div>`}</div>`;
 }
 
 // Overview pitch: in each position, the squad's players who can play there (their main position,
@@ -3404,9 +3423,9 @@ function depthPitch(teamId) {
   const { shown, startChance, xMins, boxMins, picks, nextLabel, startPct, lasts, benchRate } = d;
   const spots = shown.map(({ label: r, roles, row, col, n, ps, proj }) => {
     const label = `${r}${n ? `<span class="dp-usual"> – ${n}</span>` : ""}`;
-    const cell = `grid-row:${row};grid-column:${col}`;
-    if (!ps.length) return `<div class="dp-spot empty" style="${cell}"><span class="dp-pos">${label}</span></div>`;
-    return `<div class="dp-spot" style="${cell}">
+    const cell = `data-srow="${row}" data-scol="${col}"`;
+    if (!ps.length) return `<div class="dp-spot empty" ${cell}><span class="dp-pos">${label}</span></div>`;
+    return `<div class="dp-spot" ${cell}>
       <span class="dp-pos" title="${n ? `${n} usually start${n === 1 ? "s" : ""} here this season` : ""}">${label}<span class="dp-total" title="Expected minutes in this position, all its players">${
         boxMins.get(r) || 0}′</span></span>
       ${ps.map(({ p, rank }) => {
@@ -3433,7 +3452,7 @@ const kitColors = (data = state.club?.data) => HEX.test(data?.colors?.[0] ?? "")
 const kitClass = (data = state.club?.data) => kitColors(data) ? " kit" : "";
 const kitStyle = (data = state.club?.data) => {
   const c = kitColors(data);
-  return c ? ` style="--kit:#${c[0]};--kit2:#${HEX.test(c[1] ?? "") ? c[1] : "ffffff"}"` : "";
+  return c ? ` data-skit="#${c[0]}" data-skit2="#${HEX.test(c[1] ?? "") ? c[1] : "ffffff"}"` : "";
 };
 // Surname for tight spaces, keeping lower-case particles ("M. de Ligt" -> "de Ligt"), or the
 // name a player is known by where that isn't his surname
@@ -3495,7 +3514,7 @@ function clubMatchesTab() {
     </div>`;
   };
   if (!upcoming.length && !results.length) return `<div class="empty-state">No matches for this club yet.</div>`;
-  const toggle = `<div class="stats-controls" style="margin-top:0">
+  const toggle = `<div class="stats-controls u-mt0">
     <div class="seg">${[["fixtures", `Fixtures${upcoming.length ? ` (${upcoming.length})` : ""}`], ["results", `Results${results.length ? ` (${results.length})` : ""}`]].map(([k, label]) =>
       `<button type="button" data-club-match-view="${k}" aria-pressed="${k === view}">${escapeHtml(label)}</button>`).join("")}</div>
   </div>`;
@@ -3568,7 +3587,7 @@ function formationCards(known) {
       return `<div class="fm-card${i === 0 ? " top" : ""}">${formationSvg(f)}
         <div class="fm-main"><div class="fm-name">${escapeHtml(f)}</div>
           <div class="fm-count">${ms.length} match${ms.length === 1 ? "" : "es"} · ${share < 1 ? "<1" : Math.round(share)}%</div>
-          <div class="fm-bar"><span style="width:${share}%"></span></div>
+          <div class="fm-bar"><span data-sw="${share}%"></span></div>
           <div class="fm-sub">${wdl(ms)} · ${gf}–${ga}</div>
           <div class="fm-sub">last ${escapeHtml(fmtDateShortYear(ms[ms.length - 1].date))}</div></div></div>`;
     }).join("")}</div>`;
@@ -3619,12 +3638,12 @@ function clubHistoryTab() {
       <div class="season-bars">${seasons.slice().reverse().map((s) => {
         const lo = Math.min(...seasons.map((x) => x.end)) - 20, hi = Math.max(...seasons.map((x) => x.end));
         return `<div class="season-bar" title="${escapeHtml(`${label(s.y)}: ${s.end.toFixed(1)}`)}"><span class="sb-val">${Math.round(s.end)}</span>
-          <div class="sb-fill" style="height:${Math.max(6, 100 * (s.end - lo) / (hi - lo || 1)).toFixed(0)}%"></div><span class="sb-label">${label(s.y)}</span></div>`;
+          <div class="sb-fill" data-sh="${Math.max(6, 100 * (s.end - lo) / (hi - lo || 1)).toFixed(0)}%"></div><span class="sb-label">${label(s.y)}</span></div>`;
       }).join("")}</div></div>
     <div class="club-section"><div class="modal-section">Season by season</div>
       <table class="season-table"><thead><tr><th>Season</th><th>League · record · goals</th><th class="num">Elo</th><th class="num">Change</th></tr></thead>
       <tbody>${seasons.map((s) => `<tr>
-        <td class="num" style="text-align:left">${label(s.y)}${s.y === seasons[0].y ? `<div class="dim">so far</div>` : ""}</td>
+        <td class="num u-left">${label(s.y)}${s.y === seasons[0].y ? `<div class="dim">so far</div>` : ""}</td>
         <td>${s.lg ? escapeHtml(SHORT_NAMES[s.lg] || state.data.competitions[s.lg]?.name || "") : `<span class="dim">Cups only</span>`}
           <div class="dim">${s.list.length} played · ${s.w}W ${s.d}D ${s.l}L · ${s.gf}–${s.ga}</div></td>
         <td class="num">${Math.round(s.end)}<div class="dim">high ${Math.round(s.peak)}</div></td>
@@ -3653,7 +3672,7 @@ function niceTicks(lo, hi, count) {
 // ------------------------------------------------------------------ team modal
 function openTeam(teamId) {
   const r = state.rankByTeam.get(teamId);
-  $("#team-modal-title").innerHTML = `${escapeHtml(teamName(teamId))} <a class="team-link" style="font-size:12px;color:var(--blue-text);margin-left:6px" href="${clubHref(teamId)}">Club page ›</a>`;
+  $("#team-modal-title").innerHTML = `${escapeHtml(teamName(teamId))} <a class="team-link u-sidelink" href="${clubHref(teamId)}">Club page ›</a>`;
   $("#team-modal-sub").textContent = r ? compLabel(r.league) : "";
   const games = state.data.matches.filter((m) => m.home === teamId || m.away === teamId);
   const results = games.filter((m) => FINISHED.has(m.status) && m.hg != null).reverse();
@@ -4128,7 +4147,7 @@ function playerCareerTab() {
     const age = p.age != null ? p.age - (seasons[0] - y) : null;
     const sp = detail[String(y)] || [];
     const pos = posBySeason[String(y)];
-    return `<tr><td class="num" style="text-align:left">${seasonShort(y)}<div class="dim">${age != null ? `age ${age}` : ""}</div></td>
+    return `<tr><td class="num u-left">${seasonShort(y)}<div class="dim">${age != null ? `age ${age}` : ""}</div></td>
       <td>${sp.length ? spellHtml(sp) : `<span class="dim">${est ? "Estimated from his other seasons and age" : ""}</span>`}${pos ? `<div class="pos-shares">${positionShares(pos)}${seasonGroup(pos) ? `<span class="rated-as">rated as ${GROUP_SINGLE[seasonGroup(pos)]}</span>` : ""}</div>` : ""}</td>
       <td class="num">${est ? `<span class="est">${rankChipSmall(v)}</span>` : rankChipSmall(v)}</td></tr>`;
   }).join("");
@@ -4136,7 +4155,7 @@ function playerCareerTab() {
   return `
     ${hasSeasons ? `<div class="chart-card"><div class="chart-head"><span class="chart-title">Season ranks</span></div>
       <div class="chart-wrap" id="pl-chart"></div></div>` : ""}
-    <div class="club-section"${hasSeasons ? "" : ' style="margin-top:0"'}><div class="modal-section">Season by season</div>
+    <div class="club-section${hasSeasons ? "" : " u-mt0"}"><div class="modal-section">Season by season</div>
       <table class="season-table"><thead><tr><th>Season</th><th>Clubs · club Elo · minutes · rating · goals, assists</th><th class="num">Rank</th></tr></thead>
       <tbody>${rows}</tbody></table>
       <div class="page-note">A season's rank starts from his clubs' level (LT ALGO over his matches) and his stats against players in his position, then follows the typical age curve for his position from a level of his own: a season only moves off that curve as far as its minutes justify. Outlined ranks are estimated.</div>
@@ -4311,19 +4330,19 @@ function nationOverviewTab() {
     const extra = [...picked.values()].filter((p) => p.position && slotOf(p.position) === label && !topIds.has(p.id));
     const ps = [...top.map((p) => [p, shape != null && !picked.has(p.id)]), ...extra.map((p) => [p, false])]
       .sort((a, b) => (b[0].rank ?? -1) - (a[0].rank ?? -1));
-    const cell = `grid-row:${row};grid-column:${col}`;
-    if (!ps.length) return `<div class="dp-spot empty" style="${cell}"><span class="dp-pos">${label}</span></div>`;
-    return `<div class="dp-spot" style="${cell}"><span class="dp-pos">${label}</span>${ps.map(([p, unpicked]) => pitchRow(p, unpicked)).join("")}</div>`;
+    const cell = `data-srow="${row}" data-scol="${col}"`;
+    if (!ps.length) return `<div class="dp-spot empty" ${cell}><span class="dp-pos">${label}</span></div>`;
+    return `<div class="dp-spot" ${cell}><span class="dp-pos">${label}</span>${ps.map(([p, unpicked]) => pitchRow(p, unpicked)).join("")}</div>`;
   }).join("");
   const LIMIT = 100;
   const row = (p, i) => `<div class="team-row"><span class="team-row-date">${i + 1}. ${escapeHtml(p.position || "")}</span>
-    <span class="team-row-opp">${playerLink(p.id, p.name)} <span class="club-sub" style="display:inline">${playerClub(p)}${p.age != null ? ` · ${p.age}` : ""}</span></span>
+    <span class="team-row-opp">${playerLink(p.id, p.name)} <span class="club-sub u-inline">${playerClub(p)}${p.age != null ? ` · ${p.age}` : ""}</span></span>
     <span class="team-row-res">${rankChipSmall(p.rank)}</span></div>`;
   const shown = allPlayers ? list : list.slice(0, LIMIT);
   return `
     <div class="club-section"><div class="modal-section">${shape ? `Best by current rank in their usual ${escapeHtml(shape.formation)}` : "Top 3 in each position by current rank"}</div>
       <div class="pp-section"><div class="pitch dp-pitch">${PITCH_LINES}${spots}</div>
-        ${shape ? `<div class="page-note" style="text-align:center">Plus everyone ${escapeHtml(coach || "the current coach")} has picked. <span class="nat-unpicked-key">Red</span>: not picked by him.</div>` : ""}</div></div>
+        ${shape ? `<div class="page-note u-center">Plus everyone ${escapeHtml(coach || "the current coach")} has picked. <span class="nat-unpicked-key">Red</span>: not picked by him.</div>` : ""}</div></div>
     <div class="club-section"><div class="modal-section">All players</div><div>${shown.map(row).join("")}</div>
       ${shown.length < list.length ? `<button type="button" class="show-all" data-nat-more>Show all ${list.length.toLocaleString()}</button>` : ""}</div>`;
 }
@@ -4354,7 +4373,7 @@ const venueLabel = { H: "Home", A: "Away", N: "Neutral ground" };
 function nationMatchCells(m) {
   return `<span class="team-row-date">${escapeHtml(fmtDateShortYear(m.date))}</span>
     <span class="team-row-opp">${flagImg(m.opp)} <a class="nat-link" href="#/nation/${encodeURIComponent(m.opp)}">${escapeHtml(m.opp)}</a>
-      <span class="club-sub" style="display:inline" title="${escapeHtml(venueLabel[m.venue] || "")}">${escapeHtml(m.venue)} · ${escapeHtml(m.tournament || "")}</span></span>
+      <span class="club-sub u-inline" title="${escapeHtml(venueLabel[m.venue] || "")}">${escapeHtml(m.venue)} · ${escapeHtml(m.tournament || "")}</span></span>
     <span class="rel-chip rel-${m.gf > m.ga ? 4 : m.gf === m.ga ? 3 : 1}">${m.gf}–${m.ga}</span>`;
 }
 // A starting XI as one line per unit, keeper first: "GK Pickford · RB Walker ..."
@@ -4655,7 +4674,7 @@ function leagueZones(rows) {
 const formChips = (f) => f ? `<span class="lt-form">${[...f].map((c) =>
   `<i class="${c === "W" ? "res-w" : c === "D" ? "res-d" : "res-l"}">${escapeHtml(c)}</i>`).join("")}</span>` : "";
 const zoneLegend = (zones) => zones.size ? `<div class="lt-legend">${[...zones].map(([d, c]) =>
-  `<span><i style="background:${c}"></i>${escapeHtml(d)}</span>`).join("")}</div>` : "";
+  `<span><i data-sbg="${c}"></i>${escapeHtml(d)}</span>`).join("")}</div>` : "";
 // Sortable league tables (Standings, Strength ranking): the viewer's column per tab, kept on
 // state.league. A column's first click sorts it best first (1 = asc, -1 = desc), a second reverses.
 // Ties keep the table's own order.
@@ -4706,7 +4725,7 @@ function leagueTableTab() {
         ${th("form", "Form", "Last five league games, newest first: green won, grey drawn, red lost. Sorts by points from them", "lt-formcol")}${th("current", "Current", "Current Strength: the club's current Elo rating")}</tr></thead>
       <tbody>${sortLeagueRows(rows.filter((r) => r.group === g), s, STANDINGS_COLS).map((r) => {
         const rk = state.rankByTeam.get(r.team);
-        return `<tr><td class="lt-pos" style="border-left-color:${zones.get(r.description) || "transparent"}">${r.rank}</td>
+        return `<tr><td class="lt-pos" data-sedge="${zones.get(r.description) || "transparent"}">${r.rank}</td>
           <td class="lt-badge">${clubCrest(r.team, "club-logo", `data-club="${r.team}"`)}</td>
           <td class="lt-club">${clubLink(r.team, r.name)}</td>
           <td>${r.played ?? ""}</td><td class="lt-wdl">${r.win ?? ""}</td><td class="lt-wdl">${r.draw ?? ""}</td><td class="lt-wdl">${r.lose ?? ""}</td>
@@ -4821,8 +4840,8 @@ function leagueProjectedTab() {
       <thead><tr><th class="lt-pos">#</th><th></th><th class="lt-club">Club</th>
         <th class="lt-wide" title="Matches left to play">Left</th><th class="lt-wdl" title="Projected wins">W</th><th class="lt-wdl" title="Projected draws">D</th><th class="lt-wdl" title="Projected losses">L</th>
         <th class="lt-gd" title="Projected goal difference">GD</th><th title="Projected points: points so far plus the average over the simulated seasons">Pts</th>
-        <th class="lt-chance" title="Chance of finishing top">1st</th>${cols.map(([d, c]) => `<th title="${escapeHtml(d)}"><i class="lt-zone" style="background:${c}"></i></th>`).join("")}</tr></thead>
-      <tbody>${list.map((x, i) => `<tr><td class="lt-pos" style="border-left-color:${zones.get(byRank.get(i + 1)) || "transparent"}">${i + 1}</td>
+        <th class="lt-chance" title="Chance of finishing top">1st</th>${cols.map(([d, c]) => `<th title="${escapeHtml(d)}"><i class="lt-zone" data-sbg="${c}"></i></th>`).join("")}</tr></thead>
+      <tbody>${list.map((x, i) => `<tr><td class="lt-pos" data-sedge="${zones.get(byRank.get(i + 1)) || "transparent"}">${i + 1}</td>
           <td class="lt-badge">${clubCrest(x.r.team, "club-logo", `data-club="${x.r.team}"`)}</td>
           <td class="lt-club">${clubLink(x.r.team, data.teams[x.r.team] || teamName(x.r.team))}</td>
           <td class="lt-wide">${x.left}</td><td class="lt-wdl">${Math.round(x.w)}</td><td class="lt-wdl">${Math.round(x.d)}</td><td class="lt-wdl">${Math.round(x.l)}</td>
@@ -4908,7 +4927,7 @@ function clubRatingTable(rows, pos, names = {}, meta = null, sort = null, limit 
       <td>${i}</td>
       <td>${clubCrest(r.team, "club-logo", `data-club="${r.team}"`)}</td>
       <td>${clubLink(r.team, name)}${meta ? meta(r) : ""}</td>
-      <td class="num" style="color:var(--text-muted)">${pos ? p : r.played}</td>
+      <td class="num u-muted">${pos ? p : r.played}</td>
       <td class="num">${eloChip(r.lt)}</td>
       <td class="num col-gap">${formHtml(r.trend)}</td>
       <td class="num">${formChip(r.current)}</td>
@@ -4983,9 +5002,9 @@ function openCountryPage(country) {
       ${avg != null ? `<div class="pl-hero-rank rel-${ratingTierOf(avg)}" title="Average Baseline Strength (long-term Elo) of the 15 best clubs in its leagues">
         <span class="val">${Math.round(avg)}</span></div>` : ""}
     </div>
-    ${leagues.length ? `<div class="modal-section" style="margin-top:0">Leagues</div><div class="lg-list">${leagues.map(card).join("")}</div>
+    ${leagues.length ? `<div class="modal-section u-mt0">Leagues</div><div class="lg-list">${leagues.map(card).join("")}</div>
       ${leagues.length > 1 ? `<div class="page-note">Strongest first, by the average Baseline Strength of their clubs.</div>` : ""}` : ""}
-    ${cups.length ? `<div class="club-section"${leagues.length ? "" : ' style="margin-top:0"'}><div class="modal-section">${leagues.length ? "Cups" : "Competitions"}</div>
+    ${cups.length ? `<div class="club-section${leagues.length ? "" : " u-mt0"}"><div class="modal-section">${leagues.length ? "Cups" : "Competitions"}</div>
       <div class="lg-list">${cups.map(card).join("")}</div></div>` : ""}
     ${clubs.length ? `<div class="club-section"><div class="modal-section">Clubs</div><div id="country-clubs"></div>
       ${clubs.length > LIMIT ? `<button type="button" class="show-all" id="country-more">Show all ${clubs.length.toLocaleString()}</button>` : ""}</div>` : ""}`;
@@ -5038,7 +5057,7 @@ function renderLeagues() {
           <td><a href="${leagueHref(c.lid)}" aria-label="${escapeHtml(c.name)}">${leagueCrest(c.lid)}</a></td>
           <td><div class="club-cell"><a class="team-link" href="${leagueHref(c.lid)}">${escapeHtml(c.name)}</a>
             ${FLAG_CODES[countryDisplay(c.country)] ? `<span class="club-meta">${flagLink(c.country)}</span>` : ""}</div></td>
-          <td class="num" style="color:var(--text-muted)">${c.clubs}</td>
+          <td class="num u-muted">${c.clubs}</td>
           <td class="num"><span class="rel-chip rel-${ratingTierOf(c.lt)}">${Math.round(c.lt)}</span></td>
           <td class="num col-gap">${formHtml(c.trend)}</td>
           <td class="num">${formChip(c.current)}</td>
@@ -5110,7 +5129,7 @@ function renderNations() {
     `<th class="num sortable${key === k ? " active" : ""}${cls}" tabindex="0"${key === k ? ` aria-sort="descending"` : ""} data-natsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   const score = (l) => `${l.gf}–${l.ga} v ${l.opp}`;
   body.innerHTML = `
-    <div class="filter-row" style="margin-bottom:10px">${chip("all", "World")}${CONFEDS.map((c) => chip(c, c)).join("")}</div>
+    <div class="filter-row u-mb10">${chip("all", "World")}${CONFEDS.map((c) => chip(c, c)).join("")}</div>
     <div class="table-scroll"><table class="leaderboard clubs">
       <thead><tr>
         <th title="Position in this list, in the current sort order.">#</th>
@@ -5190,7 +5209,7 @@ function renderFpl() {
   const calibRows = (c) => c.bins.map(([count, p, rate], i) => {
     const gap = Math.abs(rate - p);
     return `<tr><td>${pct(p, 0)}</td><td>${count.toLocaleString()}</td><td class="${gap <= 0.03 ? "gap-ok" : gap > 0.06 ? "gap-off" : ""}">${pct(rate, 0)}</td>
-      <td style="width:70px"><span class="calib-bar" style="width:${Math.round(rate * 60)}px"></span></td></tr>`;
+      <td class="u-w70"><span class="calib-bar" data-sw="${Math.round(rate * 60)}px"></span></td></tr>`;
   }).join("");
   const mi = f.minutes, reg = f.segments.regular.regular, pr = f.prospective;
   const liveText = pr.state === "not_started" ? "Not started: the snapshot table hasn't been created yet."
@@ -5230,7 +5249,7 @@ function renderFpl() {
     <div class="stats-card">
       <div class="stats-label">By position</div>
       ${segTable(f.segments.position, "Position", ["G", "D", "M", "F"], (g) => FPL_POS[g])}
-      <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table" style="margin-top:10px">
+      <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table u-mt10">
         <thead><tr><th>Best picks each round</th><th>Model</th><th>Last-5</th><th>PPG</th><th>No match model</th></tr></thead>
         <tbody>${posTop}</tbody></table></div>
       <div class="stats-note">Green error: the model beat the last-5 average. The match model helps most for defenders and goalkeepers, whose points depend on the opponent.</div>
@@ -5244,7 +5263,7 @@ function renderFpl() {
       </div>
       <div class="stats-note">An honest miss: on plain average error the simple last-5 average is slightly better, because minutes are nearly all-or-nothing and
         a 90%-likely starter is best predicted as ~76 minutes, not 90. With injury news the model's error drops to ${f.availability_minutes_mae.toFixed(1)} minutes.</div>
-      <div class="stats-label" style="margin-top:12px">Chance of starting: said vs happened</div>
+      <div class="stats-label u-mt12">Chance of starting: said vs happened</div>
       <table class="calib-table"><thead><tr><th>Said</th><th>Players</th><th>Started</th><th></th></tr></thead><tbody>${calibRows(f.start_calibration)}</tbody></table>
     </div>
     <div class="stats-card">
@@ -5262,13 +5281,13 @@ function renderFpl() {
     <div class="stats-card">
       <div class="stats-label">Through the season</div>
       ${segTable(f.segments.round_bucket, "Rounds", ["1-5", "6-19", "20-38"])}
-      <div class="stats-label" style="margin-top:12px">By player level (our player rank, not FPL price)</div>
+      <div class="stats-label u-mt12">By player level (our player rank, not FPL price)</div>
       ${segTable(f.segments.ability_band, "Rank", ["80+", "70-80", "60-70"])}
     </div>
     <div class="stats-card">
       <div class="stats-label">Live test on upcoming gameweeks</div>
-      <div class="stats-value">${rounds} / ${pr.target_rounds} <span style="font-size:14px;color:var(--text-muted)">rounds</span></div>
-      <div class="dist-row"><span class="dist-bar-wrap"><span class="dist-bar" style="display:block;width:${Math.min(100, 100 * rounds / pr.target_rounds).toFixed(0)}%;background:var(--series-blue)"></span></span></div>
+      <div class="stats-value">${rounds} / ${pr.target_rounds} <span class="u-sub">rounds</span></div>
+      <div class="dist-row"><span class="dist-bar-wrap"><span class="dist-bar" data-sw="${Math.min(100, 100 * rounds / pr.target_rounds).toFixed(0)}%" data-sbg="var(--series-blue)"></span></span></div>
       <div class="stats-note">${liveText} Every player's prediction is saved before kickoff and can't be changed afterwards. Results stay sealed until
         ${pr.target_rounds} rounds are in, then the same checks are run once. This count is v1.1's; later versions' predictions are saved the same way and checked separately.</div>
     </div>
