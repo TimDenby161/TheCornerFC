@@ -1,9 +1,9 @@
--- Additive and repeatable. NOT APPLIED YET.
+-- Additive and repeatable. Applied 2026-10-04.
 -- Accounts (README: Accounts): a signed-in visitor can delete their own account from the site's
 -- account box. Supabase's API has no call for that with the public key, so this function does it,
 -- for the caller only: auth.uid() comes from their sign-in token and is null for anyone else, so
 -- nothing is deleted. Removing the auth.users row removes their sign-in identities and sessions
--- with it. When applied, append this file to db/schema.sql as the other migrations are.
+-- with it. Also in db/schema.sql.
 CREATE OR REPLACE FUNCTION delete_my_account() RETURNS void
 LANGUAGE sql SECURITY DEFINER SET search_path = '' AS $$
     DELETE FROM auth.users WHERE id = (SELECT auth.uid());

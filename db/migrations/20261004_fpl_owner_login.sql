@@ -1,5 +1,5 @@
--- Repeatable. NOT APPLIED YET. Apply together with publishing the site change that goes with it:
--- the site before it calls the passphrase functions this drops.
+-- Repeatable. Applied 2026-10-04, with the site change that goes with it (the site before it
+-- called the passphrase functions this drops).
 -- The owner-only FPL pages check who is signed in instead of a passphrase (owner's decision
 -- 2026-10-04; README: Accounts, My FPL team). fpl_team_owners holds the email address allowed for
 -- an entry; it is set in the SQL editor (README: My FPL team), not here. fpl_owner_data and
@@ -9,7 +9,7 @@
 -- the emailed link), so signing up with the owner's address doesn't pass without that mailbox.
 -- The passphrase functions and tables are dropped. Don't re-run 20260930_fpl_team_locks.sql or
 -- 20261003_fpl_owner_docs.sql on their own after this: they would bring the passphrase back.
--- When applied, append this file to db/schema.sql as the other migrations are.
+-- Also in db/schema.sql.
 CREATE TABLE IF NOT EXISTS fpl_team_owners (
     entry_id integer PRIMARY KEY,
     email text NOT NULL
