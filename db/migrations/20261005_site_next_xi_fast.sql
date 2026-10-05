@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-05.
 -- site_next_xi(team) was slow on the real database: about 0.2 s of work a call, 4 to 7 s each
 -- with twenty at once, and some stopped at the public key's 3 second limit. To find a club's
 -- next match with a predicted XI, the database walked every fixture in kick-off order from the
