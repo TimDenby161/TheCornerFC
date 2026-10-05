@@ -130,9 +130,11 @@ class SiteReaderTests(unittest.TestCase):
             self.assertLess(html.index('<script src="assets/data.js">'), html.index(f'<script src="assets/{script}">'), page)
             self.assertIn("connect-src 'self' https://bookkurhdabdeccckjbn.supabase.co;", html, page)
 
-    def test_files_are_the_default_and_the_database_is_asked_by_key(self):
+    def test_the_database_is_the_default_and_is_asked_by_key(self):
         reader = (ROOT / 'docs/assets/data.js').read_text()
-        self.assertIn(': "files";', reader)
+        self.assertIn(': "db";', reader)
+        # the published file is still there to fall back on while the export writes one
+        self.assertIn("read from the published file", (ROOT / 'docs/assets/app.js').read_text())
         self.assertIn("/rest/v1/rpc/site_doc?", reader)
         self.assertIn('q.set("p_v", hash)', reader)
 

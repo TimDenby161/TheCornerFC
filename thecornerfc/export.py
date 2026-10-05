@@ -230,8 +230,8 @@ def store_owner_doc(conn, name, payload):
 
 def mirror_site_docs(conn, out_dir=OUT_DIR):
     """site.docs: a row for every published data file, keyed by its path without ".json"
-    (audit/db-api-plan.md, db/migrations/20261004_site_docs.sql). Step 1 of moving the site's data
-    off docs/data: the files are still what the site reads. Only rows whose file changed are
+    (audit/db-api-plan.md, db/migrations/20261004_site_docs.sql). These rows are what the site
+    reads (docs/assets/data.js, since 2026-10-05); the files are its fallback. Only rows whose file changed are
     written, rows whose file has gone are deleted, and it is one transaction. Never fatal: a
     read-only run, a database without the table or a failed write is logged and skipped.
     Returns (written, deleted), or None when skipped."""

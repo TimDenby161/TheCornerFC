@@ -1662,7 +1662,7 @@ END; $$;
 --   select count(*), pg_size_pretty(pg_total_relation_size('site.docs')) from site.docs;    -- after the next export: about 9,700 rows
 --   select jsonb_typeof(public.site_doc('rankings'));                                       -- object
 
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-05.
 -- Step 3 of the move away from docs/data (audit/db-api-plan.md): the site reads its data through
 -- site_doc(). A file on GitHub Pages is kept by the browser for as long as its content hash stands
 -- (data/manifest.json); a database row needs the same, or every visit downloads everything again.
