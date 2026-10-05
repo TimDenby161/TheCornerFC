@@ -251,7 +251,9 @@ def mirror_site_docs(conn, out_dir=OUT_DIR):
                 changed.append((key, raw.decode("utf-8"), sha))
         gone = sorted(set(stored) - set(files))
         with conn.cursor() as cur:
-            cur.executemany("""insert into site.docs (key, body, sha256, updated_at) values (%s, %s::jsonb, %s, now())
+            # the file's text as it is: no cast, so it goes in whether the column is json (the text
+            # is kept and returned untouched) or, before 20261005_site_doc_raw.sql, jsonb
+            cur.executemany("""insert into site.docs (key, body, sha256, updated_at) values (%s, %s, %s, now())
                                on conflict (key) do update set body = excluded.body, sha256 = excluded.sha256,
                                                                updated_at = excluded.updated_at""", changed)
             if gone:

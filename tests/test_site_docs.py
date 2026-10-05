@@ -131,6 +131,30 @@ class CacheMigrationTests(unittest.TestCase):
         self.assertIn('"Cache-Control": "no-cache"', self.SQL)
 
 
+class RawMigrationTests(unittest.TestCase):
+    """site_doc returns the stored text as the response body (20261005_site_doc_raw.sql)."""
+    SQL = (ROOT / 'db/migrations/20261005_site_doc_raw.sql').read_text()
+
+    def test_migration_is_in_the_schema(self):
+        self.assertIn(self.SQL, (ROOT / 'db/schema.sql').read_text())
+
+    def test_nothing_is_rebuilt_on_a_read(self):
+        self.assertIn("ALTER COLUMN body TYPE json USING body::json", self.SQL)
+        self.assertIn('RETURNS public."application/json"', self.SQL)
+        self.assertIn("RETURN coalesce(doc.body, 'null'::json);", self.SQL)      # no row is still null, not an empty answer
+
+    def test_still_only_the_function_and_never_a_paid_row(self):
+        self.assertIn("REVOKE ALL ON FUNCTION public.site_doc(text, text) FROM PUBLIC", self.SQL)
+        self.assertIn("AND NOT paid", self.SQL)
+        self.assertIn("SET search_path = ''", self.SQL)
+        self.assertIn("p_v = pg_catalog.left(doc.sha256, 16)", self.SQL)
+        self.assertNotIn("GRANT SELECT", self.SQL.upper().replace("GRANT EXECUTE", ""))
+
+    def test_the_export_sends_the_file_text_without_a_cast(self):
+        import inspect
+        self.assertIn("values (%s, %s, %s, now())", inspect.getsource(export.mirror_site_docs))
+
+
 class SiteReaderTests(unittest.TestCase):
     def test_pages_load_the_reader_before_the_scripts_that_use_it(self):
         for page, script in (('index.html', 'app.js'), ('methodology.html', 'methodology.js')):
