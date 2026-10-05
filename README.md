@@ -1285,7 +1285,7 @@ signed in in that browser (README: Accounts).
 
 ### The site's data in the database (step 1)
 
-`site.docs` holds a copy of every file in `docs/data`, one row per file, keyed by its path without `.json` (`matches`, `clubs/42`). `export.mirror_site_docs` writes it after every export, `nations` and `matchday` run: only rows whose file changed are written, rows whose file has gone are deleted, in one transaction. A read-only run, or a database without the table, skips it with a log line.
+`site.docs` holds a copy of every file in `docs/data`, one row per file, keyed by its path without `.json` (`matches`, `clubs/42`). `export.mirror_site_docs` writes it after every export, `nations` and `matchday` run: only rows whose file changed are written, rows whose file has gone are deleted, in one transaction. A read-only run (a local one) skips it with a log line. A failed write stops the run with an error, so the workflow goes red and nothing from that run is committed: the site reads these rows, and would otherwise go on showing the old ones behind a green run. The next run writes every row whose file differs, so it catches up without help.
 
 - The table is in the `site` schema, which the Data API doesn't expose. The only way to read it is `site_doc(key)`, which returns one row's JSON and never a row marked `paid`.
 - **The site reads the database** (since 2026-10-05): every data file comes through `site_doc`. If the database doesn't answer, the page reads the published file, which the export still writes. `docs/assets/data.js` holds the switch: `?data=files` in the address reads the files only.
