@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-05.
 -- site_lineup_history() was too slow for the whole history. Measured on 2026-10-05, the evening
 -- it went live: about 2 seconds for all 63,369 line-ups against the public key's 3 second limit
 -- (filtered views 0.3 to 0.5 seconds), and several at once failed. It read every row for each
