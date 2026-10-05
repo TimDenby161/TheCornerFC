@@ -11,6 +11,7 @@ import math
 import re
 import shutil
 import tempfile
+import unicodedata
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -409,14 +410,14 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     # site.json: what every page needs whatever it shows (the competitions, the clubs' names, when
     # the data was made). It is one of the two files loaded on every visit (rankings.json is the
     # other); matches.json is fetched by the views that show matches.
-    (out_dir / "site.json").write_text(json.dumps({
+    site = {
         "generated_at": generated,
         "freshness": site_freshness(conn),
         "competitions": competitions,
         "teams": teams,
         "nation_pages": nation_pages,
         "match_fields": SITE_MATCH_FIELDS,      # the order of a match's row, as site_matches() returns them
-    }, separators=(",", ":")), encoding="utf-8")
+    }
     (out_dir / "matches.json").write_text(json.dumps({
         "generated_at": generated,
         "fields": SITE_MATCH_FIELDS,
@@ -436,7 +437,15 @@ def _write_site_data(conn, out_dir=OUT_DIR):
         export_fixture_pages(out_dir, explained)      # a database from before site.matches: a file per match, as before
     export_methodology(conn, out_dir, now)
     export_injuries(conn, out_dir)
-    player_team = export_players(conn, out_dir)
+    player_team, listed = export_players(conn, out_dir, rankings)
+    # the players are in the database (site.players): the site asks it for the ones a view shows,
+    # and needs the order of a row, the seasons and the names of their clubs outside the rankings
+    if listed["stored"]:
+        site.update(player_fields=SITE_PLAYER_FIELDS, player_season_fields=PLAYER_SEASON_FIELDS,
+                    player_seasons=PLAYER_SEASONS, player_future_seasons=listed["future_seasons"])
+        for team, name in listed["teams"].items():
+            site["teams"].setdefault(team, name)
+    (out_dir / "site.json").write_text(json.dumps(site, separators=(",", ":")), encoding="utf-8")
     detail = export_player_seasons(conn, out_dir)
     export_clubs(conn, out_dir, _club_positions(player_team, detail["positions"]))
     export_leagues(conn, out_dir)
@@ -1209,12 +1218,14 @@ LISTED = """p.current_rank is not null and (p.rank_minutes >= 450 or exists (
       and r.minutes >= 1500) or exists (select 1 from team_squads s where s.player_id = p.player_id))"""
 
 
-def export_players(conn, out_dir=OUT_DIR):
+def export_players(conn, out_dir=OUT_DIR, rankings=()):
     """Current player ranks, season ranks and each team's predicted XI for its next match
-    (players.json). A season rank is the player's average rank across that season (after each
-    match, weighted by minutes; player_season_ranks), blank if he didn't play in these leagues.
-    A match's own line-ups aren't here: the site asks the database for the match it opens
-    (site_lineups). Returns {player: his club}."""
+    (players.json, and the site.players table: store_players). A season rank is the player's
+    average rank across that season (after each match, weighted by minutes; player_season_ranks),
+    blank if he didn't play in these leagues. A match's own line-ups aren't here: the site asks
+    the database for the match it opens (site_lineups). rankings: the rows of rankings.json, for
+    each club's world rank. Returns ({player: his club}, {"stored": whether the table was
+    written, "future_seasons", "teams": the names of the players' clubs})."""
     # Listed: 450+ minutes in his last 20 appearances, a 1,500+ minute season in the seasons
     # shown (an established player back from injury, e.g. John Stones), or in a current squad
     # (a new signing). His club: the squad he's in now (team_squads), else the club the weekly
@@ -1315,24 +1326,137 @@ def export_players(conn, out_dir=OUT_DIR):
     for player, season, rank in conn.execute("select player_id, season, projected_rank from player_projected_ranks"):
         future[player][season] = float(rank)
     future_seasons = sorted({y for ys in future.values() for y in ys})
+    rows = [[r[0], r[1], main_pos.get(r[0], r[2]), float(r[3]), r[4], r[5], r[6],
+             [season_ranks[r[0]].get(y) for y in PLAYER_SEASONS], r[7],
+             [i for i, y in enumerate(PLAYER_SEASONS) if y in estimated[r[0]]], r[8],
+             pos_12m.get(r[0], []), pos_ranks.get(r[0], {}),
+             [future[r[0]].get(y) for y in future_seasons], season_stats.get(r[0])] for r in players]
+    # names of players' clubs outside the club rankings (a move out of our leagues)
+    teams = {t: n for t, n in conn.execute(
+        "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])}
     (out_dir / "players.json").write_text(json.dumps({
-        "fields": ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
-                   "nationality", "positions_12m", "position_ranks", "future", "season"],
+        "fields": PLAYER_FIELDS,
         "seasons": PLAYER_SEASONS,
         "season_fields": PLAYER_SEASON_FIELDS,
         "future_seasons": future_seasons,    # oldest first
-        "players": [[r[0], r[1], main_pos.get(r[0], r[2]), float(r[3]), r[4], r[5], r[6],
-                     [season_ranks[r[0]].get(y) for y in PLAYER_SEASONS], r[7],
-                     [i for i, y in enumerate(PLAYER_SEASONS) if y in estimated[r[0]]], r[8],
-                     pos_12m.get(r[0], []), pos_ranks.get(r[0], {}),
-                     [future[r[0]].get(y) for y in future_seasons], season_stats.get(r[0])] for r in players],
+        "players": rows,
         "next_xi": next_xi,
-        # names of players' clubs outside the club rankings (a move out of our leagues)
-        "teams": {str(t): n for t, n in conn.execute(
-            "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])},
+        "teams": {str(t): n for t, n in teams.items()},
     }, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
     log.info("Exported %d player ranks and %d predicted XIs", len(players), len(next_xi))
-    return {r[0]: r[5] for r in players}       # {player: his club}, for the club files' positions
+    stored = store_players(conn, site_player_rows(rows, rankings))
+    # {player: his club}, for the club files' positions
+    return {r[0]: r[5] for r in players}, {"stored": stored, "future_seasons": future_seasons, "teams": teams}
+
+
+# A player as the site draws him: the order of each row of players.json (PLAYER_FIELDS), and of
+# site.players.data (SITE_PLAYER_FIELDS), which adds what the site used to work out from the
+# whole list: his place by Ability among every listed player (world) and in his league (lg of
+# lg_of), his place by current rank among his league's players with a club (lg_rank of lg_n, on
+# his page), and his place in the export's order (ord).
+PLAYER_FIELDS = ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
+                 "nationality", "positions_12m", "position_ranks", "future", "season"]
+SITE_PLAYER_FIELDS = PLAYER_FIELDS + ["world", "lg", "lg_of", "lg_rank", "lg_n", "ord"]
+
+
+def _fold(text):
+    """Text as the site's search folds it (foldText in app.js): no accents, lower case, anything
+    but letters and digits a space."""
+    plain = "".join(ch for ch in unicodedata.normalize("NFD", str(text or "")) if not "\u0300" <= ch <= "\u036f")
+    return re.sub(r"[^a-z0-9]+", " ", plain.lower()).strip()
+
+
+def _places(values):
+    """{value: its place among values, highest first}; a tie shares the higher place."""
+    places = {}
+    for i, v in enumerate(sorted(values, reverse=True)):
+        places.setdefault(v, i + 1)
+    return places
+
+
+_ENTITIES = {"apos": "'", "#39": "'", "quot": '"', "amp": "&", "lt": "<", "gt": ">"}
+
+
+def _decode(text):
+    """A name as the site shows it (decodeEntities in app.js): API-Football sends some
+    HTML-encoded ("O&apos;Reilly")."""
+    return re.sub(r"&(apos|#39|quot|amp|lt|gt);", lambda m: _ENTITIES[m.group(1)], text or "")
+
+
+def site_player_rows(rows, rankings=()):
+    """The rows of site.players, one dict per player in rows (PLAYER_FIELDS order, the export's
+    order): the columns site_players() filters and sorts on, and "data", his row in
+    SITE_PLAYER_FIELDS order. rankings: the rows of rankings.json (club, ..., Baseline Strength
+    fifth), for his club's world rank. Places are counted as the site counted them from the
+    whole list: by Ability (this season's rank) among every listed player and within his
+    league; a tie shares the higher place."""
+    at = {name: i for i, name in enumerate(PLAYER_FIELDS)}
+    ability = lambda r: r[at["seasons"]][0] if r[at["seasons"]] else None
+    world = _places([ability(r) for r in rows if ability(r) is not None])
+    by_league, club_league = defaultdict(list), defaultdict(list)
+    for r in rows:
+        if ability(r) is not None and r[at["league"]] is not None:
+            by_league[r[at["league"]]].append(ability(r))
+        if r[at["team"]] and r[at["league"]]:
+            club_league[r[at["league"]]].append(r[at["rank"]])
+    league_place = {lg: _places(v) for lg, v in by_league.items()}
+    club_place = {lg: _places(v) for lg, v in club_league.items()}
+    strengths = [r[4] for r in rankings if r[4] is not None]
+    club_places = _places(strengths)
+    club_world = {r[0]: club_places[r[4]] for r in rankings if r[4] is not None}
+    out = []
+    for i, r in enumerate(rows):
+        a, league, team = ability(r), r[at["league"]], r[at["team"]]
+        placed = a is not None
+        in_league = placed and league is not None
+        with_club = bool(team and league)
+        season = r[at["season"]]
+        goals, assists = (season[PLAYER_SEASON_FIELDS.index("goals")], season[PLAYER_SEASON_FIELDS.index("assists")]) if season else (None, None)
+        name = _decode(r[at["name"]])
+        plays = [x for x in dict.fromkeys([r[at["position"]], *r[at["positions_12m"]]]) if x]
+        out.append({
+            "player_id": r[at["id"]], "ord": i, "name_lc": name.lower(), "name_fold": _fold(name),
+            "team_id": team, "league_id": league, "age": r[at["age"]], "nationality": r[at["nationality"]],
+            "plays": plays, "ability": None if a is None else math.floor(a + 0.5),
+            "club_world": club_world.get(team), "minutes": r[at["minutes"]],
+            "seasons": r[at["seasons"]], "future": r[at["future"]], "pos_ranks": r[at["position_ranks"]],
+            "ga": None if season is None else goals + assists + goals / 1000,
+            "data": [*r, world[a] if placed else None,
+                     league_place[league][a] if in_league else None, len(by_league[league]) if in_league else None,
+                     club_place[league][r[at["rank"]]] if with_club else None, len(club_league[league]) if with_club else None, i],
+        })
+    return out
+
+
+def store_players(conn, players):
+    """site.players: every listed player as a row (site_player_rows), for the database functions
+    the site asks (db/migrations/20261005_site_players.sql: site_players, site_player_facets).
+    The table is rewritten whole, in one transaction.
+
+    True once stored. False, with nothing written, on a read-only run or a database from before
+    the migration (logged): the site then goes on reading players.json. Any other failure stops
+    the run."""
+    try:
+        config.require_db_write("store the players")
+    except config.SafetyError as exc:
+        log.info("Players not stored: %s", exc)
+        return False
+    (table,) = conn.execute("select to_regclass(%s)", ["site.players"]).fetchone()
+    if table is None:
+        log.warning("site.players isn't there yet (db/migrations/20261005_site_players.sql): the players weren't stored")
+        return False
+    text = lambda value: json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+    columns = ["player_id", "ord", "name_lc", "name_fold", "team_id", "league_id", "age", "nationality", "plays",
+               "ability", "club_world", "minutes", "seasons", "future", "pos_ranks", "ga", "data"]
+    with conn.cursor() as cur:
+        cur.execute("delete from site.players")
+        with cur.copy(f"copy site.players ({', '.join(columns)}) from stdin") as copy:
+            for p in players:
+                copy.write_row([text(p[c]) if c in ("pos_ranks", "data") else p[c] for c in columns])
+        cur.execute("analyze site.players")
+    conn.commit()
+    log.info("Stored %d players", len(players))
+    return True
 
 
 def _club_spells(rows):
