@@ -168,20 +168,45 @@ function loadPlayers() {
   });
 }
 
+// Every visit loads two files, whatever it opens on: the names every page uses (data/site.json:
+// the competitions, the clubs' names, when the data was made) and the club ratings. The rest is
+// fetched by the views that show it, the first time one of them opens (TAB_NEEDS and the club,
+// player and league pages): the matches, the model's record, the paper bets, the FPL findings.
+const lazy = {}, lazyIn = new Set();          // each on its way, and the ones that are in
+function loadOnce(name, fetcher) {
+  return lazy[name] ||= fetcher().then(() => { lazyIn.add(name); }, (err) => { delete lazy[name]; throw err; });
+}
+const loadMatches = () => loadOnce("matches", () => getJson("data/matches.json").then((m) => {
+  state.data.matches = rowsToObjects(m.fields, m.matches);
+  state.matchesTab = state.matchCountries = state.intlLeagues = null;      // anything worked out before they were in
+  if (!state.date) state.date = defaultDate();
+}));
+const loadStats = () => loadOnce("stats", () => getJsonOrNull("data/stats.json").then((st) => {
+  state.stats = st;
+  state.statsCountries = null;
+  renderStatsFilters();
+}));
+const loadBets = () => loadOnce("bets", () => getJsonOrNull("data/bets.json").then((bets) => {
+  state.bets = bets;
+  state.betCountries = null;
+  renderBetFilters();
+}));
+const loadFplFindings = () => loadOnce("fpl", () => getJsonOrNull("data/fpl.json").then((fpl) => { state.fpl = fpl; }));
+const LAZY = { matches: loadMatches, stats: loadStats, bets: loadBets, fpl: loadFplFindings };
+// A page that shows a club's or player's matches draws without them if they can't be fetched
+const matchesOrNone = () => loadMatches().catch((err) => { console.error(err); });
+
 async function loadData() {
   try {
     // A page that opens on a view needing players.json asks for it alongside the rest, so the
     // largest file isn't left waiting behind them. The Players table waits for it, to be drawn once
     const hash = location.hash;
     const players = /^#\/(players|club\/|player\/|nation|fpl$|efl-fantasy$)/.test(hash) ? loadPlayers() : null;
-    const [m, r, st, bets, fpl] = await Promise.all([
-      getJson("data/matches.json"), getJson("data/rankings.json"), getJsonOrNull("data/stats.json"),
-      getJsonOrNull("data/bets.json"), getJsonOrNull("data/fpl.json"), hash.startsWith("#/players") ? players : null,
+    const [site, r] = await Promise.all([
+      getJsonOrNull("data/site.json"), getJson("data/rankings.json"), hash.startsWith("#/players") ? players : null,
     ]);
-    state.stats = st;
-    state.fpl = fpl;
-    state.bets = bets;
-    state.data = { ...m, matches: rowsToObjects(m.fields, m.matches) };
+    // (an export from before site.json existed has the names in matches.json)
+    state.data = { ...(site || await getJson("data/matches.json")), matches: [] };
     state.rankings = rowsToObjects(r.fields, r.rankings);
     // Gap: Current Strength less Baseline Strength (as shown, so the sum adds up), how far a club's
     // rating now sits from its long-term level. Not recent movement: that is x.form, the export's
@@ -190,11 +215,7 @@ async function loadData() {
     state.rankByTeam = new Map(state.rankings.map((x) => [x.team, x]));
     buildCompetitionLabels();
     renderFreshness();
-    if (!state.date) state.date = defaultDate();
     renderTableFilters();
-    renderStatsFilters();
-    renderBetFilters();
-    loadEuroCups();
     route();          // draws the tab that's open; the others are drawn when first opened (showTab)
     document.body.classList.remove("booting");
   } catch (err) {
@@ -2756,6 +2777,7 @@ function setTitle(name) {
   if (document.body.dataset.tab === "club") $("#app-title").textContent = name;
 }
 function showPage(name = "") {            // club, player and nationality pages share one panel
+  document.body.classList.remove("booting");       // (a tab may have been waiting for its files)
   setTitle(name);
   document.body.dataset.tab = "club";
   state.nation = null;
@@ -2781,7 +2803,7 @@ async function openClubPage(id, want = null) {
   body.innerHTML = `<div class="empty-state">Loading ${escapeHtml(teamName(id))}…</div>`;
   const r = state.rankByTeam.get(id);
   // its league's file too, for the domestic table position
-  const [club] = await Promise.all([loadClub(id), r?.in_league ? loadLeague(r.league) : null, loadPlayers()]);
+  const [club] = await Promise.all([loadClub(id), r?.in_league ? loadLeague(r.league) : null, loadPlayers(), matchesOrNone()]);
   state.injuries ||=await getJsonOrNull("data/injuries.json");
   if (Number(location.hash.match(/^#\/club\/(\d+)/)?.[1]) !== id) return;      // moved on while loading
   if (!club && loadFailed(`clubs/${id}`)) { body.innerHTML = loadError("this club's page"); return; }
@@ -3794,6 +3816,7 @@ function openTeam(teamId) {
     (results.length ? `<div class="modal-section">Recent results</div>${results.slice(0, 8).map((m) => row(m, true)).join("")}` : "");
   showDialog($("#team-modal"));
   state.modalTeam = teamId;
+  if (!lazyIn.has("matches")) matchesOrNone().then(() => { if (!$("#team-modal").hidden && state.modalTeam === teamId && lazyIn.has("matches")) openTeam(teamId); });
   // the predicted XI comes from players.json: drawn again with it if the pop-up is still on this club
   if (state.players === undefined)
     loadPlayers().then(() => { if (!$("#team-modal").hidden && state.modalTeam === teamId) openTeam(teamId); });
@@ -3817,9 +3840,9 @@ async function openPlayerPage(id, want = null) {
   showPage();
   state.club = null;
   const body = $("#club-body");
-  if (state.players === undefined) {
+  if (state.players === undefined || !lazyIn.has("matches")) {
     body.innerHTML = `<div class="empty-state">Loading…</div>`;
-    await loadPlayers();
+    await Promise.all([loadPlayers(), matchesOrNone()]);      // his club's next match is on his page
     if (!here()) return;      // moved on while loading
   }
   const p = state.players && playerById(id);
@@ -4691,7 +4714,7 @@ async function openLeaguePage(lid, want = null) {
   state.club = null;
   const comp = state.data.competitions[lid];
   $("#club-body").innerHTML = `<div class="empty-state">Loading ${escapeHtml(comp?.name || "competition")}…</div>`;
-  const lg = await loadLeague(lid);
+  const [lg] = await Promise.all([loadLeague(lid), matchesOrNone()]);       // its fixtures carry the model's predictions
   if (Number(location.hash.match(/^#\/league\/(\d+)/)?.[1]) !== lid) return;      // moved on while loading
   if (!lg && !comp && !loadFailed(`leagues/${lid}`)) return showNotFound();
   const tabs = LEAGUE_TABS.filter(([k]) => (k !== "table" && k !== "projected") || lg?.tableRows.length);
@@ -6109,13 +6132,31 @@ function renderTabHead(key) {
 }
 
 // ------------------------------------------------------------------ wiring
-// The tabs drawn from the start-up files: each is drawn the first time it's opened
+// These tabs are each drawn the first time they're opened, once the files they need are in
 const TAB_DRAW = { matches: renderMatches, table: renderTable, stats: renderStats, bets: renderBets, tips: renderTips, fpl: renderFpl };
+const TAB_NEEDS = { matches: ["matches"], tips: ["matches", "bets", "stats"], bets: ["bets"], stats: ["stats"], fpl: ["fpl"] };
+// True when the tab's files are in. If not, they are fetched behind the "Loading…" note and
+// then() runs once they arrive, unless another view has been opened in the meantime.
+function tabReady(tab, then) {
+  const needs = (TAB_NEEDS[tab] || []).filter((n) => !lazyIn.has(n));
+  const note = $("#boot-status");
+  if (!needs.length) { document.body.classList.remove("booting"); return true; }
+  document.body.dataset.tab = tab;
+  state.tab = tab;
+  syncMenu();
+  note.textContent = "Loading…";
+  document.body.classList.add("booting");
+  Promise.all(needs.map((n) => LAZY[n]())).then(() => { if (document.body.dataset.tab === tab) then(); },
+    (err) => { console.error(err); if (document.body.dataset.tab === tab) note.innerHTML = loadError("this page's data"); });
+  return false;
+}
 function showTab(tab) {
+  if (!tabReady(tab, () => showTab(tab))) return;
   // on screen first, so a first draw measures its rows; and drawn before state.tab changes, so a
   // first draw of the table doesn't put its filters in the address
   document.body.dataset.tab = tab;
   document.querySelectorAll(".panel").forEach((p) => p.dataset.active = String(p.dataset.tab === tab));
+  if (tab === "table") loadEuroCups();       // the cup filters' clubs (its menu shows how many each has)
   if (TAB_DRAW[tab] && !state.drawn.has(tab)) TAB_DRAW[tab]();
   state.tab = tab;
   if (tab === "fpl") loadFplPredictions();
@@ -6196,7 +6237,10 @@ function route() {
   else if (country) openCountryPage(decodeURIComponent(country[1]));
   else if (league) openLeaguePage(Number(league[1]), league[2]);
   else if (tableView) openTableView(tableView[1], tableView[2]);
-  else if (tab) { applyTabQuery(tab, tabRoute[2]); showTab(tab); window.scrollTo(0, 0); }
+  else if (tab) {
+    if (!tabReady(tab, route)) return;       // a link's choices (a date, a round) are read once its files are in
+    applyTabQuery(tab, tabRoute[2]); showTab(tab); window.scrollTo(0, 0);
+  }
   else if (location.hash.startsWith("#/")) showNotFound();
   else showTab(state.tab || "table");
 }
