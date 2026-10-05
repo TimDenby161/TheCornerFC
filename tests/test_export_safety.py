@@ -2,7 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from thecornerfc.export import (ExportValidationError, _ban, _club_positions, _injured, _kit_colors, _publish_export,
                                 export_player_seasons)
@@ -108,6 +108,29 @@ class ExportSafetyTests(unittest.TestCase):
                 _publish_export(build, live)
 
             self.assertEqual(json.loads((live / "rankings.json").read_text())["marker"], "old")
+
+    def test_with_no_earlier_files_the_export_is_compared_with_the_stored_one(self):
+        # the data isn't kept in the repository: a run's working copy has no export from before
+        stored = {"rows": {"player_seasons.json": 200}, "dirs": {"clubs": 40}}
+        for build_players, clubs, message in ((60, 1, "player_seasons.json collapsed from 200 to 60"), (150, 1, "clubs/ collapsed from 40 to 1")):
+            with self.subTest(message=message), tempfile.TemporaryDirectory() as tmp:
+                live = Path(tmp) / "data"
+
+                def build(staged):
+                    write_valid_export(staged, "new")
+                    write_json(staged / "player_seasons.json", {"players": {str(i): {} for i in range(build_players)}})
+
+                with patch("thecornerfc.export._stored_shape", return_value=stored) as asked, \
+                        self.assertRaisesRegex(ExportValidationError, message):
+                    _publish_export(build, live, conn=object())
+                asked.assert_called_once()
+                self.assertFalse(live.exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            live = Path(tmp) / "data"
+            write_valid_export(live, "old")
+            with patch("thecornerfc.export._stored_shape") as asked:           # files from before: they are what it is compared with
+                _publish_export(lambda staged: write_valid_export(staged, "new"), live, conn=object())
+            asked.assert_not_called()
 
     def test_successful_export_replaces_old_output(self):
         with tempfile.TemporaryDirectory() as tmp:

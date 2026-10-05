@@ -112,27 +112,51 @@ def _xi_lines(vals):
 @monitored("exports", conn_index=0)
 def export_site_data(conn, out_dir=OUT_DIR):
     """Build, validate and publish the static site export without clobbering old data."""
-    _publish_export(lambda staged: _write_site_data(conn, staged), out_dir)
+    _publish_export(lambda staged: _write_site_data(conn, staged), out_dir, conn)
     mirror_site_docs(conn, out_dir)
 
 
 MANIFEST = "manifest.json"
 
 
-def write_manifest(out_dir=OUT_DIR):
+def write_manifest(out_dir=OUT_DIR, conn=None, only=None):
     """data/manifest.json: a short content hash of each top-level data file. The site asks for
-    file.json?v=<hash> and keeps its copy until the hash changes, so a deploy that didn't touch a
-    file doesn't make every visitor download it again (GitHub Pages changes every file's ETag on
-    every deploy). Anything that writes a top-level data file must call this afterwards, and the
-    workflow that commits it must commit this file too (tests/test_manifest.py)."""
+    a file by its hash and keeps its copy until the hash changes, so unchanged data isn't
+    downloaded again. Anything that writes a top-level data file must call this afterwards
+    (tests/test_manifest.py).
+
+    A full export hashes the files it wrote. A job that writes part of the data (only: the
+    top-level files it wrote) starts from the hashes of the rows in site.docs and replaces its
+    own, so the manifest is whole whether or not the other files are in its working copy."""
     out_dir = Path(out_dir)
     files = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()[:16]
-             for p in sorted(out_dir.glob("*.json")) if p.name != MANIFEST}
+             for p in sorted(out_dir.glob("*.json")) if p.name != MANIFEST and (only is None or p.name in only)}
+    if only is not None:
+        files = dict(sorted({**_stored_hashes(conn), **files}.items()))
     _write_json_file(out_dir / MANIFEST, {"files": files})
     return files
 
 
-def _publish_export(build, out_dir=OUT_DIR):
+def _stored_hashes(conn):
+    """{file name: short hash} of the top-level rows of site.docs, as the manifest lists them
+    (a row's sha256 is its file's). Empty on a read-only run (a local one, which publishes
+    nothing and whose role can't see the site schema) and for a database from before the table."""
+    try:
+        config.require_db_write("read the stored manifest")
+    except config.SafetyError as exc:
+        log.info("Manifest lists this run's files only: %s", exc)
+        return {}
+    (table,) = conn.execute("select to_regclass(%s)", ["site.docs"]).fetchone()
+    if table is None:
+        return {}
+    return {f"{key}.json": sha[:16] for key, sha in conn.execute(
+        "select key, sha256 from site.docs where position('/' in key) = 0 and key <> %s", [Path(MANIFEST).stem]).fetchall()}
+
+
+def _publish_export(build, out_dir=OUT_DIR, conn=None):
+    """Build the export in a staging directory, validate it and swap it in. The new export is
+    compared with the one before it (_check_row_collapse): the files in out_dir, or, where the
+    working copy has none (the data isn't kept in the repository), the rows in site.docs."""
     out_dir = Path(out_dir)
     parent = out_dir.parent
     parent.mkdir(parents=True, exist_ok=True)
@@ -143,7 +167,9 @@ def _publish_export(build, out_dir=OUT_DIR):
             if (out_dir / rel).exists() and not (staged / rel).exists():
                 shutil.copy2(out_dir / rel, staged / rel)
         write_manifest(staged)
-        validate_export(staged, previous_dir=out_dir if out_dir.exists() else None)
+        earlier = out_dir.is_dir() and any(out_dir.glob("*.json"))
+        validate_export(staged, previous_dir=out_dir if earlier else None,
+                        previous=None if earlier or conn is None else _stored_shape(conn))
         _replace_export(staged, out_dir)
         staged = None
     finally:
@@ -168,7 +194,7 @@ def _replace_export(staged, out_dir):
             shutil.rmtree(backup, ignore_errors=True)
 
 
-def validate_export(out_dir, previous_dir=None):
+def validate_export(out_dir, previous_dir=None, previous=None):
     out_dir = Path(out_dir)
     if not out_dir.is_dir():
         raise ExportValidationError(f"Export directory does not exist: {out_dir}")
@@ -204,7 +230,9 @@ def validate_export(out_dir, previous_dir=None):
 
     previous_dir = Path(previous_dir) if previous_dir else None
     if previous_dir and previous_dir.is_dir():
-        _check_row_collapse(out_dir, previous_dir)
+        previous = _export_shape(previous_dir)
+    if previous:
+        _check_row_collapse(_export_shape(out_dir), previous)
 
 
 def _read_json(path):
@@ -229,18 +257,22 @@ def store_owner_doc(conn, name, payload):
     conn.commit()
 
 
-def mirror_site_docs(conn, out_dir=OUT_DIR):
-    """site.docs: a row for every published data file, keyed by its path without ".json"
+def mirror_site_docs(conn, out_dir=OUT_DIR, only=None):
+    """site.docs: a row for every data file, keyed by its path without ".json"
     (audit/db-api-plan.md, db/migrations/20261004_site_docs.sql). These rows are what the site
-    reads (docs/assets/data.js, since 2026-10-05); the files are its fallback. Only rows whose file changed are
-    written, rows whose file has gone are deleted, and it is one transaction. A failed write is
-    fatal: the site would go on showing the old rows, so the run has to stop and show red. A
-    read-only run (a local one) is skipped with a log line.
+    reads (docs/assets/data.js, since 2026-10-05). Only rows whose file changed are written,
+    and it is one transaction. After a full export, rows whose file has gone are deleted. A job
+    that writes part of the data names what it wrote (only: paths or patterns under out_dir,
+    such as "nations/*.json"): just those are written and nothing is deleted, so it doesn't
+    matter what else is, or isn't, in its working copy. A failed write is fatal: the site would
+    go on showing the old rows, so the run has to stop and show red. A read-only run (a local
+    one) is skipped with a log line.
     Returns (written, deleted), or None when skipped."""
     out_dir = Path(out_dir)
     try:
         config.require_db_write("mirror site docs")
-        files = {p.relative_to(out_dir).with_suffix("").as_posix(): p for p in sorted(out_dir.rglob("*.json"))}
+        found = sorted(out_dir.rglob("*.json")) if only is None else sorted({p for pattern in only for p in out_dir.glob(pattern)})
+        files = {p.relative_to(out_dir).with_suffix("").as_posix(): p for p in found}
         if not files:
             return None
         stored = dict(conn.execute("select key, sha256 from site.docs").fetchall())
@@ -250,7 +282,7 @@ def mirror_site_docs(conn, out_dir=OUT_DIR):
             sha = hashlib.sha256(raw).hexdigest()
             if stored.get(key) != sha:
                 changed.append((key, raw.decode("utf-8"), sha))
-        gone = sorted(set(stored) - set(files))
+        gone = sorted(set(stored) - set(files)) if only is None else []
         with conn.cursor() as cur:
             # the file's text as it is: no cast, so it goes in whether the column is json (the text
             # is kept and returned untouched) or, before 20261005_site_doc_raw.sql, jsonb
@@ -285,31 +317,66 @@ def _write_json_file(path, payload, *, ensure_ascii=True):
         raise
 
 
-def _check_row_collapse(out_dir, previous_dir):
+def _export_shape(root):
+    """What one export is compared with the next by: {"rows": {major file: its rows},
+    "dirs": {detail directory: its files}}. A file or directory that isn't there is left out."""
+    root = Path(root)
+    rows = {}
     for rel, (key, _) in MIN_MAJOR_ROWS.items():
-        old_path = previous_dir / rel
-        new_path = out_dir / rel
-        if not old_path.exists():
+        if (root / rel).exists():
+            value = _read_json(root / rel).get(key)
+            if isinstance(value, MAJOR_ROW_TYPES.get(rel, list)):
+                rows[rel] = len(value)
+    return {"rows": rows,
+            "dirs": {rel: sum(1 for _ in (root / rel).glob("*.json")) for rel in CRITICAL_DETAIL_DIRS if (root / rel).is_dir()}}
+
+
+def _stored_shape(conn):
+    """The same for the export in site.docs, the last one published: counted in the database, so
+    no file is fetched. None on a read-only run (a local one, which publishes nothing and whose
+    role can't see the site schema) and for a database from before the table."""
+    try:
+        config.require_db_write("read the stored export")
+    except config.SafetyError as exc:
+        log.info("Export not compared with the stored one: %s", exc)
+        return None
+    (table,) = conn.execute("select to_regclass(%s)", ["site.docs"]).fetchone()
+    if table is None:
+        return None
+    rows = {}
+    for rel, (key, _) in MIN_MAJOR_ROWS.items():
+        row = conn.execute(
+            """select json_typeof(body::json -> %s),
+                      case json_typeof(body::json -> %s)
+                          when 'array' then json_array_length(body::json -> %s)
+                          when 'object' then (select count(*) from json_object_keys(body::json -> %s)) end
+               from site.docs where key = %s""", [key, key, key, key, Path(rel).stem]).fetchone()
+        if row and row[0] == ("object" if MAJOR_ROW_TYPES.get(rel, list) is dict else "array"):
+            rows[rel] = int(row[1])
+    dirs = {name: int(n) for name, n in conn.execute(
+        """select split_part(key, '/', 1), count(*) from site.docs
+           where position('/' in key) > 0 group by 1""").fetchall() if name in CRITICAL_DETAIL_DIRS}
+    return {"rows": rows, "dirs": dirs}
+
+
+def _check_row_collapse(new, old):
+    """Stop an export that has lost most of a major file's rows or a detail directory's files
+    since the one before it. new, old: _export_shape (or _stored_shape)."""
+    for rel, (key, _) in MIN_MAJOR_ROWS.items():
+        was, now = old["rows"].get(rel), new["rows"].get(rel)
+        if not was or now is None:
             continue
-        old_value = _read_json(old_path).get(key)
-        new_value = _read_json(new_path).get(key)
-        expected_type = MAJOR_ROW_TYPES.get(rel, list)
-        if not isinstance(old_value, expected_type) or not isinstance(new_value, expected_type) or not old_value:
-            continue
-        if len(new_value) < len(old_value) * COLLAPSE_RATIO:
+        if now < was * COLLAPSE_RATIO:
             raise ExportValidationError(
-                f"{rel} collapsed from {len(old_value)} to {len(new_value)} {key} rows")
+                f"{rel} collapsed from {was} to {now} {key} rows")
 
     for rel in CRITICAL_DETAIL_DIRS:
-        old_dir = previous_dir / rel
-        new_dir = out_dir / rel
-        if not old_dir.is_dir() or not new_dir.is_dir():
+        was, now = old["dirs"].get(rel), new["dirs"].get(rel)
+        if was is None or now is None:
             continue
-        old_count = sum(1 for _ in old_dir.glob("*.json"))
-        new_count = sum(1 for _ in new_dir.glob("*.json"))
-        if old_count >= 10 and new_count < old_count * COLLAPSE_RATIO:
+        if was >= 10 and now < was * COLLAPSE_RATIO:
             raise ExportValidationError(
-                f"{rel}/ collapsed from {old_count} to {new_count} JSON files")
+                f"{rel}/ collapsed from {was} to {now} JSON files")
 
 
 def _write_site_data(conn, out_dir=OUT_DIR):
