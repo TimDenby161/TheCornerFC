@@ -73,11 +73,19 @@ class MirrorTests(unittest.TestCase):
         self.assertIsNone(export.mirror_site_docs(conn, empty))
         self.assertEqual((conn.deleted, conn.commits), ([], 0))
 
-    def test_a_database_without_the_table_is_skipped_not_fatal(self):
+    def test_a_failed_write_stops_the_run(self):
+        # the site reads these rows: a run that couldn't write them must not finish green
         conn = Conn(missing=True)
-        with self.assertLogs(export.log, 'ERROR'):
-            self.assertIsNone(export.mirror_site_docs(conn, self.out))
+        with self.assertLogs(export.log, 'ERROR'), self.assertRaises(RuntimeError):
+            export.mirror_site_docs(conn, self.out)
         self.assertEqual((conn.rollbacks, conn.commits), (1, 0))
+
+    def test_a_failed_commit_stops_the_run(self):
+        conn = Conn()
+        conn.commit = mock.Mock(side_effect=RuntimeError('connection lost'))
+        with self.assertLogs(export.log, 'ERROR'), self.assertRaises(RuntimeError):
+            export.mirror_site_docs(conn, self.out)
+        self.assertEqual(conn.rollbacks, 1)
 
     def test_a_read_only_run_writes_nothing(self):
         conn = Conn()

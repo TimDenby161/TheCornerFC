@@ -232,8 +232,9 @@ def mirror_site_docs(conn, out_dir=OUT_DIR):
     """site.docs: a row for every published data file, keyed by its path without ".json"
     (audit/db-api-plan.md, db/migrations/20261004_site_docs.sql). These rows are what the site
     reads (docs/assets/data.js, since 2026-10-05); the files are its fallback. Only rows whose file changed are
-    written, rows whose file has gone are deleted, and it is one transaction. Never fatal: a
-    read-only run, a database without the table or a failed write is logged and skipped.
+    written, rows whose file has gone are deleted, and it is one transaction. A failed write is
+    fatal: the site would go on showing the old rows, so the run has to stop and show red. A
+    read-only run (a local one) is skipped with a log line.
     Returns (written, deleted), or None when skipped."""
     out_dir = Path(out_dir)
     try:
@@ -260,10 +261,11 @@ def mirror_site_docs(conn, out_dir=OUT_DIR):
         return len(changed), len(gone)
     except config.SafetyError as exc:
         log.info("site.docs mirror skipped: %s", exc)
+        return None
     except Exception:
         conn.rollback()         # leave the caller's connection usable
-        log.exception("site.docs mirror skipped")
-    return None
+        log.error("site.docs was not written: the site is still showing the rows from the last run that wrote them")
+        raise
 
 
 def _write_json_file(path, payload, *, ensure_ascii=True):
