@@ -2,10 +2,11 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from thecornerfc import predictions
-from thecornerfc.export import explanation, export_explanations, export_fixture_pages
+from thecornerfc import export
+from thecornerfc.export import explanation, export_explanations, export_fixture_pages, store_matches
 from tests import test_match_snapshots
 
 HOME = [(1.8, 0.9), (2.1, 1.2), (1.1, 1.0)]
@@ -134,6 +135,50 @@ class FixturePageTests(unittest.TestCase):
             export_fixture_pages(Path(d), why)
             pages = {p.stem: json.loads(p.read_text()) for p in (Path(d) / "fixtures").glob("*.json")}
         self.assertEqual(pages, {"11": {"id": 11, "why": why["11"]}, "12": {"id": 12, "why": why["12"]}})
+
+    def match(self, fid, **over):
+        row = dict.fromkeys(export.SITE_MATCH_FIELDS)
+        row.update({"id": fid, "kickoff": "2026-10-10T14:00:00+00:00", "league": 39, "home": 1, "away": 2, "status": "NS", "intl": 0, **over})
+        return [row[k] for k in export.SITE_MATCH_FIELDS]
+
+    def test_matches_are_stored_as_rows_with_their_reasons_and_detail(self):
+        why = {"11": {"reasons": [["strength", 0.4]], "exp_diff": 0.4}}
+        conn, cur = Mock(), MagicMock()
+        conn.execute.return_value.fetchone.return_value = ("site.matches",)
+        cur.__enter__.return_value = cur
+        conn.cursor.return_value = cur
+        copy = cur.copy.return_value.__enter__.return_value
+        with patch.object(export.config, "require_db_write"):
+            self.assertTrue(store_matches(conn, [self.match(11), self.match(12, status="FT")], why))
+        self.assertEqual(cur.execute.call_args_list[0][0][0], "delete from site.matches")        # rewritten whole
+        first, second = [c[0][0] for c in copy.write_row.call_args_list]
+        self.assertEqual(first[:6], (11, "2026-10-10T14:00:00+00:00", 39, 1, 2, "NS"))
+        self.assertEqual(json.loads(first[6]), self.match(11))
+        self.assertEqual((json.loads(first[7]), json.loads(first[8])), ([["strength", 0.4]], why["11"]))
+        self.assertEqual(second[6:][1:], (None, None))             # no breakdown for that prediction
+        conn.commit.assert_called_once()
+
+    def test_without_the_table_nothing_is_stored_and_the_files_are_written(self):
+        conn = Mock()
+        conn.execute.return_value.fetchone.return_value = (None,)
+        with patch.object(export.config, "require_db_write"), self.assertLogs(export.log, "WARNING"):
+            self.assertFalse(store_matches(conn, [self.match(11)], {}))
+        conn.cursor.assert_not_called()
+        with patch.object(export.config, "require_db_write", side_effect=export.config.SafetyError("read-only")):
+            self.assertFalse(store_matches(conn, [self.match(11)], {}))
+        source = Path(export.__file__).read_text()
+        self.assertIn("if not store_matches(conn, matches, explained):\n        export_fixture_pages(out_dir, explained)", source)
+
+    def test_the_detail_function_reads_one_match(self):
+        root = Path(__file__).resolve().parents[1]
+        sql = (root / "db/migrations/20261005_site_matches.sql").read_text()
+        self.assertIn(sql, (root / "db/schema.sql").read_text())
+        self.assertIn("WHERE m.fixture_id = p_fixture", sql)
+        self.assertIn("REVOKE ALL ON FUNCTION public.site_match_detail(integer) FROM PUBLIC", sql)
+        self.assertIn("REVOKE ALL ON site.matches FROM PUBLIC", sql)
+        self.assertIn("SET search_path = ''", sql)
+        self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
+        self.assertIn('siteAsk("site_match_detail", { p_fixture: id })', (root / "docs/assets/app.js").read_text())
 
     def test_line_ups_come_from_the_database_for_one_match(self):
         root = Path(__file__).resolve().parents[1]

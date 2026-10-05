@@ -418,12 +418,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     }, separators=(",", ":")), encoding="utf-8")
     (out_dir / "matches.json").write_text(json.dumps({
         "generated_at": generated,
-        "fields": ["id", "kickoff", "league", "round", "home", "away", "status", "hg", "ag",
-                   "pen_h", "pen_a", "p_home", "p_draw", "p_away", "home_xg", "away_xg",
-                   "likely", "home_rank", "away_rank", "source", "rating", "r_winner",
-                   "r_margin", "r_clean_sheets", "r_shape", "r_goals", "m_home", "m_draw",
-                   "home_missing", "away_missing", "p_over25", "p_btts",
-                   "home_xi", "home_recent_xi", "away_xi", "away_recent_xi", "intl"],
+        "fields": SITE_MATCH_FIELDS,
         "matches": matches,
     }, separators=(",", ":")), encoding="utf-8")
     (out_dir / "rankings.json").write_text(json.dumps({
@@ -436,10 +431,11 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     export_stats(conn, out_dir)
     export_bets(conn, out_dir)
     explained = export_explanations(conn, out_dir, now)
+    if not store_matches(conn, matches, explained):
+        export_fixture_pages(out_dir, explained)      # a database from before site.matches: a file per match, as before
     export_methodology(conn, out_dir, now)
     export_injuries(conn, out_dir)
     player_team = export_players(conn, out_dir)
-    export_fixture_pages(out_dir, explained)
     detail = export_player_seasons(conn, out_dir)
     export_clubs(conn, out_dir, _club_positions(player_team, detail["positions"]))
     export_leagues(conn, out_dir)
@@ -545,12 +541,55 @@ def export_explanations(conn, out_dir=OUT_DIR, now=None):
     return out
 
 
+# A match as the site draws it: the order of each row of matches.json, and of site.matches.data
+SITE_MATCH_FIELDS = ["id", "kickoff", "league", "round", "home", "away", "status", "hg", "ag",
+                     "pen_h", "pen_a", "p_home", "p_draw", "p_away", "home_xg", "away_xg",
+                     "likely", "home_rank", "away_rank", "source", "rating", "r_winner",
+                     "r_margin", "r_clean_sheets", "r_shape", "r_goals", "m_home", "m_draw",
+                     "home_missing", "away_missing", "p_over25", "p_btts",
+                     "home_xi", "home_recent_xi", "away_xi", "away_recent_xi", "intl"]
+
+
+def store_matches(conn, matches, explained=None):
+    """site.matches: every match on the site as a row, with the key reasons its card shows and
+    its full model detail (export_explanations), for the database functions the site asks
+    (db/migrations/20261005_site_matches.sql: site_match_detail). matches: the rows of
+    matches.json, in SITE_MATCH_FIELDS order. The table is rewritten whole, in one transaction.
+
+    True once stored. False, with nothing written, on a read-only run or a database from before
+    the migration (logged): the caller then writes a file per match as before. Any other failure
+    stops the run."""
+    explained = explained or {}
+    try:
+        config.require_db_write("store the matches")
+    except config.SafetyError as exc:
+        log.info("Matches not stored: %s", exc)
+        return False
+    (table,) = conn.execute("select to_regclass(%s)", ["site.matches"]).fetchone()
+    if table is None:
+        log.warning("site.matches isn't there yet (db/migrations/20261005_site_matches.sql): the matches weren't stored")
+        return False
+    text = lambda value: None if value is None else json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+    at = {name: i for i, name in enumerate(SITE_MATCH_FIELDS)}
+    with conn.cursor() as cur:
+        cur.execute("delete from site.matches")
+        with cur.copy("""copy site.matches (fixture_id, kickoff, league_id, home_id, away_id, status, data, reasons, why)
+                         from stdin""") as copy:
+            for row in matches:
+                why = explained.get(str(row[at["id"]]))
+                copy.write_row((row[at["id"]], row[at["kickoff"]], row[at["league"]], row[at["home"]], row[at["away"]],
+                                row[at["status"]], text(row), text(why and why["reasons"]), text(why)))
+        cur.execute("analyze site.matches")
+    conn.commit()
+    log.info("Stored %d matches (%d with model detail)", len(matches), sum(str(m[0]) in explained for m in matches))
+    return True
+
+
 def export_fixture_pages(out_dir, explained=None):
     """One small file per explained match, for its card's model detail:
     docs/data/fixtures/<fixture_id>.json, {"id", "why": the explanation (export_explanations)}.
-    A page asks for one match's file, never every match's. The explanation is worked out here in
-    Python and stored nowhere else, which is why it is a file; the match's line-ups are in the
-    database already, and the site asks it for them (site_lineups)."""
+    Only written while the database has no site.matches table (store_matches): with it, the
+    detail is a column of the match's row and the site asks site_match_detail() for it."""
     pages = {str(fid): {"why": entry} for fid, entry in (explained or {}).items()}
     fixture_dir = Path(out_dir) / "fixtures"
     fixture_dir.mkdir(parents=True, exist_ok=True)
