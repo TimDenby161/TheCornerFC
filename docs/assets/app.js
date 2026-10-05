@@ -884,25 +884,29 @@ function probBars(m, diff = true) {
 // ---- Why the model says what it says. Everything below formats predictions.explain() output;
 // none of it is worked out here. data/explanations.json has each match's key reasons, for its
 // card (loaded when the first card with reasons is drawn); the full detail is in the match's own
-// file (loadFixture), fetched when that card's model detail is opened.
+// file (loadWhy), fetched when that card's model detail is opened.
 function loadExplanations() {
   state.explainLoading ||= getJsonOrNull("data/explanations.json")
     .then((j) => { state.explain = j?.matches || {}; state.explainModels = j?.models || {}; fillReasons(); });
   return state.explainLoading;
 }
 const explainOf = (m) => state.explain?.[String(m.id)] || null;
-// One match's file (data/fixtures/<id>.json): its explanation ("why") and its line-ups by team
-// ("xi" predicted, "actual" as started, "prematch" as predicted before the team sheet). Asked for
-// when a card is opened, once; null if the match has none.
-const fixturePages = new Map();
-function loadFixture(id) {
-  if (!fixturePages.has(id)) fixturePages.set(id, getJsonOrNull(`data/fixtures/${id}.json`).then((fx) => {
-    for (const part of ["xi", "actual", "prematch"])       // API-Football sends some names HTML-encoded
-      for (const xi of Object.values(fx?.[part] || {})) for (const r of xi) r[1] = decodeEntities(r[1]);
-    return fx;
-  }));
-  return fixturePages.get(id);
+// One match's full explanation, from its own file (data/fixtures/<id>.json): asked for when its
+// card's model detail is opened, once; null if the match has none.
+const whyPages = new Map();
+function loadWhy(id) {
+  if (!whyPages.has(id)) whyPages.set(id, getJsonOrNull(`data/fixtures/${id}.json`).then((fx) => fx?.why || null));
+  return whyPages.get(id);
 }
+// One match's line-ups by team, asked of the database when its line-ups are opened (site_lineups):
+// "xi" predicted, "actual" as started, "prematch" as predicted before the team sheet; rows are
+// [player, name, role, rank]. Not kept between openings: a line-up can change before kick-off.
+// null if the database doesn't answer (the card then shows what it can work out itself).
+const loadLineups = (id) => siteAsk("site_lineups", { p_fixture: id }).then((fx) => {
+  for (const part of ["xi", "actual", "prematch"])       // API-Football sends some names HTML-encoded
+    for (const xi of Object.values(fx?.[part] || {})) for (const r of xi) r[1] = decodeEntities(r[1]);
+  return fx;
+}, (err) => { console.warn(`line-ups for match ${id}: ${err.message}`); return null; });
 // Goals to one decimal, never "0.0" for something the model did count
 const goalsText = (v) => { const a = Math.abs(v); return a === 0 ? "0" : a < 0.05 ? "<0.1" : a.toFixed(1); };
 const signedGoals = (v) => v !== 0 && Math.abs(v) < 0.05 ? "≈0" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${goalsText(v)}`;
@@ -2647,7 +2651,7 @@ function xiBlock(teamId) {
 async function renderMatchLineups(m, panel) {
   const finished = FINISHED.has(m.status) && m.hg != null;
   panel.innerHTML = `<div class="empty-state">Loading ${finished ? "actual line-ups" : "predicted line-ups"}…</div>`;
-  const [homeData, awayData, fx] = await Promise.all([loadClub(m.home), loadClub(m.away), loadFixture(m.id), loadPlayers()]);
+  const [homeData, awayData, fx] = await Promise.all([loadClub(m.home), loadClub(m.away), loadLineups(m.id), loadPlayers()]);
   const exact = (finished ? fx?.actual : fx?.xi) || {};
   if (!finished && (!exact[String(m.home)] || !exact[String(m.away)])) {
     state.injuries ||= await getJsonOrNull("data/injuries.json");
@@ -6424,8 +6428,8 @@ async function setMatchPart(card, part, open) {
   const why = card.querySelector(".why-detail");
   why.hidden = !open;
   if (open) {
-    const [fx] = await Promise.all([loadFixture(m.id), loadExplanations()]);     // the model names are with the reasons
-    why.innerHTML = whyDetailHtml(m, fx?.why || null);
+    const [x] = await Promise.all([loadWhy(m.id), loadExplanations()]);     // the model names are with the reasons
+    why.innerHTML = whyDetailHtml(m, x);
   }
 }
 const togglePart = (btn) => btn.classList.contains("why-toggle") ? "why" : "lineups";

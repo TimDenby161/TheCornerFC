@@ -124,26 +124,37 @@ class ExportTests(unittest.TestCase):
 
 
 class FixturePageTests(unittest.TestCase):
-    """One file per match: a page asks for the match it shows, not for every match."""
-    def test_each_match_gets_only_its_own_parts(self):
-        why = {"11": {"reasons": [["strength", 0.4]], "exp_diff": 0.4}}
-        lineups = {"xi": {"11": {"1": [[5, "A. Player", "ST", 80.0]]}, "12": {"2": [[6, "B. Player", "GK", 70.0]]}},
-                   "actual": {"13": {"3": [[7, "C. Player", "CB", 75.0]]}}, "prematch": {"13": {"3": [[8, "D. Player", "CB", 74.0]]}}}
+    """A page asks for the match it shows, not for every match: the explanation from the match's
+    own file, the line-ups from the database (site_lineups)."""
+    def test_each_explained_match_gets_its_own_file(self):
+        why = {"11": {"reasons": [["strength", 0.4]], "exp_diff": 0.4}, "12": {"reasons": []}}
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "fixtures").mkdir()
             (Path(d) / "fixtures/9.json").write_text("{}")           # a match no longer on the site
-            export_fixture_pages(Path(d), why, lineups)
+            export_fixture_pages(Path(d), why)
             pages = {p.stem: json.loads(p.read_text()) for p in (Path(d) / "fixtures").glob("*.json")}
-        self.assertEqual(set(pages), {"11", "12", "13"})
-        self.assertEqual(pages["11"], {"id": 11, "why": why["11"], "xi": lineups["xi"]["11"]})
-        self.assertEqual(set(pages["12"]), {"id", "xi"})
-        self.assertEqual(set(pages["13"]), {"id", "actual", "prematch"})
+        self.assertEqual(pages, {"11": {"id": 11, "why": why["11"]}, "12": {"id": 12, "why": why["12"]}})
+
+    def test_line_ups_come_from_the_database_for_one_match(self):
+        root = Path(__file__).resolve().parents[1]
+        sql = (root / "db/migrations/20261005_site_lineups.sql").read_text()
+        self.assertIn(sql, (root / "db/schema.sql").read_text())
+        self.assertIn("REVOKE ALL ON FUNCTION public.site_lineups(integer) FROM PUBLIC", sql)
+        self.assertIn("SET search_path = ''", sql)
+        self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
+        # one match by its id in every part, and the site's own limits on what a finished match shows
+        self.assertEqual(sql.count("fixture_id = p_fixture"), 6)
+        self.assertEqual(sql.count("interval '21 days'"), 2)
+        from thecornerfc import export
+        self.assertEqual(export.PAST_DAYS, 21)
+        app = (root / "docs/assets/app.js").read_text()
+        self.assertIn('siteAsk("site_lineups", { p_fixture: id })', app)
 
     def test_the_shared_files_no_longer_carry_every_match(self):
         import inspect
         from thecornerfc import export
         players = inspect.getsource(export.export_players)
-        for gone in ('"fixture_xi": fixture_xi', '"actual_xi": actual_xi', '"prematch_xi": prematch_xi'):
+        for gone in ("fixture_xi", "actual_xi", "prematch_xi"):
             self.assertNotIn(gone, players)
         self.assertIn('{"reasons": entry["reasons"]}', inspect.getsource(export.export_explanations))
         app = (Path(export.__file__).resolve().parents[1] / "docs/assets/app.js").read_text()
