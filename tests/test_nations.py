@@ -1,6 +1,5 @@
 import unittest
 from datetime import date, datetime, timezone
-from decimal import Decimal
 from unittest import mock
 
 from thecornerfc import nations
@@ -89,9 +88,9 @@ class NationsTests(unittest.TestCase):
             "from national_fixture_lineups": [(1, 10, 9, "ST", "H. Kane"), (2, 10, 9, "ST", "H. Kane"),
                                               (2, 10, 7, "RW", "B. Saka")],
             "from national_fixture_players": [
-                (1, 10, 9, 90, True, 2, 0, Decimal("8.1"), None, None, "H. Kane"),
-                (1, 10, 11, 20, False, 0, 1, Decimal("7.0"), 1, None, "J. Bellingham"),
-                (2, 10, 9, 90, True, 0, 0, Decimal("6.5"), None, None, "H. Kane")],
+                (1, 10, 9, 90, True, 2, 0, None, None, "H. Kane"),
+                (1, 10, 11, 20, False, 0, 1, 1, None, "J. Bellingham"),
+                (2, 10, 9, 90, True, 0, 0, None, None, "H. Kane")],
             "from players": [(9, "Harry Kane")],
             "from team_coaches": [(10, 5, "T. Tuchel", date(2025, 1, 1))],
         }
@@ -113,7 +112,8 @@ class NationsTests(unittest.TestCase):
         apps = [dict(zip(eng["app_fields"], a)) for a in eng["apps"]]
         self.assertEqual([(a["match"], a["player"], a["started"]) for a in apps],
                          [(0, 9, 1), (0, 11, 0), (1, 7, 1), (1, 9, 1)])
-        self.assertEqual((apps[0]["goals"], apps[0]["rating"], apps[0]["role"]), (2, 8.1, "ST"))
+        self.assertEqual((apps[0]["goals"], apps[0]["role"]), (2, "ST"))
+        self.assertNotIn("rating", eng["app_fields"])            # API-Football's match rating isn't published
         self.assertEqual((apps[1]["assists"], apps[1]["yellow"], apps[1]["role"]), (1, 1, None))
         self.assertIsNone(apps[2]["minutes"])                    # a starter with no stat line
         self.assertEqual(eng["players"], {9: "Harry Kane", 11: "J. Bellingham", 7: "B. Saka"})

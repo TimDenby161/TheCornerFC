@@ -39,7 +39,7 @@ def write_valid_export(root, marker):
     write_json(root / "player_seasons.json", {
         "generated_at": "test",
         "fields": ["id"],
-        "players": {str(i): {"2026": [[1, 90, 50, 7, 0, 0]]} for i in range(100)},
+        "players": {str(i): {"2026": [[1, 90, 50, 0, 0]]} for i in range(100)},
     })
     for dirname in ("players", "clubs", "leagues"):
         write_json(root / dirname / "1.json", {"marker": marker})
@@ -50,7 +50,7 @@ class ExportSafetyTests(unittest.TestCase):
         conn = Mock()
         conn.execute.side_effect = [
             [(i,) for i in range(100)],
-            Mock(fetchall=lambda: [(i, 2026, 1, 90, 50, 7, 0, 0) for i in range(100)]),
+            Mock(fetchall=lambda: [(i, 2026, 1, 90, 50, 0, 0) for i in range(100)]),
             Mock(fetchall=lambda: []), Mock(fetchall=lambda: []),
             [], [], [], [(1, "Club")], [],
         ]
@@ -66,7 +66,7 @@ class ExportSafetyTests(unittest.TestCase):
             players = json.loads((live / "player_seasons.json").read_text())["players"]
             self.assertEqual(returned[0]["players"], players)     # what it wrote, for the page files
             self.assertEqual(len(players), 100)
-            self.assertEqual(players["0"]["2026"], [[1, 90, 50, 7, 0, 0]])
+            self.assertEqual(players["0"]["2026"], [[1, 90, 50, 0, 0]])
 
     def test_invalid_or_depleted_player_seasons_preserves_old_output(self):
         for players, message in (([], "does not contain a dict"),

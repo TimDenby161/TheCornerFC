@@ -360,7 +360,7 @@ def load(conn=None):
 # --------------------------------------------------------------------------- team pages
 
 TEAM_YEARS = ACTIVE_YEARS   # matches on a nation page's Formations and Players tabs
-APP_FIELDS = ["match", "player", "minutes", "started", "role", "goals", "assists", "rating", "yellow", "red"]
+APP_FIELDS = ["match", "player", "minutes", "started", "role", "goals", "assists", "yellow", "red"]
 MATCH_FIELDS = ["date", "opp", "venue", "gf", "ga", "tournament", "formation", "coach", "coach_id"]
 
 
@@ -385,20 +385,20 @@ def team_pages(conn, today=None):
     formations = {(fid, t): (fm, coach, coach_id) for fid, t, fm, coach, coach_id in conn.execute(
         "select fixture_id, team_id, formation, coach_name, coach_id from national_fixture_formations"
         " where fixture_id = any(%s)", [ids])}
-    apps = {}                                  # (fixture, player) -> [team, minutes, started, role, g, a, rating, y, r]
+    apps = {}                                  # (fixture, player) -> [team, minutes, started, role, g, a, y, r]
     names = {}
     for fid, team, pid, grid_role, name in conn.execute(
             "select fixture_id, team_id, player_id, role, player_name from national_fixture_lineups where fixture_id = any(%s)",
             [ids]):
-        apps[fid, pid] = [team, None, True, grid_role, None, None, None, None, None]
+        apps[fid, pid] = [team, None, True, grid_role, None, None, None, None]
         if name:
             names[pid] = name
-    for fid, team, pid, mins, started, g, a, rating, y, r, name in conn.execute("""
-            select fixture_id, team_id, player_id, minutes, started, goals, assists, rating, yellow_cards, red_cards,
+    for fid, team, pid, mins, started, g, a, y, r, name in conn.execute("""
+            select fixture_id, team_id, player_id, minutes, started, goals, assists, yellow_cards, red_cards,
                    player_name
             from national_fixture_players where fixture_id = any(%s)""", [ids]):
         role = apps.get((fid, pid), [None] * 4)[3]
-        apps[fid, pid] = [team, mins, bool(started), role, g, a, float(rating) if rating is not None else None, y, r]
+        apps[fid, pid] = [team, mins, bool(started), role, g, a, y, r]
         if name:
             names[pid] = name
     coaches = {t: {"id": c, "name": n, "since": since.isoformat() if since else None}
