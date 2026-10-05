@@ -107,7 +107,9 @@ class OwnerOnlyTest(unittest.TestCase):
 
     def test_site_has_no_public_efl_predictions(self):
         self.assertFalse((ROOT / 'docs/data/efl_predictions.json').exists())
-        self.assertNotIn('efl_predictions.json', (ROOT / 'docs/data/manifest.json').read_text())
+        manifest = ROOT / 'docs/data/manifest.json'          # there after a local export; the data isn't in the repository
+        if manifest.exists():
+            self.assertNotIn('efl_predictions.json', manifest.read_text())
         app = (ROOT / 'docs/assets/app.js').read_text()
         self.assertNotIn('data/efl_predictions.json', app)
         self.assertIn('const OWNER_TABS = new Set(["fpl", "myteam", "efl"]);', app)

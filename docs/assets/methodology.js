@@ -120,13 +120,13 @@ function renderVersion(d) {
 
 async function main() {
   try {
-    // from the database or the published file (data.js); the file if the database doesn't answer
+    // from the database (data.js), or with ?data=files the file beside a local copy of the page
     const file = async () => {
       const res = await fetch("data/methodology.json", { cache: "no-cache" });
       if (!res.ok) throw new Error(res.status);
       return res.json();
     };
-    const d = DATA_SOURCE === "db" ? await siteDoc("methodology").catch(file) : await file();
+    const d = DATA_SOURCE === "db" ? await siteDoc("methodology") : await file();
     renderFreshness(d);
     renderMatches(d.matches);
     renderLineups(d.lineups);

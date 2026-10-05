@@ -90,16 +90,16 @@ function rowsToObjects(fields, rows) {
   return rows.map((r) => Object.fromEntries(fields.map((f, i) => [f, r[i]])));
 }
 
-// Every data file is checked with the server each time, so the data is always current. GitHub
-// Pages changes every file's ETag on each deploy, so that check alone downloads everything again
-// after any deploy, changed or not. The top-level files are therefore asked for by content hash
-// (data/manifest.json, written by the export: file.json?v=<hash>) and the browser's copy is kept
-// for as long as the hash stands. The copy is hashed before it's trusted: one that doesn't match
-// (a deploy caught half way) is fetched afresh. Club, player, league and nation files aren't in
-// the manifest and are revalidated as before. A file already on its way is shared, not fetched twice.
-// Read from the database (DATA_SOURCE "db", data.js) it is the same idea with less to do: the
-// manifest is a row too, and a row asked for by its hash is kept by the browser on the database's
-// say-so, so nothing is hashed here. Rows outside the manifest are fetched each time.
+// The site's data is rows of the database's site.docs table, one per data file the export writes
+// ("matches", "clubs/42"), read through site_doc (data.js). Unchanged data isn't downloaded
+// again: the "manifest" row lists a content hash for each top-level row, and a row asked for by
+// its hash is kept by the browser on the database's say-so, for as long as the hash stands. Rows
+// outside the manifest (club, player, league and nation pages) are fetched each time. A row
+// already on its way is shared, not fetched twice.
+// ?data=files reads the same files from data/ beside the page instead: there are none on the
+// published site (the data isn't kept in the repository), so it is for a local copy with its own
+// export. A file is asked for by its hash too (file.json?v=<hash>), and the browser's copy is
+// hashed before it's trusted.
 const inflight = new Map();
 let manifest = null;
 const dataManifest = () => manifest ||= (DATA_SOURCE === "db" ? siteDoc("manifest")
@@ -112,18 +112,7 @@ async function sha16(buf) {
 }
 async function fetchJson(path) {
   const hash = (await dataManifest())[path.replace(/^data\//, "")];
-  if (DATA_SOURCE === "db") {
-    try {
-      return await siteDoc(path.replace(/^data\//, "").replace(/\.json$/, ""), hash);
-    } catch (err) {
-      if (err.missing) throw err;
-      // the database didn't answer: the published file, for as long as the export still writes one
-      console.warn(`${path}: read from the published file (${err.message})`);
-      const r = await fetch(path, { cache: "no-cache" });
-      if (!r.ok) throw httpError(path, r);
-      return r.json();
-    }
-  }
+  if (DATA_SOURCE === "db") return siteDoc(path.replace(/^data\//, "").replace(/\.json$/, ""), hash);
   if (!hash || !globalThis.crypto?.subtle) {
     const r = await fetch(path, { cache: "no-cache" });
     if (!r.ok) throw httpError(path, r);
@@ -183,7 +172,7 @@ function addPlayers(rows) {
   return rows.map((r) => playerStore.byId.get(r[0]));
 }
 function playersFromFile(err) {
-  console.warn(`players: read from the published file (${err.message})`);
+  console.warn(`players: the whole list is read (${err.message})`);
   if (!playerStore.whole) {         // nothing is ready until the file is in, and nothing worked out so far stands
     playerStore.whole = true;
     state.players = undefined;
@@ -540,7 +529,7 @@ function loadAllMatches() {
 }
 const loadMatchDays = () => matchStore.daysAsked ||= (state.data.match_fields
   ? siteAsk("site_match_days", { p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" })
-    .then((d) => { matchStore.days = d; }, (err) => { console.warn(`matches: read from the published file (${err.message})`); return loadAllMatches(); })
+    .then((d) => { matchStore.days = d; }, (err) => { console.warn(`matches: the whole list is read (${err.message})`); return loadAllMatches(); })
   : loadAllMatches()).catch((err) => { matchStore.daysAsked = null; throw err; });
 const haveMatches = (key) => matchStore.all || matchStore.got.has(key);
 function askMatches(key, params) {
@@ -549,7 +538,7 @@ function askMatches(key, params) {
   if (!matchStore.asking.has(key)) matchStore.asking.set(key, siteAsk("site_matches", params).then((d) => {
     addMatches(state.data.match_fields, d.matches, d.reasons);
     matchStore.got.add(key);
-  }, (err) => { console.warn(`matches: read from the published file (${err.message})`); return loadAllMatches(); })
+  }, (err) => { console.warn(`matches: the whole list is read (${err.message})`); return loadAllMatches(); })
     .finally(() => matchStore.asking.delete(key)));
   return matchStore.asking.get(key);
 }

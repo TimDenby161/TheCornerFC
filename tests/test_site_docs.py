@@ -187,8 +187,11 @@ class SiteReaderTests(unittest.TestCase):
     def test_the_database_is_the_default_and_is_asked_by_key(self):
         reader = (ROOT / 'docs/assets/data.js').read_text()
         self.assertIn(': "db";', reader)
-        # the published file is still there to fall back on while the export writes one
-        self.assertIn("read from the published file", (ROOT / 'docs/assets/app.js').read_text())
+        # and it is the only source: there are no data files on the published site to fall back on
+        app = (ROOT / 'docs/assets/app.js').read_text()
+        self.assertIn('if (DATA_SOURCE === "db") return siteDoc(', app)
+        self.assertNotIn("published file", app)
+        self.assertNotIn(".catch(file)", (ROOT / 'docs/assets/methodology.js').read_text())
         self.assertIn("/rest/v1/rpc/site_doc?", reader)
         self.assertIn('q.set("p_v", hash)', reader)
 

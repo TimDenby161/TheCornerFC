@@ -9,6 +9,10 @@ logs/
 .api-usage/
 .DS_Store
 
+# The site's data: written here by the export and sent to the database (site.docs, site.matches,
+# site.players), which is what the site reads. Not kept in the repository since 2026-10-05.
+docs/data/
+
 # Security audit findings — never commit (public repo)
 audit/
 
