@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from thecornerfc import predictions
-from thecornerfc.export import explanation, export_explanations
+from thecornerfc.export import explanation, export_explanations, export_fixture_pages
 from tests import test_match_snapshots
 
 HOME = [(1.8, 0.9), (2.1, 1.2), (1.1, 1.0)]
@@ -119,8 +119,36 @@ class ExportTests(unittest.TestCase):
         conn = Mock()
         conn.execute.return_value.fetchone.return_value = (None,)
         with tempfile.TemporaryDirectory() as d:
-            export_explanations(conn, Path(d))
+            self.assertEqual(export_explanations(conn, Path(d)), {})
             self.assertEqual(json.loads((Path(d) / "explanations.json").read_text())["matches"], {})
+
+
+class FixturePageTests(unittest.TestCase):
+    """One file per match: a page asks for the match it shows, not for every match."""
+    def test_each_match_gets_only_its_own_parts(self):
+        why = {"11": {"reasons": [["strength", 0.4]], "exp_diff": 0.4}}
+        lineups = {"xi": {"11": {"1": [[5, "A. Player", "ST", 80.0]]}, "12": {"2": [[6, "B. Player", "GK", 70.0]]}},
+                   "actual": {"13": {"3": [[7, "C. Player", "CB", 75.0]]}}, "prematch": {"13": {"3": [[8, "D. Player", "CB", 74.0]]}}}
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "fixtures").mkdir()
+            (Path(d) / "fixtures/9.json").write_text("{}")           # a match no longer on the site
+            export_fixture_pages(Path(d), why, lineups)
+            pages = {p.stem: json.loads(p.read_text()) for p in (Path(d) / "fixtures").glob("*.json")}
+        self.assertEqual(set(pages), {"11", "12", "13"})
+        self.assertEqual(pages["11"], {"id": 11, "why": why["11"], "xi": lineups["xi"]["11"]})
+        self.assertEqual(set(pages["12"]), {"id", "xi"})
+        self.assertEqual(set(pages["13"]), {"id", "actual", "prematch"})
+
+    def test_the_shared_files_no_longer_carry_every_match(self):
+        import inspect
+        from thecornerfc import export
+        players = inspect.getsource(export.export_players)
+        for gone in ('"fixture_xi": fixture_xi', '"actual_xi": actual_xi', '"prematch_xi": prematch_xi'):
+            self.assertNotIn(gone, players)
+        self.assertIn('{"reasons": entry["reasons"]}', inspect.getsource(export.export_explanations))
+        app = (Path(export.__file__).resolve().parents[1] / "docs/assets/app.js").read_text()
+        self.assertIn("data/fixtures/${id}.json", app)
+        self.assertNotIn('getJson("data/player_seasons.json")', app.split("function loadPlayerSeasons")[0])
 
 
 if __name__ == "__main__":
