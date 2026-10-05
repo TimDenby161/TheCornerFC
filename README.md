@@ -124,7 +124,7 @@ API-Football's injury lists run from 2021 for the big five, the Championship, Tu
    | Goalkeeper | Save % 50, pass accuracy 25, goals conceded 25 (lower is better) |
    | Centre-back | Duels won 23, passes 19, tackles + interceptions 16, times dribbled past 15 (lower is better), pass accuracy 11, team xG conceded while he played 9 (lower is better), blocks 7 |
    | Full-back | Key passes 18, times dribbled past 15 (lower is better), tackles + interceptions 13, passes 12, pass accuracy 9, assists 8, goals 6, dribbles won 6, shots on target 5, failed dribbles 4 (lower is better), duels won 4 |
-   | Wing-back | Key passes 20, tackles + interceptions 12, times dribbled past 12 (lower is better), passes 9, assists 9, dribbles won 8, pass accuracy 7, goals 7, shots on target 6, duels won 5, failed dribbles 5 (lower is better) |
+   | Wing-back | Key passes 20, assists 14, tackles + interceptions 12, passes 9, dribbles won 8, times dribbled past 7 (lower is better), pass accuracy 7, goals 7, shots on target 6, duels won 5, failed dribbles 5 (lower is better) |
    | Defensive mid | Passes 22, tackles + interceptions 20, duels won 18, key passes 12, times dribbled past 12 (lower is better), pass accuracy 11, blocks 2, shots on target 2 |
    | Central mid | Passes 23, key passes 17, duels won 13, goals 10, tackles + interceptions 9, assists 8, dribbles won 7, pass accuracy 7, shots on target 6 |
    | Attacking mid | Key passes 22, shots on target 18, goals 18, assists 15, dribbles won 10, passes 7, duels won 6, pass accuracy 3 |

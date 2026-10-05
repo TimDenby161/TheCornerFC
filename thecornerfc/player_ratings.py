@@ -174,8 +174,9 @@ WEIGHTS = {
            "assists": .08, "goals": .06, "dribbles_won": .06, "shots_on": .05, "dribbles_lost": -.04,
            "duels_pct": .04},
     # Wing-backs (LWB / RWB), a group of their own since 2026-10: the full-back stats leaning forward
-    "WB": {"key_passes": .20, "tackles_int": .12, "dribbled_past": -.12, "passes": .09, "assists": .09,
-           "dribbles_won": .08, "pass_acc": .07, "goals": .07, "shots_on": .06, "duels_pct": .05,
+    # (assists above being dribbled past: the owner's pass over the list)
+    "WB": {"key_passes": .20, "assists": .14, "tackles_int": .12, "passes": .09, "dribbles_won": .08,
+           "dribbled_past": -.07, "pass_acc": .07, "goals": .07, "shots_on": .06, "duels_pct": .05,
            "dribbles_lost": -.05},
     # Defensive mids (repeat for all DMs, few changed club): passing volume (0.81), tackles +
     # interceptions (0.76), times dribbled past (0.69), duels won (0.65), key passes (0.82). Out:
