@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .health import monitored
-from . import config, positions, availability, predictions
+from . import config, availability, predictions
 from .cache import WEEK, cached_rows, finished_fixtures, rank_history
 from .betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_cautious
 from .predictions import GOAL_LINES, UPCOMING_STATUSES, goal_lines
@@ -1166,15 +1166,8 @@ def export_players(conn, out_dir=OUT_DIR):
     pos_ranks = defaultdict(dict)        # {player: {role group: rank as that position}}
     for player, g, r in conn.execute("select player_id, role_group, position_rank from player_position_ranks"):
         pos_ranks[player][g] = float(r)
-    # anchored on the position shown for him, so "As <his position>" equals his rank, and no
-    # position above his rank (De Cuyper, shown as LW, isn't better as a full-back than overall)
-    for r in players:
-        ranks = pos_ranks.get(r[0])
-        if not ranks:
-            continue
-        g = positions.group(main_pos.get(r[0], r[2]))
-        shift = float(r[3]) - ranks[g] if g in ranks else 0.0
-        pos_ranks[r[0]] = {k: round(min(max(v + shift, 0), float(r[3])), 1) for k, v in ranks.items()}
+    # published as the model has them: how good he is in that position (player_ratings step 6),
+    # which needn't equal his overall rank, even in the position shown for him
     lineups = conn.execute(
         """select distinct on (pl.team_id, pl.player_id) pl.team_id, pl.fixture_id, pl.player_id,
                   p.name, pl.position, pl.player_rank

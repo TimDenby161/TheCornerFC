@@ -1835,7 +1835,7 @@ const PITCH_LINES = `<svg viewBox="0 0 68 88" preserveAspectRatio="none" aria-hi
 // starting minutes in the last 12 months (positions_12m)
 const playsAt = (p) => new Set([p.position, ...(p.positions_12m || [])]);
 // With the position filter on: the selected role groups, and a player's rank as the best of them
-// (position_ranks: his stats scored as each position, less for one he hasn't played)
+// (position_ranks: how good he is in each position he has started in, less for one he rarely plays)
 function selectedGroups() {
   return state.positions?.size ? [...new Set([...state.positions].map((r) => GROUP_OF[r]).filter(Boolean))] : [];
 }
@@ -3126,7 +3126,8 @@ function clubDepth(teamId, data = state.club?.data, match = null) {
   const atClub = new Set((state.players?.list || []).filter((p) => p.team === teamId).map((p) => p.id));
   const squad = (state.players?.list || []).filter((p) => p.team === teamId && !out.has(p.id));
   if (!squad.length) return null;
-  const rankAt = (p, r) => p.position_ranks?.[GROUP_OF[r]] ?? (GROUP_OF[p.position] === GROUP_OF[r] ? p.rank : null);
+  const rankAt = (p, r) => p.position_ranks?.[GROUP_OF[r]] ?? p.position_ranks?.[NEAR_GROUP[GROUP_OF[r]]]
+    ?? (GROUP_OF[p.position] === GROUP_OF[r] ? p.rank : null);
   // only the positions in the formations the club has used (all of them if none are known)
   // a formation used only once this season (a one-off 4-4-2) is left out of the predictions,
   // unless no formation has been used more than once
@@ -3711,9 +3712,10 @@ function openTeam(teamId) {
 }
 
 // ------------------------------------------------------------------ player page
-const GROUP_OF = { GK: "GK", CB: "CB", LB: "FB", RB: "FB", LWB: "FB", RWB: "FB", DM: "DM", CM: "CM", LM: "W", RM: "W",   // as positions.py
+const GROUP_OF = { GK: "GK", CB: "CB", LB: "FB", RB: "FB", LWB: "WB", RWB: "WB", DM: "DM", CM: "CM", LM: "W", RM: "W",   // as positions.py
                    AM: "AM", LW: "W", RW: "W", ST: "ST", G: "GK", D: "CB", M: "CM", F: "ST" };
-const GROUP_NAME = { GK: "goalkeepers", CB: "centre-backs", FB: "full-backs", DM: "defensive mids", CM: "central mids",
+const NEAR_GROUP = { FB: "WB", WB: "FB" };    // a full-back with no wing-back rank is shown there on his full-back one, and the other way round
+const GROUP_NAME = { GK: "goalkeepers", CB: "centre-backs", FB: "full-backs", WB: "wing-backs", DM: "defensive mids", CM: "central mids",
                      AM: "attacking mids", W: "wingers", ST: "strikers" };
 const seasonShort = (y) => `${String(y).slice(2)}/${String(y + 1).slice(2)}`;
 const seasonName = (y) => `${y}/${String(y + 1).slice(2)}`;
@@ -3931,8 +3933,8 @@ function playerOverviewTab() {
 }
 const resClass = (m) => m.gf > m.ga ? "res-w" : m.gf === m.ga ? "res-d" : "res-l";
 
-// His positions in a row, most played first (his share of starting minutes; then best rank): his rank in each role group he has one in (his recent
-// stats scored as that position, so LB and RB share the full-back rank) and his share of starting
+// His positions in a row, most played first (his share of starting minutes; then best rank): his rank in each role group he has one in (how good
+// he is in that position, so LB and RB share the full-back rank, and it needn't equal his overall rank) and his share of starting
 // minutes there. Keepers have no position_ranks: their keeper rank is their rank.
 function positionRow(p) {
   const pos = state.player.detail.positions;

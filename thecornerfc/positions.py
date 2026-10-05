@@ -15,14 +15,14 @@ Roles are grouped for comparing players: left and right versions share a group.
 
 GROUPS = {
     "GK": "GK", "CB": "CB",
-    "LB": "FB", "RB": "FB", "LWB": "FB", "RWB": "FB",
+    "LB": "FB", "RB": "FB", "LWB": "WB", "RWB": "WB",
     "DM": "DM", "CM": "CM", "AM": "AM",
     "LW": "W", "RW": "W", "LM": "W", "RM": "W",
     "ST": "ST",
 }
 # Broad API position -> group, for players never seen starting with a grid
 FALLBACK = {"G": "GK", "D": "CB", "M": "CM", "F": "ST"}
-GROUP_LABELS = {"GK": "Goalkeeper", "CB": "Centre-back", "FB": "Full-back", "DM": "Defensive mid",
+GROUP_LABELS = {"GK": "Goalkeeper", "CB": "Centre-back", "FB": "Full-back", "WB": "Wing-back", "DM": "Defensive mid",
                 "CM": "Central mid", "AM": "Attacking mid", "W": "Winger", "ST": "Striker"}
 
 

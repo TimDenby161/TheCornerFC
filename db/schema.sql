@@ -369,7 +369,7 @@ create index if not exists team_squads_player_idx on team_squads (player_id);
 -- rebuilt on every run): his recent stats scored as that position, against its players
 create table if not exists player_position_ranks (
     player_id      int not null,
-    role_group     text not null,       -- CB FB DM CM AM W ST
+    role_group     text not null,       -- CB FB WB DM CM AM W ST
     position_rank  numeric(4,1),
     primary key (player_id, role_group)
 );

@@ -1,0 +1,342 @@
+{
+ "min_minutes": 900,
+ "appearances": 964206,
+ "seasons": [
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ],
+ "groups": {
+  "CB": {
+   "player_seasons": 5889,
+   "rating_weight": 0.12,
+   "moved": {
+    "spearman_with_live": 0.9763400687755401,
+    "pct_mean_abs": 4.395835559143976,
+    "rank_mean_abs": 0.8262777994511235,
+    "rank_p95_abs": 2.373215507411615,
+    "rank_max_abs": 6.8916875712656775,
+    "share_rank_moved_2plus": 0.0815078960774325
+   },
+   "live": {
+    "repeat_all": 0.536909887494966,
+    "pairs": 2739,
+    "repeat_changed_club": 0.4674450747871,
+    "pairs_changed": 689
+   },
+   "no_rating": {
+    "repeat_all": 0.5514272727578738,
+    "pairs": 2739,
+    "repeat_changed_club": 0.47789287824374427,
+    "pairs_changed": 689
+   }
+  },
+  "FB": {
+   "player_seasons": 4834,
+   "rating_weight": 0.1,
+   "moved": {
+    "spearman_with_live": 0.9777777913856953,
+    "pct_mean_abs": 4.3881433997154575,
+    "rank_mean_abs": 0.8306671376805225,
+    "rank_p95_abs": 2.2754818281938327,
+    "rank_max_abs": 5.170209251101326,
+    "share_rank_moved_2plus": 0.07385188249896565
+   },
+   "live": {
+    "repeat_all": 0.4972468373267057,
+    "pairs": 1849,
+    "repeat_changed_club": 0.4128258548115287,
+    "pairs_changed": 462
+   },
+   "no_rating": {
+    "repeat_all": 0.4776048098401701,
+    "pairs": 1849,
+    "repeat_changed_club": 0.38342150187079854,
+    "pairs_changed": 462
+   }
+  },
+  "DM": {
+   "player_seasons": 1693,
+   "rating_weight": 0.1,
+   "moved": {
+    "spearman_with_live": 0.9849983527480923,
+    "pct_mean_abs": 3.570322936960725,
+    "rank_mean_abs": 0.8266414493451495,
+    "rank_p95_abs": 2.272249070631972,
+    "rank_max_abs": 7.767546468401477,
+    "share_rank_moved_2plus": 0.0767867690490254
+   },
+   "live": {
+    "repeat_all": 0.6501172455524055,
+    "pairs": 426,
+    "repeat_changed_club": 0.5088278170876485,
+    "pairs_changed": 73
+   },
+   "no_rating": {
+    "repeat_all": 0.6532158834562123,
+    "pairs": 426,
+    "repeat_changed_club": 0.4803467851413057,
+    "pairs_changed": 73
+   }
+  },
+  "CM": {
+   "player_seasons": 4488,
+   "rating_weight": 0.12,
+   "moved": {
+    "spearman_with_live": 0.9889063253386491,
+    "pct_mean_abs": 3.156398657310786,
+    "rank_mean_abs": 0.714724828096451,
+    "rank_p95_abs": 1.9608834244080242,
+    "rank_max_abs": 4.152071948998177,
+    "share_rank_moved_2plus": 0.04679144385026738
+   },
+   "live": {
+    "repeat_all": 0.6990991639289744,
+    "pairs": 1569,
+    "repeat_changed_club": 0.6089803296226952,
+    "pairs_changed": 396
+   },
+   "no_rating": {
+    "repeat_all": 0.7099318827298643,
+    "pairs": 1569,
+    "repeat_changed_club": 0.6333964570919275,
+    "pairs_changed": 396
+   }
+  },
+  "AM": {
+   "player_seasons": 1296,
+   "rating_weight": 0.11,
+   "moved": {
+    "spearman_with_live": 0.9926937877036792,
+    "pct_mean_abs": 2.5193686618535374,
+    "rank_mean_abs": 0.6801468421651836,
+    "rank_p95_abs": 1.8323353293413192,
+    "rank_max_abs": 3.3338323353293475,
+    "share_rank_moved_2plus": 0.035493827160493825
+   },
+   "live": {
+    "repeat_all": 0.6813899923267144,
+    "pairs": 288,
+    "repeat_changed_club": 0.3912393050832456,
+    "pairs_changed": 70
+   },
+   "no_rating": {
+    "repeat_all": 0.6970105704385141,
+    "pairs": 288,
+    "repeat_changed_club": 0.41607250651158706,
+    "pairs_changed": 70
+   }
+  },
+  "W": {
+   "player_seasons": 3578,
+   "rating_weight": 0.11,
+   "moved": {
+    "spearman_with_live": 0.9929193698672216,
+    "pct_mean_abs": 2.4994363172502156,
+    "rank_mean_abs": 0.6585430512422774,
+    "rank_p95_abs": 1.813577586206904,
+    "rank_max_abs": 3.975215517241381,
+    "share_rank_moved_2plus": 0.033817775293460035
+   },
+   "live": {
+    "repeat_all": 0.5958801151641561,
+    "pairs": 1051,
+    "repeat_changed_club": 0.45389734496342954,
+    "pairs_changed": 280
+   },
+   "no_rating": {
+    "repeat_all": 0.6108611400124047,
+    "pairs": 1051,
+    "repeat_changed_club": 0.48409274659755436,
+    "pairs_changed": 280
+   }
+  },
+  "ST": {
+   "player_seasons": 3569,
+   "rating_weight": 0.1,
+   "moved": {
+    "spearman_with_live": 0.9940224740532957,
+    "pct_mean_abs": 2.335045580531109,
+    "rank_mean_abs": 0.6154702249179383,
+    "rank_p95_abs": 1.7006591702210159,
+    "rank_max_abs": 4.093447072508724,
+    "share_rank_moved_2plus": 0.023255813953488372
+   },
+   "live": {
+    "repeat_all": 0.4708084437393163,
+    "pairs": 1445,
+    "repeat_changed_club": 0.33844669014571477,
+    "pairs_changed": 548
+   },
+   "no_rating": {
+    "repeat_all": 0.486225922797054,
+    "pairs": 1445,
+    "repeat_changed_club": 0.36094709160458316,
+    "pairs_changed": 548
+   }
+  }
+ },
+ "keepers": {
+  "live": {
+   "repeat_all": 0.22242587555113968,
+   "pairs": 1108,
+   "repeat_changed_club": 0.25135196737741533,
+   "pairs_changed": 279,
+   "moved": {
+    "spearman_with_live": 1.0,
+    "pct_mean_abs": 0.0,
+    "rank_mean_abs": 0.0,
+    "rank_p95_abs": 0.0,
+    "rank_max_abs": 0.0,
+    "share_rank_moved_2plus": 0.0
+   }
+  },
+  "save_pct": {
+   "repeat_all": 0.1779940340009545,
+   "pairs": 1108,
+   "repeat_changed_club": 0.184519193285834,
+   "pairs_changed": 279,
+   "moved": {
+    "spearman_with_live": 0.8210597322578591,
+    "pct_mean_abs": 13.000343941853254,
+    "rank_mean_abs": 2.210058470115053,
+    "rank_p95_abs": 5.916347381864625,
+    "rank_max_abs": 11.224776500638583,
+    "share_rank_moved_2plus": 0.44355219650448746
+   }
+  },
+  "save_pct_conceded": {
+   "repeat_all": 0.24639160466024915,
+   "pairs": 1108,
+   "repeat_changed_club": 0.21393307529909691,
+   "pairs_changed": 279,
+   "moved": {
+    "spearman_with_live": 0.7799302414236682,
+    "pct_mean_abs": 14.20962355614342,
+    "rank_mean_abs": 2.4156360045443814,
+    "rank_p95_abs": 6.665389527458487,
+    "rank_max_abs": 11.833827208836425,
+    "share_rank_moved_2plus": 0.47756258856872935
+   }
+  },
+  "conceded": {
+   "repeat_all": 0.34385885872635585,
+   "pairs": 1108,
+   "repeat_changed_club": 0.24231188330397005,
+   "pairs_changed": 279,
+   "moved": {
+    "spearman_with_live": 0.5912713107354427,
+    "pct_mean_abs": 19.720771816904413,
+    "rank_mean_abs": 3.3525312088737502,
+    "rank_p95_abs": 9.314176245210732,
+    "rank_max_abs": 14.048386595809603,
+    "share_rank_moved_2plus": 0.5862068965517241
+   }
+  }
+ },
+ "outfield_pooled": {
+  "live": {
+   "repeat_all": 0.5630796218304329,
+   "pairs": 9367,
+   "repeat_changed_club": 0.4522897820702243,
+   "pairs_changed": 2518
+  },
+  "no_rating": {
+   "repeat_all": 0.5702490316917509,
+   "pairs": 9367,
+   "repeat_changed_club": 0.4628531788577517,
+   "pairs_changed": 2518
+  }
+ },
+ "biggest_moves_last_full_season": {
+  "season": 2025,
+  "down": [
+   [
+    20010,
+    "FB",
+    -4.5
+   ],
+   [
+    2194,
+    "CB",
+    -4.1
+   ],
+   [
+    6610,
+    "CB",
+    -3.8
+   ],
+   [
+    106086,
+    "CB",
+    -3.6
+   ],
+   [
+    24845,
+    "FB",
+    -3.6
+   ],
+   [
+    51569,
+    "FB",
+    -3.6
+   ],
+   [
+    322984,
+    "CB",
+    -3.4
+   ],
+   [
+    377313,
+    "CB",
+    -3.4
+   ]
+  ],
+  "up": [
+   [
+    375915,
+    "FB",
+    4.3
+   ],
+   [
+    41606,
+    "CB",
+    3.8
+   ],
+   [
+    47329,
+    "FB",
+    3.6
+   ],
+   [
+    17367,
+    "CB",
+    3.5
+   ],
+   [
+    138816,
+    "FB",
+    3.5
+   ],
+   [
+    269531,
+    "CB",
+    3.5
+   ],
+   [
+    278118,
+    "CB",
+    3.5
+   ],
+   [
+    162568,
+    "CB",
+    3.5
+   ]
+  ]
+ }
+}
