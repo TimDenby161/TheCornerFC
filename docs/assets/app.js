@@ -146,7 +146,10 @@ function loadPlayers() {
       for (const k of ["fixture_xi", "actual_xi", "prematch_xi"])
         for (const teams of Object.values(pj[k] || {})) for (const xi of Object.values(teams)) for (const r of xi) r[1] = decodeEntities(r[1]);
     }
-    state.players = pj ? { list: rowsToObjects(pj.fields, pj.players), nextXi: pj.next_xi, fixtureXi: pj.fixture_xi || {},
+    // his season so far by name (minutes, goals, assists); a file from before the fields were named
+    // has the older, longer layout
+    const seasonFields = pj?.season_fields || ["minutes", "rating", "goals", "assists", "club_minutes"];
+    state.players = pj ? { list: rowsToObjects(pj.fields, pj.players).map((p) => ({ ...p, season: p.season && Object.fromEntries(seasonFields.map((f, i) => [f, p.season[i]])) })), nextXi: pj.next_xi, fixtureXi: pj.fixture_xi || {},
       actualXi: pj.actual_xi || {}, prematchXi: pj.prematch_xi || {}, seasons: pj.seasons || [], futureSeasons: pj.future_seasons || [], teams: pj.teams || {} } : null;
   });
 }
@@ -1352,7 +1355,7 @@ function seasonsFor(...files) {
 }
 // Hover text for a season cell: his age that season (his age now for the current season, one
 // less for each season before), then per club "Team – club rank" and
-// "minutes – match rating – goals G, assists A"
+// "minutes – goals G, assists A"
 function playerCellTip(pid, key) {
   const detail = state.playerSeasons;
   if (!detail) return "Loading…";
@@ -1368,8 +1371,8 @@ function playerCellTip(pid, key) {
   }
   if (!spells?.length) return ageLine + "No minutes";
   const club = (id) => detail.teams?.[id] || teamName(id);
-  return ageLine + spells.map(([team, mins, rank, rating, goals, assists]) =>
-    `${club(team)} – ${rank == null ? "–" : rank}\n${mins.toLocaleString()} mins – ${rating == null ? "–" : rating.toFixed(2)} – ${goals ?? 0} G, ${assists ?? 0} A`)
+  return ageLine + rowsToObjects(detail.fields, spells).map((sp) =>
+    `${club(sp.team)} – ${sp.club_rank == null ? "–" : sp.club_rank}\n${sp.minutes.toLocaleString()} mins – ${sp.goals ?? 0} G, ${sp.assists ?? 0} A`)
     .join("\n\n");
 }
 
@@ -1399,8 +1402,8 @@ function renderPlayers() {
   if (groups.length && key === `s${seasons[0]}`) key = "pos";                                  // Ability is shown as "As ST"
   const val = (p) => key === "pos" ? posRank(p, groups) : key.startsWith("s") ? p.seasons?.[seasons.indexOf(Number(key.slice(1)))]
     : key.startsWith("f") ? p.future?.[future.indexOf(Number(key.slice(1)))]
-    : key === "ga" ? (p.season ? p.season[2] + p.season[3] + p.season[2] / 1000 : null)   // goals break ties
-    : key === "rating" ? p.season?.[1] : p[key];
+    : key === "ga" ? (p.season ? p.season.goals + p.season.assists + p.season.goals / 1000 : null)   // goals break ties
+    : p[key];
   rows = key === "age"
     ? rows.slice().sort((a, b) => (a.age ?? 999) - (b.age ?? 999))
     : rows.slice().sort((a, b) => (val(b) ?? -1) - (val(a) ?? -1));
@@ -1423,9 +1426,8 @@ function renderPlayers() {
         ${th("age", "Age", "Age today (sorts youngest first).", " col-age")}
         <th class="num col-wrank" data-tip="World rank: his place among every listed player by Ability, whatever this list is filtered or sorted by.">World</th>
         <th class="num col-lrank" data-tip="League rank: his place by Ability among the listed players in his club's league.">Lg</th>
-        ${th("ga", "G/A", "Goals and assists this season, all his clubs (7G 4A), with his match rating under them where the Rtg column doesn't fit. Sorts by the two added together.", " col-ga")}
-        ${th("rating", "Rtg", "Average match rating this season (API-Football's, weighted by minutes), all his clubs. Greyed when he's played under a third of his clubs' minutes since he joined (a squad player, or back from injury), so it rests on little.", " col-rtg")}
-        ${shown.map((y, i) => [y, i]).reverse().map(([y, i]) => i === 0 && groups.length ? posTh : th(`s${y}`, i === 0 ? nowHead("Ability") : `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `${i === 0 ? "Underlying Ability: the model's estimate of how good he is now (not his recent match ratings or this season's totals, which are on his page). " : ""}Rank for the ${seasonName(y)} season (the ${y} season in calendar-year leagues such as MLS and Norway${i === 0 ? "; so far" : ""}): his club's level that season, moved by how his stats compare with other players in his position (elite seasons earn extra, and positions are weighted). Squad players who play little are marked down. Every player follows the typical age curve for his position from a level of his own, and only moves off it as far as his minutes that season justify, so a thin season (an injury year, the start of a season) stays close to his curve. A season with no minutes in these leagues is estimated from his other seasons and his age, and shown outlined.`, ` col-season col-s${i}${i === 0 ? " col-now" : ""}`)).join("")}
+        ${th("ga", "G/A", "Goals and assists this season, all his clubs (7G 4A). Sorts by the two added together.", " col-ga")}
+        ${shown.map((y, i) => [y, i]).reverse().map(([y, i]) => i === 0 && groups.length ? posTh : th(`s${y}`, i === 0 ? nowHead("Ability") : `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `${i === 0 ? "Underlying Ability: the model's estimate of how good he is now (not this season's totals, which are on his page). " : ""}Rank for the ${seasonName(y)} season (the ${y} season in calendar-year leagues such as MLS and Norway${i === 0 ? "; so far" : ""}): his club's level that season, moved by how his stats compare with other players in his position (elite seasons earn extra, and positions are weighted). Squad players who play little are marked down. Every player follows the typical age curve for his position from a level of his own, and only moves off it as far as his minutes that season justify, so a thin season (an injury year, the start of a season) stays close to his curve. A season with no minutes in these leagues is estimated from his other seasons and his age, and shown outlined.`, ` col-season col-s${i}${i === 0 ? " col-now" : ""}`)).join("")}
         ${open ? future.map((y, j) => th(`f${y}`, `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `Projected for ${seasonName(y)}: his Ability moved along the typical age curve for his position, from his age now to his age that season (young players rise, from 31 (33 for keepers) they decline, faster each year). A guide, not a forecast of his form.`, ` col-season col-future col-f${j}`)).join("") : ""}
       </tr></thead>
       <tbody>${rows.slice(0, FIRST_ROWS).map((p, i) => playerRow(p, i, shown, groups, open ? future : [])).join("")}</tbody>
@@ -1455,7 +1457,6 @@ function renderPlayers() {
 const FIRST_ROWS = 100, BATCH_ROWS = 100;
 function playerRow(p, i, seasons, groups = selectedGroups(), future = []) {
   const place = state.playerPlaces?.get(p.id);
-  const thin = p.season?.[4] && p.season[0] < p.season[4] / 3;     // under a third of his clubs' minutes
   return `
         <tr${p.team ? ` data-team="${p.team}"` : ""} data-player="${p.id}">
           <td>${i + 1}</td>
@@ -1466,8 +1467,7 @@ function playerRow(p, i, seasons, groups = selectedGroups(), future = []) {
           <td class="num col-age">${p.age ?? `<span class="dim">–</span>`}</td>
           <td class="num col-wrank">${place?.world.toLocaleString() ?? `<span class="dim">–</span>`}</td>
           <td class="num col-lrank"${place?.lg ? ` title="${ordinal(place.lg)} of ${place.lgOf} in the ${escapeHtml(leagueShort(p.league))}"` : ""}>${place?.lg ?? `<span class="dim">–</span>`}</td>
-          <td class="num col-ga">${p.season ? `${p.season[2]}G ${p.season[3]}A` : `<span class="dim">–</span>`}${p.season?.[1] != null ? `<span class="ga-rtg${thin ? " thin" : ""}">${p.season[1].toFixed(2)}</span>` : ""}</td>
-          <td class="num col-rtg${thin ? " thin" : ""}">${p.season?.[1] != null ? p.season[1].toFixed(2) : `<span class="dim">–</span>`}</td>
+          <td class="num col-ga">${p.season ? `${p.season.goals}G ${p.season.assists}A` : `<span class="dim">–</span>`}</td>
           ${seasons.map((y, k) => [y, k]).reverse().map(([y, k]) => k === 0 && groups.length ? `<td class="num col-posrank">${posRank(p, groups) == null ? `<span class="dim">–</span>` : rankChipSmall(posRank(p, groups))}</td>` : `<td class="num col-season col-s${k}${k === 0 ? " col-now" : ""} tip-cell" data-key="${y}">${p.seasons?.[k] == null ? `<span class="dim">–</span>` : p.estimated?.includes(k) ? `<span class="est">${rankChipSmall(p.seasons[k])}</span>` : rankChipSmall(p.seasons[k])}</td>`).join("")}
           ${future.map((y, j) => `<td class="num col-season col-future col-f${j}">${p.future?.[j] == null ? `<span class="dim">–</span>` : rankChipSmall(p.future[j])}</td>`).join("")}
         </tr>`;
@@ -1744,7 +1744,7 @@ function openTableView(view, query) {
   const sort = p.get("sort");
   for (const k of rangeKeys(view)) state.ranges[k] = range(k);
   if (view === "players") {
-    state.playerSort = sort && /^(age|pos|ga|rating|[sf]\d{4})$/.test(sort) ? sort : null;
+    state.playerSort = sort && /^(age|pos|ga|[sf]\d{4})$/.test(sort) ? sort : null;
     [state.ageMin, state.ageMax] = range("age");
     state.positions = new Set((p.get("pos") || "").split(",").filter((x) => PITCH_SPOTS.some(([s]) => s === x)));
     state.clubs = new Set((p.get("club") || "").split(",").map(Number).filter((n) => n > 0));
@@ -2788,7 +2788,7 @@ function clubBestPlayers(id) {
       <tbody>${list.map((p) => `<tr>
         <td class="lt-badge">${personChip(p.name)}</td>
         <td class="lt-club"><a class="player-link" href="#/player/${p.id}"><span class="cmt-full">${escapeHtml(p.name)}</span><span class="cmt-short">${escapeHtml(shortName(p.name))}</span></a>${p.position ? ` <span class="bp-pos">${escapeHtml(p.position)}</span>` : ""}</td>
-        <td>${rankChipSmall(p.rank)}</td><td>${p.season?.[2] ?? "–"}</td><td>${p.season?.[3] ?? "–"}</td></tr>`).join("")}</tbody>
+        <td>${rankChipSmall(p.rank)}</td><td>${p.season?.goals ?? "–"}</td><td>${p.season?.assists ?? "–"}</td></tr>`).join("")}</tbody>
     </table></div></div>`;
 }
 
@@ -2935,7 +2935,7 @@ function injuredCard(id) {
     ${inj.players.map((row) => [row, playerById(row[0])?.rank ?? row[5] ?? -1]).sort((a, b) => b[1] - a[1]).map(([row]) => row)
       .map(([pid, name, type, ban, missed, seasonRank]) => `<div class="inj-row">
       <div class="inj-top"><span class="inj-name" title="${escapeHtml(`${name}: missed his club's last ${missed} match${missed === 1 ? "" : "es"}`)}"><span class="inj-surname">${playerById(pid) ? playerLink(pid, shortName(name)) : escapeHtml(shortName(name))}</span>${missed ? `<span class="inj-missed">&nbsp;– ${missed}</span>` : ""}</span>
-        ${(playerById(pid)?.rank ?? seasonRank) != null ? rankChipSmall(playerById(pid)?.rank ?? seasonRank) : `<span class="rel-chip rating-none" title="No rating: no minutes in the leagues with player data">–</span>`}</div>
+        ${(playerById(pid)?.rank ?? seasonRank) != null ? rankChipSmall(playerById(pid)?.rank ?? seasonRank) : `<span class="rel-chip rel-none" title="No rating: no minutes in the leagues with player data">–</span>`}</div>
       ${type === "Questionable" ? `<span class="inj-reason doubt">Doubtful</span>`
         : type === "Suspended" || BAN_REASONS.has(ban) ? `<span class="inj-reason susp">${escapeHtml(BAN_REASONS.has(ban) && ban !== "Suspended" ? `Suspended · ${ban}` : "Suspended")}</span>` : ""}</div>`).join("")}
   </div>`;
@@ -3751,9 +3751,11 @@ async function openPlayerPage(id, want = null) {
 // His season detail (birth date, clubs by season, starting minutes by position): from his page
 // file, else his rows of player_seasons.json
 function playerDetail(p, page) {
-  if (page?.positions) return { born: page.born, spells: page.spells || {}, positions: page.positions };
+  // each club spell by its field names (team, minutes, club_rank, goals, assists)
+  const named = (spells, fields) => Object.fromEntries(Object.entries(spells || {}).map(([key, sp]) => [key, rowsToObjects(fields, sp)]));
+  if (page?.positions) return { born: page.born, spells: named(page.spells, page.spell_fields), positions: page.positions };
   const d = state.playerSeasons, k = String(p.id);
-  return { born: d?.born?.[k], spells: d?.players?.[k] || {}, positions: d?.positions?.[k] || {} };
+  return { born: d?.born?.[k], spells: named(d?.players?.[k], d?.fields || []), positions: d?.positions?.[k] || {} };
 }
 const POS_WORD = { G: "GK", D: "DEF", M: "MID", F: "FWD", SUB: "Sub" };
 const GROUP_SINGLE = { GK: "goalkeeper", CB: "centre-back", FB: "full-back", DM: "defensive mid", CM: "central mid",
@@ -3778,9 +3780,6 @@ function positionShares(list) {
     + (other > 0 ? `<span class="pos-share sub">other ${Math.round(100 * other / total)}%</span>` : "");
 }
 
-// Match ratings (API-Football, 0-10): coloured like the rank chips
-const ratingTier = (r) => r >= 7.5 ? 4 : r >= 7 ? 3 : r >= 6.5 ? 2 : 1;
-const ratingChip = (r) => r == null ? `<span class="rel-chip rating-none">–</span>` : `<span class="rel-chip rel-${ratingTier(r)}">${r.toFixed(1)}</span>`;
 const pageTeamName = (id) => state.player?.page?.teams?.[id] || state.playerSeasons?.teams?.[id] || teamName(id);
 const PLAYER_TABS = [["overview", "Overview"], ["stats", "Stats"], ["matches", "Matches"], ["career", "Career"]];
 
@@ -3824,7 +3823,7 @@ function heroGoalsAssists(p) {
 const ABILITY_TIP = "Underlying Ability (0-100): the model's estimate of his level, from his clubs' strength, his stats against players in his position and his age curve. It carries over from earlier seasons, so it isn't a measure of current form: Current Season and Recent Performance are shown separately";
 
 // His league minutes and stats this season (all his clubs), from his page file, else the
-// Players view's season detail (minutes, rating, goals and assists only)
+// Players view's season detail (minutes, goals and assists only)
 function playerSeasonNow(p, page) {
   const y = state.players.seasons?.[0];
   if (y == null) return null;
@@ -3834,10 +3833,8 @@ function playerSeasonNow(p, page) {
   }
   const sp = state.player?.detail?.spells?.[String(y)];
   if (!sp) return null;
-  const minutes = sp.reduce((a, x) => a + (x[1] || 0), 0);
-  const rated = sp.filter((x) => x[3] != null && x[1]);
-  return { minutes, goals: sp.reduce((a, x) => a + (x[4] || 0), 0), assists: sp.reduce((a, x) => a + (x[5] || 0), 0),
-    rating: rated.length ? rated.reduce((a, x) => a + x[3] * x[1], 0) / rated.reduce((a, x) => a + x[1], 0) : null, full: false };
+  const sum = (k) => sp.reduce((a, x) => a + (x[k] || 0), 0);
+  return { minutes: sum("minutes"), goals: sum("goals"), assists: sum("assists"), full: false };
 }
 // His latest league appearance in the page file, and whether it falls in this season's window
 function lastAppearance(page) {
@@ -3856,14 +3853,14 @@ function playerKeyFigures(p) {
   const tier = (place, of) => { const s = place / Math.max(1, of); return s <= 0.02 ? 4 : s <= 0.1 ? 3 : s <= 0.35 ? 2 : 1; };
   const season = y != null ? seasonShort(y) : "Season";
 
-  // first row: his league rank, then this season's minutes and match rating
+  // first row: his league rank, then this season's minutes, and goals and assists
   const main = (inLeague.length ? kfTile("League rank", `#${leaguePlace.toLocaleString()}`, `of ${inLeague.length.toLocaleString()} in ${escapeHtml(league)}`,
       `Place by Ability among ranked players at ${league} clubs`, tier(leaguePlace, inLeague.length)) : "")
     + kfTile(`${season} minutes`, now ? now.minutes.toLocaleString() : "–",
       now?.apps != null ? `${now.apps} apps${now.starts != null ? ` · ${now.starts} started` : ""}` : "league matches",
       "League minutes this season, all his clubs")
-    + kfTile(`${season} match rating`, now?.rating != null ? now.rating.toFixed(2) : "–", now?.minutes ? "season average" : "no minutes yet",
-      "API-Football's match rating, averaged over his league minutes this season");
+    + kfTile(`${season} goals · assists`, now?.minutes ? `${now.goals ?? 0} · ${now.assists ?? 0}` : "–", now?.minutes ? "league matches" : "no minutes yet",
+      "League goals and assists this season, all his clubs");
 
   return `<div class="key-figures pl-figures"><div class="kf-group"><div class="kf-tiles kf-main">${main}</div></div></div>`;
 }
@@ -3891,7 +3888,7 @@ function playerRecentSection() {
   return plSection(stale ? `Most recent appearances · last played ${escapeHtml(fmtLongDate(last.m.date))}` : "",
     `${stale ? `<div class="pl-callout">No league appearance for ${last.days} days, so these are not current form.</div>` : ""}
     <div class="form-strip">${apps.map((m) => `<div class="form-cell" title="${escapeHtml(`${fmtShortDate(m.date)} ${m.home ? "v" : "@"} ${pageTeamName(m.opponent)} ${m.gf}–${m.ga} · ${m.minutes}′${m.goals ? ` · ${m.goals} G` : ""}${m.assists ? ` · ${m.assists} A` : ""}`)}">
-      ${ratingChip(m.rating)}${gaIcons(m)}</div>`).join("")}</div>`);
+      <span class="rel-chip ${RES_CHIP[resClass(m)]}">${m.gf}–${m.ga}</span>${gaIcons(m)}</div>`).join("")}</div>`);
 }
 // Under each match: a ball per goal and a boot per assist (a count past three, so the cell stays narrow)
 const gaIcons = (m) => {
@@ -3915,7 +3912,6 @@ function playerOverviewTab() {
         ${plTile("Minutes", now.minutes.toLocaleString(), now.apps != null ? `${now.apps} apps${now.starts != null ? ` · ${now.starts} started` : ""}` : "")}
         ${gk ? plTile("Saves", now.saves ?? "–") : plTile("Goals", now.goals ?? "–")}
         ${gk ? plTile("Conceded", now.conceded ?? "–") : plTile("Assists", now.assists ?? "–")}
-        ${plTile("Match rating", now.rating != null ? now.rating.toFixed(2) : "–")}
       </div>`;
   } else {
     seasonBody = `<div class="pl-callout">No league minutes in ${y != null ? seasonName(y) : "this season"} yet${
@@ -3932,6 +3928,7 @@ function playerOverviewTab() {
     ${current}`;
 }
 const resClass = (m) => m.gf > m.ga ? "res-w" : m.gf === m.ga ? "res-d" : "res-l";
+const RES_CHIP = { "res-w": "rel-4", "res-d": "rel-none", "res-l": "rel-1" };     // his club's result, as a chip
 
 // His positions in a row, most played first (his share of starting minutes; then best rank): his rank in each role group he has one in (how good
 // he is in that position, so LB and RB share the full-back rank, and it needn't equal his overall rank) and his share of starting
@@ -4041,8 +4038,7 @@ window.addEventListener("resize", () => { if (state.player) drawPlayerChart($("#
 // ---- Stats: one season (all his clubs added up), as totals or per 90 minutes
 const SUM_KEYS = ["apps", "starts", "minutes", "goals", "assists", "shots_on", "key_passes", "passes", "tackles",
                   "interceptions", "blocks", "duels_won", "duels", "dribbles_won", "fouls", "yellow", "red", "saves", "conceded"];
-// a season's lines added up (null where no line has the stat); rating weighted by minutes,
-// pass accuracy by passes
+// a season's lines added up (null where no line has the stat); pass accuracy weighted by passes
 function sumSeason(rows) {
   if (!rows.length) return null;
   const out = {};
@@ -4054,7 +4050,6 @@ function sumSeason(rows) {
     const rs = rows.filter((r) => r[key] != null && r[weight]);
     return rs.length ? rs.reduce((a, r) => a + r[key] * r[weight], 0) / rs.reduce((a, r) => a + r[weight], 0) : null;
   };
-  out.rating = wavg("rating", "minutes");
   out.pass_acc = wavg("pass_acc", "passes");
   return out;
 }
@@ -4098,7 +4093,6 @@ function playerStatsTab() {
     <div class="team-stats compact">
       ${tile("Apps", s.apps, s.starts != null && !partial ? `${s.starts} started` : "")}
       ${tile("Minutes", s.minutes.toLocaleString())}
-      ${tile("Match rating", s.rating != null ? s.rating.toFixed(2) : "–")}
       ${gk ? tile("Saves", fmt("saves")) : tile("Goals", fmt("goals"))}
       ${gk ? tile("Save %", fmt("save_pct", "pct")) : tile("Assists", fmt("assists"))}
     </div>
@@ -4125,12 +4119,12 @@ function playerMatchesTab() {
       <div class="mr-opp">${clubCrest(m.opponent, "club-logo", `data-club="${m.opponent}"`)}
         <span>${m.home ? "v" : "@"} ${clubLink(m.opponent, pageTeamName(m.opponent))}</span></div>
       <div class="mr-res ${resClass(m)}">${m.gf}–${m.ga}</div>
-      <div class="mr-rating">${ratingChip(m.rating)}</div>
-      <div class="mr-sub"><span>${bits.join(" · ")}</span>${m.rank != null ? `<span class="mr-rank">rank ${Math.round(m.rank)}</span>` : ""}</div>
+      <div class="mr-rank" title="His rank going into the match">${rankChipSmall(m.rank)}</div>
+      <div class="mr-sub"><span>${bits.join(" · ")}</span></div>
     </div>`;
   };
   return `<div class="match-list">${page.matchRows.map(row).join("")}</div>
-    <div class="page-note">His last ${page.matchRows.length} league appearances. Rating: API-Football's match rating. Rank: his rank going into the match.</div>`;
+    <div class="page-note">His last ${page.matchRows.length} league appearances. The number on the right is his rank going into the match.</div>`;
 }
 
 // ---- Career: rank by season with his clubs, and the clubs his current rank is built on
@@ -4139,9 +4133,9 @@ function playerCareerTab() {
   const seasons = state.players.seasons || [];
   const hasSeasons = seasons.filter((y, k) => p.seasons?.[k] != null).length >= 2;
   const { spells: detail, positions: posBySeason } = state.player.detail;
-  const spellHtml = (sp) => sp.map(([team, mins, clubRank, rating, goals, assists]) =>
-    `<div class="spell">${clubLink(team, pageTeamName(team))}
-      <span class="dim"> · club ${clubRank ?? "–"} · ${mins ? `${mins.toLocaleString()}′` : "no minutes here"}${rating != null ? ` · rating ${rating.toFixed(2)}` : ""}${mins ? ` · ${goals} G, ${assists} A` : ""}</span></div>`).join("");
+  const spellHtml = (sp) => sp.map((x) =>
+    `<div class="spell">${clubLink(x.team, pageTeamName(x.team))}
+      <span class="dim"> · club ${x.club_rank ?? "–"} · ${x.minutes ? `${x.minutes.toLocaleString()}′` : "no minutes here"}${x.minutes ? ` · ${x.goals} G, ${x.assists} A` : ""}</span></div>`).join("");
   const rows = seasons.map((y, k) => {
     const v = p.seasons?.[k];
     if (v == null) return "";
@@ -4158,7 +4152,7 @@ function playerCareerTab() {
     ${hasSeasons ? `<div class="chart-card"><div class="chart-head"><span class="chart-title">Season ranks</span></div>
       <div class="chart-wrap" id="pl-chart"></div></div>` : ""}
     <div class="club-section${hasSeasons ? "" : " u-mt0"}"><div class="modal-section">Season by season</div>
-      <table class="season-table"><thead><tr><th>Season</th><th>Clubs · club Elo · minutes · rating · goals, assists</th><th class="num">Rank</th></tr></thead>
+      <table class="season-table"><thead><tr><th>Season</th><th>Clubs · club Elo · minutes · goals, assists</th><th class="num">Rank</th></tr></thead>
       <tbody>${rows}</tbody></table>
       <div class="page-note">A season's rank starts from his clubs' level (LT ALGO over his matches) and his stats against players in his position, then follows the typical age curve for his position from a level of his own: a season only moves off that curve as far as its minutes justify. Outlined ranks are estimated.</div>
     </div>
@@ -4497,11 +4491,11 @@ function nationFormationsTab() {
 }
 
 // ---- Players: everyone who has played under the current coach, with appearances, starts, minutes,
-// goals, assists, average match rating and cards
+// goals, assists and cards
 const NAT_PLAYER_COLS = [
   ["apps", "Apps", "Matches played, starting or from the bench."],
   ["minutes", "Mins", "Minutes played (where API-Football has the player's stat line)."], ["goals", "G", "Goals."],
-  ["assists", "A", "Assists."], ["rating", "Rating", "Average API-Football match rating (matches with one)."],
+  ["assists", "A", "Assists."],
   ["cards", "Cards", "Yellow and red cards."], ["last", "Last", "Date of his latest appearance."],
 ];
 function nationPlayersTab() {
@@ -4514,19 +4508,17 @@ function nationPlayersTab() {
     if (!inWindow.has(a.match)) continue;
     let p = by.get(a.player);
     if (!p) by.set(a.player, p = { id: a.player, name: team.players[a.player] || "Unknown", apps: 0, minutes: 0,
-      noMins: 0, goals: 0, assists: 0, ratings: [], y: 0, r: 0, last: "", roles: new Map() });
+      noMins: 0, goals: 0, assists: 0, y: 0, r: 0, last: "", roles: new Map() });
     const m = team.matchRows[a.match];
     p.apps++;
     if (a.minutes == null) p.noMins++; else p.minutes += a.minutes;
     p.goals += a.goals || 0; p.assists += a.assists || 0;
-    if (a.rating != null) p.ratings.push(a.rating);
     p.y += a.yellow || 0; p.r += a.red || 0;
     if (m.date > p.last) p.last = m.date;
     if (a.role) p.roles.set(a.role, (p.roles.get(a.role) || 0) + 1);
   }
   const players = [...by.values()];
   for (const p of players) {
-    p.rating = p.ratings.length ? p.ratings.reduce((x, y) => x + y, 0) / p.ratings.length : null;
     p.cards = p.y + 3 * p.r;
     p.role = [...p.roles].sort((a, b) => b[1] - a[1])[0]?.[0] || playerById(p.id)?.position || "";
   }
@@ -4549,7 +4541,6 @@ function nationPlayersTab() {
           <td class="num">${p.apps}</td>
           <td class="num"${p.noMins ? ` title="Minutes not known for ${p.noMins} of his matches"` : ""}>${p.noMins === p.apps ? "–" : `${p.minutes}${p.noMins ? "*" : ""}`}</td>
           <td class="num">${p.goals || ""}</td><td class="num">${p.assists || ""}</td>
-          <td class="num">${p.rating != null ? p.rating.toFixed(2) : "–"}</td>
           <td class="num">${p.y ? `<span class="card-y" title="Yellow cards">${p.y}</span>` : ""}${p.r ? `<span class="card-r" title="Red cards">${p.r}</span>` : ""}</td>
           <td class="num">${escapeHtml(fmtDateShortYear(p.last))}</td></tr>`;
       }).join("")}</tbody></table></div>
@@ -5976,8 +5967,7 @@ const TAB_INFO = {
     ["Pos", "The role he has started in most over his last 20 appearances."],
     ["World", "His place by Ability among every listed player."],
     ["Lg", "His place by Ability among the listed players in his club's league."],
-    ["G/A", "Goals and assists this season, for all his clubs."],
-    ["Rtg", "His average match rating this season, out of 10 (API-Football's rating)."]] },
+    ["G/A", "Goals and assists this season, for all his clubs."]] },
   leagues: { intro: "Leagues ranked by the average strength of their clubs this season.", more: "terms", key: [
     ["Baseline (Base)", "The average long-term rating of the league's clubs."],
     ["Current", "The average of its clubs' ratings now."],

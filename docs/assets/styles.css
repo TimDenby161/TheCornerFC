@@ -488,21 +488,16 @@
   /* under the name: his club and league */
   .pl-text { min-width: 0; }
   .pl-club { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
-  /* World and league rank, and this season's goals / assists and match rating (greyed when thin) */
-  table.leaderboard.players :is(th, td):is(.col-wrank, .col-lrank, .col-rtg) { width: 52px; text-align: center; padding-left: 3px; padding-right: 3px; }
+  /* World and league rank, and this season's goals / assists */
+  table.leaderboard.players :is(th, td):is(.col-wrank, .col-lrank) { width: 52px; text-align: center; padding-left: 3px; padding-right: 3px; }
   table.leaderboard.players :is(th, td).col-ga { width: 64px; text-align: center; padding-left: 2px; padding-right: 2px; white-space: nowrap; }
   table.leaderboard.players td:is(.col-wrank, .col-lrank) { color: var(--text-secondary); font-size: 12px; }
-  table.leaderboard.players td:is(.col-ga, .col-rtg) { font-size: 12px; }
-  table.leaderboard.players :is(td.col-rtg, .ga-rtg).thin { color: var(--text-muted); }
-  /* the rating under goals and assists, where the Rtg column has made way */
-  table.leaderboard.players .ga-rtg { display: none; font-size: 10.5px; color: var(--text-secondary); line-height: 1.2; }
-  /* narrower tables: league rank makes way first, then world rank, then the rating (under the goals), so the
+  table.leaderboard.players td.col-ga { font-size: 12px; }
+  /* narrower tables: league rank makes way first, then world rank, so the
      name, flag and position keep room (all on his page, and the + view still shows them, swiping sideways) */
   @container (max-width: 659px) { table.leaderboard.players:not(.years) .col-lrank { display: none; } }
   @container (max-width: 579px) { table.leaderboard.players:not(.years) .col-wrank { display: none; } }
   @container (max-width: 499px) {
-    table.leaderboard.players:not(.years) .col-rtg { display: none; }
-    table.leaderboard.players:not(.years) .ga-rtg { display: block; }
     table.leaderboard.players .pn-full { display: none; }
     table.leaderboard.players .pn-short { display: inline; }
     table.leaderboard.players .pl-club { display: none; }     /* club and league: the badge shows the club */
@@ -896,7 +891,7 @@
   .form-cell .rel-chip { min-width: 0; width: 100%; padding: 4px 0; font-size: 12px; }
   .form-ga { display: flex; flex-direction: column; align-items: center; min-height: 13px; font-size: 11px; line-height: 13px; letter-spacing: -1px; }
   .ga-icon { white-space: nowrap; }
-  .rel-chip.rating-none { background: var(--chip-bg); color: var(--text-muted); }
+  .rel-chip.rel-none { background: var(--chip-bg); color: var(--text-muted); }
   .stats-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
   .chip-scroll { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
   .chip-scroll::-webkit-scrollbar { display: none; }
@@ -925,10 +920,9 @@
   .mr-opp > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mr-opp .club-logo { width: 18px; height: 18px; flex: none; }
   .mr-res { font-weight: 700; font-variant-numeric: tabular-nums; }
-  .mr-rating { text-align: right; }
   .mr-sub { grid-column: 2 / -1; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
     font-size: 11px; color: var(--text-muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .mr-rank { flex: none; white-space: nowrap; }
+  .mr-rank { text-align: right; }
   .card { display: inline-block; width: 8px; height: 11px; border-radius: 1.5px; background: var(--status-warning); vertical-align: -1px; }
   .card.red { background: var(--status-critical); }
   @media (max-width: 480px) {
@@ -1613,11 +1607,11 @@
   @media (max-width: 480px) {
     /* Clubs: league place and the Gap make way on phones (both on the club page); headers fit their columns */
     table.leaderboard.clubs :is(.col-gap, .col-dom) { display: none; }
-    /* Players: the ranks and Rtg column make way for the name (all on his page, and the + view
-       shows them, swiping sideways); goals and assists stay, with the rating under them */
-    table.leaderboard.players:not(.years) :is(.col-wrank, .col-lrank, .col-rtg) { display: none; }
+    /* Players: the ranks make way for the name (both on his page, and the + view shows them,
+       swiping sideways); goals and assists stay */
+    table.leaderboard.players:not(.years) :is(.col-wrank, .col-lrank) { display: none; }
     table.leaderboard.players .pl-cell .player-photo { display: none; }      /* the name's room; the badge stays */
-    table.leaderboard.players :is(th, td):is(.col-wrank, .col-lrank, .col-rtg) { width: 42px; padding-left: 1px; padding-right: 1px; }
+    table.leaderboard.players :is(th, td):is(.col-wrank, .col-lrank) { width: 42px; padding-left: 1px; padding-right: 1px; }
     table.leaderboard.players :is(th, td).col-ga { width: 50px; padding-left: 0; padding-right: 0; letter-spacing: -.02em; }
     table.leaderboard.clubs th { letter-spacing: 0; }
     table.leaderboard.clubs th:nth-child(n+4), table.leaderboard.clubs td:nth-child(n+4) { width: 49px; }

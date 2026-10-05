@@ -1094,6 +1094,7 @@ def export_bets(conn, out_dir=OUT_DIR):
 
 
 PLAYER_SEASONS = list(range(2026, 2020, -1))     # season ranks shown, newest first
+PLAYER_SEASON_FIELDS = ["minutes", "goals", "assists"]     # a player's "season" in players.json
 
 
 POSITION_SHARE = 0.25      # a position counts for the filter at this share of his starting minutes
@@ -1240,44 +1241,22 @@ def export_players(conn, out_dir=OUT_DIR):
     for teams in actual_xi.values():
         for xi_players in teams.values():
             xi_players.sort(key=lambda x: (order.get(x[2], 99), -(x[3] or 0)))
-    # this season so far, all his clubs: [minutes, match rating (minutes-weighted), goals, assists,
-    # his clubs' minutes]; the per-match leagues first, else the season totals where his league has
-    # them (player_seasons, no club minutes)
+    # this season so far, all his clubs (PLAYER_SEASON_FIELDS): the per-match leagues first, else
+    # the season totals where his league has them (player_seasons). No match rating: API-Football's
+    # rating isn't published anywhere on the site
     season_stats = {}
-    rating_avg = """(sum(x.rating * x.minutes) filter (where x.rating is not null)
-                     / nullif(sum(x.minutes) filter (where x.rating is not null), 0))::float8"""
-    for _, player, mins, rating, goals, assists in conn.execute(
-            f"""select 1 src, x.player_id, sum(x.minutes), {rating_avg}, sum(x.goals), sum(x.assists)
-                from player_seasons x where x.season = %s and x.player_id = any(%s) and x.minutes > 0
-                group by 2
-                union all
-                select 2, x.player_id, sum(x.minutes), {rating_avg}, sum(x.goals), sum(x.assists)
-                from fixture_players x join fixtures f using (fixture_id)
-                where f.season = %s and x.player_id = any(%s) and f.status_short = any(%s) and x.minutes > 0
-                group by 2
-                order by src""",
+    for _, player, mins, goals, assists in conn.execute(
+            """select 1 src, x.player_id, sum(x.minutes), sum(x.goals), sum(x.assists)
+               from player_seasons x where x.season = %s and x.player_id = any(%s) and x.minutes > 0
+               group by 2
+               union all
+               select 2, x.player_id, sum(x.minutes), sum(x.goals), sum(x.assists)
+               from fixture_players x join fixtures f using (fixture_id)
+               where f.season = %s and x.player_id = any(%s) and f.status_short = any(%s) and x.minutes > 0
+               group by 2
+               order by src""",
             [PLAYER_SEASONS[0], [r[0] for r in players]] * 2 + [list(config.FINISHED_STATUSES)]):
-        season_stats[player] = [int(mins), round(rating, 2) if rating is not None else None,
-                                int(goals or 0), int(assists or 0), None]   # per-match rows come last and win
-    # his clubs' minutes: 90 a match for each club he's played for this season, from his first
-    # appearance for it (a new signing isn't marked down for matches before he joined), in the
-    # matches with player data (the ones his own minutes come from). The site greys his rating when
-    # he's played under a third of them (a squad player, or back from injury)
-    for player, club_mins in conn.execute(
-            """with joined as (
-                   select x.player_id, x.team_id, min(f.kickoff) since
-                   from fixture_players x join fixtures f using (fixture_id)
-                   where f.season = %s and x.player_id = any(%s) and f.status_short = any(%s) and x.minutes > 0
-                   group by 1, 2)
-               select j.player_id, 90 * count(*)
-               from joined j join fixtures f on f.season = %s and j.team_id in (f.home_team_id, f.away_team_id)
-                    and f.kickoff >= j.since and f.status_short = any(%s)
-                    and (f.league_id = any(%s) or f.players_fetched_at is not null)
-               group by 1""",
-            [PLAYER_SEASONS[0], [r[0] for r in players], list(config.FINISHED_STATUSES),
-             PLAYER_SEASONS[0], list(config.FINISHED_STATUSES), config.MATCH_PLAYER_LEAGUES]):
-        if player in season_stats:
-            season_stats[player][4] = int(club_mins)
+        season_stats[player] = [int(mins), int(goals or 0), int(assists or 0)]   # per-match rows come last and win
     # his next seasons, projected along his age curve (player_ratings.py)
     future = defaultdict(dict)
     for player, season, rank in conn.execute("select player_id, season, projected_rank from player_projected_ranks"):
@@ -1287,6 +1266,7 @@ def export_players(conn, out_dir=OUT_DIR):
         "fields": ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
                    "nationality", "positions_12m", "position_ranks", "future", "season"],
         "seasons": PLAYER_SEASONS,
+        "season_fields": PLAYER_SEASON_FIELDS,
         "future_seasons": future_seasons,    # oldest first
         "players": [[r[0], r[1], main_pos.get(r[0], r[2]), float(r[3]), r[4], r[5], r[6],
                      [season_ranks[r[0]].get(y) for y in PLAYER_SEASONS], r[7],
@@ -1306,20 +1286,19 @@ def export_players(conn, out_dir=OUT_DIR):
 
 
 def _club_spells(rows):
-    """[(player, key, team, minutes, club rank, rating, goals, assists)]
-    -> {player: {key: [[team, mins, rank, rating, goals, assists], ...]}}, clubs by minutes, most first."""
+    """[(player, key, team, minutes, club rank, goals, assists)]
+    -> {player: {key: [[team, mins, rank, goals, assists], ...]}}, clubs by minutes, most first."""
     out = defaultdict(dict)
-    for player, key, team, mins, rank, rating, goals, assists in rows:
+    for player, key, team, mins, rank, goals, assists in rows:
         out[player].setdefault(key, []).append(
-            [team, int(mins), round(float(rank)) if rank is not None else None,
-             round(float(rating), 2) if rating is not None else None, int(goals or 0), int(assists or 0)])
+            [team, int(mins), round(float(rank)) if rank is not None else None, int(goals or 0), int(assists or 0)])
     for seasons in out.values():
         for spells in seasons.values():
             spells.sort(key=lambda x: -x[1])
     return out
 
 
-SPELL_FIELDS = ["team", "minutes", "club_rank", "rating", "goals", "assists"]
+SPELL_FIELDS = ["team", "minutes", "club_rank", "goals", "assists"]
 
 
 def export_player_seasons(conn, out_dir=OUT_DIR):
@@ -1328,13 +1307,11 @@ def export_player_seasons(conn, out_dir=OUT_DIR):
 
     For each exported player and each season in PLAYER_SEASONS, and for "now" (his last 20
     appearances, the ones the current rank is built from): the clubs he played for, his minutes
-    for each, the club's average rank over those matches and his average match rating.
+    for each, the club's average rank over those matches, and his goals and assists.
     """
     ids = [r[0] for r in conn.execute(f"select player_id from players p where {LISTED}", [PLAYER_SEASONS])]
     per_club = """sum(fp.minutes),
                   sum(h.lt_before * fp.minutes) / nullif(sum(fp.minutes) filter (where h.lt_before is not null), 0),
-                  sum(fp.rating * fp.minutes) filter (where fp.rating is not null)
-                    / nullif(sum(fp.minutes) filter (where fp.rating is not null), 0),
                   sum(fp.goals), sum(fp.assists)"""
     seasons = conn.execute(
         f"""select fp.player_id, f.season, fp.team_id, {per_club}
@@ -1355,9 +1332,6 @@ def export_player_seasons(conn, out_dir=OUT_DIR):
     # his season totals where the league has them (player_seasons; minutes 0: an estimate)
     gaps = conn.execute(
         """select r.player_id, r.season, r.team_id, r.minutes, avg(h.lt_before),
-                  (select sum(ps.rating * ps.minutes) / nullif(sum(ps.minutes) filter (where ps.rating is not null), 0)
-                   from player_seasons ps where ps.player_id = r.player_id and ps.season = r.season
-                     and ps.team_id = r.team_id)::float8,
                   coalesce((select sum(ps.goals) from player_seasons ps where ps.player_id = r.player_id
                             and ps.season = r.season and ps.team_id = r.team_id), 0),
                   coalesce((select sum(ps.assists) from player_seasons ps where ps.player_id = r.player_id
@@ -1418,11 +1392,11 @@ def _club_positions(player_team, positions):
 
 
 PLAYER_MATCHES = 20      # match log on a player's page: his last this-many appearances
-SEASON_FIELDS = ["season", "team", "league", "apps", "starts", "minutes", "rating", "goals", "assists",
+SEASON_FIELDS = ["season", "team", "league", "apps", "starts", "minutes", "goals", "assists",
                  "shots_on", "key_passes", "passes", "pass_acc", "tackles", "interceptions", "blocks",
                  "duels_won", "duels", "dribbles_won", "fouls", "yellow", "red", "saves", "conceded"]
 MATCH_FIELDS = ["fixture", "date", "league", "team", "opponent", "home", "gf", "ga", "started", "minutes",
-                "role", "rating", "rank", "goals", "assists", "shots_on", "key_passes", "tackles_int",
+                "role", "rank", "goals", "assists", "shots_on", "key_passes", "tackles_int",
                 "duels_won", "duels", "yellow", "red", "saves", "conceded"]
 
 
@@ -1436,10 +1410,10 @@ def build_player_pages(ids, apps, fixtures, other_seasons):
     """
     ids = set(ids)
     fx = {r[0]: r for r in fixtures}
-    # per (season, team, league): apps, starts, minutes, rated minutes, rating x minutes, goals,
-    # assists, shots_on, key_passes, passes, accurate passes, tackles, interceptions, blocks,
-    # duels_won, duels, dribbles_won, fouls, yellow, red, saves, conceded
-    lines = defaultdict(lambda: defaultdict(lambda: [0] * 22))
+    # per (season, team, league): apps, starts, minutes, goals, assists, shots_on, key_passes,
+    # passes, accurate passes, tackles, interceptions, blocks, duels_won, duels, dribbles_won,
+    # fouls, yellow, red, saves, conceded
+    lines = defaultdict(lambda: defaultdict(lambda: [0] * 20))
     recent = defaultdict(list)
     for r in apps:
         if r[2] not in ids or r[3] <= 0 or r[10] not in config.FINISHED_STATUSES or r[0] not in fx:
@@ -1447,15 +1421,13 @@ def build_player_pages(ids, apps, fixtures, other_seasons):
         (goals, assists, shots_on, key_passes, passes, passes_acc, tackles, interceptions, blocks, duels,
          duels_won, dribbles_won, fouls, yellow, red, saves, conceded, _, _) = (x or 0 for x in r[11:30])
         s = lines[r[2]][(r[8], r[1], r[9])]
-        for i, v in enumerate((1, 1 if r[4] else 0, r[3], r[3] if r[7] else 0, (r[7] or 0) * r[3],
-                               goals, assists, shots_on, key_passes, passes, passes_acc, tackles, interceptions,
+        for i, v in enumerate((1, 1 if r[4] else 0, r[3], goals, assists, shots_on, key_passes, passes, passes_acc, tackles, interceptions,
                                blocks, duels_won, duels, dribbles_won, fouls, yellow, red, saves, conceded)):
             s[i] += v
         recent[r[2]].append(r)
     out = {}
     for player in ids:
-        seasons = [[season, team, league, *s[:3], round(s[4] / s[3], 2) if s[3] else None, *s[5:10],
-                    round(100 * s[10] / s[9]) if s[9] else None, *s[11:]]
+        seasons = [[season, team, league, *s[:8], round(100 * s[8] / s[7]) if s[7] else None, *s[9:]]
                    for (season, team, league), s in lines.get(player, {}).items()]
         matches = []
         for r in sorted(recent.get(player, []), key=lambda r: fx[r[0]][1], reverse=True)[:PLAYER_MATCHES]:
@@ -1464,15 +1436,15 @@ def build_player_pages(ids, apps, fixtures, other_seasons):
             st = [x or 0 for x in r[11:30]]
             matches.append([r[0], f[1].date().isoformat(), r[9], r[1], f[5] if home else f[4], 1 if home else 0,
                             f[6] if home else f[7], f[7] if home else f[6], 1 if r[4] else 0, r[3],
-                            r[6] or r[5], _r(r[7], 1), None, st[0], st[1], st[2], st[3], st[6] + st[7],
+                            r[6] or r[5], None, st[0], st[1], st[2], st[3], st[6] + st[7],
                             st[10], st[9], st[13], st[14], st[15], st[16]])
         out[player] = {"seasons": seasons, "matches": matches, "injury": None}
-    for (player, team, league, season, _, minutes, n, rating, goals, assists, shots_on, key_passes, passes, _,
+    for (player, team, league, season, _, minutes, n, _, goals, assists, shots_on, key_passes, passes, _,
          tackles, interceptions, blocks, duels, duels_won, dribbles_won, fouls, yellow, yellow_red, red,
          saves, conceded, _, _) in other_seasons:
         if player in out:
             out[player]["seasons"].append(
-                [season, team, league, n or 0, None, minutes, _r(rating), goals or 0, assists or 0, shots_on,
+                [season, team, league, n or 0, None, minutes, goals or 0, assists or 0, shots_on,
                  key_passes, passes, None, tackles, interceptions, blocks, duels_won, duels, dribbles_won,
                  fouls, yellow, (red or 0) + (yellow_red or 0), saves, conceded])
     for page in out.values():
@@ -1529,7 +1501,7 @@ def export_player_pages(conn, out_dir=OUT_DIR, detail=None):
     movement = _player_movement(conn, ids)
     for pid, page in pages.items():
         for m in page["matches"]:
-            m[12] = _r(ranks.get((m[0], pid)), 1)
+            m[11] = _r(ranks.get((m[0], pid)), 1)
         page["injury"] = injuries.get(pid)
         if pid in movement:
             page["movement"] = movement[pid]
