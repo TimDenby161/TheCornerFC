@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor, then an export.
+-- Repeatable. Applied 2026-10-05.
 -- The players as rows in the database, not as one file (owner, 2026-10-05: convert Players to a
 -- table and query functions). Until now every view that showed a player downloaded all 7,500 of
 -- them (players.json, 1.4 MB) and filtered, sorted and searched them in the browser.

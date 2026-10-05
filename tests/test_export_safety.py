@@ -41,7 +41,7 @@ def write_valid_export(root, marker):
 
 
 class ExportSafetyTests(unittest.TestCase):
-    def test_real_player_seasons_writer_passes_publication_validation(self):
+    def test_player_seasons_are_returned_for_the_page_files_and_no_file_is_written(self):
         conn = Mock()
         conn.execute.side_effect = [
             [(i,) for i in range(100)],
@@ -57,25 +57,24 @@ class ExportSafetyTests(unittest.TestCase):
                 write_valid_export(staged, "new")
                 returned.append(export_player_seasons(conn, staged))
 
+            (live / "player_seasons.json").unlink(missing_ok=True) if live.exists() else None
             _publish_export(build, live)
-            players = json.loads((live / "player_seasons.json").read_text())["players"]
-            self.assertEqual(returned[0]["players"], players)     # what it wrote, for the page files
+            players = returned[0]["players"]                      # each player's rows, for his page file
             self.assertEqual(len(players), 100)
             self.assertEqual(players["0"]["2026"], [[1, 90, 50, 0, 0]])
 
-    def test_invalid_or_depleted_player_seasons_preserves_old_output(self):
-        for players, message in (([], "does not contain a dict"),
-                                 ({}, "expected at least 50"),
-                                 ({str(i): {} for i in range(60)}, "collapsed from 200 to 60")):
+    def test_invalid_or_depleted_rankings_preserve_old_output(self):
+        for rankings, message in (({}, "does not contain a list"),
+                                  ([], "expected at least 50"),
+                                  ([[i] for i in range(60)], "collapsed from 200 to 60")):
             with self.subTest(message=message), tempfile.TemporaryDirectory() as tmp:
                 live = Path(tmp) / "data"
                 write_valid_export(live, "old")
-                write_json(live / "player_seasons.json",
-                           {"players": {str(i): {} for i in range(200)}})
+                write_json(live / "rankings.json", {"rankings": [[i] for i in range(200)], "marker": "old"})
 
                 def build(staged):
                     write_valid_export(staged, "new")
-                    write_json(staged / "player_seasons.json", {"players": players})
+                    write_json(staged / "rankings.json", {"rankings": rankings})
 
                 with self.assertRaisesRegex(ExportValidationError, message):
                     _publish_export(build, live)
@@ -111,14 +110,14 @@ class ExportSafetyTests(unittest.TestCase):
 
     def test_with_no_earlier_files_the_export_is_compared_with_the_stored_one(self):
         # the data isn't kept in the repository: a run's working copy has no export from before
-        stored = {"rows": {"player_seasons.json": 200}, "dirs": {"clubs": 40}}
-        for build_players, clubs, message in ((60, 1, "player_seasons.json collapsed from 200 to 60"), (150, 1, "clubs/ collapsed from 40 to 1")):
+        stored = {"rows": {"rankings.json": 200}, "dirs": {"clubs": 40}}
+        for build_players, clubs, message in ((60, 1, "rankings.json collapsed from 200 to 60"), (150, 1, "clubs/ collapsed from 40 to 1")):
             with self.subTest(message=message), tempfile.TemporaryDirectory() as tmp:
                 live = Path(tmp) / "data"
 
                 def build(staged):
                     write_valid_export(staged, "new")
-                    write_json(staged / "player_seasons.json", {"players": {str(i): {} for i in range(build_players)}})
+                    write_json(staged / "rankings.json", {"rankings": [[i] for i in range(build_players)]})
 
                 with patch("thecornerfc.export._stored_shape", return_value=stored) as asked, \
                         self.assertRaisesRegex(ExportValidationError, message):

@@ -25,17 +25,30 @@ const DATA_SOURCE = (() => {
 // A plain GET like site_doc's; arguments too long for an address (a few thousand ids) are posted.
 async function siteAsk(fn, params) {
   const q = String(new URLSearchParams({ ...params, apikey: SUPABASE.key }));
-  const r = q.length < 8000 ? await fetch(`${SUPABASE.url}/rest/v1/rpc/${fn}?${q}`)
-    : await fetch(`${SUPABASE.url}/rest/v1/rpc/${fn}?apikey=${SUPABASE.key}`,
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(params) });
+  const r = await askDatabase(() => q.length < 8000 ? fetch(`${SUPABASE.url}/rest/v1/rpc/${fn}?${q}`)
+    : fetch(`${SUPABASE.url}/rest/v1/rpc/${fn}?apikey=${SUPABASE.key}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(params) }));
   if (!r.ok) throw Object.assign(new Error(`${fn}: ${r.status}`), { status: r.status });
   return r.json();
+}
+// The database is the only source, so a request that fails outright or with a server error (a
+// dropped connection, a busy moment) is sent once more after a moment before the view gives up.
+async function askDatabase(send) {
+  for (let again = false; ; again = true) {
+    try {
+      const r = await send();
+      if (r.status < 500 || again) return r;
+    } catch (err) {
+      if (again) throw err;
+    }
+    await new Promise((done) => setTimeout(done, 400));
+  }
 }
 
 async function siteDoc(key, hash) {
   const q = new URLSearchParams({ p_key: key, apikey: SUPABASE.key });
   if (hash) q.set("p_v", hash);
-  const r = await fetch(`${SUPABASE.url}/rest/v1/rpc/site_doc?${q}`);
+  const r = await askDatabase(() => fetch(`${SUPABASE.url}/rest/v1/rpc/site_doc?${q}`));
   if (!r.ok) throw Object.assign(new Error(`${key}: ${r.status}`), { status: r.status });
   const doc = await r.json();
   if (doc === null) throw Object.assign(new Error(`${key}: 404`), { status: 404, missing: true });

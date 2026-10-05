@@ -31,17 +31,17 @@ PAST_DAYS = 21       # recent results shown on the site
 FUTURE_DAYS = 60     # upcoming fixtures shown on the site
 FORM_GAMES = 6       # rank change over this many recent games = "form"
 CRITICAL_JSON_FILES = (
-    "site.json", "matches.json", "rankings.json", "stats.json", "bets.json",
-    "injuries.json", "players.json", "player_seasons.json",
+    "site.json", "rankings.json", "stats.json", "bets.json", "injuries.json",
 )
 CRITICAL_DETAIL_DIRS = ("players", "clubs", "leagues")
 MIN_MAJOR_ROWS = {
     "rankings.json": ("rankings", 50),
-    "players.json": ("players", 50),
-    "player_seasons.json": ("players", 50),
 }
-MAJOR_ROW_TYPES = {"player_seasons.json": dict}
+MAJOR_ROW_TYPES = {}        # a major file whose rows are a dict, not a list
 COLLAPSE_RATIO = 0.5
+# The matches and the players are rows of site.matches and site.players, not files: each table is
+# checked the same way before it is rewritten (_check_table_collapse)
+MIN_PLAYERS = 50
 
 
 class ExportValidationError(RuntimeError):
@@ -476,7 +476,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     generated = now.isoformat()
     # site.json: what every page needs whatever it shows (the competitions, the clubs' names, when
     # the data was made). It is one of the two files loaded on every visit (rankings.json is the
-    # other); matches.json is fetched by the views that show matches.
+    # other); the matches are rows of site.matches, asked for by the views that show them.
     site = {
         "generated_at": generated,
         "freshness": site_freshness(conn),
@@ -485,11 +485,6 @@ def _write_site_data(conn, out_dir=OUT_DIR):
         "nation_pages": nation_pages,
         "match_fields": SITE_MATCH_FIELDS,      # the order of a match's row, as site_matches() returns them
     }
-    (out_dir / "matches.json").write_text(json.dumps({
-        "generated_at": generated,
-        "fields": SITE_MATCH_FIELDS,
-        "matches": matches,
-    }, separators=(",", ":")), encoding="utf-8")
     (out_dir / "rankings.json").write_text(json.dumps({
         "generated_at": generated,
         "fields": ["team", "league", "current", "st", "lt", "played",
@@ -499,19 +494,16 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     log.info("Exported %d matches and %d rankings to %s", len(matches), len(rankings), out_dir)
     export_stats(conn, out_dir)
     export_bets(conn, out_dir)
-    explained = export_explanations(conn, out_dir, now)
-    if not store_matches(conn, matches, explained):
-        export_fixture_pages(out_dir, explained)      # a database from before site.matches: a file per match, as before
+    store_matches(conn, matches, match_explanations(conn, now))
     export_methodology(conn, out_dir, now)
     export_injuries(conn, out_dir)
     player_team, listed = export_players(conn, out_dir, rankings)
-    # the players are in the database (site.players): the site asks it for the ones a view shows,
-    # and needs the order of a row, the seasons and the names of their clubs outside the rankings
-    if listed["stored"]:
-        site.update(player_fields=SITE_PLAYER_FIELDS, player_season_fields=PLAYER_SEASON_FIELDS,
-                    player_seasons=PLAYER_SEASONS, player_future_seasons=listed["future_seasons"])
-        for team, name in listed["teams"].items():
-            site["teams"].setdefault(team, name)
+    # the players are rows of site.players: the site asks for the ones a view shows, and needs the
+    # order of a row, the seasons and the names of their clubs outside the rankings
+    site.update(player_fields=SITE_PLAYER_FIELDS, player_season_fields=PLAYER_SEASON_FIELDS,
+                player_seasons=PLAYER_SEASONS, player_future_seasons=listed["future_seasons"])
+    for team, name in listed["teams"].items():
+        site["teams"].setdefault(team, name)
     (out_dir / "site.json").write_text(json.dumps(site, separators=(",", ":")), encoding="utf-8")
     detail = export_player_seasons(conn, out_dir)
     export_clubs(conn, out_dir, _club_positions(player_team, detail["positions"]))
@@ -549,7 +541,7 @@ def _records_sum(side):
 
 
 def explanation(inputs, league_id, home_totals, away_totals, stored, meta):
-    """One match's entry in explanations.json: predictions.explain() on the snapshot behind the
+    """One match's explanation (match_explanations): predictions.explain() on the snapshot behind the
     stored prediction, plus the inputs it was built from, rounded for display. None if the
     snapshot doesn't reproduce the stored prediction."""
     parts = predictions.explain(inputs, league_id, home_totals, away_totals, stored)
@@ -573,15 +565,14 @@ def explanation(inputs, league_id, home_totals, away_totals, stored, meta):
     return out
 
 
-def export_explanations(conn, out_dir=OUT_DIR, now=None):
-    """docs/data/explanations.json: for every match on the site whose prediction has a snapshot,
-    the key reasons its card shows, and the model versions (details once each, under "models").
-    The site loads it after the matches, so it doesn't slow the first page. Returns every match's
-    full entry (the parts of the prediction, see predictions.explain, when its inputs were captured
-    and the model version that made it): each goes in the match's own file (export_fixture_pages),
-    fetched when its card's detail is opened."""
+def match_explanations(conn, now=None):
+    """{fixture id: its explanation} for every match on the site whose prediction has a snapshot:
+    the parts of the prediction (predictions.explain), the key reasons its card shows, when its
+    inputs were captured and the model version that made it. Each goes in the match's row of
+    site.matches (store_matches): the reasons come with the match, the rest is fetched when its
+    card's model detail is opened."""
     now = now or datetime.now(timezone.utc)
-    out, models = {}, {}
+    out = {}
     (registry,) = conn.execute("select to_regclass('public.match_prediction_snapshots')").fetchone()
     if registry is not None:
         # The latest snapshot whose outputs are the stored prediction's: the one it came from
@@ -610,15 +601,11 @@ def export_explanations(conn, out_dir=OUT_DIR, now=None):
             entry = explanation(inputs, lid, (hs, hc, hn), (as_, ac, an), (exp_diff, hxg, axg), meta)
             if entry:
                 out[str(fid)] = entry
-                models[version_id] = {"name": version_name, "code": code_sha[:7] if code_sha else None}
-    _write_json_file(out_dir / "explanations.json",
-                     {"generated_at": now.isoformat(), "models": models,
-                      "matches": {fid: {"reasons": entry["reasons"]} for fid, entry in out.items()}})
-    log.info("Exported explanations for %d matches", len(out))
+    log.info("Explained %d matches", len(out))
     return out
 
 
-# A match as the site draws it: the order of each row of matches.json, and of site.matches.data
+# A match as the site draws it: the order of its row in site.matches.data
 SITE_MATCH_FIELDS = ["id", "kickoff", "league", "round", "home", "away", "status", "hg", "ag",
                      "pen_h", "pen_a", "p_home", "p_draw", "p_away", "home_xg", "away_xg",
                      "likely", "home_rank", "away_rank", "source", "rating", "r_winner",
@@ -629,14 +616,14 @@ SITE_MATCH_FIELDS = ["id", "kickoff", "league", "round", "home", "away", "status
 
 def store_matches(conn, matches, explained=None):
     """site.matches: every match on the site as a row, with the key reasons its card shows and
-    its full model detail (export_explanations), for the database functions the site asks
+    its full model detail (match_explanations), for the database functions the site asks
     (db/migrations/20261005_site_matches.sql and 20261005_site_matches_queries.sql: site_matches,
-    site_match_days, site_match_detail). matches: the rows of
-    matches.json, in SITE_MATCH_FIELDS order. The table is rewritten whole, in one transaction.
+    site_match_days, site_match_detail). matches: the rows, in SITE_MATCH_FIELDS order. The table
+    is rewritten whole, in one transaction, unless it would lose most of its rows
+    (_check_table_collapse).
 
     True once stored. False, with nothing written, on a read-only run or a database from before
-    the migration (logged): the caller then writes a file per match as before. Any other failure
-    stops the run."""
+    the migration (logged). Any other failure stops the run."""
     explained = explained or {}
     try:
         config.require_db_write("store the matches")
@@ -653,6 +640,7 @@ def store_matches(conn, matches, explained=None):
     text = lambda value: None if value is None else json.dumps(value, separators=(",", ":"), ensure_ascii=False)
     at = {name: i for i, name in enumerate(SITE_MATCH_FIELDS)}
     with conn.cursor() as cur:
+        _check_table_collapse(cur, "site.matches", len(matches))
         cur.execute("delete from site.matches")
         with cur.copy("""copy site.matches (fixture_id, kickoff, league_id, home_id, away_id, status, intl, data, reasons, why)
                          from stdin""") as copy:
@@ -664,25 +652,6 @@ def store_matches(conn, matches, explained=None):
     conn.commit()
     log.info("Stored %d matches (%d with model detail)", len(matches), sum(str(m[0]) in explained for m in matches))
     return True
-
-
-def export_fixture_pages(out_dir, explained=None):
-    """One small file per explained match, for its card's model detail:
-    docs/data/fixtures/<fixture_id>.json, {"id", "why": the explanation (export_explanations)}.
-    Only written while the database has no site.matches table (store_matches): with it, the
-    detail is a column of the match's row and the site asks site_match_detail() for it."""
-    pages = {str(fid): {"why": entry} for fid, entry in (explained or {}).items()}
-    fixture_dir = Path(out_dir) / "fixtures"
-    fixture_dir.mkdir(parents=True, exist_ok=True)
-    for old in fixture_dir.glob("*.json"):
-        if old.stem not in pages:
-            old.unlink()
-    for fid, page in pages.items():
-        payload = json.dumps({"id": int(fid), **page}, separators=(",", ":"), ensure_ascii=False)
-        path = fixture_dir / f"{fid}.json"
-        if not path.exists() or path.read_text(encoding="utf-8") != payload:
-            path.write_text(payload, encoding="utf-8")
-    log.info("Exported %d match pages", len(pages))
 
 
 STAT_RANGES = {"7d": 7, "30d": 30, "90d": 90, "365d": 365}
@@ -1275,7 +1244,7 @@ def export_bets(conn, out_dir=OUT_DIR):
 
 
 PLAYER_SEASONS = list(range(2026, 2020, -1))     # season ranks shown, newest first
-PLAYER_SEASON_FIELDS = ["minutes", "goals", "assists"]     # a player's "season" in players.json
+PLAYER_SEASON_FIELDS = ["minutes", "goals", "assists"]     # a player's "season" in his row
 
 
 POSITION_SHARE = 0.25      # a position counts for the filter at this share of his starting minutes
@@ -1286,13 +1255,13 @@ LISTED = """p.current_rank is not null and (p.rank_minutes >= 450 or exists (
 
 
 def export_players(conn, out_dir=OUT_DIR, rankings=()):
-    """Current player ranks, season ranks and each team's predicted XI for its next match
-    (players.json, and the site.players table: store_players). A season rank is the player's
-    average rank across that season (after each match, weighted by minutes; player_season_ranks),
-    blank if he didn't play in these leagues. A match's own line-ups aren't here: the site asks
-    the database for the match it opens (site_lineups). rankings: the rows of rankings.json, for
-    each club's world rank. Returns ({player: his club}, {"stored": whether the table was
-    written, "future_seasons", "teams": the names of the players' clubs})."""
+    """Current player ranks and season ranks, as rows of the site.players table (store_players).
+    A season rank is the player's average rank across that season (after each match, weighted by
+    minutes; player_season_ranks), blank if he didn't play in these leagues. Line-ups aren't
+    here: the site asks the database for the match it opens (site_lineups) and for a club's next
+    predicted XI (site_next_xi). rankings: the rows of rankings.json, for each club's world
+    rank. Returns ({player: his club}, {"stored": whether the table was written,
+    "future_seasons", "teams": the names of the players' clubs})."""
     # Listed: 450+ minutes in his last 20 appearances, a 1,500+ minute season in the seasons
     # shown (an established player back from injury, e.g. John Stones), or in a current squad
     # (a new signing). His club: the squad he's in now (team_squads), else the club the weekly
@@ -1354,24 +1323,8 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
         pos_ranks[player][g] = float(r)
     # published as the model has them: how good he is in that position (player_ratings step 6),
     # which needn't equal his overall rank, even in the position shown for him
-    lineups = conn.execute(
-        """select distinct on (pl.team_id, pl.player_id) pl.team_id, pl.fixture_id, pl.player_id,
-                  p.name, pl.position, pl.player_rank
-           from predicted_lineups pl join players p using (player_id) join fixtures f using (fixture_id)
-           where (pl.team_id, f.kickoff) in (select pl2.team_id, min(f2.kickoff) from predicted_lineups pl2
-                                             join fixtures f2 using (fixture_id) group by pl2.team_id)
-           order by pl.team_id, pl.player_id""").fetchall()
-    next_xi = {}
-    for team, fid, player, name, pos, rank in lineups:
-        entry = next_xi.setdefault(str(team), {"fixture": fid, "players": []})
-        entry["players"].append([player, name, pos, float(rank) if rank is not None else None])
-    # (each match's own line-ups aren't exported: the site asks the database for the match it
-    # opens, site_lineups in db/migrations/20261005_site_lineups.sql, which uses this order too)
-    # team-sheet order: keeper, defence right to left, midfield, attack
-    order = {r: i for i, r in enumerate(["GK", "RB", "RWB", "CB", "LB", "LWB", "DM", "CM", "RM", "LM",
-                                          "AM", "RW", "LW", "ST"])}
-    for entry in next_xi.values():
-        entry["players"].sort(key=lambda x: (order.get(x[2], 99), -(x[3] or 0)))
+    # (line-ups aren't exported: the site asks the database for a match's, site_lineups, and for
+    # a club's next predicted XI, site_next_xi)
     # this season so far, all his clubs (PLAYER_SEASON_FIELDS): the per-match leagues first, else
     # the season totals where his league has them (player_seasons). No match rating: API-Football's
     # rating isn't published anywhere on the site
@@ -1401,24 +1354,15 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
     # names of players' clubs outside the club rankings (a move out of our leagues)
     teams = {t: n for t, n in conn.execute(
         "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])}
-    (out_dir / "players.json").write_text(json.dumps({
-        "fields": PLAYER_FIELDS,
-        "seasons": PLAYER_SEASONS,
-        "season_fields": PLAYER_SEASON_FIELDS,
-        "future_seasons": future_seasons,    # oldest first
-        "players": rows,
-        "next_xi": next_xi,
-        "teams": {str(t): n for t, n in teams.items()},
-    }, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
-    log.info("Exported %d player ranks and %d predicted XIs", len(players), len(next_xi))
+    log.info("Exported %d player ranks", len(players))
     stored = store_players(conn, site_player_rows(rows, rankings))
     # {player: his club}, for the club files' positions
     return {r[0]: r[5] for r in players}, {"stored": stored, "future_seasons": future_seasons, "teams": teams}
 
 
-# A player as the site draws him: the order of each row of players.json (PLAYER_FIELDS), and of
-# site.players.data (SITE_PLAYER_FIELDS), which adds what the site used to work out from the
-# whole list: his place by Ability among every listed player (world) and in his league (lg of
+# A player as the site draws him: the order of his row in site.players.data (SITE_PLAYER_FIELDS):
+# the fields the export builds for each player (PLAYER_FIELDS), then what is counted across all
+# of them: his place by Ability among every listed player (world) and in his league (lg of
 # lg_of), his place by current rank among his league's players with a club (lg_rank of lg_n, on
 # his page), and his place in the export's order (ord).
 PLAYER_FIELDS = ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
@@ -1495,14 +1439,22 @@ def site_player_rows(rows, rankings=()):
     return out
 
 
+def _check_table_collapse(cur, table, rows):
+    """Stop an export that would leave a site table with under half the rows it has (the files'
+    _check_row_collapse, for the data that is stored as rows). Nothing has been deleted yet."""
+    (was,) = cur.execute(f"select count(*) from {table}").fetchone()
+    if was >= 10 and rows < was * COLLAPSE_RATIO:
+        raise ExportValidationError(f"{table} would collapse from {was} to {rows} rows")
+
+
 def store_players(conn, players):
     """site.players: every listed player as a row (site_player_rows), for the database functions
     the site asks (db/migrations/20261005_site_players.sql: site_players, site_player_facets).
-    The table is rewritten whole, in one transaction.
+    The table is rewritten whole, in one transaction, unless there are too few players or it
+    would lose most of its rows (_check_table_collapse).
 
     True once stored. False, with nothing written, on a read-only run or a database from before
-    the migration (logged): the site then goes on reading players.json. Any other failure stops
-    the run."""
+    the migration (logged). Any other failure stops the run."""
     try:
         config.require_db_write("store the players")
     except config.SafetyError as exc:
@@ -1515,7 +1467,10 @@ def store_players(conn, players):
     text = lambda value: json.dumps(value, separators=(",", ":"), ensure_ascii=False)
     columns = ["player_id", "ord", "name_lc", "name_fold", "team_id", "league_id", "age", "nationality", "plays",
                "ability", "club_world", "minutes", "seasons", "future", "pos_ranks", "ga", "data"]
+    if len(players) < MIN_PLAYERS:
+        raise ExportValidationError(f"only {len(players)} players to store; expected at least {MIN_PLAYERS}")
     with conn.cursor() as cur:
+        _check_table_collapse(cur, "site.players", len(players))
         cur.execute("delete from site.players")
         with cur.copy(f"copy site.players ({', '.join(columns)}) from stdin") as copy:
             for p in players:
@@ -1543,8 +1498,8 @@ SPELL_FIELDS = ["team", "minutes", "club_rank", "goals", "assists"]
 
 
 def export_player_seasons(conn, out_dir=OUT_DIR):
-    """Hover detail for the Players table (player_seasons.json, loaded on the first hover there).
-    Returns what it wrote: each player's own rows also go in his page file and his club's file.
+    """Each player's season detail, returned for the files that carry it: his own rows go in his
+    page file (the hover on his season cells and his page read it) and his club's file.
 
     For each exported player and each season in PLAYER_SEASONS, and for "now" (his last 20
     appearances, the ones the current rank is built from): the clubs he played for, his minutes
@@ -1615,9 +1570,7 @@ def export_player_seasons(conn, out_dir=OUT_DIR):
         "players": {str(p): {str(k): v for k, v in d.items()} for p, d in spells.items()},
         "positions": {str(p): d for p, d in positions.items()},   # {player: {season: [[role, minutes], ...]}}
     }
-    (out_dir / "player_seasons.json").write_text(
-        json.dumps(detail, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
-    log.info("Exported season detail for %d players", len(spells))
+    log.info("Season detail for %d players", len(spells))
     return detail
 
 

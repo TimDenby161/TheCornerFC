@@ -140,22 +140,20 @@ const loadError = (what) => `<div class="empty-state" role="alert">Couldn't load
 document.addEventListener("click", (e) => { if (e.target.closest("[data-reload]")) location.reload(); });
 
 // ------------------------------------------------------------------ players: the ones a view shows
-// With the players in the database (site.json has player_fields), state.players.list holds the
-// players fetched so far, in the export's order, not every player. A view asks for the ones it
-// shows: the Players table for the 100 rows on screen, filtered, sorted and searched there
-// (askPlayerRows); a club's page for that club's (needClubPlayers), a nation's for that
-// nationality (needNation), anything that names players for those by id (needPlayers). The code
-// that draws them filters the list as it always did. What the filters need without any player
-// (ranges, clubs, nationalities) is site_player_facets, a club's next predicted XI site_next_xi,
-// and the numbers in the competition menu a count by league and club (playerCounts).
-// If the database can't answer, or its data is from before the players were in it, the whole of
-// data/players.json is read once, as it used to be, and everything is worked out from it here.
+// state.players.list holds the players fetched so far, in the export's order, not every player.
+// A view asks the database for the ones it shows: the Players table for the 100 rows on screen,
+// filtered, sorted and searched there (askPlayerRows); a club's page for that club's
+// (needClubPlayers), a nation's for that nationality (needNation), anything that names players
+// for those by id (needPlayers). The code that draws them filters the list as it always did.
+// What the filters need without any player (ranges, clubs, nationalities) is
+// site_player_facets, a club's next predicted XI site_next_xi, and the numbers in the
+// competition menu a count by league and club (playerCounts). If the database can't answer, a
+// view draws without its players and the Players table and a player's page say they couldn't load.
 const playerStore = { byId: new Map(), missing: new Set(), got: new Set(), asking: new Map(), xi: new Map(), xiIn: new Set(),
-  facets: null, results: new Map(), counts: null, whole: false };
-const playersInDb = () => !!state.data?.player_fields && !playerStore.whole;
-// the filters can be drawn / nothing has been asked for yet
-const playersReady = () => playersInDb() ? !!playerStore.facets : !!state.players;
-const playersPending = () => playersInDb() ? !playerStore.facets : state.players === undefined;
+  facets: null, failed: false, unanswered: false, results: new Map(), counts: null };
+// the filters can be drawn / what they need is still on its way
+const playersReady = () => !!playerStore.facets;
+const playersPending = () => !playerStore.facets && !playerStore.failed;
 const intArr = (ids) => `{${ids.join(",")}}`;
 const textArr = (items) => `{${items.map((x) => `"${String(x).replace(/[\\"]/g, "\\$&")}"`).join(",")}}`;
 function addPlayers(rows) {
@@ -171,14 +169,9 @@ function addPlayers(rows) {
   state.playersById = null;
   return rows.map((r) => playerStore.byId.get(r[0]));
 }
-function playersFromFile(err) {
-  console.warn(`players: the whole list is read (${err.message})`);
-  if (!playerStore.whole) {         // nothing is ready until the file is in, and nothing worked out so far stands
-    playerStore.whole = true;
-    state.players = undefined;
-    state.playersById = state.rangeStopsCache = state.ageBoundsCache = state.whoCache = null;
-  }
-  return loadPlayers();
+function playersFailed(err) {
+  console.error(err);
+  playerStore.unanswered = true;          // a player's page and the table say so
 }
 // every player that fits, 2,000 a request (the most site_players sends)
 async function fetchPlayers(params) {
@@ -190,10 +183,9 @@ async function fetchPlayers(params) {
   }
 }
 function askPlayers(key, params) {
-  if (!playersInDb()) return loadPlayers();
   if (playerStore.got.has(key)) return Promise.resolve();
   if (!playerStore.asking.has(key)) playerStore.asking.set(key, fetchPlayers(params)
-    .then(() => { playerStore.got.add(key); }, playersFromFile)
+    .then(() => { playerStore.got.add(key); playerStore.unanswered = false; }, playersFailed)
     .finally(() => playerStore.asking.delete(key)));
   return playerStore.asking.get(key);
 }
@@ -201,7 +193,6 @@ const needClubPlayers = (...teams) => Promise.all(teams.map((t) => askPlayers(`t
 const needNation = (nat) => askPlayers(`n:${nat}`, { p_nats: textArr([nat]) });
 // players by id, 1,000 a request; one who isn't listed simply doesn't come back
 function needPlayers(ids) {
-  if (!playersInDb()) return loadPlayers();
   const need = [...new Set(ids.map(Number))].filter((id) => id && !playerStore.byId.has(id) && !playerStore.missing.has(id)).sort((a, b) => a - b);
   const asked = [];
   for (let i = 0; i < need.length; i += 1000) {
@@ -212,38 +203,19 @@ function needPlayers(ids) {
   return Promise.all(asked);
 }
 function needNextXi(team) {
-  if (!playersInDb()) return loadPlayers();
   if (team == null) return Promise.resolve();
   if (!playerStore.xi.has(team)) playerStore.xi.set(team, siteAsk("site_next_xi", { p_team: team }).then((xi) => {
     if (xi) {
       for (const r of xi.players) r[1] = decodeEntities(r[1]);
       state.players.nextXi[String(team)] = xi;
     }
-    playerStore.xiIn.add(team);
-  }, (err) => { playerStore.xi.delete(team); return playersFromFile(err); }));
+  }, (err) => { console.error(err); }).then(() => { playerStore.xiIn.add(team); }));       // asked, with or without an answer
   return playerStore.xi.get(team);
 }
-const haveNextXi = (team) => playersInDb() ? playerStore.xiIn.has(team) : state.players !== undefined;
+const haveNextXi = (team) => playerStore.xiIn.has(team);
 function needFacets() {
-  if (!playersInDb()) return loadPlayers();
-  return playerStore.facetsAsked ||= siteAsk("site_player_facets", {}).then((f) => { playerStore.facets = f; }, playersFromFile);
-}
-// The whole of players.json (the largest file by far), for a site whose players aren't in the
-// database: fetched the first time a view needs it. state.players: undefined until then, null if
-// the file couldn't be loaded
-function loadPlayers() {
-  return state.playersLoading ||= getJsonOrNull("data/players.json").then((pj) => {
-    if (pj) {        // API-Football sends some names HTML-encoded ("O&apos;Reilly")
-      for (const r of pj.players) r[1] = decodeEntities(r[1]);
-      for (const xi of Object.values(pj.next_xi || {})) for (const r of xi.players) r[1] = decodeEntities(r[1]);
-    }
-    // his season so far by name (minutes, goals, assists); a file from before the fields were named
-    // has the older, longer layout
-    const seasonFields = pj?.season_fields || ["minutes", "rating", "goals", "assists", "club_minutes"];
-    state.players = pj ? { list: rowsToObjects(pj.fields, pj.players).map((p) => ({ ...p, season: p.season && Object.fromEntries(seasonFields.map((f, i) => [f, p.season[i]])) })), nextXi: pj.next_xi,
-      seasons: pj.seasons || [], futureSeasons: pj.future_seasons || [], teams: pj.teams || {} } : null;
-    state.playersById = null;
-  });
+  return playerStore.facetsAsked ||= siteAsk("site_player_facets", {})
+    .then((f) => { playerStore.facets = f; }, (err) => { playerStore.failed = true; playersFailed(err); });
 }
 
 // Every visit loads two files, whatever it opens on: the names every page uses (data/site.json:
@@ -279,19 +251,10 @@ const quiet = (asked) => asked.catch((err) => { console.error(err); });
 
 async function loadData() {
   try {
-    const hash = location.hash;
-    const [site, r] = await Promise.all([getJsonOrNull("data/site.json"), getJson("data/rankings.json")]);
-    // (an export from before site.json existed has the names in matches.json)
-    state.data = { ...(site || await getJson("data/matches.json")), matches: [] };
-    // The players are in the database: each view asks for the ones it shows. A site from before
-    // they were reads the whole of players.json for a view that needs it; the Players table
-    // waits for it, to be drawn once
-    if (state.data.player_fields) state.players = { list: [], nextXi: {}, seasons: state.data.player_seasons || [],
-      futureSeasons: state.data.player_future_seasons || [], teams: {} };
-    else if (/^#\/(players|club\/|player\/|nation|fpl$|efl-fantasy$)/.test(hash)) {
-      const players = loadPlayers();
-      if (hash.startsWith("#/players")) await players;
-    }
+    const [site, r] = await Promise.all([getJson("data/site.json"), getJson("data/rankings.json")]);
+    // the matches and the players are asked for as views show them (matchStore, playerStore)
+    state.data = { ...site, matches: [] };
+    state.players = { list: [], nextXi: {}, seasons: site.player_seasons || [], futureSeasons: site.player_future_seasons || [] };
     state.rankings = rowsToObjects(r.fields, r.rankings);
     // Gap: Current Strength less Baseline Strength (as shown, so the sum adds up), how far a club's
     // rating now sits from its long-term level. Not recent movement: that is x.form, the export's
@@ -398,7 +361,7 @@ const clubTableObserver = new ResizeObserver((entries) => {
     fitClubMeta(e.target);
   }
 });
-const teamName = (id) => state.data.teams[id] || state.players?.teams?.[id] || `Team ${id}`;
+const teamName = (id) => state.data.teams[id] || `Team ${id}`;
 // No club badges, competition logos or player and coach photos: badges and logos are the clubs' and
 // competitions' trade marks and the photos belong to photographers. Each is a chip instead, the
 // initials on a colour of the club's or competition's own (worked out from its id, so the same
@@ -493,10 +456,8 @@ const natLink = (nat) => nat ? `<a class="nat-link" href="#/nation/${encodeURICo
 // list of ids); they are added to the list, and the code that draws matches filters it as it
 // always did. A match comes with the key reasons its card shows. What the date controls and the
 // competition menu need without any match (which days and competitions have matches) comes from
-// site_match_days. If the database can't answer, or its files are from before it could, the
-// whole of data/matches.json is read once, as it used to be, and everything is answered from it
-// (matchStore.all).
-const matchStore = { byId: new Map(), got: new Set(), asking: new Map(), all: false, days: null };
+// site_match_days. If the database can't answer, the view says it couldn't load.
+const matchStore = { byId: new Map(), got: new Set(), asking: new Map(), days: null };
 function addMatches(fields, rows, reasons = {}) {
   for (const r of rows) {
     const m = Object.fromEntries(fields.map((f, i) => [f, r[i]]));
@@ -508,38 +469,16 @@ function addMatches(fields, rows, reasons = {}) {
 }
 // days: [day on this visitor's calendar, competition, matches] (postponed ones left out);
 // leagues: the competitions with matches; intl: [competition, matches] for the international
-// ones, most matches first. As site_match_days answers, worked out here from the whole file
-function matchDaysFrom(list) {
-  const days = new Map(), intl = new Map();
-  for (const m of list) {
-    if (m.intl) intl.set(m.league, (intl.get(m.league) || 0) + 1);
-    if (m.status === "PST") continue;
-    const k = `${localDateStr(new Date(m.kickoff))}|${m.league}`;
-    days.set(k, (days.get(k) || 0) + 1);
-  }
-  return { days: [...days].map(([k, n]) => [k.split("|")[0], Number(k.split("|")[1]), n]),
-    leagues: [...new Set(list.map((m) => m.league))], intl: [...intl].sort((a, b) => b[1] - a[1] || a[0] - b[0]) };
-}
-function loadAllMatches() {
-  return matchStore.whole ||= getJson("data/matches.json").then((m) => {
-    addMatches(m.fields, m.matches);
-    matchStore.all = true;
-    matchStore.days = matchDaysFrom(state.data.matches);
-  }, (err) => { matchStore.whole = null; throw err; });
-}
-const loadMatchDays = () => matchStore.daysAsked ||= (state.data.match_fields
-  ? siteAsk("site_match_days", { p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" })
-    .then((d) => { matchStore.days = d; }, (err) => { console.warn(`matches: the whole list is read (${err.message})`); return loadAllMatches(); })
-  : loadAllMatches()).catch((err) => { matchStore.daysAsked = null; throw err; });
-const haveMatches = (key) => matchStore.all || matchStore.got.has(key);
+// ones, most matches first
+const loadMatchDays = () => matchStore.daysAsked ||= siteAsk("site_match_days", { p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" })
+  .then((d) => { matchStore.days = d; }, (err) => { matchStore.daysAsked = null; throw err; });
+const haveMatches = (key) => matchStore.got.has(key);
 function askMatches(key, params) {
   if (haveMatches(key)) return Promise.resolve();
-  if (!state.data.match_fields) return loadAllMatches();
   if (!matchStore.asking.has(key)) matchStore.asking.set(key, siteAsk("site_matches", params).then((d) => {
     addMatches(state.data.match_fields, d.matches, d.reasons);
     matchStore.got.add(key);
-  }, (err) => { console.warn(`matches: the whole list is read (${err.message})`); return loadAllMatches(); })
-    .finally(() => matchStore.asking.delete(key)));
+  }).finally(() => matchStore.asking.delete(key)));
   return matchStore.asking.get(key);
 }
 // a day on this visitor's calendar, a competition's matches, a club's, and matches by id
@@ -741,19 +680,18 @@ function renderTableFilters() {
   const counts = new Map();
   let total = 0;
   const players = state.tableView === "players" && playersReady();
-  // with the players in the database: how many fit the filters per league and club, asked for
-  // there (null while the first answer is on its way: the menu is drawn without numbers)
-  const asked = players && playersInDb() ? playerCounts() : undefined;
-  if (asked !== undefined) for (const [lg, , n] of asked || []) { counts.set(lg, (counts.get(lg) || 0) + n); total += n; }
-  else for (const r of players ? state.players.list : state.rankings)
-    if ((players ? playerVisible(r) : r.in_league) && !isExcluded(r.league)) { counts.set(r.league, (counts.get(r.league) || 0) + 1); total++; }
+  // Players: how many fit the filters per league and club, asked of the database (null while
+  // the first answer is on its way: the menu is drawn without numbers)
+  const asked = players ? playerCounts() : undefined;
+  if (players) for (const [lg, , n] of asked || []) { counts.set(lg, (counts.get(lg) || 0) + n); total += n; }
+  else for (const r of state.rankings)
+    if (r.in_league && !isExcluded(r.league)) { counts.set(r.league, (counts.get(r.league) || 0) + 1); total++; }
   const sum = (ids) => ids.reduce((n, id) => n + (counts.get(id) || 0), 0);
   const euroCount = (value) => {
     const teams = euroTeams(value);
     if (!teams) return 0;
-    if (asked !== undefined) return (asked || []).reduce((n, [, team, k]) => n + (teams.has(team) ? k : 0), 0);
-    return players ? state.players.list.filter((p) => teams.has(p.team) && playerVisible(p) && !isExcluded(p.league)).length
-      : state.rankings.filter((r) => teams.has(r.team) && !isExcluded(r.league)).length;
+    if (players) return (asked || []).reduce((n, [, team, k]) => n + (teams.has(team) ? k : 0), 0);
+    return state.rankings.filter((r) => teams.has(r.team) && !isExcluded(r.league)).length;
   };
   const countOf = (value) => value === "all" ? total
     : isCupFilter(value) ? euroCount(value)
@@ -1059,25 +997,18 @@ function probBars(m, diff = true) {
 }
 
 // ---- Why the model says what it says. Everything below formats predictions.explain() output;
-// none of it is worked out here. data/explanations.json has each match's key reasons, for its
-// card (loaded when the first card with reasons is drawn); the full detail is in the match's own
-// row (loadWhy), fetched when that card's model detail is opened.
-function loadExplanations() {
-  state.explainLoading ||= getJsonOrNull("data/explanations.json")
-    .then((j) => { state.explain = j?.matches || {}; state.explainModels = j?.models || {}; fillReasons(); });
-  return state.explainLoading;
-}
-// (a match from the database carries its reasons; one from the whole file has them in explanations.json)
-const explainOf = (m) => m.reasons ? { reasons: m.reasons } : state.explain?.[String(m.id)] || null;
+// none of it is worked out here. A match comes from the database with the key reasons its card
+// shows; the full detail is in the match's own row (loadWhy), fetched when that card's model
+// detail is opened.
+const explainOf = (m) => m.reasons ? { reasons: m.reasons } : null;
 // One match's full explanation, asked of the database when its card's model detail is opened
-// (site_match_detail, once per match); null if the match has none. Until the database has the
-// matches table, or if it doesn't answer, it comes from the match's own file as before
-// (data/fixtures/<id>.json).
+// (site_match_detail, once per match); null if the match has none, or if it couldn't be fetched
+// (asked again the next time the detail is opened)
 const whyPages = new Map();
 function loadWhy(id) {
-  if (!whyPages.has(id)) whyPages.set(id, siteAsk("site_match_detail", { p_fixture: id }).catch(() => null)
-    .then((row) => row ? row.why && Object.assign(row.why, { model_info: row.model })      // the version that made it, by name
-      : getJsonOrNull(`data/fixtures/${id}.json`).then((fx) => fx?.why || null)));
+  if (!whyPages.has(id)) whyPages.set(id, siteAsk("site_match_detail", { p_fixture: id })
+    .then((row) => row ? row.why && Object.assign(row.why, { model_info: row.model }) : null,       // the version that made it, by name
+      (err) => { console.error(err); whyPages.delete(id); return null; }));
   return whyPages.get(id);
 }
 // One match's line-ups by team, asked of the database when its line-ups are opened (site_lineups):
@@ -1121,13 +1052,6 @@ function reasonsHtml(m) {
   const x = explainOf(m);
   if (!x?.reasons?.length) return "";
   return `<div class="why-hd" title="${REASONS_TIP}">Key reasons</div><ul class="why-list">${x.reasons.map((r) => reasonHtml(m, r)).join("")}</ul>`;
-}
-// Fill the key-reason slots of cards drawn before the file arrived
-function fillReasons() {
-  document.querySelectorAll(".why[data-why]:empty").forEach((el) => {
-    const m = state.data.matches.find((x) => x.id === Number(el.dataset.why));
-    if (m) el.innerHTML = reasonsHtml(m);
-  });
 }
 const whenText = (iso) => `${fmtShortDate(iso)} ${fmtTime(iso)}`;
 const SOURCE_TEXT = {
@@ -1192,7 +1116,7 @@ function whyDetailHtml(m, x) {
   }
 
   if (x) {
-    const v = x.model_info || state.explainModels?.[x.model];
+    const v = x.model_info;
     const model = v?.name ? `${escapeHtml(v.name)}${v.code ? ` · ${escapeHtml(v.code)}` : ""}` : null;
     section("Data", detailRow("Model inputs", `${escapeHtml(whenText(x.captured_at))}`, `Inputs ${SOURCE_TEXT[x.source] || x.source}`)
       + (x.source !== "prospective" ? detailRow("Captured", escapeHtml(SOURCE_TEXT[x.source] || x.source)) : "")
@@ -1283,7 +1207,7 @@ function matchCard(m, { lineups = true } = {}) {
     <div class="match-card${cls}" data-fixture="${m.id}">
       ${matchHead(m, `${badge}${statusTag(m)}`)}
       ${probBars(m, false)}
-      ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${(matchStore.all && loadExplanations(), reasonsHtml(m))}</div>` : ""}
+      ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${reasonsHtml(m)}</div>` : ""}
       ${upcoming && !m.intl ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
       ${toggles ? `<div class="card-toggles">${toggles}</div>` : ""}
       ${m.p_home != null ? `<div class="why-detail" hidden></div>` : ""}
@@ -1568,17 +1492,6 @@ function fitYearsBox(wrap) {
   });
 }
 
-function loadPlayerSeasons() {
-  if (state.playerSeasons || state.playerSeasonsLoading) return;
-  state.playerSeasonsLoading = getJson("data/player_seasons.json").then((d) => { state.playerSeasons = d; }).catch(() => {});
-}
-// Club and player files carry their own rows of the season detail (positions). One exported
-// before they did has none, so the whole file is loaded for it as before
-function seasonsFor(...files) {
-  if (!files.some((f) => f && !f.positions)) return null;
-  loadPlayerSeasons();
-  return state.playerSeasonsLoading;
-}
 // One player's file (data/players/<id>.json), as his page and the hover on his season cells use
 // it: asked for once, null if he has none
 const playerFiles = new Map(), playerFileData = new Map();     // on its way, and once it's in
@@ -1614,7 +1527,7 @@ function playerCellTip(pid, key) {
 }
 
 // The filters every Players query carries, as site_players' arguments: age, positions, clubs,
-// nationalities and the ranges (playerVisible, asked of the database)
+// nationalities and the ranges
 function playerVisibleParams() {
   const [lo, hi] = ageBounds();
   const min = state.ageMin ?? lo, max = state.ageMax ?? hi;
@@ -1644,7 +1557,7 @@ function playerCounts() {
       if (playerStore.countsAsked !== key) return;
       playerStore.counts = { key, rows: d.counts };
       if (state.tableView === "players") renderTableFilters();
-    }, (err) => playersFromFile(err).then(() => { if (state.tableView === "players") setTableView("players"); }));
+    }, (err) => { console.error(err); });          // the menu stays as it is, without new numbers
   }
   return playerStore.counts?.rows ?? null;
 }
@@ -1659,7 +1572,8 @@ function playerSearchParams(q) {
   return { p_q: q, p_words: textArr(words) };
 }
 // The rows the Players table shows, asked of the database: { total, rows (the first 100, then as
-// many as have been scrolled to) }, or null while they are on their way (drawn when they are in).
+// many as have been scrolled to) }, null while they are on their way (drawn when they are in), or
+// { failed } if they couldn't be fetched.
 // A change made while typing or dragging a slider is asked for once it has settled
 function askPlayerRows(q, key, groups, seasons, future) {
   const f = state.tableFilter;
@@ -1681,6 +1595,8 @@ function askPlayerRows(q, key, groups, seasons, future) {
   playerStore.want = id;
   const got = playerStore.results.get(id);
   if (got) return got;
+  if (playerStore.rowsFailed === id) return { failed: true };
+  playerStore.rowsFailed = null;
   clearTimeout(playerStore.timer);
   const ask = () => {
     if (playerStore.want !== id || playerStore.rowsAsked === id) return;
@@ -1690,7 +1606,13 @@ function askPlayerRows(q, key, groups, seasons, future) {
       playerStore.results.set(id, { total: d.total, rows: addPlayers(d.rows), params });
       if (playerStore.rowsAsked === id) playerStore.rowsAsked = null;
       if (playerStore.want === id && state.tableView === "players") renderPlayers();
-    }, (err) => playersFromFile(err).then(() => { if (state.tableView === "players") setTableView("players"); }));
+    }, (err) => {
+      console.error(err);
+      playerStore.rowsAsked = null;
+      if (playerStore.want !== id) return;
+      playerStore.rowsFailed = id;
+      if (state.tableView === "players") renderPlayers();
+    });
   };
   if ($("#table-wrap table.players")) playerStore.timer = setTimeout(ask, 150); else ask();
   return null;
@@ -1704,17 +1626,9 @@ function morePlayerRows(got, at) {
 
 function renderPlayers() {
   const wrap = $("#table-wrap");
-  if (!playersReady()) { wrap.innerHTML = `<div class="empty-state">${playersPending() ? "Loading players…" : "No player ranks yet."}</div>`; if (loadFailed("players")) wrap.innerHTML = loadError("the players"); return; }
-  const inDb = playersInDb();
-  const ids = tableLeagueIds();
+  if (!playersReady()) { wrap.innerHTML = `<div class="empty-state">${playersPending() ? "Loading players…" : "No player ranks yet."}</div>`; if (playerStore.unanswered) wrap.innerHTML = loadError("the players"); return; }
   const q = state.tableSearch.trim().toLowerCase();
   const all = tableFilterIsWide();
-  let rows = inDb ? [] : q ? state.players.list.filter((p) => playerSearchMatch(p, q))
-               : state.clubs?.size ? state.players.list
-               : isCupFilter(state.tableFilter) ? state.players.list.filter((p) => euroTeams(state.tableFilter)?.has(p.team))
-               : ids === null ? state.players.list : state.players.list.filter((p) => ids.includes(p.league));
-  if (!q && !state.clubs?.size) rows = rows.filter((p) => !isExcluded(p.league));
-  rows = rows.filter(playerVisible);
   // Sort: a season rank ("s2026", the current season by default; highest first) or age
   // (youngest first); blanks last
   // Collapsed: Age and Ability only. Expanded (the Years button): past seasons before Ability and
@@ -1727,17 +1641,11 @@ function renderPlayers() {
   let key = state.playerSort === "pos" && !groups.length ? `s${seasons[0]}` : state.playerSort || (groups.length ? "pos" : `s${seasons[0]}`);
   if (!open && /^[sf]\d/.test(key) && key !== `s${seasons[0]}`) key = `s${seasons[0]}`;   // a hidden column
   if (groups.length && key === `s${seasons[0]}`) key = "pos";                                  // Ability is shown as "As ST"
-  const val = (p) => key === "pos" ? posRank(p, groups) : key.startsWith("s") ? p.seasons?.[seasons.indexOf(Number(key.slice(1)))]
-    : key.startsWith("f") ? p.future?.[future.indexOf(Number(key.slice(1)))]
-    : key === "ga" ? (p.season ? p.season.goals + p.season.assists + p.season.goals / 1000 : null)   // goals break ties
-    : p[key];
-  // the database filters and sorts them the same way and sends the rows on screen
-  const got = inDb ? askPlayerRows(q, key, groups, seasons, future) : null;
-  if (inDb && !got) { if (!wrap.querySelector("table.players")) wrap.innerHTML = `<div class="empty-state">Loading players…</div>`; return; }
-  rows = got ? got.rows : key === "age"
-    ? rows.slice().sort((a, b) => (a.age ?? 999) - (b.age ?? 999))
-    : rows.slice().sort((a, b) => (val(b) ?? -1) - (val(a) ?? -1));
-  const total = got ? got.total : rows.length;
+  // the database filters and sorts them and sends the rows on screen
+  const got = askPlayerRows(q, key, groups, seasons, future);
+  if (!got) { if (!wrap.querySelector("table.players")) wrap.innerHTML = `<div class="empty-state">Loading players…</div>`; return; }
+  if (got.failed) { wrap.innerHTML = loadError("the players"); return; }
+  const { rows, total } = got;
   const th = (k, label, tip, cls = "") =>
     `<th class="num sortable${key === k ? " active" : ""}${cls}" tabindex="0"${key === k ? ` aria-sort="${k === "age" ? "ascending" : "descending"}"` : ""} data-sort="${k}" data-tip="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
   const seasonName = (y) => `${y}/${String(y + 1).slice(2)}`;
@@ -1747,7 +1655,6 @@ function renderPlayers() {
   const nowHead = (text) => `<span class="now-head">${text}${yearsBtn}</span>`;
   const posTh = groups.length ? th("pos", nowHead(groups.length === 1 ? `As ${groups[0]}` : "In pos"), `How good he is now as ${groups.map((g) => GROUP_SINGLE[g]).join(" / ")}: his recent stats scored as that position against its players, with up to 6 points off for a position he hasn't played much (none once it's 40% of his starts). Only positions he has started in get a number. With several positions picked, his best of them.`, " col-posrank") : "";
   if (!rows.length) { wrap.innerHTML = `<div class="empty-state">No players match these filters.</div>`; return; }
-  playerPlaces();
   wrap.innerHTML = `
     <div class="table-scroll"><table class="leaderboard players${open ? " years" : ""}">
       <thead><tr>
@@ -1778,11 +1685,9 @@ function renderPlayers() {
   let busy = false;
   const observer = state.playerObserver = new IntersectionObserver(async (entries) => {
     if (busy || !entries.some((e) => e.isIntersecting)) return;
-    if (got) {           // the next rows, from the database
-      busy = true;
-      try { await morePlayerRows(got, at); } catch (err) { console.error(err); return; } finally { busy = false; }
-      if (state.playerObserver !== observer) return;         // drawn again while they were fetched
-    }
+    busy = true;           // the next rows, from the database
+    try { await morePlayerRows(got, at); } catch (err) { console.error(err); return; } finally { busy = false; }
+    if (state.playerObserver !== observer) return;         // drawn again while they were fetched
     tbody.insertAdjacentHTML("beforeend", rows.slice(at, at + BATCH_ROWS).map((p, j) => playerRow(p, at + j, shown, groups, open ? future : [])).join(""));
     at += BATCH_ROWS;
     if (at >= total) { observer.disconnect(); sentinel.remove(); }
@@ -1793,7 +1698,7 @@ function renderPlayers() {
 
 const FIRST_ROWS = 100, BATCH_ROWS = 100;
 function playerRow(p, i, seasons, groups = selectedGroups(), future = []) {
-  const place = playersInDb() ? (p.world == null ? undefined : { world: p.world, lg: p.lg, lgOf: p.lg_of }) : state.playerPlaces?.get(p.id);
+  const place = p.world == null ? undefined : { world: p.world, lg: p.lg, lgOf: p.lg_of };      // counted by the export
   return `
         <tr${p.team ? ` data-team="${p.team}"` : ""} data-player="${p.id}">
           <td>${i + 1}</td>
@@ -1872,18 +1777,10 @@ function clubSearchText(r) {
   searchIndex.set(r.team, text);
   return text;
 }
-// Players search: his name as typed ("yamal"), or every word starting a word of his name or of
-// his club's search text, so club short forms work too ("man city", "haaland city", "spurs")
+// Players search (playerSearchParams): his name as typed ("yamal"), or every word starting a word
+// of his name or of his club's search text, so club short forms work too ("man city", "haaland
+// city", "spurs")
 let rankingByTeam = null;
-function playerSearchMatch(p, q) {
-  if (p.name.toLowerCase().includes(q)) return true;
-  const words = foldText(q).split(" ").filter(Boolean);
-  if (!words.length) return false;
-  rankingByTeam ??= new Map(state.rankings.map((r) => [r.team, r]));
-  const r = p.team ? rankingByTeam.get(p.team) : null;
-  const text = ` ${foldText(p.name)} ${r ? clubSearchText(r) : ` ${foldText(teamName(p.team))} `}`;
-  return words.every((w) => text.includes(" " + w));
-}
 function clubSearchRows(q) {
   const words = foldText(q).split(" ").filter(Boolean);
   return state.rankings.filter((r) => {
@@ -1925,19 +1822,6 @@ function clubPlaces() {
   }
   return state.clubPlaces;
 }
-const clubWorld = (team) => team == null ? null : clubPlaces().get(team)?.world ?? null;
-const abilityOf = (p) => p.seasons?.[0] ?? null;
-function playerPlaces() {        // (from the database each player's row carries his own)
-  if (playersInDb()) return null;
-  if (!state.playerPlaces) {
-    const list = state.players.list;
-    const { all, by } = sortedGroups(list, abilityOf, (p) => p.league);
-    state.playerPlaces = new Map(list.filter((p) => abilityOf(p) != null).map((p) => [p.id, {
-      world: placeIn(all, abilityOf(p)), lg: p.league != null ? placeIn(by.get(p.league), abilityOf(p)) : null,
-      lgOf: p.league != null ? by.get(p.league).length : null }]));
-  }
-  return state.playerPlaces;
-}
 const leagueShort = (lid) => SHORT_NAMES[lid] || state.data.competitions[lid]?.name || "";
 
 // ---- Range filters on Players: each [min, max], null = open. They combine with the competition
@@ -1954,13 +1838,12 @@ function rangeStops(k) {
   const cache = state.rangeStopsCache ||= {};
   if (cache[k]) return cache[k];
   let stops;
-  const facets = playersInDb() ? playerStore.facets : null;
+  const facets = playerStore.facets;
   if (k === "ab") {
-    const v = facets ? facets.ability || [0, 0] : state.players.list.map(abilityOf).filter((x) => x != null).map(Math.round);
-    const lo = Math.min(...v), hi = Math.max(...v);
+    const [lo, hi] = facets.ability || [0, 0];
     stops = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
   } else if (k === "mins") {
-    const hi = Math.ceil((facets ? facets.minutes : Math.max(...state.players.list.map((p) => p.minutes || 0))) / 90) * 90;
+    const hi = Math.ceil(facets.minutes / 90) * 90;
     stops = Array.from({ length: hi / 90 + 1 }, (_, i) => i * 90);
   } else {
     const n = clubPlaces().size;
@@ -1977,15 +1860,8 @@ function stopIndex(stops, v, end) {
   return i < 0 ? (end ? 0 : n) : i;
 }
 const rangeOf = (k) => state.ranges[k] || [null, null];
-function inRange(k, v) {
-  const [lo, hi] = rangeOf(k);
-  if (lo == null && hi == null) return true;
-  return v != null && (lo == null || v >= lo) && (hi == null || v <= hi);
-}
 const rangeKeys = (view = state.tableView) => Object.keys(RANGES).filter((k) => RANGES[k].view === view);
 const rangesOn = (view = state.tableView) => rangeKeys(view).filter((k) => rangeOf(k).some((v) => v != null)).length;
-const playerInRanges = (p) => inRange("ab", abilityOf(p) == null ? null : Math.round(abilityOf(p)))   // as shown
-  && inRange("crank", clubWorld(p.team)) && inRange("mins", p.minutes);
 function renderRangeFilter() {
   const box = $("#range-filter");
   box.hidden = !state.rankings || (state.tableView === "players" && !playersReady()) || !rangeKeys().length;
@@ -2182,11 +2058,6 @@ function posRank(p, groups) {     // null if he has never played any of them
   const v = groups.map((g) => p.position_ranks?.[g]).filter((x) => x != null);
   return v.length ? Math.max(...v) : null;
 }
-function playerVisible(p) {
-  return inAgeRange(p) && (!state.positions?.size || [...playsAt(p)].some((r) => state.positions.has(r)))
-    && (!state.clubs?.size || state.clubs.has(p.team))
-    && (!state.nats?.size || state.nats.has(p.nationality)) && playerInRanges(p);
-}
 // ---- Club and nationality (Players view): pick one or more of each; they combine with the
 // other filters, and a club pick shows that club's players whatever league is selected
 // Built once: clubs {id, name (league added where two share a name), league}, clubs by league
@@ -2194,9 +2065,7 @@ function playerVisible(p) {
 const whoKey = (s) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 function whoOptions() {
   if (!state.whoCache && playersReady()) {
-    const inDb = playersInDb();
-    const league = new Map(inDb ? playerStore.facets.clubs : []), names = new Map();
-    if (!inDb) for (const p of state.players.list) if (p.team && !league.has(p.team)) league.set(p.team, p.league);
+    const league = new Map(playerStore.facets.clubs), names = new Map();
     for (const t of league.keys()) {
       const n = teamName(t);
       names.set(n, (names.get(n) || 0) + 1);
@@ -2215,8 +2084,7 @@ function whoOptions() {
     }
     const leagues = [...byLeague].map(([id, list]) => ({ id, name: lgName(id), clubs: list }))
       .sort((a, b) => pos(a.id) - pos(b.id) || a.name.localeCompare(b.name));
-    const nats = (inDb ? [...playerStore.facets.nats] : [...new Set(state.players.list.map((p) => p.nationality).filter(Boolean))])
-      .sort((a, b) => a.localeCompare(b)).map((name) => ({ name, key: whoKey(name) }));
+    const nats = [...playerStore.facets.nats].sort((a, b) => a.localeCompare(b)).map((name) => ({ name, key: whoKey(name) }));
     state.whoCache = { clubs, byId: new Map(clubs.map((c) => [c.id, c])), leagues, nats };
   }
   return state.whoCache;
@@ -2252,6 +2120,7 @@ function whoMatches(items, q) {
 function renderWhoMenu(input) {
   const kind = input.dataset.kind, menu = $(`#${kind}-menu`);
   const q = whoKey(input.value.trim());
+  if (!playersReady()) return;          // (the boxes are hidden until what they list is in)
   const { clubs, leagues, nats } = whoOptions();
   const opt = (attrs, on, inner) => `<button type="button" class="who-opt" role="option" tabindex="-1" ${attrs}
     aria-selected="${on}"><span class="tick" aria-hidden="true">${on ? "✓" : ""}</span>${inner}</button>`;
@@ -2355,8 +2224,7 @@ function renderPosFilter() {
   box.hidden = state.tableView !== "players" || !playersReady();
   if (box.hidden) return;
   const sel = state.positions || new Set();
-  const n = playersInDb() ? playerStore.facets.positions : {};
-  if (!playersInDb()) for (const p of state.players.list) for (const r of playsAt(p)) n[r] = (n[r] || 0) + 1;
+  const n = playerStore.facets.positions;
   box.innerHTML = `<div class="pos-head"><span>Position</span>
       <button type="button" class="pos-clear" data-pos-clear${sel.size ? "" : " hidden"}>Clear</button></div>
     <div class="pitch">${PITCH_LINES}${PITCH_SPOTS.map(([pos, x, y]) =>
@@ -3001,7 +2869,6 @@ async function renderMatchLineups(m, panel) {
   const exact = (finished ? fx?.actual : fx?.xi) || {};
   if (!finished && (!exact[String(m.home)] || !exact[String(m.away)])) {
     state.injuries ||= await getJsonOrNull("data/injuries.json");
-    await seasonsFor(homeData, awayData);
   }
   const side = (teamId, data, home) => {
     const rating = home ? m.home_xi : m.away_xi;
@@ -3089,10 +2956,6 @@ async function openClubPage(id, want = null) {
   if (!club && !knownTeam(id)) return showNotFound();
   state.club = { id, data: club };
   renderClubPage();
-  if (club && !club.positions && !state.playerSeasons) {   // position minutes for the overview pitch: redraw once loaded
-    await seasonsFor(club);
-    if (state.club?.id === id && (state.clubTab || "overview") === "overview") renderClubTab();
-  }
 }
 // The club's injury list (injuries.json): its next match's, else its latest recent one
 const clubInjuries = (id) => state.injuries?.teams?.[String(id)] || null;
@@ -3504,7 +3367,7 @@ function clubFormationRows(data = state.club?.data) {
 }
 function canPlay(p) {
   const own = clubCache.get(p.team)?.positions;      // his club's file: {player: [[role, minutes], ...]}
-  const rows = own ? own[String(p.id)] : state.playerSeasons?.positions?.[String(p.id)]?.["12m"];
+  const rows = own?.[String(p.id)];
   if (!rows) return playsAt(p);
   return new Set([p.position, ...rows.filter(([r, m]) => r !== "SUB" && m >= DEPTH_MINUTES).map(([r]) => r)]);
 }
@@ -4119,13 +3982,13 @@ async function openPlayerPage(id, want = null) {
   showPage();
   state.club = null;
   const body = $("#club-body");
-  if (playersInDb() ? !playerStore.byId.has(id) : state.players === undefined) {
+  if (!playerStore.byId.has(id)) {
     body.innerHTML = `<div class="empty-state">Loading…</div>`;
     await needPlayers([id]);
     if (!here()) return;      // moved on while loading
   }
-  const p = state.players && playerById(id);
-  if (!p) { body.innerHTML = loadFailed("players") ? loadError("the players") : `<div class="empty-state">This player isn't in the current ranks.</div>`; return; }
+  const p = playerById(id);
+  if (!p) { body.innerHTML = playerStore.unanswered ? loadError("the players") : `<div class="empty-state">This player isn't in the current ranks.</div>`; return; }
   setTitle(p.name);
   body.innerHTML = `<div class="empty-state">Loading ${escapeHtml(p.name)}…</div>`;
   if (p.team) await Promise.all([quiet(ensureTeam(p.team)), needNextXi(p.team)]);        // his club's next match is on his page, and whether he is in its predicted XI
@@ -4134,19 +3997,16 @@ async function openPlayerPage(id, want = null) {
     if (d) playerPages.set(id, { ...d, seasonRows: rowsToObjects(d.season_fields, d.seasons), matchRows: rowsToObjects(d.match_fields, d.matches) });
   }
   const page = playerPages.get(id) || null;
-  if (!page?.positions) { loadPlayerSeasons(); await state.playerSeasonsLoading; }   // no page file, or an older one
   if (!here()) return;      // moved on while loading
   state.player = { p, page, detail: playerDetail(p, page), season: null };
   renderPlayerPage();
 }
 // His season detail (birth date, clubs by season, starting minutes by position): from his page
-// file, else his rows of player_seasons.json
+// file (nothing for a player without one)
 function playerDetail(p, page) {
   // each club spell by its field names (team, minutes, club_rank, goals, assists)
   const named = (spells, fields) => Object.fromEntries(Object.entries(spells || {}).map(([key, sp]) => [key, rowsToObjects(fields, sp)]));
-  if (page?.positions) return { born: page.born, spells: named(page.spells, page.spell_fields), positions: page.positions };
-  const d = state.playerSeasons, k = String(p.id);
-  return { born: d?.born?.[k], spells: named(d?.players?.[k], d?.fields || []), positions: d?.positions?.[k] || {} };
+  return { born: page?.born, spells: named(page?.spells, page?.spell_fields || []), positions: page?.positions || {} };
 }
 const POS_WORD = { G: "GK", D: "DEF", M: "MID", F: "FWD", SUB: "Sub" };
 const GROUP_SINGLE = { GK: "goalkeeper", CB: "centre-back", FB: "full-back", DM: "defensive mid", CM: "central mid",
@@ -4171,7 +4031,7 @@ function positionShares(list) {
     + (other > 0 ? `<span class="pos-share sub">other ${Math.round(100 * other / total)}%</span>` : "");
 }
 
-const pageTeamName = (id) => state.player?.page?.teams?.[id] || state.playerSeasons?.teams?.[id] || teamName(id);
+const pageTeamName = (id) => state.player?.page?.teams?.[id] || teamName(id);
 const PLAYER_TABS = [["overview", "Overview"], ["stats", "Stats"], ["matches", "Matches"], ["career", "Career"]];
 
 function renderPlayerPage() {
@@ -4234,11 +4094,8 @@ function lastAppearance(page) {
 }
 
 function playerKeyFigures(p) {
-  // his place by rank among his league's players with a club: on his row from the database,
-  // else counted from the whole list
-  const inLeague = !playersInDb() && p.team && p.league ? state.players.list.filter((x) => x.team && x.league === p.league) : [];
-  const leagueOf = playersInDb() ? p.lg_n || 0 : inLeague.length;
-  const leaguePlace = playersInDb() ? p.lg_rank : inLeague.filter((x) => x.rank > p.rank).length + 1;
+  // his place by rank among his league's players with a club, counted by the export
+  const leagueOf = p.lg_n || 0, leaguePlace = p.lg_rank;
   const league = p.league ? SHORT_NAMES[p.league] || state.data.competitions[p.league]?.name || "" : "";
   const page = state.player?.page;
   const now = playerSeasonNow(p, page);
@@ -4604,7 +4461,7 @@ async function openNationPage(nat, want = null) {
   if (NATION_TABS.some(([k]) => k === want)) state.nationTab = want;
   showPage(nat);
   state.club = null;
-  if (playersInDb() ? !playerStore.got.has(`n:${nat}`) : state.players === undefined) {
+  if (!playerStore.got.has(`n:${nat}`)) {
     const at = location.hash;
     $("#club-body").innerHTML = `<div class="empty-state">Loading ${escapeHtml(nat)}…</div>`;
     await needNation(nat);
@@ -4621,7 +4478,7 @@ async function openNationPage(nat, want = null) {
     state.injuries ? null : getJsonOrNull("data/injuries.json").then((d) => { state.injuries ||= d; })]);
   if (team) await needPlayers(Object.keys(team.players));      // the squad's ranks, clubs and links to their pages
   if (state.nation?.name !== nat) return;              // moved on while it loaded
-  if (team) {           // names as API-Football sent them: some HTML-encoded ("O&apos;Reilly"), as in players.json
+  if (team) {           // names as API-Football sent them: some HTML-encoded ("O&apos;Reilly"), as the players' are
     for (const pid in team.players) team.players[pid] = decodeEntities(team.players[pid]);
     if (team.coach) team.coach.name = decodeEntities(team.coach.name);
     team.matchRows = rowsToObjects(team.match_fields, team.matches)
@@ -5495,8 +5352,7 @@ async function fillNationRating(nat) {
 }
 // The nationality page's name for a nation (API-Football's), if we have players from it
 function nationPageName(n, aliases) {
-  const nats = playersInDb() ? (playerStore.natSet ||= playerStore.facets && new Set(playerStore.facets.nats)) || new Set()
-    : state.natSet ||= new Set((state.players?.list || []).map((p) => p.nationality));
+  const nats = (playerStore.natSet ||= playerStore.facets && new Set(playerStore.facets.nats)) || new Set();
   return [n.name, ...(aliases[n.name] || [])].find((x) => nats.has(x));
 }
 function renderNations() {
@@ -6722,16 +6578,10 @@ $("#table-search").addEventListener("input", (e) => { state.tableSearch = e.targ
 // ---- Age range (Players view)
 function ageBounds() {           // youngest and oldest age in the data, worked out once
   if (!state.ageBoundsCache && playersReady()) {
-    const ages = playersInDb() ? playerStore.facets.age || [] : state.players.list.map((p) => p.age).filter((a) => a != null);
+    const ages = playerStore.facets.age || [];
     state.ageBoundsCache = ages.length ? [Math.min(...ages), Math.max(...ages)] : [15, 45];
   }
   return state.ageBoundsCache || [15, 45];
-}
-function inAgeRange(p) {
-  const [lo, hi] = ageBounds();
-  const min = state.ageMin ?? lo, max = state.ageMax ?? hi;
-  if (min <= lo && max >= hi) return true;           // full range: include players with no age
-  return p.age != null && p.age >= min && p.age <= max;
 }
 function renderAgeFilter() {
   const box = $("#age-filter");
@@ -6767,7 +6617,7 @@ for (const id of ["#age-min", "#age-max"]) {
 // Clubs or Players, picked from the menu
 function setTableView(view) {
   state.tableView = view;
-  // Players: drawn again, filters and all, once what the filters need (or players.json) is in
+  // Players: drawn again, filters and all, once what the filters need is in
   if (view === "players" && playersPending())
     needFacets().then(() => { if (state.tableView === "players") setTableView("players"); });
   renderExcludeFilter();
@@ -6807,7 +6657,6 @@ async function setMatchPart(card, part, open) {
   why.hidden = !open;
   if (open) {
     const x = await loadWhy(m.id);
-    if (x && !x.model_info) await loadExplanations();     // from its file: the model's name is with every match's reasons
     why.innerHTML = whyDetailHtml(m, x);
   }
 }

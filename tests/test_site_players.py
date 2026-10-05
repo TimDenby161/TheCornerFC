@@ -66,11 +66,12 @@ class SitePlayerRows(unittest.TestCase):
         cur.__enter__.return_value = cur
         conn.cursor.return_value = cur
         copy = cur.copy.return_value.__enter__.return_value
-        rows = site_player_rows([player(1), player(2, team=None)])
+        rows = site_player_rows([player(1), player(2, team=None)] + [player(i) for i in range(3, 61)])
+        cur.execute.return_value.fetchone.return_value = (70,)
         with patch.object(export.config, "require_db_write"):
             self.assertTrue(store_players(conn, rows))
-        self.assertEqual(cur.execute.call_args_list[0][0][0], "delete from site.players")        # rewritten whole
-        first, second = [c[0][0] for c in copy.write_row.call_args_list]
+        self.assertEqual(cur.execute.call_args_list[1][0][0], "delete from site.players")        # rewritten whole
+        first, second = [c[0][0] for c in copy.write_row.call_args_list][:2]
         self.assertEqual(first[:8], [1, 0, "a. player", "a player", 1, 39, None, None])
         self.assertEqual(first[8], ["ST"])                         # an array column, not text
         self.assertEqual(json.loads(first[14]), {"ST": 80.0})
@@ -78,7 +79,21 @@ class SitePlayerRows(unittest.TestCase):
         self.assertIsNone(second[4])
         conn.commit.assert_called_once()
 
-    def test_without_the_table_nothing_is_stored_and_the_site_keeps_the_file(self):
+    def test_too_few_players_or_most_of_them_gone_leaves_the_table_alone(self):
+        conn, cur = Mock(), MagicMock()
+        conn.execute.return_value.fetchone.return_value = ("site.players",)
+        cur.__enter__.return_value = cur
+        conn.cursor.return_value = cur
+        cur.execute.return_value.fetchone.return_value = (7500,)
+        with patch.object(export.config, "require_db_write"):
+            with self.assertRaisesRegex(export.ExportValidationError, "only 2 players"):
+                store_players(conn, site_player_rows([player(1), player(2)]))
+            with self.assertRaisesRegex(export.ExportValidationError, "site.players would collapse from 7500 to 60 rows"):
+                store_players(conn, site_player_rows([player(i) for i in range(1, 61)]))
+        cur.copy.assert_not_called()
+        self.assertNotIn("delete from site.players", [c[0][0] for c in cur.execute.call_args_list])
+
+    def test_without_the_table_nothing_is_stored(self):
         conn = Mock()
         conn.execute.return_value.fetchone.return_value = (None,)
         with patch.object(export.config, "require_db_write"), self.assertLogs(export.log, "WARNING"):
@@ -86,9 +101,9 @@ class SitePlayerRows(unittest.TestCase):
         conn.cursor.assert_not_called()
         with patch.object(export.config, "require_db_write", side_effect=export.config.SafetyError("read-only")):
             self.assertFalse(store_players(conn, []))
-        # the site is told the players are in the database only once they are
+        # the site is told the order of a player's row, which it needs to read any of them
         source = Path(export.__file__).read_text()
-        self.assertIn('if listed["stored"]:\n        site.update(player_fields=SITE_PLAYER_FIELDS', source)
+        self.assertIn('site.update(player_fields=SITE_PLAYER_FIELDS', source)
 
     def test_the_functions_are_the_only_way_in(self):
         sql = (ROOT / "db/migrations/20261005_site_players.sql").read_text()
@@ -105,15 +120,30 @@ class SitePlayerRows(unittest.TestCase):
         self.assertIn("LIMIT least(greatest(coalesce(p_limit, 100), 0), 2000)", sql)        # never every player
         self.assertNotIn("EXECUTE format('SELECT", sql)                                     # fixed SQL: no query built from an argument
 
+    def test_a_clubs_next_xi_starts_from_the_clubs_own_fixtures(self):
+        # joined to fixtures and sorted by kick-off with LIMIT 1, the database walked every fixture
+        # from the oldest (20261005_site_next_xi_fast.sql): the club's fixtures are taken first
+        sql = (ROOT / "db/migrations/20261005_site_next_xi_fast.sql").read_text()
+        self.assertIn(sql, (ROOT / "db/schema.sql").read_text())
+        self.assertIn("FROM (SELECT DISTINCT pl.fixture_id FROM public.predicted_lineups pl WHERE pl.team_id = p_team OFFSET 0) mine", sql)
+        self.assertIn("REVOKE ALL ON FUNCTION public.site_next_xi(integer) FROM PUBLIC", sql)
+        self.assertIn("SET search_path = ''", sql)
+        schema = (ROOT / "db/schema.sql").read_text()
+        # in the schema it comes after the first version, so a new database ends up with this one
+        self.assertGreater(schema.index("next_fixture integer"), schema.index("CREATE OR REPLACE FUNCTION public.site_player_facets()"))
+
     def test_views_ask_for_the_players_they_show(self):
         app = (ROOT / "docs/assets/app.js").read_text()
         for asked in ('siteAsk("site_players", { ...params, p_limit: FIRST_ROWS })', 'siteAsk("site_players", { ...params, p_limit: 2000, p_offset: at })',
                       'siteAsk("site_player_facets", {})', 'siteAsk("site_next_xi", { p_team: team })',
                       "needClubPlayers(m.home, m.away)", "needClubPlayers(id)", "needNation(nat)", "needPlayers([id])"):
             self.assertIn(asked, app)
-        # the whole file is only read by a site whose players aren't in the database, or when it can't answer
-        self.assertEqual(app.count('getJsonOrNull("data/players.json")'), 1)
-        self.assertEqual(app.count("loadPlayers()"), app.count("return loadPlayers();") + 2)
+        # there is no list of every player any more, in the site or the export
+        for gone in ("loadPlayers", "playersInDb", "state.players.list.filter((p) => playerSearchMatch"):
+            self.assertNotIn(gone, app)
+        self.assertNotIn('"players.json"', Path(export.__file__).read_text())
+        # a request the database didn't answer is sent once more
+        self.assertIn("askDatabase(", (ROOT / "docs/assets/data.js").read_text())
         # long lists of ids are posted, not put in the address
         self.assertIn('method: "POST"', (ROOT / "docs/assets/data.js").read_text())
 

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 from thecornerfc import predictions
 from thecornerfc import export
-from thecornerfc.export import explanation, export_explanations, export_fixture_pages, store_matches
+from thecornerfc.export import ExportValidationError, explanation, match_explanations, store_matches
 from tests import test_match_snapshots
 
 HOME = [(1.8, 0.9), (2.1, 1.2), (1.1, 1.0)]
@@ -116,26 +116,15 @@ class ExportTests(unittest.TestCase):
         for _, v in entry["reasons"]:
             self.assertEqual(v, round(v, 2))
 
-    def test_writes_an_empty_file_without_the_snapshot_table(self):
+    def test_nothing_is_explained_without_the_snapshot_table(self):
         conn = Mock()
         conn.execute.return_value.fetchone.return_value = (None,)
-        with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(export_explanations(conn, Path(d)), {})
-            self.assertEqual(json.loads((Path(d) / "explanations.json").read_text())["matches"], {})
+        self.assertEqual(match_explanations(conn), {})
 
 
 class FixturePageTests(unittest.TestCase):
     """A page asks for the match it shows, not for every match: the explanation from the match's
-    own file, the line-ups from the database (site_lineups)."""
-    def test_each_explained_match_gets_its_own_file(self):
-        why = {"11": {"reasons": [["strength", 0.4]], "exp_diff": 0.4}, "12": {"reasons": []}}
-        with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "fixtures").mkdir()
-            (Path(d) / "fixtures/9.json").write_text("{}")           # a match no longer on the site
-            export_fixture_pages(Path(d), why)
-            pages = {p.stem: json.loads(p.read_text()) for p in (Path(d) / "fixtures").glob("*.json")}
-        self.assertEqual(pages, {"11": {"id": 11, "why": why["11"]}, "12": {"id": 12, "why": why["12"]}})
-
+    own row (site_match_detail), the line-ups from the database (site_lineups)."""
     def match(self, fid, **over):
         row = dict.fromkeys(export.SITE_MATCH_FIELDS)
         row.update({"id": fid, "kickoff": "2026-10-10T14:00:00+00:00", "league": 39, "home": 1, "away": 2, "status": "NS", "intl": 0, **over})
@@ -148,9 +137,10 @@ class FixturePageTests(unittest.TestCase):
         cur.__enter__.return_value = cur
         conn.cursor.return_value = cur
         copy = cur.copy.return_value.__enter__.return_value
+        cur.execute.return_value.fetchone.return_value = (3,)
         with patch.object(export.config, "require_db_write"):
             self.assertTrue(store_matches(conn, [self.match(11), self.match(12, status="FT")], why))
-        self.assertEqual(cur.execute.call_args_list[0][0][0], "delete from site.matches")        # rewritten whole
+        self.assertEqual(cur.execute.call_args_list[1][0][0], "delete from site.matches")        # rewritten whole
         first, second = [c[0][0] for c in copy.write_row.call_args_list]
         self.assertEqual(first[:7], (11, "2026-10-10T14:00:00+00:00", 39, 1, 2, "NS", False))
         self.assertEqual(json.loads(first[7]), self.match(11))
@@ -167,7 +157,21 @@ class FixturePageTests(unittest.TestCase):
         with patch.object(export.config, "require_db_write", side_effect=export.config.SafetyError("read-only")):
             self.assertFalse(store_matches(conn, [self.match(11)], {}))
         source = Path(export.__file__).read_text()
-        self.assertIn("if not store_matches(conn, matches, explained):\n        export_fixture_pages(out_dir, explained)", source)
+        self.assertIn("store_matches(conn, matches, match_explanations(conn, now))", source)
+        for gone in ('"matches.json"', '"explanations.json"', "fixtures/"):        # the matches are rows, not files
+            self.assertNotIn(gone, source)
+
+    def test_a_table_that_would_lose_most_of_its_matches_is_left_alone(self):
+        conn, cur = Mock(), MagicMock()
+        conn.execute.return_value.fetchone.return_value = ("site.matches",)
+        cur.__enter__.return_value = cur
+        conn.cursor.return_value = cur
+        cur.execute.return_value.fetchone.return_value = (5000,)
+        with patch.object(export.config, "require_db_write"), \
+                self.assertRaisesRegex(ExportValidationError, "site.matches would collapse from 5000 to 2 rows"):
+            store_matches(conn, [self.match(11), self.match(12)], {})
+        self.assertEqual(len(cur.execute.call_args_list), 1)           # counted, nothing deleted
+        cur.copy.assert_not_called()
 
     def test_the_detail_function_reads_one_match(self):
         root = Path(__file__).resolve().parents[1]
@@ -193,8 +197,9 @@ class FixturePageTests(unittest.TestCase):
         app = (root / "docs/assets/app.js").read_text()
         for asked in ('siteAsk("site_matches", params)', 'siteAsk("site_match_days"', "ensureDay(state.date)", "ensureLeague(lid)", "ensureTeam(id)"):
             self.assertIn(asked, app)
-        # the whole file is only the fallback, and the start-up files don't include it
-        self.assertEqual(app.count('getJson("data/matches.json")'), 2)
+        # there is no file of every match any more
+        for gone in ("matches.json", "loadAllMatches", "matchStore.all"):
+            self.assertNotIn(gone, app)
         self.assertIn('"match_fields": SITE_MATCH_FIELDS', Path(export.__file__).read_text())
 
     def test_line_ups_come_from_the_database_for_one_match(self):
@@ -218,10 +223,11 @@ class FixturePageTests(unittest.TestCase):
         players = inspect.getsource(export.export_players)
         for gone in ("fixture_xi", "actual_xi", "prematch_xi"):
             self.assertNotIn(gone, players)
-        self.assertIn('{"reasons": entry["reasons"]}', inspect.getsource(export.export_explanations))
         app = (Path(export.__file__).resolve().parents[1] / "docs/assets/app.js").read_text()
-        self.assertIn("data/fixtures/${id}.json", app)
-        self.assertNotIn('getJson("data/player_seasons.json")', app.split("function loadPlayerSeasons")[0])
+        source = Path(export.__file__).read_text()
+        for gone in ("data/fixtures/", "explanations.json", "player_seasons.json", "players.json"):
+            self.assertNotIn(gone, app)
+            self.assertNotIn(f'"{gone}"', source)
 
 
 if __name__ == "__main__":
