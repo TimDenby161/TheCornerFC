@@ -847,8 +847,6 @@ def export_methodology(conn, out_dir=OUT_DIR, now=None):
 
 LINEUP_RECORD_FIELDS = ["fixture", "kickoff", "league", "team", "opponent", "home", "correct",
                         "roles_right", "roles_known", "lines", "hours_before", "version", "missed", "wrong"]
-LINEUP_HISTORY_FIELDS = ["fixture", "kickoff", "league", "team", "opponent", "home", "correct",
-                         "roles_right", "roles_known", "lines", "missed", "wrong"]
 
 
 def _score_xi(predicted, actual):
@@ -926,16 +924,20 @@ def export_lineup_record(conn, out_dir=OUT_DIR, now=None):
 
 
 def export_lineup_history(conn, out_dir=OUT_DIR, now=None):
-    """docs/data/lineups_history.json: the reconstructed history for the Line-up record tab. The
-    predicted XI the nightly player-ratings replay worked out for every finished match
-    (reconstructed_lineups), from what it knew before kick-off, scored against the XI that
-    started exactly as the live record is. Rebuilt with today's code, so it's kept apart from the
-    live record; loaded only when the tab switches to it. kickoff is the match date."""
-    now = now or datetime.now(timezone.utc)
-    out = {"generated_at": now.isoformat(), "fields": LINEUP_HISTORY_FIELDS, "available": False, "rows": [],
-           "leagues": {}, "teams": {}, "players": {}}
+    """site.lineup_history: the reconstructed history for the Line-up record tab. The predicted XI
+    the nightly player-ratings replay worked out for every finished match (reconstructed_lineups),
+    from what it knew before kick-off, scored against the XI that started exactly as the live
+    record is. Rebuilt with today's code, so it's kept apart from the live record.
+
+    Stored in the database, not in a file (it was lineups_history.json, 6.5 MB): the tab asks
+    site_lineup_history() for the totals and the rows it shows
+    (db/migrations/20261005_site_lineup_history.sql). The table is rewritten whole, in one
+    transaction. A read-only run stores nothing, and neither does a database from before the
+    migration (logged); any other failure stops the run. Returns the rows:
+    (fixture, team, kickoff, match date, league, opponent, home, starters named, in the right
+    role, with both roles known, lines, missed, wrong)."""
+    rows = []
     if _table_exists(conn, "reconstructed_lineups"):
-        out["available"] = True
         starters = defaultdict(dict)
         for fid, team, player, role, broad in conn.execute(
                 """select fp.fixture_id, fp.team_id, fp.player_id, fp.role, fp.position
@@ -952,11 +954,27 @@ def export_lineup_history(conn, out_dir=OUT_DIR, now=None):
             if len(actual) != 11 or len(players) != 11:
                 continue     # no complete team sheet to check against
             correct, right, known, lines, missed, wrong = _score_xi(dict(zip(players, roles)), actual)
-            out["rows"].append([fid, kickoff.date().isoformat(), league, team, away if team == home else home,
-                                int(team == home), correct, right, known, lines, missed, wrong])
-        _lineup_names(conn, out, out["rows"], 3, 2, 10)
-    _write_json_file(out_dir / "lineups_history.json", out, ensure_ascii=False)
-    log.info("Exported the reconstructed line-up history (%s team line-ups)", len(out["rows"]))
+            rows.append((fid, team, kickoff, kickoff.date(), league, away if team == home else home, team == home,
+                         correct, right, known, lines, missed, wrong))
+    try:
+        config.require_db_write("store the line-up history")
+    except config.SafetyError as exc:
+        log.info("Line-up history not stored: %s", exc)
+        return rows
+    (table,) = conn.execute("select to_regclass(%s)", ["site.lineup_history"]).fetchone()
+    if table is None:
+        log.warning("site.lineup_history isn't there yet (db/migrations/20261005_site_lineup_history.sql): "
+                    "the reconstructed line-up history wasn't stored")
+        return rows
+    with conn.cursor() as cur:
+        cur.execute("delete from site.lineup_history")
+        with cur.copy("""copy site.lineup_history (fixture_id, team_id, kickoff, day, league_id, opponent_id, home,
+                              correct, roles_right, roles_known, lines, missed, wrong) from stdin""") as copy:
+            for row in rows:
+                copy.write_row(row)
+    conn.commit()
+    log.info("Stored the reconstructed line-up history (%s team line-ups)", len(rows))
+    return rows
 
 
 # Paper money shown on the Bets tab: a flat stake per bet out of a starting bank

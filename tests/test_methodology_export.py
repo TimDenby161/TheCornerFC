@@ -157,36 +157,63 @@ class LineupRecordExportTests(unittest.TestCase):
 
 
 class LineupHistoryExportTests(unittest.TestCase):
+    """The reconstructed history is scored here and stored in site.lineup_history; the tab asks the
+    database for what it shows (site_lineup_history), so there is no lineups_history.json."""
     ROLES = ["GK", "CB", "CB", "LB", "RB", "CM", "CM", "LM", "RM", "ST", "ST"]
+    FIELDS = ("fixture", "team", "kickoff", "day", "league", "opponent", "home", "correct", "roles_right",
+              "roles_known", "lines", "missed", "wrong")
 
-    def export(self, conn):
-        with tempfile.TemporaryDirectory() as d:
-            export_lineup_history(conn, Path(d), now=T2)
-            return json.loads((Path(d) / "lineups_history.json").read_text(encoding="utf-8"))
+    def export(self, conn, writable=False):
+        effect = None if writable else export.config.SafetyError("read-only")
+        with tempfile.TemporaryDirectory() as d, patch.object(export.config, "require_db_write", side_effect=effect):
+            rows = export_lineup_history(conn, Path(d), now=T2)
+            self.assertEqual(list(Path(d).iterdir()), [])          # no file
+        return rows
 
     def test_scored_like_the_live_record(self):
         starters = [(7, 2, i, self.ROLES[i], None) for i in range(11)]
         # the predicted XI: 0-8 right (8 as a striker), 11 and 12 instead of 9 and 10
         predicted = (list(range(9)) + [11, 12], self.ROLES[:8] + ["ST", "ST", "ST"])
-        out = self.export(record_conn(history=[(7, 2, *predicted, T1, 39, 1, 2)], starters=starters))
-        self.assertTrue(out["available"])
-        row = dict(zip(out["fields"], out["rows"][0]))
-        self.assertEqual((row["fixture"], row["kickoff"], row["team"], row["opponent"], row["home"]),
-                         (7, "2026-09-26", 2, 1, 0))
+        rows = self.export(record_conn(history=[(7, 2, *predicted, T1, 39, 1, 2)], starters=starters))
+        row = dict(zip(self.FIELDS, rows[0]))
+        self.assertEqual((row["fixture"], row["kickoff"], row["day"].isoformat(), row["team"], row["opponent"], row["home"]),
+                         (7, T1, "2026-09-26", 2, 1, False))
         self.assertEqual((row["correct"], row["roles_right"], row["roles_known"]), (9, 8, 9))
         self.assertEqual(row["lines"], [1, 1, 4, 4, 4, 4, 2, 0])
         self.assertEqual((row["missed"], row["wrong"]), ([9, 10], [11, 12]))
-        self.assertEqual(set(out["players"]), {"9", "10", "11", "12"})
 
     def test_skips_a_match_without_a_full_team_sheet(self):
         starters = [(7, 2, i, "CB", None) for i in range(10)]
-        out = self.export(record_conn(history=[(7, 2, list(range(11)), ["CB"] * 11, T1, 39, 1, 2)], starters=starters))
-        self.assertEqual(out["rows"], [])
+        rows = self.export(record_conn(history=[(7, 2, list(range(11)), ["CB"] * 11, T1, 39, 1, 2)], starters=starters))
+        self.assertEqual(rows, [])
 
-    def test_before_the_migration_it_says_so(self):
-        out = self.export(record_conn(tables=False))
-        self.assertFalse(out["available"])
-        self.assertEqual(out["rows"], [])
+    def test_the_table_is_rewritten_whole_in_one_transaction(self):
+        starters = [(7, 2, i, self.ROLES[i], None) for i in range(11)]
+        conn = record_conn(history=[(7, 2, list(range(11)), self.ROLES, T1, 39, 1, 2)], starters=starters)
+        cur = MagicMock()
+        cur.__enter__.return_value = cur
+        copy = cur.copy.return_value.__enter__.return_value
+        conn.cursor.return_value = cur
+        rows = self.export(conn, writable=True)
+        cur.execute.assert_called_once_with("delete from site.lineup_history")
+        self.assertIn("copy site.lineup_history (fixture_id, team_id, kickoff, day,", cur.copy.call_args[0][0])
+        copy.write_row.assert_called_once_with(rows[0])
+        conn.commit.assert_called_once()
+
+    def test_before_the_migration_nothing_is_stored(self):
+        conn = record_conn(tables=False)
+        with self.assertLogs(export.log, "WARNING"):
+            self.assertEqual(self.export(conn, writable=True), [])
+        conn.cursor.assert_not_called()
+
+    def test_the_function_adds_up_what_the_browser_did(self):
+        sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261005_site_lineup_history.sql").read_text()
+        self.assertIn(sql, (Path(__file__).resolve().parents[1] / "db/schema.sql").read_text())
+        self.assertIn("REVOKE ALL ON FUNCTION public.site_lineup_history(integer, integer[], integer) FROM PUBLIC", sql)
+        self.assertIn("REVOKE ALL ON site.lineup_history FROM PUBLIC", sql)
+        self.assertIn("SET search_path = ''", sql)
+        self.assertIn("LIMIT least(greatest(coalesce(p_limit, 50), 1), 1000)", sql)       # never the whole table
+        self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
 
 
 class LoadMatchesMarketSwitchTests(unittest.TestCase):
