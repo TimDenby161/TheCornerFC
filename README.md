@@ -1290,7 +1290,8 @@ signed in in that browser (README: Accounts).
 - The table is in the `site` schema, which the Data API doesn't expose. The only way to read it is `site_doc(key)`, which returns one row's JSON and never a row marked `paid`.
 - **The site reads the database** (since 2026-10-05): every data file comes through `site_doc`. If the database doesn't answer, the page reads the published file, which the export still writes. `docs/assets/data.js` holds the switch: `?data=files` in the address reads the files only.
 - Unchanged data isn't downloaded again. The site asks for a row with its content hash from the `manifest` row (`site_doc(key, hash)`); when the hash is the row's, the database tells the browser to keep the answer for a year. Rows outside the manifest (club, player, league and nation pages) are fetched each time.
-- The migrations are `db/migrations/20261004_site_docs.sql` (applied 2026-10-04) and `db/migrations/20261005_site_doc_cache.sql` (the hash argument; applied 2026-10-05). Both are in `db/schema.sql`, with their checks at the bottom of each file.
+- The migrations are `db/migrations/20261004_site_docs.sql` (applied 2026-10-04) and `db/migrations/20261005_site_doc_cache.sql` (the hash argument; applied 2026-10-05) and `db/migrations/20261005_site_doc_raw.sql` (**not applied yet**). All are in `db/schema.sql`, with their checks at the bottom of each file.
+- **Speed.** A row is the published file's own text (`json`, not `jsonb`) and `site_doc` returns it as the response body (the `"application/json"` domain), so nothing is rebuilt on a read. That is the third migration: before it, `players` (5 MB) took 2 to 4 seconds and `lineups_history` (8 MB) ran into the anon role's 3 second limit, more so with several readers at once. Browsers get the answer Brotli-compressed (`players` about 0.6 MB).
 
 ### Accounts
 
