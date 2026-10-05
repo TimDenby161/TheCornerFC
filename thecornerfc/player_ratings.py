@@ -1,5 +1,7 @@
 """Player ranks (0-100) from per-match stats, and predicted-XI team ratings - all backdated.
 
+Counted stats only (goals, passes, tackles, ...): API-Football's own match rating is not an input.
+
 Everything is replayed in kickoff order, so every number is what could have been known before
 that match:
 
@@ -8,7 +10,7 @@ Player rank
     role     = his most common starting role in the window (from line-up grids, positions.py:
                LB, CB, DM, RW, ...); players only seen off the bench use their broad position
     metrics  = per-90 stats and ratios from the window (see WEIGHTS), each turned into a
-               z-score against players in the same role group (GK, CB, FB, DM, CM, AM, W, ST;
+               z-score against players in the same role group (GK, CB, FB, WB, DM, CM, AM, W, ST;
                norms: player-seasons with 900+ minutes - a distribution, not any one player's future)
     score    = sum(weight * z) for the player's role group
     score    = (score x minutes + MINUTES_PRIOR x SHRINK_MINUTES) / (minutes + SHRINK_MINUTES)
@@ -47,8 +49,9 @@ and only leaves it where he has the minutes to (season_model)
                the start of this season, a teenager's debut) stays on his curve, and a full season
                moves off it most of the way
     elsewhere = seasons in the other player leagues (no per-match data: Portugal, Belgium, ...)
-               use their season totals (player_seasons), scored the same way, match ratings
-               league-adjusted; the site shows them with the club (team_id) and real minutes
+               use their season totals (player_seasons), scored the same way (without
+               failed dribbles: no attempts there); the site shows them with the club (team_id)
+               and real minutes
     gaps     = every season from FILL_FROM_SEASON to now with no minutes in these leagues gets
                level + curve (stored with minutes = 0, shown as an estimate). His club that season
                comes from player_career_teams; one we have fixtures for but no player data (a
@@ -66,8 +69,12 @@ and only leaves it where he has the minutes to (season_model)
                (retired_players, ingest.check_retired) get no current rank, so they leave the
                players list, and no estimated seasons after their last one
 
-Match ratings everywhere are league-adjusted: each rating minus (that league's average rating
-for the position - the average across all leagues), so a 7.0 is compared within its league.
+    positions = how good he is in each outfield position he has started in (player_position_ranks):
+               a level per position, his seasons elsewhere counted by how well that position
+               fits it (GROUP_FIT) and scored on its weights, less for one he rarely starts in
+               (season_model step 6). It needn't equal his rank, even in his own position
+    backups  = a keeper with no minutes this season once his club has played BACKUP_GAMES, and
+               not injured, is marked down by SQUAD_MARKDOWN (compute_player_ratings)
 
 Team ratings per fixture and team
     predicted XI  = 1 goalkeeper + 10 outfielders with the most minutes over the team's last
@@ -98,21 +105,23 @@ SHRINK_MINUTES = 900
 CLUB_RANK_MAX = 1200       # club rank treated as the top of the scale (rank is scaled by club / this)
 MINUTES_PRIOR = -0.5       # score a player with no minutes is pulled toward (below an average regular)
 PREDICT_MATCHES = 5
-# match rating with a goal vs without, by role group (CB 6.93 -> 7.70); taken off per goal
+# API-Football's match rating is not an input (since 2026-10): the ranks are built from counted
+# stats only. _adjusted and this bonus are kept for experiments/player_club_strength, which read it
 GOAL_RATING_BONUS = {"CB": 0.78, "FB": 0.82, "DM": 0.79}
-DEFAULT_RATING = 6.5       # match rating for season totals the API has no rating for
 # season-total metrics and the stats they need: left out (not counted as 0) when the API lacks them
 METRIC_INPUTS = {"goals": {"goals"}, "assists": {"assists"}, "shots_on": {"shots_on"},
                  "key_passes": {"key_passes"}, "dribbles_won": {"dribbles_won"}, "tackles_int": {"tackles"},
                  "blocks": {"blocks"}, "passes": {"passes"}, "duels_pct": {"duels", "duels_won"},
                  "discipline": {"fouls_committed"}, "save_pct": {"saves"}, "conceded": {"goals_conceded"},
-                 "dribbled_past": {"dribbled_past"}, "pens_conceded": {"penalties_committed"}}
+                 "dribbled_past": {"dribbled_past"}, "pens_conceded": {"penalties_committed"},
+                 "dribbles_lost": {"dribbles"}}
 REFERENCE = set(config.RATING_REFERENCE_LEAGUES)   # the players everyone is compared with
-OUTFIELD_GROUPS = ("CB", "FB", "DM", "CM", "AM", "W", "ST")
-POSITION_RANK_SEASONS = 3  # rank in each position: from his last this-many seasons ...
-POSITION_RANK_MINUTES = 450  # ... with at least this many minutes
-FAMILIARITY_PENALTY = 6.0  # rank points off in a position he's never started in, ...
-FAMILIAR_SHARE = 0.4       # ... none once it's this share of his starting minutes
+OUTFIELD_GROUPS = ("CB", "FB", "WB", "DM", "CM", "AM", "W", "ST")
+POSITION_RANK_SEASONS = 3  # how familiar a position is: his starts over his last this-many seasons
+FAMILIARITY_PENALTY = 10.0 # rank points off in a position he's never started in, ...
+FAMILIAR_SHARE = 0.4       # ... none once it's this share of his starting minutes, ...
+UNRELATED_MAX = 1.4        # ... x 2 (1 - fit of his usual position to it, GROUP_FIT), at most this
+BACKUP_GAMES = 5           # a keeper with no minutes once his club has played this many is a backup
 ANCHOR_MINUTES = 1500      # a season with this many minutes measures the age curve
 FILL_FROM_SEASON = 2021    # every season from here to now gets a number (estimated where he has no minutes)
 CURVE_MIN_PAIRS = 30       # an age needs this many season pairs to measure the curve there
@@ -125,7 +134,7 @@ YOUNG_STEP_17 = 3.4        # age curve below the measured ages (too few regulars
 YOUNG_STEP_EXTRA = 1.7     # plus this for each year younger, in rank points
 PRIOR_MINUTES = 450        # a player's level starts as PRIOR_LEVEL, weighted as this many minutes
 PRIOR_LEVEL = {"GK": 64.3, "OUT": 64.3}   # rank at peak age of a player we know nothing about
-LEVEL_DECAY = 0.7          # a season's weight in his level for another season, per year apart
+LEVEL_DECAY = 0.5          # a season's weight in his level for another season, per year apart
 DEVIATION_MINUTES = 1500   # a season keeps minutes / (minutes + this) of its difference from the curve
 GAP_CLUB_MINUTES = 450     # weight of a gap season's club level (a lower league we have no player data for)
 FUTURE_SEASONS = 5         # seasons after the current one projected along his age curve
@@ -133,58 +142,58 @@ FUTURE_SEASONS = 5         # seasons after the current one projected along his a
 STATS = ("minutes", "rating_mins", "rated_mins", "goals", "assists", "shots_on", "key_passes",
          "passes", "passes_accurate", "tackles", "interceptions", "blocks", "duels", "duels_won",
          "dribbles_won", "fouls_committed", "yellow_cards", "red_cards", "saves", "goals_conceded",
-         "dribbled_past", "penalties_committed")
+         "dribbled_past", "penalties_committed", "dribbles")
+# rating_mins / rated_mins are no longer filled (the match rating isn't an input); they keep their
+# place so the appearance rows and STATS[3:] line up as before. dribbles = dribbles attempted
 # plus, from the opponent's xG in matches with xG: xga = opponent xG x his minutes, xg_mins = those minutes
 SUMS = STATS + ("xga", "xg_mins")
 
-# weight per metric by role group; negative weight = lower is better
-# Weights per role group. Tested against results (2021-26, club rank as the baseline): match
-# rating added nothing, while shots on target, key passes, passing volume and duels won did, and
-# goals / assists / save % beyond those mostly reflected luck that evened out. So rating is a
-# small part everywhere, the lasting stats carry the weight, and goals still count for attackers.
+# weight per metric by role group, as shares that add up to 1 (a window's score is pulled towards
+# MINUTES_PRIOR, so the scale has to be the same for every group); negative weight = lower is
+# better. Counted stats only: no
+# match rating from the feed, and no fouls or cards ("discipline": the owner found it no guide to
+# quality). Set by the owner position by position (2026-10-05, experiments/player_no_rating),
+# judged on where known players land, starting from the weights that were tested against results
+# (2021-26, club rank as the baseline: shots on target, key passes, passing volume and duels won
+# added to it; goals, assists and save % beyond those mostly reflected luck that evened out).
 WEIGHTS = {
-    # keepers on match rating alone, corrected for workload (gk_rating, see metrics): goals
-    # conceded mostly measures the defence in front of him (Trafford went 41 -> 96 moving from a
-    # relegated Premier League side to the Championship's best defence) and save % is mostly luck
-    # save % repeats 0.28 for keepers who changed club (some skill); saves per 90 (0.18) is mostly
-    # his defence's workload and goals prevented vs xG (0.05) is noise, so neither is used
-    "GK": {"gk_rating": .75, "save_pct": .25},
+    # Keepers: save % (repeats 0.18 from one season to the next: noisy, but his own), pass
+    # accuracy (0.69, and 0.54 for keepers who changed club: a trait, though partly style) and
+    # goals conceded (0.34; mostly the defence in front of him, kept at the owner's choice)
+    "GK": {"save_pct": .50, "pass_acc": .25, "conceded": -.25},
     # Centre-backs: no goals or shots on target (season-to-season repeat 0.08 / 0.18 for CBs who
-    # changed club: luck and role), and a goal-neutral rating (see _adjusted). Times dribbled past
-    # repeats 0.55 across a move (a player trait); team xG conceded while he played 0.29 (mostly
-    # the team, a little him). Penalties conceded (0.02) is noise and left out
-    "CB": {"rating": .12, "duels_pct": .19, "passes": .15, "pass_acc": .09, "tackles_int": .13,
-           "blocks": .06, "dribbled_past": -.12, "team_xga": -.07, "discipline": -.07},
-    # Full-backs (repeat for FBs who changed club in brackets): defending - tackles +
-    # interceptions (0.64), duels won (0.47), times dribbled past (0.55) - and going forward -
-    # dribbles won (0.70), key passes (0.54), passing volume (0.55). Out: goals, shots on target,
-    # assists (0.10: luck beyond key passes) and team xG conceded (0.05: all team)
-    "FB": {"rating": .10, "key_passes": .16, "passes": .13, "dribbles_won": .10, "tackles_int": .14,
-           "duels_pct": .12, "pass_acc": .06, "dribbled_past": -.12, "discipline": -.07},
+    # changed club: luck and role). Times dribbled past repeats 0.55 across a move (a player
+    # trait); team xG conceded while he played 0.29 (mostly the team, a little him). Penalties
+    # conceded (0.02) is noise and left out
+    "CB": {"duels_pct": .2346, "passes": .1852, "tackles_int": .1605, "dribbled_past": -.1481, "pass_acc": .1111,
+           "team_xga": -.0864, "blocks": .0741},
+    # Full-backs: going forward (key passes, passing, assists, goals, dribbles won, shots on
+    # target) and defending (times dribbled past, tackles + interceptions, duels won); failed
+    # dribbles (attempts - won) count against him: giving the ball away
+    "FB": {"key_passes": .18, "dribbled_past": -.15, "tackles_int": .13, "passes": .12, "pass_acc": .09,
+           "assists": .08, "goals": .06, "dribbles_won": .06, "shots_on": .05, "dribbles_lost": -.04,
+           "duels_pct": .04},
+    # Wing-backs (LWB / RWB), a group of their own since 2026-10: the full-back stats leaning forward
+    "WB": {"key_passes": .20, "tackles_int": .12, "dribbled_past": -.12, "passes": .09, "assists": .09,
+           "dribbles_won": .08, "pass_acc": .07, "goals": .07, "shots_on": .06, "duels_pct": .05,
+           "dribbles_lost": -.05},
     # Defensive mids (repeat for all DMs, few changed club): passing volume (0.81), tackles +
     # interceptions (0.76), times dribbled past (0.69), duels won (0.65), key passes (0.82). Out:
     # goals, team xG conceded (negative across a move); shots on target only a sliver
-    "DM": {"rating": .10, "passes": .18, "tackles_int": .17, "duels_pct": .15, "key_passes": .10,
-           "pass_acc": .09, "blocks": .02, "shots_on": .02, "dribbled_past": -.10, "discipline": -.07},
-    "CM": {"rating": .12, "key_passes": .20, "passes": .15, "shots_on": .12, "duels_pct": .10,
-           "goals": .08, "tackles_int": .07, "assists": .06, "dribbles_won": .05, "pass_acc": .05},
+    "DM": {"passes": .2169, "tackles_int": .2048, "duels_pct": .1807, "key_passes": .1205, "dribbled_past": -.1205,
+           "pass_acc": .1084, "blocks": .0241, "shots_on": .0241},
+    # Centre mids: passing volume above key passes, and little for shots on target (an 8, not a 10)
+    "CM": {"passes": .2310, "key_passes": .1732, "duels_pct": .1312, "goals": .1050, "tackles_int": .0919,
+           "assists": .0787, "dribbles_won": .0656, "pass_acc": .0656, "shots_on": .0577},
     # Goals per 90 repeat 0.44 for strikers who changed club (0.36 wingers, 0.27 attacking mids),
     # near shots on target, so scoring counts more for attackers; conversion rate (0.17) is luck
-    "AM": {"rating": .11, "key_passes": .21, "shots_on": .17, "goals": .17, "dribbles_won": .10,
-           "assists": .08, "passes": .07, "duels_pct": .06, "pass_acc": .03},
-    "W": {"rating": .11, "shots_on": .19, "key_passes": .18, "goals": .22, "dribbles_won": .10,
-          "assists": .08, "passes": .05, "duels_pct": .05, "discipline": -.02},
-    "ST": {"rating": .10, "goals": .33, "shots_on": .25, "key_passes": .09, "duels_pct": .08,
-           "assists": .06, "passes": .05, "dribbles_won": .04},
+    "AM": {"key_passes": .2205, "shots_on": .1785, "goals": .1785, "assists": .1495, "dribbles_won": .1050,
+           "passes": .0735, "duels_pct": .0630, "pass_acc": .0315},
+    "W": {"goals": .2529, "shots_on": .2184, "key_passes": .2069, "dribbles_won": .1149, "assists": .0920,
+          "passes": .0575, "duels_pct": .0575},
+    "ST": {"goals": .3667, "shots_on": .2778, "key_passes": .1000, "duels_pct": .0889, "assists": .0667,
+           "passes": .0556, "dribbles_won": .0444},
 }
-
-
-# Keeper ratings rise with workload: busy keepers earn rating points for saves. Raya was 7.21 at
-# Brentford (4.1 saves per 90) and 6.86 at Arsenal (1.4). A keeper's rating is compared with what
-# his workload would give: GK_SAVES_ADJ per save per 90 away from GK_SAVES_MEAN. 0.10 made ratings
-# most consistent for keepers who changed club (Raya 7.09 -> 7.01); stronger overshoots.
-GK_SAVES_ADJ = 0.10
-GK_SAVES_MEAN = 2.9
 
 
 def metrics(s):
@@ -194,10 +203,7 @@ def metrics(s):
         return None
     p90 = lambda k: s[k] * 90 / m
     ratio = lambda a, b: s[a] / s[b] if s[b] else None
-    rating = s["rating_mins"] / s["rated_mins"] if s["rated_mins"] else None
     return {
-        "rating": rating,
-        "gk_rating": rating - GK_SAVES_ADJ * (p90("saves") - GK_SAVES_MEAN) if rating is not None else None,
         "goals": p90("goals"), "assists": p90("assists"), "shots_on": p90("shots_on"),
         "key_passes": p90("key_passes"), "dribbles_won": p90("dribbles_won"),
         "tackles_int": (s["tackles"] + s["interceptions"]) * 90 / m, "blocks": p90("blocks"),
@@ -207,6 +213,8 @@ def metrics(s):
         "save_pct": s["saves"] / (s["saves"] + s["goals_conceded"]) if s["saves"] + s["goals_conceded"] else None,
         "conceded": p90("goals_conceded"),
         "dribbled_past": p90("dribbled_past"), "pens_conceded": p90("penalties_committed"),
+        # dribbles he tried and lost (attempts - won): possession given away
+        "dribbles_lost": max(s.get("dribbles", 0) - s["dribbles_won"], 0) * 90 / m,
         # his team's xG conceded per 90 while he was on the pitch (matches with xG only)
         "team_xga": s["xga"] / s["xg_mins"] if s.get("xg_mins") else None,
     }
@@ -216,8 +224,6 @@ def _row_stats(r):
     """Stat dict for one appearance row from fixture_players."""
     d = dict(zip(STATS[3:], (x or 0 for x in r["stats"])))
     d["minutes"] = r["minutes"]
-    d["rating_mins"] = (r["rating"] or 0) * r["minutes"] if r["rating"] else 0
-    d["rated_mins"] = r["minutes"] if r["rating"] else 0
     if r.get("opp_xg") is not None:
         d["xga"] = r["opp_xg"] * r["minutes"]
         d["xg_mins"] = r["minutes"]
@@ -269,26 +275,11 @@ class Window:
         return role_group(self.label()) if self.apps else None
 
 
-def _rating_offsets(conn):
-    """Temp table rating_offsets(league_id, position, off): how far each league's average match
-    rating for a position (G/D/M/F) sits above the average across all leagues."""
-    conn.execute("create temp table if not exists rating_offsets (league_id int, position text, off double precision)")
-    if conn.execute("select count(*) from rating_offsets").fetchone()[0]:
-        return
-    conn.execute("""insert into rating_offsets
-                    select league_id, position, lr - pr from (
-                        select f.league_id, fp.position, sum(fp.rating * fp.minutes) / sum(fp.minutes) as lr,
-                               sum(sum(fp.rating * fp.minutes)) over (partition by fp.position)
-                                 / sum(sum(fp.minutes)) over (partition by fp.position) as pr
-                        from fixture_players fp join fixtures f using (fixture_id)
-                        where fp.rating is not null and fp.minutes > 0
-                        group by f.league_id, fp.position) t""")
-
-
 def _appearances(conn):
     """Every appearance, from the local cache (cache.py), in fixture order:
     (fixture_id, team, player, minutes, started, position, role, rating, season, league_id,
-    status, *STATS[3:], opponent xG), rating not yet league-adjusted (see _adjusted)."""
+    status, *STATS[3:], opponent xG). The rating column is the feed's match rating: the
+    player pages show it (export.py); the ranks don't use it."""
     fcols = ", ".join(f"fp.{c}" for c in STATS[3:])
     return cached_rows(conn, "appearances", f"""
         select {WEEK.format('f.kickoff')} as part, fp.fixture_id, fp.team_id, fp.player_id,
@@ -316,17 +307,10 @@ def _other_seasons(conn):
         [config.MATCH_PLAYER_LEAGUES], order_by="player_id, team_id, league_id")
 
 
-def _offsets(conn):
-    """{(league_id, position): rating offset} (see _rating_offsets)."""
-    _rating_offsets(conn)
-    return {(lg, pos): off for lg, pos, off in conn.execute(
-        "select league_id, position, off from rating_offsets")}
-
-
 def _adjusted(row, offsets):
-    """League-adjusted match rating of an appearance row, or None if unrated. A centre-back's
-    rating has GOAL_RATING_BONUS taken off per goal for defensive roles: API-Football adds ~0.8
-    to their rating when they score, and scoring isn't their job."""
+    """Not used by the ranks; kept for experiments/player_club_strength. League-adjusted match
+    rating of an appearance row (offsets: {(league, position): offset}), or None if unrated,
+    with GOAL_RATING_BONUS taken off per goal for defensive roles."""
     if row[7] is None:
         return None
     r = row[7] - offsets.get((row[9], row[5]), 0.0)
@@ -335,14 +319,12 @@ def _adjusted(row, offsets):
     return r
 
 
-def _add_season(entry, row, rating):
-    """Add one appearance row to a player-season's running sums, roles and positions."""
+def _add_season(entry, row, rating=None):
+    """Add one appearance row to a player-season's running sums, roles and positions (rating
+    is ignored: an old argument experiments still pass)."""
     mins = row[3] or 0
     sums = entry["sums"]
     sums["minutes"] += mins
-    if rating is not None:
-        sums["rating_mins"] += rating * mins
-        sums["rated_mins"] += mins
     for k, v in zip(STATS[3:], row[11:]):
         sums[k] += v or 0
     if row[-1] is not None:              # opponent's xG in the match
@@ -366,13 +348,13 @@ def season_group(entry):
     return FALLBACK.get(broad.most_common(1)[0][0]) if broad else None
 
 
-def _norms(apps, offsets):
+def _norms(apps):
     """{position: {metric: (mean, sd)}} from player-seasons with 900+ minutes in
     config.RATING_REFERENCE_LEAGUES."""
     seasons = defaultdict(lambda: {"sums": dict.fromkeys(SUMS, 0.0), "roles": Counter(), "broad": Counter()})
     for row in apps:
         if row[9] in REFERENCE:
-            _add_season(seasons[(row[2], row[8])], row, _adjusted(row, offsets))
+            _add_season(seasons[(row[2], row[8])], row)
     groups = defaultdict(list)
     for entry in seasons.values():
         if entry["sums"]["minutes"] < 900:
@@ -447,8 +429,16 @@ ELITE_WEIGHT = 1.0         # up to +10: great players at clubs below the very to
 # How far stats move each role group (x the stats part), and a flat offset per group. Set by
 # judgement, not measured: results can't separate position value (XI ratings added nothing on
 # top of club rank). With these Haaland (94-96) is above Davies (89-90), Kane above Alexander-Arnold.
-POSITION_STATS = {"ST": 1.0, "W": 1.0, "AM": 1.0, "CM": 0.85, "DM": 0.85, "CB": 0.7, "FB": 0.7}
-POSITION_OFFSET = {"ST": 2, "W": 1, "AM": 1, "CM": 0, "DM": -1, "CB": -2, "FB": -3}
+POSITION_STATS = {"ST": 1.0, "W": 1.0, "AM": 1.0, "CM": 0.85, "DM": 0.85, "CB": 0.7, "FB": 0.7, "WB": 0.7}
+POSITION_OFFSET = {"ST": 2, "W": 1, "AM": 1, "CM": 0, "DM": -1, "CB": -2, "FB": -3, "WB": -3}
+# Stats move a player further from his club's level the stronger the club: as OUT_STATS_WEIGHT
+# at a club rated TOP_STATS_FROM or below, rising to TOP_STATS times it at TOP_STATS_FULL and
+# above. An average season at a top club used to cost nothing (the club's level alone put an
+# ordinary regular in the world's top ten for his position); at weaker clubs nothing changes, so
+# big numbers in weaker leagues count as they did
+TOP_STATS = 2.0
+TOP_STATS_FROM = 950.0
+TOP_STATS_FULL = 1080.0
 
 
 def outfield_rank(pct, club, share=None, pos=None):
@@ -458,7 +448,8 @@ def outfield_rank(pct, club, share=None, pos=None):
     87 -> 92.5 with the soft ceiling). A player under OUT_FULL_SHARE of his club's minutes (squad player) is scaled
     down by up to 20%. pos (role group) weights the stats and adds its offset (POSITION_STATS,
     POSITION_OFFSET)."""
-    stats = OUT_STATS_WEIGHT * (pct - 50) + ELITE_WEIGHT * max(0.0, pct - ELITE_FROM)
+    top = 1 + (TOP_STATS - 1) * min(max((club - TOP_STATS_FROM) / (TOP_STATS_FULL - TOP_STATS_FROM), 0.0), 1.0)
+    stats = OUT_STATS_WEIGHT * top * (pct - 50) + ELITE_WEIGHT * max(0.0, pct - ELITE_FROM)
     r = (100 * min(club / CLUB_RANK_MAX, 1) - OUT_CLUB_OFFSET + POSITION_STATS.get(pos, 1.0) * stats
          + POSITION_OFFSET.get(pos, 0))
     if share is not None:
@@ -497,12 +488,12 @@ def _stat_score(sums, pos, norms):
                for k, w in WEIGHTS[pos].items() if m[k] is not None)
 
 
-def _season_ranks(conn, norms, apps, offsets, team_rank, retired, position_ranks=None, projections=None):
+def _season_ranks(conn, norms, apps, team_rank, retired, position_ranks=None, projections=None):
     """[(player, season, rank, minutes, gap-season club or None)] (see module docstring).
     team_rank: {(fixture, team): LT ALGO going into the match}."""
     q = lambda sql, p=None: conn.execute(sql, p).fetchall()
     return season_model(
-        norms, apps, offsets, team_rank,
+        norms, apps, team_rank,
         born=q("select player_id, birth_date from players where birth_date is not null"),
         team_level=q("""select h.team_id, f.season, avg(h.lt_before), count(*) from team_rank_history h
                         join fixtures f using (fixture_id) group by 1, 2"""),
@@ -516,14 +507,6 @@ def _season_ranks(conn, norms, apps, offsets, team_rank, retired, position_ranks
                where league_id = any(%(l)s) and status_short in ('FT', 'AET', 'PEN')) g
            group by 1, 2""", {"l": config.PLAYER_LEAGUES}),
         other_seasons=_other_seasons(conn),
-        other_offsets=q("""with l as (select league_id, left(position, 1) as pos,
-                                             sum(rating * minutes) / sum(minutes) as r
-                                      from player_seasons where rating is not null and minutes > 0 group by 1, 2),
-                               ref as (select left(position, 1) as pos, sum(rating * minutes) / sum(minutes) as r
-                                       from player_seasons where rating is not null and minutes > 0
-                                         and league_id = any(%s) group by 1)
-                          select l.league_id, l.pos, (l.r - ref.r)::float8 from l join ref using (pos)""",
-                        [config.RATING_REFERENCE_LEAGUES]),
         retired=retired, position_ranks=position_ranks, projections=projections,
         unrated=q("""select distinct on (i.player_id) i.player_id, coalesce(left(ps.position, 1), 'M')
                      from injuries i join fixtures f using (fixture_id)
@@ -532,14 +515,13 @@ def _season_ranks(conn, norms, apps, offsets, team_rank, retired, position_ranks
                      order by i.player_id, ps.season desc nulls last"""))
 
 
-def season_model(norms, apps, offsets, team_rank, born, team_level, careers, covered, team_games=(),
-                 other_seasons=(), other_offsets=(), retired=None, detail=None, position_ranks=None,
+def season_model(norms, apps, team_rank, born, team_level, careers, covered, team_games=(),
+                 other_seasons=(), retired=None, detail=None, position_ranks=None,
                  projections=None, unrated=()):
     """Season ranks: every player follows the age curve through all his seasons, from a level
     of his own, and only leaves it where he has the minutes to (see module docstring). Query
     results come in as rows so this can be run offline. other_seasons: player_seasons rows
-    (season totals) from leagues without per-match data, other_offsets: their match-rating
-    offsets by (league, position letter). retired: {player: last season}, no
+    (season totals) from leagues without per-match data. retired: {player: last season}, no
     estimates after it (retired_players). detail: a dict to fill with the
     workings per (player, season): (evidence, weight, level, curve), for checking.
     position_ranks: a dict to fill with {player: {role group: rank}} (see below). projections: a
@@ -554,7 +536,7 @@ def season_model(norms, apps, offsets, team_rank, born, team_level, careers, cov
         if row[10] not in ("FT", "AET", "PEN"):
             continue
         e = seasons[(row[2], row[8])]
-        _add_season(e, row, _adjusted(row, offsets))
+        _add_season(e, row)
         club = team_rank.get((row[0], row[1]))
         if club is not None:
             e["club"][0] += club * (row[3] or 0)
@@ -592,13 +574,12 @@ def season_model(norms, apps, offsets, team_rank, born, team_level, careers, cov
 
     #    Seasons in leagues without per-match data (Portugal, Belgium, ...) from their season
     #    totals (player_seasons), scored the same way against the same players, at the club's
-    #    real level that season. Match ratings take their league's offset off; pass accuracy is
-    #    left out where the API has none. Merged, minutes-weighted, with any per-match evidence
+    #    real level that season. Pass accuracy is left out where the API has none, and failed
+    #    dribbles everywhere (the season totals have no attempts). Merged, minutes-weighted, with any per-match evidence
     #    for the same season (a January move)
     main_pos = {}
     for (player, season), (sc, mins, pos, club) in raw.items():
         main_pos.setdefault(player, Counter())[pos] += mins
-    other_offsets = {(lg, b): off for lg, b, off in other_offsets}
     other = defaultdict(lambda: {"sums": dict.fromkeys(SUMS, 0.0), "acc": True, "club": [0.0, 0.0],
                                  "teams": Counter(), "broad": Counter(), "games": 0, "known": set(), "apps": 0})
     for (player, team, league, season, broad, mins, n_apps, rating, goals, assists, shots_on, key_passes,
@@ -607,10 +588,6 @@ def season_model(norms, apps, offsets, team_rank, born, team_level, careers, cov
         e = other[(player, season)]
         sums = e["sums"]
         sums["minutes"] += mins
-        # no rating from the API (the National League, Azerbaijan): DEFAULT_RATING
-        sums["rating_mins"] += (DEFAULT_RATING if rating is None
-                                else rating - other_offsets.get((league, broad), 0.0)) * mins
-        sums["rated_mins"] += mins
         for k, v in (("goals", goals), ("assists", assists), ("shots_on", shots_on), ("key_passes", key_passes),
                      ("passes", passes), ("tackles", tackles), ("interceptions", interceptions),
                      ("blocks", blocks), ("duels", duels), ("duels_won", duels_won),
@@ -647,10 +624,6 @@ def season_model(norms, apps, offsets, team_rank, born, team_level, careers, cov
         for k, need in METRIC_INPUTS.items():   # stats the API doesn't have are unknown, not 0
             if not e["known"] >= need:
                 m[k] = None
-        if "saves" not in e["known"]:
-            m["gk_rating"] = m["rating"]
-        if pos in GOAL_RATING_BONUS and e["apps"] and m["rating"] is not None:   # goal bonus off
-            m["rating"] -= GOAL_RATING_BONUS[pos] * e["sums"]["goals"] / e["apps"]
         sc = sum(w * (m[k] - norms[pos][k][0]) / norms[pos][k][1] for k, w in WEIGHTS[pos].items() if m[k] is not None)
         mins = e["sums"]["minutes"]
         sh = min(mins / (90 * e["games"]), 1.0) if e["games"] else None
@@ -813,53 +786,55 @@ def season_model(norms, apps, offsets, team_rank, born, team_level, careers, cov
                     for y in range(last_season + 1, last_season + FUTURE_SEASONS + 1)
                     for d in [curve(player, y, g) - c]}
 
-    # 6. How good he'd be in each outfield position: his recent seasons' stats scored with each
-    #    group's weights against that group's players (and its position weighting), minus the
-    #    same for the group he actually played; that difference, minutes-weighted over his last
-    #    POSITION_RANK_SEASONS seasons (LEVEL_DECAY ^ years back), is added to his current rank.
-    #    Gakpo as a striker is judged on striker stats against strikers. Then less for a position
-    #    he hasn't played: up to FAMILIARITY_PENALTY if he's never started there, none once it's
-    #    FAMILIAR_SHARE of his (recency-weighted) starting minutes in those seasons. Only positions
-    #    he has started in at some point in our data get a rank. Anchored on the position of his
-    #    latest season, which equals his current rank (Cherki, a winger in 24/25 and an attacking
-    #    mid since, isn't rated higher as an AM than his overall 92.1)
+    # 6. How good he is in each outfield position he has started in, not how good he is: a
+    #    level per position, as in step 4, where each season's stats are scored with that
+    #    position's weights against its players and a season played in another position counts
+    #    by how well it fits (GROUP_FIT: a winger's seasons count 0.4 towards his level as a
+    #    centre mid, an attacking mid's 0.05 towards his level as a wing-back). Then less for a
+    #    position he rarely starts in: up to FAMILIARITY_PENALTY if he's never started there in
+    #    his last POSITION_RANK_SEASONS seasons, none once it's FAMILIAR_SHARE of his
+    #    (recency-weighted) starting minutes, times 2 x (1 - how well his usual position fits
+    #    it), at most UNRELATED_MAX: a full-back at wing-back pays 0.3 of it, a winger there all
+    #    of it, an attacking mid 1.4 times it. So the rank in his own position needn't equal his
+    #    current rank: Foden, a winger who moved into midfield, is rated lower as a centre mid
+    #    than overall, on the one season he has played there
     if position_ranks is not None:
         ever = defaultdict(set)              # player -> groups he has ever started in
-        for (player, _), e in seasons.items():
-            ever[player].update(role_group(r) for r, m in e["roles"].items() if m > 0 and role_group(r))
-        now = {p: r for p, y, r, _, _ in rows if y == last_season}
-        acc = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0]))
-        played = defaultdict(Counter)        # player -> {group: recency-weighted starting minutes}
-        latest = {}                          # player -> (season, group) of his latest season used
-        for key, (sc, mins, pos, club) in raw.items():
-            player, season = key
-            if (pos == "GK" or player not in now or mins < POSITION_RANK_MINUTES
-                    or season <= last_season - POSITION_RANK_SEASONS):
-                continue
-            own = final_rank(pct(sc, pos), club, pos, share.get(key))
-            w = mins * LEVEL_DECAY ** (last_season - season)
-            if season > latest.get(player, (0, None))[0]:
-                latest[player] = (season, pos)
-            for role, rm in seasons[key]["roles"].items():
-                if role_group(role):
-                    played[player][role_group(role)] += rm * LEVEL_DECAY ** (last_season - season)
-            for g in OUTFIELD_GROUPS:
-                sc_g = sc if g == pos else _stat_score(seasons[key]["sums"], g, norms)
-                if sc_g is None:
-                    continue
-                a = acc[player][g]
-                a[0] += (final_rank(pct(sc_g, g), club, g, share.get(key)) - own) * w
-                a[1] += w
-        for player, groups in acc.items():
-            starts = sum(played[player].values())
-            fam = lambda g: min(played[player][g] / starts / FAMILIAR_SHARE, 1) if starts else 0.0
-            # anchored so his current position (his latest season's) equals his current rank
-            main = latest[player][1]
-            base = groups[main][0] / groups[main][1] if groups.get(main, [0, 0])[1] else 0.0
-            position_ranks[player] = {
-                g: round(min(max(now[player] + d / w - base
-                                 - (0 if g == main else FAMILIARITY_PENALTY * (1 - fam(g))), 0), 100), 1)
-                for g, (d, w) in groups.items() if w and g in ever[player]}
+        started = defaultdict(Counter)       # player -> {group: recency-weighted starting minutes}
+        for (player, season), e in seasons.items():
+            for role, rm in e["roles"].items():
+                g = role_group(role)
+                if rm > 0 and g:
+                    ever[player].add(g)
+                    if season > last_season - POSITION_RANK_SEASONS:
+                        started[player][g] += rm * LEVEL_DECAY ** (last_season - season)
+        now = {p for p, y, _, _, _ in rows if y == last_season}
+        mine = defaultdict(dict)             # player -> {season: (evidence, minutes, group)}
+        for (player, season), (ev, mins, pos) in evidence.items():
+            if player in now and pos != "GK":
+                mine[player][season] = (ev, mins, pos)
+        for player, have in mine.items():
+            starts = sum(started[player].values())
+            usual = started[player].most_common(1)[0][0] if starts else None
+            out = {}
+            for g in ever[player] & set(OUTFIELD_GROUPS):
+                total, wsum = PRIOR_LEVEL["OUT"] * PRIOR_MINUTES, PRIOR_MINUTES
+                for season, (ev, mins, pos) in have.items():
+                    key = (player, season)
+                    if pos != g and key in raw:      # his stats that season, had a g produced them
+                        sc_g = _stat_score(seasons[key]["sums"], g, norms)
+                        if sc_g is not None:
+                            ev = final_rank(pct(sc_g, g), raw[key][3], g, share.get(key))
+                    fit = 1.0 if pos == g else GROUP_FIT.get(frozenset((pos, g)), OFF_ROLE_FIT)
+                    w = mins * LEVEL_DECAY ** (last_season - season) * fit
+                    total += (ev - curve(player, season, g)) * w
+                    wsum += w
+                fam = min(started[player][g] / starts / FAMILIAR_SHARE, 1) if starts else 0.0
+                fit = 1.0 if usual in (g, None) else GROUP_FIT.get(frozenset((usual, g)), OFF_ROLE_FIT)
+                penalty = FAMILIARITY_PENALTY * (1 - fam) * min(2 * (1 - fit), UNRELATED_MAX)
+                out[g] = round(min(max(total / wsum + curve(player, last_season, g) - penalty, 0), 100), 1)
+            if out:
+                position_ranks[player] = out
     return rows
 
 
@@ -910,7 +885,9 @@ def _by_line(ranked):
 GROUP_FIT = {frozenset(k): v for k, v in (
     (("CB", "FB"), 0.5), (("CB", "DM"), 0.4), (("FB", "W"), 0.5), (("FB", "CM"), 0.3),
     (("FB", "DM"), 0.2), (("DM", "CM"), 0.8), (("DM", "AM"), 0.4), (("CM", "AM"), 0.7),
-    (("CM", "W"), 0.4), (("AM", "W"), 0.7), (("AM", "ST"), 0.6), (("W", "ST"), 0.6))}
+    (("CM", "W"), 0.4), (("AM", "W"), 0.7), (("AM", "ST"), 0.6), (("W", "ST"), 0.6),
+    # wing-backs fit other positions as full-backs do, and full-back itself as the same group did
+    (("FB", "WB"), 0.85), (("CB", "WB"), 0.5), (("WB", "W"), 0.5), (("WB", "CM"), 0.3), (("WB", "DM"), 0.2))}
 SAME_GROUP_FIT = 0.85      # e.g. a right-back at right wing-back, a DM in the other DM slot
 OFF_ROLE_FIT = 0.05
 WRONG_SIDE = 0.7           # a left-sided player on the right, or the other way round
@@ -994,8 +971,7 @@ def _select_lineup(minutes, out, raw_score, kickoff, formation=None, roles_of=No
 def compute_player_ratings(conn):
     appearances = _appearances(conn)
     retired = retired_players(conn, appearances)
-    offsets = _offsets(conn)
-    norms = _norms(appearances, offsets)
+    norms = _norms(appearances)
     team_rank = {(r[0], r[1]): r[8] for r in rank_history(conn)}
     ranks = list(team_rank.values())
     tr_mean = sum(ranks) / len(ranks)
@@ -1009,8 +985,7 @@ def compute_player_ratings(conn):
     fixture_league = {r[0]: r[9] for r in appearances}
     for r in appearances:
         apps[r[0]].append({"team": r[1], "player": r[2], "minutes": r[3], "started": r[4],
-                           "position": r[5], "role": r[6], "rating": _adjusted(r, offsets),
-                           "stats": r[11:], "opp_xg": r[-1]})
+                           "position": r[5], "role": r[6], "stats": r[11:], "opp_xg": r[-1]})
     injured = defaultdict(set)
     for fid, team, player in cached_rows(conn, "injuries", f"""
             select {WEEK.format('f.kickoff')} as part, i.fixture_id, i.team_id, i.player_id
@@ -1136,17 +1111,37 @@ def compute_player_ratings(conn):
     # the season model, so it follows the same age curve and minutes weighting as his seasons;
     # role and minutes from his latest window (players with nothing in the window are left off)
     position_ranks, projections = {}, {}
-    season_rows = _season_ranks(conn, norms, appearances, offsets, team_rank, retired, position_ranks, projections)
+    season_rows = _season_ranks(conn, norms, appearances, team_rank, retired, position_ranks, projections)
     this_season = max(y for _, y, _, _, _ in season_rows)
+    listed = {}                          # players on the list: {player: (raw score, role group, window minutes)}
+    for player in list(windows):
+        if player not in retired:
+            s, pos, minutes = raw_score(player, fixtures[-1][1] if fixtures else None)
+            if s is not None:
+                listed[player] = (s, pos, minutes)
+    # Backup keepers: the season model only marks a keeper down as a backup in a season he has
+    # some minutes in, so a second choice who hasn't played yet kept his old level (Pope, 18th in
+    # the world while Newcastle's No. 2). A keeper with no minutes this season, at a club in
+    # these leagues that has played BACKUP_GAMES or more, and not on an upcoming fixture's
+    # injury list, is scaled down by SQUAD_MARKDOWN, as he would be had he played one minute
+    played = Counter(t for _, _, home, away, upcoming, y in fixtures if not upcoming and y == this_season
+                     for t in (home, away))
+    coming = {f[0] for f in fixtures if f[4]}
+    unavailable = {p for (fid, _), out in injured.items() if fid in coming for p in out}
+    backups = {p for p, y, _, mins, team in season_rows
+               if y == this_season and mins == 0 and team and played[team] >= BACKUP_GAMES
+               and p not in unavailable and p in listed and windows[p].label() == "GK"}
+    if backups:
+        season_rows = [(p, y, round(r * (1 - SQUAD_MARKDOWN), 1) if y == this_season and p in backups else r, m, t)
+                       for p, y, r, m, t in season_rows]
+        for p in backups & set(projections):
+            projections[p] = {y: round(r * (1 - SQUAD_MARKDOWN), 1) for y, r in projections[p].items()}
+        log.info("Player ratings: %d keepers marked down as backups", len(backups))
     now_rank = {p: r for p, y, r, _, _ in season_rows if y == this_season}
     current, components = [], {}
-    for player in list(windows):
-        if player in retired:            # off the players list
-            continue
-        s, pos, minutes = raw_score(player, fixtures[-1][1] if fixtures else None)
-        if s is not None:
-            current.append((player, now_rank.get(player, to_rank(s, pos)), windows[player].label(), int(minutes)))
-            components[player] = components_of(s, pos)
+    for player, (s, pos, minutes) in listed.items():     # retired players are off the list
+        current.append((player, now_rank.get(player, to_rank(s, pos)), windows[player].label(), int(minutes)))
+        components[player] = components_of(s, pos)
 
     for evidence in selection_inputs.values():
         for candidate in evidence['scored_candidates']:

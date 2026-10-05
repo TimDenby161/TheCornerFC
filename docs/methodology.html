@@ -79,11 +79,16 @@ for over 45 days.</p>
 
 <h3>Player Ability</h3>
 <p>A 0–100 estimate of a player's level, where an average Premier League regular is about 75.
-It starts from the strength of the clubs he has been a regular for, then moves up or down by up to
-about 15 points depending on how his stats compare with other players in the same position:
-tackles and duels for defenders, passing and chance creation for midfielders, shots and goals for
-forwards, and so on. The stats used are the ones that repeat from season to season rather than
-luck. Players with few minutes are pulled down until they've played more.</p>
+It starts from the strength of the clubs he has been a regular for, then moves up or down
+depending on how his stats compare with other players in the same position: tackles and duels for
+defenders, passing and chance creation for midfielders, shots and goals for forwards, and so on.
+The stats move him by up to about 15 points, and by up to twice that at the strongest clubs.
+Players with few minutes are pulled down until they've played more.</p>
+<p>Only counted stats are used, such as goals, passes and tackles. A data provider's own match
+ratings are not an input. Each position has its own mix of stats, and a player also has a rating
+for every position he has started in, which says how good he is in that position and can differ
+from his overall rating. The mix for each position was set by judgement in October 2026, by
+looking at where well-known players landed, and not by a test against results.</p>
 <p>It only covers leagues with match-by-match player data, and it can't see things the data
 doesn't record, like off-the-ball work or a player carrying an injury.</p>
 
@@ -217,14 +222,19 @@ outcome we can score each week, so they're checked through what they're used for
   <li><strong>Club strength</strong> is what drives the match probabilities above. The Current /
     Baseline mix used for matches (60/40 near kick-off) scored best of the mixes tried, in both
     2024/25 and 2025 onwards.</li>
-  <li><strong>Player Ability</strong> repeats from one season to the next better than the earlier
-    version did (rank correlation 0.54, and 0.44 for players who changed club). Versions of the
-    ratings with club strength taken out did no better at predicting players' later performances,
-    and did worse at predicting match results.</li>
+  <li><strong>Player Ability</strong> was checked in an earlier version, which repeated from one
+    season to the next better than the one before it (rank correlation 0.54, and 0.44 for players
+    who changed club). Versions of the ratings with club strength taken out did no better at
+    predicting players' later performances, and did worse at predicting match results. The October
+    2026 version has not been through those checks; taking the match ratings out left the order of
+    outfield players almost unchanged and repeated as well.</li>
 </ul>
-<p>We only change a model when a test shows a clear improvement on matches it wasn't tuned on. In
-September 2026 four proposed changes were tested on past seasons this way. None cleared the bar,
-so none were made.</p>
+<p>We only change the match model when a test shows a clear improvement on matches it wasn't tuned
+on. In September 2026 four proposed changes were tested on past seasons this way. None cleared the
+bar, so none were made. Player Ability is the exception: its October 2026 rebuild was a judgement,
+as described above. The match probabilities take a small input from it (the average rating of each
+line of the predicted XI), and the rebuild moved that input by too little to change them
+noticeably.</p>
 
 <h2 id="version">Model version</h2>
 <div id="version-live" class="live" aria-live="polite"><p class="muted">Loading…</p></div>
