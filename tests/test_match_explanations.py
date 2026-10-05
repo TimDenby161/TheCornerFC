@@ -152,10 +152,10 @@ class FixturePageTests(unittest.TestCase):
             self.assertTrue(store_matches(conn, [self.match(11), self.match(12, status="FT")], why))
         self.assertEqual(cur.execute.call_args_list[0][0][0], "delete from site.matches")        # rewritten whole
         first, second = [c[0][0] for c in copy.write_row.call_args_list]
-        self.assertEqual(first[:6], (11, "2026-10-10T14:00:00+00:00", 39, 1, 2, "NS"))
-        self.assertEqual(json.loads(first[6]), self.match(11))
-        self.assertEqual((json.loads(first[7]), json.loads(first[8])), ([["strength", 0.4]], why["11"]))
-        self.assertEqual(second[6:][1:], (None, None))             # no breakdown for that prediction
+        self.assertEqual(first[:7], (11, "2026-10-10T14:00:00+00:00", 39, 1, 2, "NS", False))
+        self.assertEqual(json.loads(first[7]), self.match(11))
+        self.assertEqual((json.loads(first[8]), json.loads(first[9])), ([["strength", 0.4]], why["11"]))
+        self.assertEqual(second[8:], (None, None))                 # no breakdown for that prediction
         conn.commit.assert_called_once()
 
     def test_without_the_table_nothing_is_stored_and_the_files_are_written(self):
@@ -179,6 +179,23 @@ class FixturePageTests(unittest.TestCase):
         self.assertIn("SET search_path = ''", sql)
         self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
         self.assertIn('siteAsk("site_match_detail", { p_fixture: id })', (root / "docs/assets/app.js").read_text())
+
+    def test_views_ask_for_the_matches_they_show(self):
+        root = Path(__file__).resolve().parents[1]
+        sql = (root / "db/migrations/20261005_site_matches_queries.sql").read_text()
+        self.assertIn(sql, (root / "db/schema.sql").read_text())
+        for fn in ("site_matches(timestamptz, timestamptz, integer[], integer, integer[])", "site_match_days(text)", "site_match_detail(integer)"):
+            self.assertIn(f"REVOKE ALL ON FUNCTION public.{fn} FROM PUBLIC", sql)
+        self.assertEqual(sql.count("SET search_path = ''"), 3)
+        self.assertIn("LIMIT 2000", sql)                                    # never every match
+        self.assertIn("(p_from IS NOT NULL OR p_to IS NOT NULL OR p_leagues IS NOT NULL OR p_team IS NOT NULL OR p_ids IS NOT NULL)", sql)
+        self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
+        app = (root / "docs/assets/app.js").read_text()
+        for asked in ('siteAsk("site_matches", params)', 'siteAsk("site_match_days"', "ensureDay(state.date)", "ensureLeague(lid)", "ensureTeam(id)"):
+            self.assertIn(asked, app)
+        # the whole file is only the fallback, and the start-up files don't include it
+        self.assertEqual(app.count('getJson("data/matches.json")'), 2)
+        self.assertIn('"match_fields": SITE_MATCH_FIELDS', Path(export.__file__).read_text())
 
     def test_line_ups_come_from_the_database_for_one_match(self):
         root = Path(__file__).resolve().parents[1]

@@ -170,15 +170,15 @@ function loadPlayers() {
 
 // Every visit loads two files, whatever it opens on: the names every page uses (data/site.json:
 // the competitions, the clubs' names, when the data was made) and the club ratings. The rest is
-// fetched by the views that show it, the first time one of them opens (TAB_NEEDS and the club,
-// player and league pages): the matches, the model's record, the paper bets, the FPL findings.
+// fetched by the views that show it, the first time one of them opens (TAB_NEEDS): which days
+// and competitions have matches, the model's record, the paper bets, the FPL findings. The
+// matches themselves are asked for as they are shown (the matches section below).
 const lazy = {}, lazyIn = new Set();          // each on its way, and the ones that are in
 function loadOnce(name, fetcher) {
   return lazy[name] ||= fetcher().then(() => { lazyIn.add(name); }, (err) => { delete lazy[name]; throw err; });
 }
-const loadMatches = () => loadOnce("matches", () => getJson("data/matches.json").then((m) => {
-  state.data.matches = rowsToObjects(m.fields, m.matches);
-  state.matchesTab = state.matchCountries = state.intlLeagues = null;      // anything worked out before they were in
+const loadMatches = () => loadOnce("matches", () => loadMatchDays().then(() => {
+  state.matchCountries = state.intlLeagues = null;      // anything worked out before they were in
   if (!state.date) state.date = defaultDate();
 }));
 const loadStats = () => loadOnce("stats", () => getJsonOrNull("data/stats.json").then((st) => {
@@ -192,9 +192,12 @@ const loadBets = () => loadOnce("bets", () => getJsonOrNull("data/bets.json").th
   renderBetFilters();
 }));
 const loadFplFindings = () => loadOnce("fpl", () => getJsonOrNull("data/fpl.json").then((fpl) => { state.fpl = fpl; }));
-const LAZY = { matches: loadMatches, stats: loadStats, bets: loadBets, fpl: loadFplFindings };
-// A page that shows a club's or player's matches draws without them if they can't be fetched
-const matchesOrNone = () => loadMatches().catch((err) => { console.error(err); });
+// Model vs Market draws each open selection on its match's card: those matches, by id
+const loadTipMatches = () => loadOnce("tipMatches", () => loadBets().then(() =>
+  ensureIds([...new Set((state.bets?.bets || []).filter((b) => !b.result).map((b) => b.fixture))])));
+const LAZY = { matches: loadMatches, stats: loadStats, bets: loadBets, fpl: loadFplFindings, tipMatches: loadTipMatches };
+// A page that shows a club's or a competition's matches draws without them if they can't be fetched
+const quiet = (asked) => asked.catch((err) => { console.error(err); });
 
 async function loadData() {
   try {
@@ -402,12 +405,81 @@ function flagLink(c) {
 }
 const natLink = (nat) => nat ? `<a class="nat-link" href="#/nation/${encodeURIComponent(nat)}">${escapeHtml(nat)}</a>` : "";
 
+// ------------------------------------------------------------------ matches: the ones a view shows
+// state.data.matches holds the matches fetched so far, oldest first, not every match. A view asks
+// the database for the ones it shows (site_matches: a day's, a competition's, a club's, or a
+// list of ids); they are added to the list, and the code that draws matches filters it as it
+// always did. A match comes with the key reasons its card shows. What the date controls and the
+// competition menu need without any match (which days and competitions have matches) comes from
+// site_match_days. If the database can't answer, or its files are from before it could, the
+// whole of data/matches.json is read once, as it used to be, and everything is answered from it
+// (matchStore.all).
+const matchStore = { byId: new Map(), got: new Set(), asking: new Map(), all: false, days: null };
+function addMatches(fields, rows, reasons = {}) {
+  for (const r of rows) {
+    const m = Object.fromEntries(fields.map((f, i) => [f, r[i]]));
+    if (reasons[m.id]) m.reasons = reasons[m.id];
+    matchStore.byId.set(m.id, m);
+  }
+  state.data.matches = [...matchStore.byId.values()].sort((a, b) => a.kickoff.localeCompare(b.kickoff) || a.id - b.id);
+  state.matchesTab = state.roundsCache = null;       // worked out from the list before these were in
+}
+// days: [day on this visitor's calendar, competition, matches] (postponed ones left out);
+// leagues: the competitions with matches; intl: [competition, matches] for the international
+// ones, most matches first. As site_match_days answers, worked out here from the whole file
+function matchDaysFrom(list) {
+  const days = new Map(), intl = new Map();
+  for (const m of list) {
+    if (m.intl) intl.set(m.league, (intl.get(m.league) || 0) + 1);
+    if (m.status === "PST") continue;
+    const k = `${localDateStr(new Date(m.kickoff))}|${m.league}`;
+    days.set(k, (days.get(k) || 0) + 1);
+  }
+  return { days: [...days].map(([k, n]) => [k.split("|")[0], Number(k.split("|")[1]), n]),
+    leagues: [...new Set(list.map((m) => m.league))], intl: [...intl].sort((a, b) => b[1] - a[1] || a[0] - b[0]) };
+}
+function loadAllMatches() {
+  return matchStore.whole ||= getJson("data/matches.json").then((m) => {
+    addMatches(m.fields, m.matches);
+    matchStore.all = true;
+    matchStore.days = matchDaysFrom(state.data.matches);
+  }, (err) => { matchStore.whole = null; throw err; });
+}
+const loadMatchDays = () => matchStore.daysAsked ||= (state.data.match_fields
+  ? siteAsk("site_match_days", { p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" })
+    .then((d) => { matchStore.days = d; }, (err) => { console.warn(`matches: read from the published file (${err.message})`); return loadAllMatches(); })
+  : loadAllMatches()).catch((err) => { matchStore.daysAsked = null; throw err; });
+const haveMatches = (key) => matchStore.all || matchStore.got.has(key);
+function askMatches(key, params) {
+  if (haveMatches(key)) return Promise.resolve();
+  if (!state.data.match_fields) return loadAllMatches();
+  if (!matchStore.asking.has(key)) matchStore.asking.set(key, siteAsk("site_matches", params).then((d) => {
+    addMatches(state.data.match_fields, d.matches, d.reasons);
+    matchStore.got.add(key);
+  }, (err) => { console.warn(`matches: read from the published file (${err.message})`); return loadAllMatches(); })
+    .finally(() => matchStore.asking.delete(key)));
+  return matchStore.asking.get(key);
+}
+// a day on this visitor's calendar, a competition's matches, a club's, and matches by id
+function ensureDay(day) {
+  const from = parseDateInput(day), to = parseDateInput(day);
+  to.setDate(to.getDate() + 1);
+  return askMatches(`d:${day}`, { p_from: from.toISOString(), p_to: to.toISOString() });
+}
+const ensureLeague = (lid) => askMatches(`l:${lid}`, { p_leagues: `{${lid}}` });
+const ensureTeam = (id) => askMatches(`t:${id}`, { p_team: id });
+function ensureIds(ids) {
+  const need = ids.filter((id) => !matchStore.byId.has(id)).sort((a, b) => a - b);
+  return need.length ? askMatches(`i:${need.join(",")}`, { p_ids: `{${need.join(",")}}` }) : Promise.resolve();
+}
 // The Matches tab leaves out postponed games (they come back under their new date once rescheduled)
 const matchesTab = () => state.matchesTab ||= state.data.matches.filter((m) => m.status !== "PST");
+// The days with matches, oldest first, in these competitions (null: any)
+const matchDays = (ids = null) => [...new Set((matchStore.days?.days || []).filter(([, lid]) => !ids || ids.includes(lid)).map(([day]) => day))].sort();
 // Today if anything is on, otherwise the nearest upcoming day with matches
 function defaultDate() {
   const today = localDateStr(new Date());
-  const days = [...new Set(matchesTab().map((m) => localDateStr(new Date(m.kickoff))))].sort();
+  const days = matchDays();
   if (days.includes(today)) return today;
   return days.find((d) => d > today) || days[days.length - 1] || today;
 }
@@ -728,15 +800,12 @@ function filterLeagueIds(f, countries) {
   return [Number(f)];
 }
 function matchCountries() {
-  return state.matchCountries ||= compCountries(state.data.matches.map((m) => m.league));
+  return matchStore.days ? state.matchCountries ||= compCountries(matchStore.days.leagues) : [];
 }
 const matchLeagueIds = (f = state.matchFilter) => filterLeagueIds(f, matchCountries());
 // National team competitions on the Matches tab (national_fixtures), most matches first
 function intlLeagues() {
-  if (state.intlLeagues) return state.intlLeagues;
-  const count = new Map();
-  for (const m of state.data.matches) if (m.intl) count.set(m.league, (count.get(m.league) || 0) + 1);
-  return state.intlLeagues = [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || a - b);
+  return matchStore.days ? state.intlLeagues ||= matchStore.days.intl.map(([lid]) => lid) : [];
 }
 // Stats: every competition with stats in any range, so the menu stays put when the range changes
 function statsCountries() {
@@ -911,7 +980,8 @@ function loadExplanations() {
     .then((j) => { state.explain = j?.matches || {}; state.explainModels = j?.models || {}; fillReasons(); });
   return state.explainLoading;
 }
-const explainOf = (m) => state.explain?.[String(m.id)] || null;
+// (a match from the database carries its reasons; one from the whole file has them in explanations.json)
+const explainOf = (m) => m.reasons ? { reasons: m.reasons } : state.explain?.[String(m.id)] || null;
 // One match's full explanation, asked of the database when its card's model detail is opened
 // (site_match_detail, once per match); null if the match has none. Until the database has the
 // matches table, or if it doesn't answer, it comes from the match's own file as before
@@ -919,7 +989,8 @@ const explainOf = (m) => state.explain?.[String(m.id)] || null;
 const whyPages = new Map();
 function loadWhy(id) {
   if (!whyPages.has(id)) whyPages.set(id, siteAsk("site_match_detail", { p_fixture: id }).catch(() => null)
-    .then((row) => row ? row.why : getJsonOrNull(`data/fixtures/${id}.json`).then((fx) => fx?.why || null)));
+    .then((row) => row ? row.why && Object.assign(row.why, { model_info: row.model })      // the version that made it, by name
+      : getJsonOrNull(`data/fixtures/${id}.json`).then((fx) => fx?.why || null)));
   return whyPages.get(id);
 }
 // One match's line-ups by team, asked of the database when its line-ups are opened (site_lineups):
@@ -1034,7 +1105,7 @@ function whyDetailHtml(m, x) {
   }
 
   if (x) {
-    const v = state.explainModels?.[x.model];
+    const v = x.model_info || state.explainModels?.[x.model];
     const model = v?.name ? `${escapeHtml(v.name)}${v.code ? ` · ${escapeHtml(v.code)}` : ""}` : null;
     section("Data", detailRow("Model inputs", `${escapeHtml(whenText(x.captured_at))}`, `Inputs ${SOURCE_TEXT[x.source] || x.source}`)
       + (x.source !== "prospective" ? detailRow("Captured", escapeHtml(SOURCE_TEXT[x.source] || x.source)) : "")
@@ -1125,7 +1196,7 @@ function matchCard(m, { lineups = true } = {}) {
     <div class="match-card${cls}" data-fixture="${m.id}">
       ${matchHead(m, `${badge}${statusTag(m)}`)}
       ${probBars(m, false)}
-      ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${loadExplanations() && reasonsHtml(m)}</div>` : ""}
+      ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${(matchStore.all && loadExplanations(), reasonsHtml(m))}</div>` : ""}
       ${upcoming && !m.intl ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
       ${toggles ? `<div class="card-toggles">${toggles}</div>` : ""}
       ${m.p_home != null ? `<div class="why-detail" hidden></div>` : ""}
@@ -1244,8 +1315,18 @@ function renderMatches(menu = true) {
   const container = $("#matches-list");
   $("#date-input").value = state.date;
   if (menu) renderMatchFilters();
-  // One competition: the round bar (‹ round › Next) and that round's matches by day
   const lid = matchSingleLeague();
+  // The matches this view shows: one competition's (for its rounds), else the day's. Asked for
+  // if they aren't in yet, then drawn, unless something else has been chosen by then
+  const viewKey = () => state.tab === "matches" && (matchSingleLeague() != null ? `l:${matchSingleLeague()}` : `d:${state.date}`);
+  const key = viewKey() || (lid != null ? `l:${lid}` : `d:${state.date}`);
+  if (!haveMatches(key)) {
+    container.innerHTML = `<div class="empty-state">Loading matches…</div>`;
+    (lid != null ? ensureLeague(lid) : ensureDay(state.date)).then(() => { if (viewKey() === key) renderMatches(false); },
+      (err) => { console.error(err); if (viewKey() === key) container.innerHTML = loadError("the matches"); });
+    return;
+  }
+  // One competition: the round bar (‹ round › Next) and that round's matches by day
   const rounds = lid != null ? matchRounds(lid) : [];
   const byRound = rounds.length > 0;
   $("#date-input").hidden = byRound;
@@ -1254,6 +1335,11 @@ function renderMatches(menu = true) {
   $("#date-today").title = byRound ? "The round on now or next up" : "";
   $("#date-prev").setAttribute("aria-label", byRound ? "Previous round" : "Previous day");
   $("#date-next").setAttribute("aria-label", byRound ? "Next round" : "Next day");
+  if (byRound && state.roundDate) {       // a link's date: the round on that day (or the next one after it)
+    const r = rounds.find((x) => localDateStr(new Date(x.last)) >= state.roundDate);
+    if (r) state.round = r.key;
+  }
+  state.roundDate = null;
   if (byRound) {
     if (!rounds.some((r) => r.key === state.round)) state.round = nextRound(lid);
     const i = rounds.findIndex((r) => r.key === state.round);
@@ -1289,11 +1375,10 @@ function renderMatches(menu = true) {
     .filter((m) => localDateStr(new Date(m.kickoff)) === day);
 
   if (!shown.length) {
-    const upcoming = matchesTab()
-      .filter((m) => (!ids || ids.includes(m.league)) && localDateStr(new Date(m.kickoff)) > day)[0];
+    const upcoming = matchDays(ids).find((d) => d > day);
     const on = parseDateInput(day);            // the year too, when it isn't this one
     container.innerHTML = `<div class="empty-state">No matches on ${escapeHtml(fmtDay(on))}${on.getFullYear() === new Date().getFullYear() ? "" : ` ${on.getFullYear()}`}.${upcoming
-      ? `<br><br><button type="button" class="filter-chip" data-goto="${localDateStr(new Date(upcoming.kickoff))}">Next: ${escapeHtml(fmtDay(upcoming.kickoff))}</button>` : ""}</div>`;
+      ? `<br><br><button type="button" class="filter-chip" data-goto="${upcoming}">Next: ${escapeHtml(fmtDay(parseDateInput(upcoming)))}</button>` : ""}</div>`;
     return;
   }
 
@@ -2806,7 +2891,7 @@ async function openClubPage(id, want = null) {
   body.innerHTML = `<div class="empty-state">Loading ${escapeHtml(teamName(id))}…</div>`;
   const r = state.rankByTeam.get(id);
   // its league's file too, for the domestic table position
-  const [club] = await Promise.all([loadClub(id), r?.in_league ? loadLeague(r.league) : null, loadPlayers(), matchesOrNone()]);
+  const [club] = await Promise.all([loadClub(id), r?.in_league ? loadLeague(r.league) : null, loadPlayers(), quiet(ensureTeam(id))]);
   state.injuries ||=await getJsonOrNull("data/injuries.json");
   if (Number(location.hash.match(/^#\/club\/(\d+)/)?.[1]) !== id) return;      // moved on while loading
   if (!club && loadFailed(`clubs/${id}`)) { body.innerHTML = loadError("this club's page"); return; }
@@ -3819,7 +3904,7 @@ function openTeam(teamId) {
     (results.length ? `<div class="modal-section">Recent results</div>${results.slice(0, 8).map((m) => row(m, true)).join("")}` : "");
   showDialog($("#team-modal"));
   state.modalTeam = teamId;
-  if (!lazyIn.has("matches")) matchesOrNone().then(() => { if (!$("#team-modal").hidden && state.modalTeam === teamId && lazyIn.has("matches")) openTeam(teamId); });
+  if (!haveMatches(`t:${teamId}`)) quiet(ensureTeam(teamId)).then(() => { if (!$("#team-modal").hidden && state.modalTeam === teamId && haveMatches(`t:${teamId}`)) openTeam(teamId); });
   // the predicted XI comes from players.json: drawn again with it if the pop-up is still on this club
   if (state.players === undefined)
     loadPlayers().then(() => { if (!$("#team-modal").hidden && state.modalTeam === teamId) openTeam(teamId); });
@@ -3843,15 +3928,16 @@ async function openPlayerPage(id, want = null) {
   showPage();
   state.club = null;
   const body = $("#club-body");
-  if (state.players === undefined || !lazyIn.has("matches")) {
+  if (state.players === undefined) {
     body.innerHTML = `<div class="empty-state">Loading…</div>`;
-    await Promise.all([loadPlayers(), matchesOrNone()]);      // his club's next match is on his page
+    await loadPlayers();
     if (!here()) return;      // moved on while loading
   }
   const p = state.players && playerById(id);
   if (!p) { body.innerHTML = loadFailed("players") ? loadError("the players") : `<div class="empty-state">This player isn't in the current ranks.</div>`; return; }
   setTitle(p.name);
   body.innerHTML = `<div class="empty-state">Loading ${escapeHtml(p.name)}…</div>`;
+  if (p.team) await quiet(ensureTeam(p.team));        // his club's next match is on his page
   if (!playerPages.has(id)) {
     const d = await loadPlayerFile(id);
     if (d) playerPages.set(id, { ...d, seasonRows: rowsToObjects(d.season_fields, d.seasons), matchRows: rowsToObjects(d.match_fields, d.matches) });
@@ -4717,7 +4803,7 @@ async function openLeaguePage(lid, want = null) {
   state.club = null;
   const comp = state.data.competitions[lid];
   $("#club-body").innerHTML = `<div class="empty-state">Loading ${escapeHtml(comp?.name || "competition")}…</div>`;
-  const [lg] = await Promise.all([loadLeague(lid), matchesOrNone()]);       // its fixtures carry the model's predictions
+  const [lg] = await Promise.all([loadLeague(lid), quiet(ensureLeague(lid))]);       // its fixtures carry the model's predictions
   if (Number(location.hash.match(/^#\/league\/(\d+)/)?.[1]) !== lid) return;      // moved on while loading
   if (!lg && !comp && !loadFailed(`leagues/${lid}`)) return showNotFound();
   const tabs = LEAGUE_TABS.filter(([k]) => (k !== "table" && k !== "projected") || lg?.tableRows.length);
@@ -6137,7 +6223,7 @@ function renderTabHead(key) {
 // ------------------------------------------------------------------ wiring
 // These tabs are each drawn the first time they're opened, once the files they need are in
 const TAB_DRAW = { matches: renderMatches, table: renderTable, stats: renderStats, bets: renderBets, tips: renderTips, fpl: renderFpl };
-const TAB_NEEDS = { matches: ["matches"], tips: ["matches", "bets", "stats"], bets: ["bets"], stats: ["stats"], fpl: ["fpl"] };
+const TAB_NEEDS = { matches: ["matches"], tips: ["bets", "stats", "tipMatches"], bets: ["bets"], stats: ["stats"], fpl: ["fpl"] };
 // True when the tab's files are in. If not, they are fetched behind the "Loading…" note and
 // then() runs once they arrive, unless another view has been opened in the meantime.
 function tabReady(tab, then) {
@@ -6274,10 +6360,8 @@ const TAB_QUERY = {
       if (knownFilter(q.c, "ei")) state.matchFilter = q.c;
       if (!/^\d{4}-\d\d-\d\d$/.test(q.d || "")) return;
       state.date = q.d;
-      // one competition is shown by round: the round on that day (or the next one after it)
-      const lid = matchSingleLeague();
-      const round = lid == null ? null : matchRounds(lid).find((r) => localDateStr(new Date(r.last)) >= q.d);
-      if (round) state.round = round.key;
+      // one competition is shown by round: the round on that day, found once its matches are in (renderMatches)
+      state.roundDate = q.d;
     },
     draw: () => renderMatches() },
   stats: {
@@ -6333,16 +6417,19 @@ function syncPageTab(base, tabs, tab) {
 $("#skip-link").addEventListener("click", (e) => { e.preventDefault(); $("#main").focus(); });
 window.addEventListener("hashchange", route);
 window.addEventListener("popstate", route);
-$("#match-filters").addEventListener("click", (e) => {
+$("#match-filters").addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-filter]");
   if (!btn) return;
   state.matchFilter = btn.dataset.filter;
   const lid = matchSingleLeague();
-  if (lid != null && matchRounds(lid).length) return setRound(nextRound(lid));
+  if (lid != null) {               // one competition goes by round: its matches say what its rounds are
+    await quiet(ensureLeague(lid));
+    if (state.matchFilter !== btn.dataset.filter) return;       // another was picked while they came
+    if (matchRounds(lid).length) return setRound(nextRound(lid));
+  }
   // nothing in this filter on the day shown: go to its next day with fixtures (or its last, once it's over)
   const ids = matchLeagueIds();
-  const days = [...new Set(matchesTab().filter((m) => !ids || ids.includes(m.league))
-    .map((m) => localDateStr(new Date(m.kickoff))))].sort();
+  const days = matchDays(ids);
   if (days.length && !days.includes(state.date)) {
     state.date = days.find((d) => d > state.date) || days[days.length - 1];
     return renderMatches();
@@ -6522,7 +6609,8 @@ async function setMatchPart(card, part, open) {
   const why = card.querySelector(".why-detail");
   why.hidden = !open;
   if (open) {
-    const [x] = await Promise.all([loadWhy(m.id), loadExplanations()]);     // the model names are with the reasons
+    const x = await loadWhy(m.id);
+    if (x && !x.model_info) await loadExplanations();     // from its file: the model's name is with every match's reasons
     why.innerHTML = whyDetailHtml(m, x);
   }
 }

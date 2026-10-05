@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-05.
 -- The matches as rows in the database, not as files (owner, 2026-10-05: convert Matches and the
 -- match model detail to tables and queries, with Players to follow). First use: a match's model
 -- detail, which was one stored file per match (4,088 of them).

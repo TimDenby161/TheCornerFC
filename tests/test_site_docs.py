@@ -168,7 +168,7 @@ class SiteReaderTests(unittest.TestCase):
         self.assertIn('getJsonOrNull("data/site.json"), getJson("data/rankings.json")', start)
         for later in ('stats.json', 'bets.json', 'fpl.json', 'loadEuroCups()'):
             self.assertNotIn(later, start)
-        self.assertIn('const TAB_NEEDS = { matches: ["matches"], tips: ["matches", "bets", "stats"], bets: ["bets"], stats: ["stats"], fpl: ["fpl"] };', app)
+        self.assertIn('const TAB_NEEDS = { matches: ["matches"], tips: ["bets", "stats", "tipMatches"], bets: ["bets"], stats: ["stats"], fpl: ["fpl"] };', app)
         # the export writes the names apart from the matches, and won't publish without them
         self.assertIn("site.json", export.CRITICAL_JSON_FILES)
         source = (ROOT / 'thecornerfc/export.py').read_text()

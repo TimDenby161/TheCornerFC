@@ -415,6 +415,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
         "competitions": competitions,
         "teams": teams,
         "nation_pages": nation_pages,
+        "match_fields": SITE_MATCH_FIELDS,      # the order of a match's row, as site_matches() returns them
     }, separators=(",", ":")), encoding="utf-8")
     (out_dir / "matches.json").write_text(json.dumps({
         "generated_at": generated,
@@ -553,7 +554,8 @@ SITE_MATCH_FIELDS = ["id", "kickoff", "league", "round", "home", "away", "status
 def store_matches(conn, matches, explained=None):
     """site.matches: every match on the site as a row, with the key reasons its card shows and
     its full model detail (export_explanations), for the database functions the site asks
-    (db/migrations/20261005_site_matches.sql: site_match_detail). matches: the rows of
+    (db/migrations/20261005_site_matches.sql and 20261005_site_matches_queries.sql: site_matches,
+    site_match_days, site_match_detail). matches: the rows of
     matches.json, in SITE_MATCH_FIELDS order. The table is rewritten whole, in one transaction.
 
     True once stored. False, with nothing written, on a read-only run or a database from before
@@ -566,19 +568,22 @@ def store_matches(conn, matches, explained=None):
         log.info("Matches not stored: %s", exc)
         return False
     (table,) = conn.execute("select to_regclass(%s)", ["site.matches"]).fetchone()
-    if table is None:
-        log.warning("site.matches isn't there yet (db/migrations/20261005_site_matches.sql): the matches weren't stored")
+    ready = table is not None and conn.execute(
+        "select 1 from pg_attribute where attrelid = 'site.matches'::regclass and attname = 'intl' and not attisdropped").fetchone()
+    if not ready:
+        log.warning("site.matches isn't ready (db/migrations/20261005_site_matches.sql and "
+                    "20261005_site_matches_queries.sql): the matches weren't stored")
         return False
     text = lambda value: None if value is None else json.dumps(value, separators=(",", ":"), ensure_ascii=False)
     at = {name: i for i, name in enumerate(SITE_MATCH_FIELDS)}
     with conn.cursor() as cur:
         cur.execute("delete from site.matches")
-        with cur.copy("""copy site.matches (fixture_id, kickoff, league_id, home_id, away_id, status, data, reasons, why)
+        with cur.copy("""copy site.matches (fixture_id, kickoff, league_id, home_id, away_id, status, intl, data, reasons, why)
                          from stdin""") as copy:
             for row in matches:
                 why = explained.get(str(row[at["id"]]))
                 copy.write_row((row[at["id"]], row[at["kickoff"]], row[at["league"]], row[at["home"]], row[at["away"]],
-                                row[at["status"]], text(row), text(why and why["reasons"]), text(why)))
+                                row[at["status"]], bool(row[at["intl"]]), text(row), text(why and why["reasons"]), text(why)))
         cur.execute("analyze site.matches")
     conn.commit()
     log.info("Stored %d matches (%d with model detail)", len(matches), sum(str(m[0]) in explained for m in matches))
