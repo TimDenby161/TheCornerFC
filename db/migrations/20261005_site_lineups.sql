@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-05.
 -- A match's line-ups, asked for when its card is opened (owner, 2026-10-05: a page gets the data
 -- it shows, when it shows it). Until now the export worked out every match's line-ups ahead of
 -- time (2.7 MB inside players.json, then 7,000 one-match files for a few hours). They are already
