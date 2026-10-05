@@ -432,8 +432,8 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     explained = export_explanations(conn, out_dir, now)
     export_methodology(conn, out_dir, now)
     export_injuries(conn, out_dir)
-    player_team, lineups = export_players(conn, out_dir)
-    export_fixture_pages(out_dir, explained, lineups)
+    player_team = export_players(conn, out_dir)
+    export_fixture_pages(out_dir, explained)
     detail = export_player_seasons(conn, out_dir)
     export_clubs(conn, out_dir, _club_positions(player_team, detail["positions"]))
     export_leagues(conn, out_dir)
@@ -539,18 +539,13 @@ def export_explanations(conn, out_dir=OUT_DIR, now=None):
     return out
 
 
-def export_fixture_pages(out_dir, explained=None, lineups=None):
-    """One small file per match, for what its card shows when opened:
-    docs/data/fixtures/<fixture_id>.json. "why": the explanation (export_explanations). "xi": the
-    predicted XI by team, "actual": the XI that started, "prematch": the XI the model predicted
-    before the team sheet (export_players; rows are [player, name, role, rank]). Only the parts a
-    match has. A page asks for one match's file, never every match's."""
-    pages = defaultdict(dict)
-    for fid, entry in (explained or {}).items():
-        pages[str(fid)]["why"] = entry
-    for part, by_fixture in (lineups or {}).items():
-        for fid, teams in by_fixture.items():
-            pages[str(fid)][part] = teams
+def export_fixture_pages(out_dir, explained=None):
+    """One small file per explained match, for its card's model detail:
+    docs/data/fixtures/<fixture_id>.json, {"id", "why": the explanation (export_explanations)}.
+    A page asks for one match's file, never every match's. The explanation is worked out here in
+    Python and stored nowhere else, which is why it is a file; the match's line-ups are in the
+    database already, and the site asks it for them (site_lineups)."""
+    pages = {str(fid): {"why": entry} for fid, entry in (explained or {}).items()}
     fixture_dir = Path(out_dir) / "fixtures"
     fixture_dir.mkdir(parents=True, exist_ok=True)
     for old in fixture_dir.glob("*.json"):
@@ -1143,8 +1138,8 @@ def export_players(conn, out_dir=OUT_DIR):
     """Current player ranks, season ranks and each team's predicted XI for its next match
     (players.json). A season rank is the player's average rank across that season (after each
     match, weighted by minutes; player_season_ranks), blank if he didn't play in these leagues.
-    Returns ({player: his club}, the line-ups by match: {"xi", "actual", "prematch"}); the
-    line-ups go in each match's own file (export_fixture_pages), not in players.json."""
+    A match's own line-ups aren't here: the site asks the database for the match it opens
+    (site_lineups). Returns {player: his club}."""
     # Listed: 450+ minutes in his last 20 appearances, a 1,500+ minute season in the seasons
     # shown (an established player back from injury, e.g. John Stones), or in a current squad
     # (a new signing). His club: the squad he's in now (team_squads), else the club the weekly
@@ -1217,67 +1212,13 @@ def export_players(conn, out_dir=OUT_DIR):
     for team, fid, player, name, pos, rank in lineups:
         entry = next_xi.setdefault(str(team), {"fixture": fid, "players": []})
         entry["players"].append([player, name, pos, float(rank) if rank is not None else None])
-    all_lineups = conn.execute(
-        """select pl.fixture_id, pl.team_id, pl.player_id, p.name, pl.position, pl.player_rank
-           from predicted_lineups pl join players p using (player_id)
-           order by pl.fixture_id, pl.team_id, pl.player_id""").fetchall()
-    fixture_xi = {}
-    for fid, team, player, name, pos, rank in all_lineups:
-        fixture_xi.setdefault(str(fid), {}).setdefault(str(team), []).append(
-            [player, name, pos, float(rank) if rank is not None else None])
-    actual_lineups = conn.execute(
-        f"""with starters as (
-                select fixture_id, team_id, player_id,
-                       coalesce(role, case position when 'G' then 'GK' when 'D' then 'CB'
-                                      when 'M' then 'CM' when 'F' then 'ST' end) role,
-                       1 src
-                from fixture_players where started
-                union all
-                select fixture_id, team_id, player_id, role, 2 src from fixture_lineups),
-            x as (select distinct on (fixture_id, team_id, player_id) fixture_id, team_id, player_id, role
-                  from starters order by fixture_id, team_id, player_id, src)
-            select x.fixture_id, x.team_id, x.player_id, p.name, x.role,
-                  coalesce(fpr.player_rank, p.current_rank)
-            from x join fixtures f using (fixture_id)
-            join players p using (player_id)
-            left join fixture_player_ranks fpr on fpr.fixture_id = x.fixture_id and fpr.player_id = x.player_id
-            where f.status_short = any(%s) and f.kickoff > now() - interval '{PAST_DAYS} days'
-            order by x.fixture_id, x.team_id, x.player_id""", [list(config.FINISHED_STATUSES)]).fetchall()
-    actual_xi = {}
-    for fid, team, player, name, pos, rank in actual_lineups:
-        actual_xi.setdefault(str(fid), {}).setdefault(str(team), []).append(
-            [player, name, pos, float(rank) if rank is not None else None])
-    # the XI the model predicted for those matches: its last genuine pre-match capture, taken before
-    # the official XI was first seen (evaluation.load_lineups' rule), so the site can mark each
-    # starter as predicted or not. [id, name, role, rank going into the match]
-    prematch_xi = {}
-    if actual_xi and _table_exists(conn, "lineup_prediction_snapshots") and _table_exists(conn, "official_lineup_snapshots"):
-        snapshots = conn.execute(
-            """select distinct on (s.fixture_id, s.team_id) s.fixture_id, s.team_id, s.players
-               from lineup_prediction_snapshots s
-               where s.source = 'prospective' and s.fixture_id = any(%s)
-                 and s.captured_at < coalesce((select min(o.captured_at) from official_lineup_snapshots o
-                     where o.fixture_id = s.fixture_id and o.team_id = s.team_id
-                       and o.effective_at = s.effective_at), 'infinity'::timestamptz)
-               order by s.fixture_id, s.team_id, s.captured_at desc, s.snapshot_id desc""",
-            [[int(f) for f in actual_xi]]).fetchall()
-        ids = list({p["player"] for *_, ps in snapshots for p in ps if p.get("predicted_starter")})
-        names = dict(conn.execute("select player_id, name from players where player_id = any(%s)", [ids]).fetchall())
-        for fid, team, ps in snapshots:
-            prematch_xi.setdefault(str(fid), {})[str(team)] = [
-                [p["player"], names.get(p["player"], ""), p.get("role"), p.get("player_rating")]
-                for p in ps if p.get("predicted_starter")]
+    # (each match's own line-ups aren't exported: the site asks the database for the match it
+    # opens, site_lineups in db/migrations/20261005_site_lineups.sql, which uses this order too)
     # team-sheet order: keeper, defence right to left, midfield, attack
     order = {r: i for i, r in enumerate(["GK", "RB", "RWB", "CB", "LB", "LWB", "DM", "CM", "RM", "LM",
                                           "AM", "RW", "LW", "ST"])}
     for entry in next_xi.values():
         entry["players"].sort(key=lambda x: (order.get(x[2], 99), -(x[3] or 0)))
-    for teams in fixture_xi.values():
-        for xi_players in teams.values():
-            xi_players.sort(key=lambda x: (order.get(x[2], 99), -(x[3] or 0)))
-    for teams in actual_xi.values():
-        for xi_players in teams.values():
-            xi_players.sort(key=lambda x: (order.get(x[2], 99), -(x[3] or 0)))
     # this season so far, all his clubs (PLAYER_SEASON_FIELDS): the per-match leagues first, else
     # the season totals where his league has them (player_seasons). No match rating: API-Football's
     # rating isn't published anywhere on the site
@@ -1316,8 +1257,7 @@ def export_players(conn, out_dir=OUT_DIR):
             "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])},
     }, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
     log.info("Exported %d player ranks and %d predicted XIs", len(players), len(next_xi))
-    # {player: his club}, for the club files' positions; and each match's line-ups, for its file
-    return {r[0]: r[5] for r in players}, {"xi": fixture_xi, "actual": actual_xi, "prematch": prematch_xi}
+    return {r[0]: r[5] for r in players}       # {player: his club}, for the club files' positions
 
 
 def _club_spells(rows):

@@ -19,6 +19,15 @@ const DATA_SOURCE = (() => {
 // says to keep it for a year, since the address changes when the content does; without one it
 // says to ask again each time. A key with no row answers null, which is this site's "not found"
 // (missing); any other failure, the function not being there included, is the database's.
+// A database function that answers one page's question from the tables themselves, such as
+// site_lineups (one match's line-ups, db/migrations/20261005_site_lineups.sql). Fixed SQL on the
+// database's side; params are its arguments. Nothing is prepared in advance and nothing is kept.
+async function siteAsk(fn, params) {
+  const r = await fetch(`${SUPABASE.url}/rest/v1/rpc/${fn}?${new URLSearchParams({ ...params, apikey: SUPABASE.key })}`);
+  if (!r.ok) throw Object.assign(new Error(`${fn}: ${r.status}`), { status: r.status });
+  return r.json();
+}
+
 async function siteDoc(key, hash) {
   const q = new URLSearchParams({ p_key: key, apikey: SUPABASE.key });
   if (hash) q.set("p_v", hash);

@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-05.
 -- site_doc() was slow on the big rows: 2 to 4 seconds for 'players' (5 MB) and over the anon
 -- role's 3 second limit for 'lineups_history' (8 MB), more so with several readers at once
 -- (measured 2026-10-05, the day the site started reading the table). The time went on rebuilding
