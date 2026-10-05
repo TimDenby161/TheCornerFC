@@ -162,6 +162,20 @@ class SiteReaderTests(unittest.TestCase):
             self.assertLess(html.index('<script src="assets/data.js">'), html.index(f'<script src="assets/{script}">'), page)
             self.assertIn("connect-src 'self' https://bookkurhdabdeccckjbn.supabase.co;", html, page)
 
+    def test_a_visit_loads_the_names_and_ratings_and_each_view_its_own_files(self):
+        app = (ROOT / 'docs/assets/app.js').read_text()
+        start = app[app.index('async function loadData()'):app.index('function renderFreshness()')]
+        self.assertIn('getJsonOrNull("data/site.json"), getJson("data/rankings.json")', start)
+        for later in ('stats.json', 'bets.json', 'fpl.json', 'loadEuroCups()'):
+            self.assertNotIn(later, start)
+        self.assertIn('const TAB_NEEDS = { matches: ["matches"], tips: ["matches", "bets", "stats"], bets: ["bets"], stats: ["stats"], fpl: ["fpl"] };', app)
+        # the export writes the names apart from the matches, and won't publish without them
+        self.assertIn('"site.json"', str(export.CRITICAL_JSON_FILES))
+        source = (ROOT / 'thecornerfc/export.py').read_text()
+        matches = source[source.index('(out_dir / "matches.json").write_text'):source.index('(out_dir / "rankings.json").write_text')]
+        for moved in ('"teams"', '"competitions"', '"nation_pages"', '"freshness"'):
+            self.assertNotIn(moved, matches)
+
     def test_the_database_is_the_default_and_is_asked_by_key(self):
         reader = (ROOT / 'docs/assets/data.js').read_text()
         self.assertIn(': "db";', reader)

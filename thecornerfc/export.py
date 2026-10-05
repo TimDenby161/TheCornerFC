@@ -30,7 +30,7 @@ PAST_DAYS = 21       # recent results shown on the site
 FUTURE_DAYS = 60     # upcoming fixtures shown on the site
 FORM_GAMES = 6       # rank change over this many recent games = "form"
 CRITICAL_JSON_FILES = (
-    "matches.json", "rankings.json", "stats.json", "bets.json",
+    "site.json", "matches.json", "rankings.json", "stats.json", "bets.json",
     "injuries.json", "players.json", "player_seasons.json",
 )
 CRITICAL_DETAIL_DIRS = ("players", "clubs", "leagues")
@@ -406,9 +406,18 @@ def _write_site_data(conn, out_dir=OUT_DIR):
         teams.setdefault(team, name)
 
     generated = now.isoformat()
-    (out_dir / "matches.json").write_text(json.dumps({
+    # site.json: what every page needs whatever it shows (the competitions, the clubs' names, when
+    # the data was made). It is one of the two files loaded on every visit (rankings.json is the
+    # other); matches.json is fetched by the views that show matches.
+    (out_dir / "site.json").write_text(json.dumps({
         "generated_at": generated,
         "freshness": site_freshness(conn),
+        "competitions": competitions,
+        "teams": teams,
+        "nation_pages": nation_pages,
+    }, separators=(",", ":")), encoding="utf-8")
+    (out_dir / "matches.json").write_text(json.dumps({
+        "generated_at": generated,
         "fields": ["id", "kickoff", "league", "round", "home", "away", "status", "hg", "ag",
                    "pen_h", "pen_a", "p_home", "p_draw", "p_away", "home_xg", "away_xg",
                    "likely", "home_rank", "away_rank", "source", "rating", "r_winner",
@@ -416,9 +425,6 @@ def _write_site_data(conn, out_dir=OUT_DIR):
                    "home_missing", "away_missing", "p_over25", "p_btts",
                    "home_xi", "home_recent_xi", "away_xi", "away_recent_xi", "intl"],
         "matches": matches,
-        "competitions": competitions,
-        "teams": teams,
-        "nation_pages": nation_pages,
     }, separators=(",", ":")), encoding="utf-8")
     (out_dir / "rankings.json").write_text(json.dumps({
         "generated_at": generated,

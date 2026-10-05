@@ -15,13 +15,8 @@ def write_json(path, payload):
 
 
 def write_valid_export(root, marker):
-    write_json(root / "matches.json", {
-        "generated_at": "test",
-        "fields": ["id"],
-        "matches": [],
-        "competitions": {},
-        "teams": {},
-    })
+    write_json(root / "site.json", {"generated_at": "test", "competitions": {}, "teams": {}})
+    write_json(root / "matches.json", {"generated_at": "test", "fields": ["id"], "matches": []})
     write_json(root / "rankings.json", {
         "generated_at": "test",
         "fields": ["team"],
