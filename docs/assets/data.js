@@ -1,11 +1,11 @@
 "use strict";
 
-// Where the site's data comes from. The export publishes every data file twice: in data/ on
-// GitHub Pages, and as a row of the database's site.docs table, keyed by the file's path without
-// ".json" ("matches", "clubs/42"). The table can't be read directly: site_doc() returns one row by
-// its key (db/migrations/20261005_site_doc_cache.sql). The site reads the database (since
-// 2026-10-05), and the published file if the database doesn't answer; ?data=files in the address
-// reads the files only, and ?data=db says the default out loud.
+// Where the site's data comes from: the database. The export writes every data file as a row of
+// the site.docs table, keyed by the file's path without ".json" ("matches", "clubs/42"). The
+// table can't be read directly: site_doc() returns one row by its key
+// (db/migrations/20261005_site_doc_cache.sql). There are no data files on the published site.
+// ?data=files in the address reads data/ beside the page instead, for a local copy that has its
+// own export there; ?data=db says the default out loud.
 // The key below is Supabase's public key: on its own the database lets it call nothing but the
 // functions granted to it (site_doc here; the owner-only FPL data and the accounts in app.js).
 const SUPABASE = { url: "https://bookkurhdabdeccckjbn.supabase.co", key: "sb_publishable_JZ_oJVHIO75SFbFc95LQew_3wmKuvM7" };

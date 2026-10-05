@@ -1,5 +1,5 @@
-"""data/manifest.json (export.write_manifest): the site keeps a data file until its hash here
-changes, so the manifest must be rewritten, and committed, whenever a top-level data file is."""
+"""The manifest (export.write_manifest): the site keeps a top-level row of data until its hash
+here changes, so the manifest must be rewritten whenever a top-level data file is."""
 import hashlib
 import json
 from pathlib import Path
@@ -58,12 +58,13 @@ class ManifestTests(unittest.TestCase):
         publish = (ROOT / 'thecornerfc/export.py').read_text().split('def _publish_export', 1)[1].split('\ndef ', 1)[0]
         self.assertLess(publish.index('write_manifest(staged)'), publish.index('_replace_export(staged'))
 
-    def test_every_workflow_that_commits_data_commits_the_manifest(self):
+    def test_no_workflow_commits_data(self):
+        # the data goes to the database (site.docs and the site.* tables); nothing is committed
         for path in sorted((ROOT / '.github/workflows').glob('*.yml')):
-            for added in re.findall(r'git add (.+)', path.read_text()):
-                paths = added.split()
-                if any(p.startswith('docs/data') for p in paths):
-                    self.assertTrue('docs/data' in paths or 'docs/data/manifest.json' in paths, f'{path.name}: {added}')
+            text = path.read_text()
+            for gone in ('git add', 'git commit', 'git push', 'contents: write'):
+                self.assertNotIn(gone, text, path.name)
+        self.assertIn('\ndocs/data/\n', (ROOT / '.gitignore').read_text())
 
     def test_site_checks_the_hash_before_trusting_a_kept_copy(self):
         app = (ROOT / 'docs/assets/app.js').read_text()

@@ -47,7 +47,7 @@ jobs:
     needs: check
     if: needs.check.outputs.run == 'true'
     permissions:
-      contents: write      # to commit the website data in docs/data
+      contents: read       # the data goes to the database, nothing is committed
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -58,7 +58,7 @@ jobs:
       THECORNERFC_NATIONAL_SYNC: "true"     # national fixtures and their line-ups (about 20-40 calls a night, more on the first run)
     steps:
       # A run queued behind another db-sync job would otherwise check out the commit from when it
-      # was queued; take the branch tip at start instead, so it builds on the last job's data
+      # was queued; take the branch tip at start instead, so it runs the latest code
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.ref }}
@@ -107,7 +107,7 @@ jobs:
           python -m thecornerfc fpl results
 
       # Publication only happens after a fully successful critical pipeline run.
-      # If nightly fails, the workflow stays red and the last committed docs/data remains live.
+      # If nightly fails, the workflow stays red and the site goes on showing the last export's rows.
       - name: Export website data
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
@@ -123,17 +123,6 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           FPL_CAPTURE_ENABLED: "true"
         run: python -m thecornerfc fpl team
-
-      - name: Commit website data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898183+github-actions[bot]@users.noreply.github.com"
-          git add docs/data
-          if ! git diff --cached --quiet; then
-            git commit -m "Update website data"
-            git pull --rebase -X theirs   # on a clash, this run's freshly generated data wins
-            git push
-          fi
 
       - name: Save query cache
         if: always()

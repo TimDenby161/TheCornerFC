@@ -26,7 +26,7 @@ permissions: {}
 jobs:
   backfill:
     permissions:
-      contents: write      # to commit docs/data/nations.json
+      contents: read       # the data goes to the database, nothing is committed
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -70,17 +70,6 @@ jobs:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python -m thecornerfc nations
-
-      - name: Commit website data
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898183+github-actions[bot]@users.noreply.github.com"
-          git add docs/data
-          if ! git diff --cached --quiet; then
-            git commit -m "Update website data"
-            git pull --rebase -X theirs   # on a clash, this run's freshly generated data wins
-            git push
-          fi
 
       - name: Report API usage
         if: always()
