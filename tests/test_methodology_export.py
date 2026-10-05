@@ -192,10 +192,14 @@ class LineupHistoryExportTests(unittest.TestCase):
         conn = record_conn(history=[(7, 2, list(range(11)), self.ROLES, T1, 39, 1, 2)], starters=starters)
         cur = MagicMock()
         cur.__enter__.return_value = cur
+        cur.execute.return_value.fetchone.return_value = ("site.lineup_history_refresh()",)
         copy = cur.copy.return_value.__enter__.return_value
         conn.cursor.return_value = cur
         rows = self.export(conn, writable=True)
-        cur.execute.assert_called_once_with("delete from site.lineup_history")
+        # the rows, then the whole-history counts the function reads, then one commit
+        self.assertEqual([c[0][0] for c in cur.execute.call_args_list],
+                         ["delete from site.lineup_history", "select to_regprocedure('site.lineup_history_refresh()')",
+                          "select site.lineup_history_refresh()"])
         self.assertIn("copy site.lineup_history (fixture_id, team_id, kickoff, day,", cur.copy.call_args[0][0])
         copy.write_row.assert_called_once_with(rows[0])
         conn.commit.assert_called_once()
@@ -213,6 +217,21 @@ class LineupHistoryExportTests(unittest.TestCase):
         self.assertIn("REVOKE ALL ON site.lineup_history FROM PUBLIC", sql)
         self.assertIn("SET search_path = ''", sql)
         self.assertIn("LIMIT least(greatest(coalesce(p_limit, 50), 1), 1000)", sql)       # never the whole table
+        self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
+
+    def test_the_whole_history_is_read_from_counts_made_once_per_export(self):
+        root = Path(__file__).resolve().parents[1]
+        sql = (root / "db/migrations/20261005_site_lineup_history_fast.sql").read_text()
+        self.assertIn(sql, (root / "db/schema.sql").read_text())
+        for table in ("site.lineup_history_teams", "site.lineup_history_days", "site.lineup_history_often"):
+            self.assertIn(f"CREATE TABLE IF NOT EXISTS {table} (", sql)
+            self.assertIn(f"FROM {table} ", sql)                    # read by the function
+            self.assertIn(f"DELETE FROM {table};", sql)             # and counted again by the refresh
+        self.assertIn("WHERE p_days IS NULL", sql)                  # the counts are for the whole history only
+        self.assertIn("LIMIT least(greatest(coalesce(p_limit, 50), 1), 1000)", sql)
+        self.assertIn("REVOKE ALL ON FUNCTION site.lineup_history_refresh() FROM PUBLIC", sql)
+        self.assertIn("SELECT site.lineup_history_refresh();", sql)
+        self.assertEqual(sql.count("SET search_path = ''"), 2)
         self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
 
 

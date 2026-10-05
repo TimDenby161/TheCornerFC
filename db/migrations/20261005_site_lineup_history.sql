@@ -1,4 +1,5 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-05. The function was replaced the same day by
+-- 20261005_site_lineup_history_fast.sql: this version read every row on every request.
 -- The Line-up record's reconstructed history, asked for as it is shown (owner, 2026-10-05: a page
 -- gets the data it shows). Until now the site downloaded every scored line-up (63,000 rows,
 -- 6.5 MB) and added them up in the browser to show four totals, a few tables and 50 rows.

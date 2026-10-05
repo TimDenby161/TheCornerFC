@@ -931,9 +931,11 @@ def export_lineup_history(conn, out_dir=OUT_DIR, now=None):
 
     Stored in the database, not in a file (it was lineups_history.json, 6.5 MB): the tab asks
     site_lineup_history() for the totals and the rows it shows
-    (db/migrations/20261005_site_lineup_history.sql). The table is rewritten whole, in one
-    transaction. A read-only run stores nothing, and neither does a database from before the
-    migration (logged); any other failure stops the run. Returns the rows:
+    (db/migrations/20261005_site_lineup_history.sql). The table is rewritten whole and the
+    whole-history counts the function reads are counted again from it
+    (site.lineup_history_refresh, 20261005_site_lineup_history_fast.sql), in one transaction. A
+    read-only run stores nothing, and neither does a database from before the migration
+    (logged); any other failure stops the run. Returns the rows:
     (fixture, team, kickoff, match date, league, opponent, home, starters named, in the right
     role, with both roles known, lines, missed, wrong)."""
     rows = []
@@ -972,6 +974,11 @@ def export_lineup_history(conn, out_dir=OUT_DIR, now=None):
                               correct, roles_right, roles_known, lines, missed, wrong) from stdin""") as copy:
             for row in rows:
                 copy.write_row(row)
+        (refresh,) = cur.execute("select to_regprocedure('site.lineup_history_refresh()')").fetchone()
+        if refresh is not None:
+            cur.execute("select site.lineup_history_refresh()")
+        else:
+            log.warning("site.lineup_history_refresh() isn't there yet (db/migrations/20261005_site_lineup_history_fast.sql)")
     conn.commit()
     log.info("Stored the reconstructed line-up history (%s team line-ups)", len(rows))
     return rows
