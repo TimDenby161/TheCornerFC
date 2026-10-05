@@ -102,5 +102,40 @@ class MigrationTests(unittest.TestCase):
         self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
 
 
+class CacheMigrationTests(unittest.TestCase):
+    """site_doc(p_key, p_v): the function the site reads through (20261005_site_doc_cache.sql)."""
+    SQL = (ROOT / 'db/migrations/20261005_site_doc_cache.sql').read_text()
+
+    def test_migration_is_in_the_schema(self):
+        self.assertIn(self.SQL, (ROOT / 'db/schema.sql').read_text())
+
+    def test_one_function_and_only_it_is_reachable(self):
+        # the one-argument function goes: two that both answer site_doc(p_key) would be ambiguous
+        self.assertIn("DROP FUNCTION IF EXISTS public.site_doc(text);", self.SQL)
+        self.assertIn("REVOKE ALL ON FUNCTION public.site_doc(text, text) FROM PUBLIC", self.SQL)
+        self.assertIn("AND NOT paid", self.SQL)
+        self.assertIn("SET search_path = ''", self.SQL)
+        self.assertNotIn("GRANT SELECT", self.SQL.upper().replace("GRANT EXECUTE", ""))
+
+    def test_kept_only_when_asked_for_by_its_hash(self):
+        # the manifest's hash is the first 16 characters of the file's sha256 (export.write_manifest)
+        self.assertIn("p_v = pg_catalog.left(doc.sha256, 16)", self.SQL)
+        self.assertIn('"Cache-Control": "no-cache"', self.SQL)
+
+
+class SiteReaderTests(unittest.TestCase):
+    def test_pages_load_the_reader_before_the_scripts_that_use_it(self):
+        for page, script in (('index.html', 'app.js'), ('methodology.html', 'methodology.js')):
+            html = (ROOT / 'docs' / page).read_text()
+            self.assertLess(html.index('<script src="assets/data.js">'), html.index(f'<script src="assets/{script}">'), page)
+            self.assertIn("connect-src 'self' https://bookkurhdabdeccckjbn.supabase.co;", html, page)
+
+    def test_files_are_the_default_and_the_database_is_asked_by_key(self):
+        reader = (ROOT / 'docs/assets/data.js').read_text()
+        self.assertIn(': "files";', reader)
+        self.assertIn("/rest/v1/rpc/site_doc?", reader)
+        self.assertIn('q.set("p_v", hash)', reader)
+
+
 if __name__ == '__main__':
     unittest.main()

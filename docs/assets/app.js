@@ -97,10 +97,14 @@ function rowsToObjects(fields, rows) {
 // for as long as the hash stands. The copy is hashed before it's trusted: one that doesn't match
 // (a deploy caught half way) is fetched afresh. Club, player, league and nation files aren't in
 // the manifest and are revalidated as before. A file already on its way is shared, not fetched twice.
+// Read from the database (DATA_SOURCE "db", data.js) it is the same idea with less to do: the
+// manifest is a row too, and a row asked for by its hash is kept by the browser on the database's
+// say-so, so nothing is hashed here. Rows outside the manifest are fetched each time.
 const inflight = new Map();
 let manifest = null;
-const dataManifest = () => manifest ||= fetch("data/manifest.json", { cache: "no-cache" })
-  .then((r) => (r.ok ? r.json() : null)).then((m) => m?.files || {}, () => ({}));
+const dataManifest = () => manifest ||= (DATA_SOURCE === "db" ? siteDoc("manifest")
+  : fetch("data/manifest.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)))
+  .then((m) => m?.files || {}, () => ({}));
 const httpError = (path, r) => Object.assign(new Error(`${path}: ${r.status}`), { status: r.status });
 async function sha16(buf) {
   const d = new Uint8Array(await crypto.subtle.digest("SHA-256", buf));
@@ -108,6 +112,18 @@ async function sha16(buf) {
 }
 async function fetchJson(path) {
   const hash = (await dataManifest())[path.replace(/^data\//, "")];
+  if (DATA_SOURCE === "db") {
+    try {
+      return await siteDoc(path.replace(/^data\//, "").replace(/\.json$/, ""), hash);
+    } catch (err) {
+      if (err.missing) throw err;
+      // the database didn't answer: the published file, for as long as the export still writes one
+      console.warn(`${path}: read from the published file (${err.message})`);
+      const r = await fetch(path, { cache: "no-cache" });
+      if (!r.ok) throw httpError(path, r);
+      return r.json();
+    }
+  }
   if (!hash || !globalThis.crypto?.subtle) {
     const r = await fetch(path, { cache: "no-cache" });
     if (!r.ok) throw httpError(path, r);
@@ -5302,9 +5318,8 @@ function renderFpl() {
 // predictions (FPL prices, positions, status, gameweeks) and the owner's team aren't in data/. They're
 // in Supabase, read through fpl_owner_data, which answers only when the visitor is signed in as the
 // owner (the accounts section below) and returns the lock-ins too. The EFL Fantasy predictions are
-// kept the same way (audit L11; owner's decision 2026-10-04). The key below is Supabase's public
-// key: on its own the database lets it call nothing (db/migrations/20261004_fpl_owner_login.sql).
-const SUPABASE = { url: "https://bookkurhdabdeccckjbn.supabase.co", key: "sb_publishable_JZ_oJVHIO75SFbFc95LQew_3wmKuvM7" };
+// kept the same way (audit L11; owner's decision 2026-10-04). SUPABASE (data.js) holds Supabase's
+// public key: on its own the database lets it call nothing (db/migrations/20261004_fpl_owner_login.sql).
 const FPL_ENTRY = 3996593;   // the owner's FPL entry (FPL_TEAM_ENTRY)
 const storedText = (k) => { try { return localStorage.getItem(`fc.${k}`) || ""; } catch { return ""; } };
 const storeText = (k, v) => { try { if (v) localStorage.setItem(`fc.${k}`, v); else localStorage.removeItem(`fc.${k}`); } catch { /* not stored */ } };

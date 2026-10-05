@@ -1288,8 +1288,9 @@ signed in in that browser (README: Accounts).
 `site.docs` holds a copy of every file in `docs/data`, one row per file, keyed by its path without `.json` (`matches`, `clubs/42`). `export.mirror_site_docs` writes it after every export, `nations` and `matchday` run: only rows whose file changed are written, rows whose file has gone are deleted, in one transaction. A read-only run, or a database without the table, skips it with a log line.
 
 - The table is in the `site` schema, which the Data API doesn't expose. The only way to read it is `site_doc(key)`, which returns one row's JSON and never a row marked `paid`.
-- **The site still reads the files.** Nothing calls `site_doc` yet.
-- The migration is `db/migrations/20261004_site_docs.sql` (applied 2026-10-04; also in `db/schema.sql`). The checks are at the bottom of the file.
+- **The site still reads the files by default.** `docs/assets/data.js` holds the switch: `?data=db` in the address reads every data file through `site_doc` instead, and `?data=files` the files. If the database doesn't answer, the page reads the published file.
+- Unchanged data isn't downloaded again. The site asks for a row with its content hash from the `manifest` row (`site_doc(key, hash)`); when the hash is the row's, the database tells the browser to keep the answer for a year. Rows outside the manifest (club, player, league and nation pages) are fetched each time.
+- The migrations are `db/migrations/20261004_site_docs.sql` (applied 2026-10-04) and `db/migrations/20261005_site_doc_cache.sql` (the hash argument; **not applied yet**). Both are in `db/schema.sql`, with their checks at the bottom of each file. Until the second is applied, `?data=db` gets the top-level files from `docs/data` and only the page rows from the database.
 
 ### Accounts
 

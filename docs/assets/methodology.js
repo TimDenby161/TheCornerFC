@@ -120,9 +120,13 @@ function renderVersion(d) {
 
 async function main() {
   try {
-    const res = await fetch("data/methodology.json", { cache: "no-cache" });
-    if (!res.ok) throw new Error(res.status);
-    const d = await res.json();
+    // from the database or the published file (data.js); the file if the database doesn't answer
+    const file = async () => {
+      const res = await fetch("data/methodology.json", { cache: "no-cache" });
+      if (!res.ok) throw new Error(res.status);
+      return res.json();
+    };
+    const d = DATA_SOURCE === "db" ? await siteDoc("methodology").catch(file) : await file();
     renderFreshness(d);
     renderMatches(d.matches);
     renderLineups(d.lineups);

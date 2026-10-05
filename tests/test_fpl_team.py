@@ -168,9 +168,9 @@ class LockMigrationTests(unittest.TestCase):
 
     def test_page_allows_only_this_supabase_project(self):
         page = (ROOT / 'docs/index.html').read_text()
-        app = (ROOT / 'docs/assets/app.js').read_text()
+        reader = (ROOT / 'docs/assets/data.js').read_text()      # SUPABASE is defined there, for every page
         self.assertIn("connect-src 'self' https://bookkurhdabdeccckjbn.supabase.co;", page)
-        self.assertIn('url: "https://bookkurhdabdeccckjbn.supabase.co"', app)
+        self.assertIn('url: "https://bookkurhdabdeccckjbn.supabase.co"', reader)
         self.assertIn('<script src="assets/fpl-planner.js"></script>', page)
 
 
