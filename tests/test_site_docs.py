@@ -170,7 +170,7 @@ class SiteReaderTests(unittest.TestCase):
             self.assertNotIn(later, start)
         self.assertIn('const TAB_NEEDS = { matches: ["matches"], tips: ["matches", "bets", "stats"], bets: ["bets"], stats: ["stats"], fpl: ["fpl"] };', app)
         # the export writes the names apart from the matches, and won't publish without them
-        self.assertIn('"site.json"', str(export.CRITICAL_JSON_FILES))
+        self.assertIn("site.json", export.CRITICAL_JSON_FILES)
         source = (ROOT / 'thecornerfc/export.py').read_text()
         matches = source[source.index('(out_dir / "matches.json").write_text'):source.index('(out_dir / "rankings.json").write_text')]
         for moved in ('"teams"', '"competitions"', '"nation_pages"', '"freshness"'):
