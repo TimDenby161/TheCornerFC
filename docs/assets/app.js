@@ -905,18 +905,21 @@ function probBars(m, diff = true) {
 // ---- Why the model says what it says. Everything below formats predictions.explain() output;
 // none of it is worked out here. data/explanations.json has each match's key reasons, for its
 // card (loaded when the first card with reasons is drawn); the full detail is in the match's own
-// file (loadWhy), fetched when that card's model detail is opened.
+// row (loadWhy), fetched when that card's model detail is opened.
 function loadExplanations() {
   state.explainLoading ||= getJsonOrNull("data/explanations.json")
     .then((j) => { state.explain = j?.matches || {}; state.explainModels = j?.models || {}; fillReasons(); });
   return state.explainLoading;
 }
 const explainOf = (m) => state.explain?.[String(m.id)] || null;
-// One match's full explanation, from its own file (data/fixtures/<id>.json): asked for when its
-// card's model detail is opened, once; null if the match has none.
+// One match's full explanation, asked of the database when its card's model detail is opened
+// (site_match_detail, once per match); null if the match has none. Until the database has the
+// matches table, or if it doesn't answer, it comes from the match's own file as before
+// (data/fixtures/<id>.json).
 const whyPages = new Map();
 function loadWhy(id) {
-  if (!whyPages.has(id)) whyPages.set(id, getJsonOrNull(`data/fixtures/${id}.json`).then((fx) => fx?.why || null));
+  if (!whyPages.has(id)) whyPages.set(id, siteAsk("site_match_detail", { p_fixture: id }).catch(() => null)
+    .then((row) => row ? row.why : getJsonOrNull(`data/fixtures/${id}.json`).then((fx) => fx?.why || null)));
   return whyPages.get(id);
 }
 // One match's line-ups by team, asked of the database when its line-ups are opened (site_lineups):
