@@ -429,10 +429,11 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     log.info("Exported %d matches and %d rankings to %s", len(matches), len(rankings), out_dir)
     export_stats(conn, out_dir)
     export_bets(conn, out_dir)
-    export_explanations(conn, out_dir, now)
+    explained = export_explanations(conn, out_dir, now)
     export_methodology(conn, out_dir, now)
     export_injuries(conn, out_dir)
-    player_team = export_players(conn, out_dir)
+    player_team, lineups = export_players(conn, out_dir)
+    export_fixture_pages(out_dir, explained, lineups)
     detail = export_player_seasons(conn, out_dir)
     export_clubs(conn, out_dir, _club_positions(player_team, detail["positions"]))
     export_leagues(conn, out_dir)
@@ -495,8 +496,11 @@ def explanation(inputs, league_id, home_totals, away_totals, stored, meta):
 
 def export_explanations(conn, out_dir=OUT_DIR, now=None):
     """docs/data/explanations.json: for every match on the site whose prediction has a snapshot,
-    the parts of that prediction (see predictions.explain), when its inputs were captured and
-    the model version that made it (details once each, under "models"). The site loads it after the matches, so it doesn't slow the first page."""
+    the key reasons its card shows, and the model versions (details once each, under "models").
+    The site loads it after the matches, so it doesn't slow the first page. Returns every match's
+    full entry (the parts of the prediction, see predictions.explain, when its inputs were captured
+    and the model version that made it): each goes in the match's own file (export_fixture_pages),
+    fetched when its card's detail is opened."""
     now = now or datetime.now(timezone.utc)
     out, models = {}, {}
     (registry,) = conn.execute("select to_regclass('public.match_prediction_snapshots')").fetchone()
@@ -529,8 +533,35 @@ def export_explanations(conn, out_dir=OUT_DIR, now=None):
                 out[str(fid)] = entry
                 models[version_id] = {"name": version_name, "code": code_sha[:7] if code_sha else None}
     _write_json_file(out_dir / "explanations.json",
-                     {"generated_at": now.isoformat(), "models": models, "matches": out})
+                     {"generated_at": now.isoformat(), "models": models,
+                      "matches": {fid: {"reasons": entry["reasons"]} for fid, entry in out.items()}})
     log.info("Exported explanations for %d matches", len(out))
+    return out
+
+
+def export_fixture_pages(out_dir, explained=None, lineups=None):
+    """One small file per match, for what its card shows when opened:
+    docs/data/fixtures/<fixture_id>.json. "why": the explanation (export_explanations). "xi": the
+    predicted XI by team, "actual": the XI that started, "prematch": the XI the model predicted
+    before the team sheet (export_players; rows are [player, name, role, rank]). Only the parts a
+    match has. A page asks for one match's file, never every match's."""
+    pages = defaultdict(dict)
+    for fid, entry in (explained or {}).items():
+        pages[str(fid)]["why"] = entry
+    for part, by_fixture in (lineups or {}).items():
+        for fid, teams in by_fixture.items():
+            pages[str(fid)][part] = teams
+    fixture_dir = Path(out_dir) / "fixtures"
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    for old in fixture_dir.glob("*.json"):
+        if old.stem not in pages:
+            old.unlink()
+    for fid, page in pages.items():
+        payload = json.dumps({"id": int(fid), **page}, separators=(",", ":"), ensure_ascii=False)
+        path = fixture_dir / f"{fid}.json"
+        if not path.exists() or path.read_text(encoding="utf-8") != payload:
+            path.write_text(payload, encoding="utf-8")
+    log.info("Exported %d match pages", len(pages))
 
 
 STAT_RANGES = {"7d": 7, "30d": 30, "90d": 90, "365d": 365}
@@ -1111,7 +1142,9 @@ LISTED = """p.current_rank is not null and (p.rank_minutes >= 450 or exists (
 def export_players(conn, out_dir=OUT_DIR):
     """Current player ranks, season ranks and each team's predicted XI for its next match
     (players.json). A season rank is the player's average rank across that season (after each
-    match, weighted by minutes; player_season_ranks), blank if he didn't play in these leagues."""
+    match, weighted by minutes; player_season_ranks), blank if he didn't play in these leagues.
+    Returns ({player: his club}, the line-ups by match: {"xi", "actual", "prematch"}); the
+    line-ups go in each match's own file (export_fixture_pages), not in players.json."""
     # Listed: 450+ minutes in his last 20 appearances, a 1,500+ minute season in the seasons
     # shown (an established player back from injury, e.g. John Stones), or in a current squad
     # (a new signing). His club: the squad he's in now (team_squads), else the club the weekly
@@ -1278,15 +1311,13 @@ def export_players(conn, out_dir=OUT_DIR):
                      pos_12m.get(r[0], []), pos_ranks.get(r[0], {}),
                      [future[r[0]].get(y) for y in future_seasons], season_stats.get(r[0])] for r in players],
         "next_xi": next_xi,
-        "fixture_xi": fixture_xi,
-        "actual_xi": actual_xi,
-        "prematch_xi": prematch_xi,
         # names of players' clubs outside the club rankings (a move out of our leagues)
         "teams": {str(t): n for t, n in conn.execute(
             "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])},
     }, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
     log.info("Exported %d player ranks and %d predicted XIs", len(players), len(next_xi))
-    return {r[0]: r[5] for r in players}       # {player: his club}, for the club files' positions
+    # {player: his club}, for the club files' positions; and each match's line-ups, for its file
+    return {r[0]: r[5] for r in players}, {"xi": fixture_xi, "actual": actual_xi, "prematch": prematch_xi}
 
 
 def _club_spells(rows):

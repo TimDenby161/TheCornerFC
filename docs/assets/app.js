@@ -159,14 +159,12 @@ function loadPlayers() {
     if (pj) {        // API-Football sends some names HTML-encoded ("O&apos;Reilly")
       for (const r of pj.players) r[1] = decodeEntities(r[1]);
       for (const xi of Object.values(pj.next_xi || {})) for (const r of xi.players) r[1] = decodeEntities(r[1]);
-      for (const k of ["fixture_xi", "actual_xi", "prematch_xi"])
-        for (const teams of Object.values(pj[k] || {})) for (const xi of Object.values(teams)) for (const r of xi) r[1] = decodeEntities(r[1]);
     }
     // his season so far by name (minutes, goals, assists); a file from before the fields were named
     // has the older, longer layout
     const seasonFields = pj?.season_fields || ["minutes", "rating", "goals", "assists", "club_minutes"];
-    state.players = pj ? { list: rowsToObjects(pj.fields, pj.players).map((p) => ({ ...p, season: p.season && Object.fromEntries(seasonFields.map((f, i) => [f, p.season[i]])) })), nextXi: pj.next_xi, fixtureXi: pj.fixture_xi || {},
-      actualXi: pj.actual_xi || {}, prematchXi: pj.prematch_xi || {}, seasons: pj.seasons || [], futureSeasons: pj.future_seasons || [], teams: pj.teams || {} } : null;
+    state.players = pj ? { list: rowsToObjects(pj.fields, pj.players).map((p) => ({ ...p, season: p.season && Object.fromEntries(seasonFields.map((f, i) => [f, p.season[i]])) })), nextXi: pj.next_xi,
+      seasons: pj.seasons || [], futureSeasons: pj.future_seasons || [], teams: pj.teams || {} } : null;
   });
 }
 
@@ -883,15 +881,28 @@ function probBars(m, diff = true) {
     + (diff ? `<div class="market-line" title="${DIFF_TIP}">Difference (model − market) H ${d[0]} · D ${d[1]} · A ${d[2]}</div>` : "");
 }
 
-// ---- Why the model says what it says. Everything below formats predictions.explain() output
-// from data/explanations.json (loaded when the first match card with key reasons is drawn, or a
-// card's model detail is opened); none of it is worked out here.
+// ---- Why the model says what it says. Everything below formats predictions.explain() output;
+// none of it is worked out here. data/explanations.json has each match's key reasons, for its
+// card (loaded when the first card with reasons is drawn); the full detail is in the match's own
+// file (loadFixture), fetched when that card's model detail is opened.
 function loadExplanations() {
   state.explainLoading ||= getJsonOrNull("data/explanations.json")
     .then((j) => { state.explain = j?.matches || {}; state.explainModels = j?.models || {}; fillReasons(); });
   return state.explainLoading;
 }
 const explainOf = (m) => state.explain?.[String(m.id)] || null;
+// One match's file (data/fixtures/<id>.json): its explanation ("why") and its line-ups by team
+// ("xi" predicted, "actual" as started, "prematch" as predicted before the team sheet). Asked for
+// when a card is opened, once; null if the match has none.
+const fixturePages = new Map();
+function loadFixture(id) {
+  if (!fixturePages.has(id)) fixturePages.set(id, getJsonOrNull(`data/fixtures/${id}.json`).then((fx) => {
+    for (const part of ["xi", "actual", "prematch"])       // API-Football sends some names HTML-encoded
+      for (const xi of Object.values(fx?.[part] || {})) for (const r of xi) r[1] = decodeEntities(r[1]);
+    return fx;
+  }));
+  return fixturePages.get(id);
+}
 // Goals to one decimal, never "0.0" for something the model did count
 const goalsText = (v) => { const a = Math.abs(v); return a === 0 ? "0" : a < 0.05 ? "<0.1" : a.toFixed(1); };
 const signedGoals = (v) => v !== 0 && Math.abs(v) < 0.05 ? "≈0" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${goalsText(v)}`;
@@ -943,8 +954,7 @@ function detailRow(label, value, tip = "") {
 }
 const pairText = (h, a, f = (v) => Math.round(v).toLocaleString()) => h == null && a == null ? null
   : `${h == null ? "–" : f(h)} · ${a == null ? "–" : f(a)}`;
-function whyDetailHtml(m) {
-  const x = explainOf(m);
+function whyDetailHtml(m, x) {
   const finished = FINISHED.has(m.status) && m.hg != null;
   const sections = [];
   const section = (title, rows, note = "") => { if (rows.trim()) sections.push(`<div class="why-sec"><div class="why-sec-hd">${title}</div>${rows}${note}</div>`); };
@@ -1369,12 +1379,23 @@ function seasonsFor(...files) {
   loadPlayerSeasons();
   return state.playerSeasonsLoading;
 }
+// One player's file (data/players/<id>.json), as his page and the hover on his season cells use
+// it: asked for once, null if he has none
+const playerFiles = new Map(), playerFileData = new Map();     // on its way, and once it's in
+function loadPlayerFile(id) {
+  if (!playerFiles.has(id)) playerFiles.set(id, getJsonOrNull(`data/players/${id}.json`).then((d) => {
+    playerFileData.set(id, d);
+    return d;
+  }));
+  return playerFiles.get(id);
+}
 // Hover text for a season cell: his age that season (his age now for the current season, one
 // less for each season before), then per club "Team – club rank" and
-// "minutes – goals G, assists A"
+// "minutes – goals G, assists A". From his own file, fetched on the first hover over his row
 function playerCellTip(pid, key) {
-  const detail = state.playerSeasons;
-  if (!detail) return "Loading…";
+  if (!playerFileData.has(Number(pid))) return "Loading…";
+  const page = playerFileData.get(Number(pid));
+  const detail = { players: { [pid]: page?.spells || {} }, teams: page?.teams, fields: page?.spell_fields || [] };
   const pl = (state.playersById ||= new Map(state.players.list.map((x) => [String(x.id), x]))).get(pid);
   const seasons = state.players.seasons || [];
   const ageLine = pl?.age != null ? `Age ${pl.age - (seasons[0] - Number(key))}
@@ -2626,8 +2647,8 @@ function xiBlock(teamId) {
 async function renderMatchLineups(m, panel) {
   const finished = FINISHED.has(m.status) && m.hg != null;
   panel.innerHTML = `<div class="empty-state">Loading ${finished ? "actual line-ups" : "predicted line-ups"}…</div>`;
-  const [homeData, awayData] = await Promise.all([loadClub(m.home), loadClub(m.away), loadPlayers()]);
-  const exact = (finished ? state.players?.actualXi : state.players?.fixtureXi)?.[String(m.id)] || {};
+  const [homeData, awayData, fx] = await Promise.all([loadClub(m.home), loadClub(m.away), loadFixture(m.id), loadPlayers()]);
+  const exact = (finished ? fx?.actual : fx?.xi) || {};
   if (!finished && (!exact[String(m.home)] || !exact[String(m.away)])) {
     state.injuries ||= await getJsonOrNull("data/injuries.json");
     await seasonsFor(homeData, awayData);
@@ -2639,7 +2660,7 @@ async function renderMatchLineups(m, panel) {
     const listed = exact[String(teamId)];
     if (listed?.length) {
       const xi = listed.map(([pid, name, pos, rank]) => ({ p: { id: pid, name }, b: { label: pos }, rank, chance: null, mins: null }));
-      const predicted = finished ? state.players?.prematchXi?.[String(m.id)]?.[String(teamId)] : null;
+      const predicted = finished ? fx?.prematch?.[String(teamId)] : null;
       const hits = predicted?.length ? markPredicted(xi, predicted) : null;
       const score = hits == null ? "" : `<span class="xi-score xi-score-${hits >= 9 ? "good" : hits >= 7 ? "ok" : "poor"}" title="Starters the model predicted">${hits}/${xi.length} predicted</span>`;
       return `<div><div class="modal-section xi-head"><span>${escapeHtml(label)}</span>${score}</div>${xiPitch(xi, data, { note: "" })}</div>`;
@@ -2649,7 +2670,7 @@ async function renderMatchLineups(m, panel) {
     if (!xi) return `<div class="modal-section">${escapeHtml(label)}</div><div class="page-note">No predicted XI for this team.</div>`;
     return `<div><div class="modal-section">${escapeHtml(label)}</div>${xiPitch(xi, data, { note: "" })}</div>`;
   };
-  const marked = finished && state.players?.prematchXi?.[String(m.id)];
+  const marked = finished && fx?.prematch;
   panel.innerHTML = `<div class="fixture-lineups">${side(m.home, homeData, true)}${side(m.away, awayData, false)}</div>
     ${marked ? `<div class="xi-legend"><span><i class="xi-key xi-hit"></i>Predicted to start</span><span><i class="xi-key xi-miss"></i>Not predicted</span>
       <span><i class="xi-key-pick">Name <b>70</b></i>The model's pick instead, with his rank going into the match</span></div>` : ""}`;
@@ -3755,7 +3776,7 @@ async function openPlayerPage(id, want = null) {
   setTitle(p.name);
   body.innerHTML = `<div class="empty-state">Loading ${escapeHtml(p.name)}…</div>`;
   if (!playerPages.has(id)) {
-    const d = await getJsonOrNull(`data/players/${id}.json`);
+    const d = await loadPlayerFile(id);
     if (d) playerPages.set(id, { ...d, seasonRows: rowsToObjects(d.season_fields, d.seasons), matchRows: rowsToObjects(d.match_fields, d.matches) });
   }
   const page = playerPages.get(id) || null;
@@ -6402,7 +6423,10 @@ async function setMatchPart(card, part, open) {
   }
   const why = card.querySelector(".why-detail");
   why.hidden = !open;
-  if (open) { await loadExplanations(); why.innerHTML = whyDetailHtml(m); }
+  if (open) {
+    const [fx] = await Promise.all([loadFixture(m.id), loadExplanations()]);     // the model names are with the reasons
+    why.innerHTML = whyDetailHtml(m, fx?.why || null);
+  }
 }
 const togglePart = (btn) => btn.classList.contains("why-toggle") ? "why" : "lineups";
 function closeMatchCard(card) {
@@ -6458,12 +6482,11 @@ const showColTip = (e) => {
     colTip.style.top = `${b.bottom + 6}px`;
   };
   show();
-  // a player's season detail (player_seasons.json, the largest file after the line-up history) is
-  // fetched on the first hover: "Loading…" until it's in, then the text if the tip is still on this cell
-  if (!h.dataset.tip && !state.playerSeasons) {
-    loadPlayerSeasons();
-    state.playerSeasonsLoading.then(() => { if (!colTip.hidden && colTip.cell === h && h.isConnected) show(); });
-  }
+  // a player's season detail is in his own file, fetched on the first hover over his row:
+  // "Loading…" until it's in, then the text if the tip is still on this cell
+  const hovered = !h.dataset.tip && Number(h.closest("tr")?.dataset.player);
+  if (hovered && !playerFileData.has(hovered))
+    loadPlayerFile(hovered).then(() => { if (!colTip.hidden && colTip.cell === h && h.isConnected) show(); });
 };
 $("#table-wrap").addEventListener("mouseover", showColTip);
 // the same tip when a sortable header is reached with the keyboard (phones: the key under the tab's name)
