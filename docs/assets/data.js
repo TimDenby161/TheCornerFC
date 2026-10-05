@@ -22,8 +22,12 @@ const DATA_SOURCE = (() => {
 // A database function that answers one page's question from the tables themselves, such as
 // site_lineups (one match's line-ups, db/migrations/20261005_site_lineups.sql). Fixed SQL on the
 // database's side; params are its arguments. Nothing is prepared in advance and nothing is kept.
+// A plain GET like site_doc's; arguments too long for an address (a few thousand ids) are posted.
 async function siteAsk(fn, params) {
-  const r = await fetch(`${SUPABASE.url}/rest/v1/rpc/${fn}?${new URLSearchParams({ ...params, apikey: SUPABASE.key })}`);
+  const q = String(new URLSearchParams({ ...params, apikey: SUPABASE.key }));
+  const r = q.length < 8000 ? await fetch(`${SUPABASE.url}/rest/v1/rpc/${fn}?${q}`)
+    : await fetch(`${SUPABASE.url}/rest/v1/rpc/${fn}?apikey=${SUPABASE.key}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(params) });
   if (!r.ok) throw Object.assign(new Error(`${fn}: ${r.status}`), { status: r.status });
   return r.json();
 }

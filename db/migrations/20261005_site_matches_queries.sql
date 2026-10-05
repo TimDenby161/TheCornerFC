@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-05.
 -- The Matches tab and every other view that shows matches ask the database for the ones they
 -- show (owner, 2026-10-05), where each downloaded all 5,200 matches across 80 days (1.2 MB) and
 -- the key reasons for 4,100 of them.
