@@ -66,6 +66,14 @@ class MirrorTests(unittest.TestCase):
         self.assertEqual([(k, sha) for k, _, sha in conn.written], [('clubs/42', self.sha('clubs/42.json'))])
         self.assertEqual(conn.deleted, ['clubs/7'])
 
+    def test_a_job_that_wrote_part_of_the_data_writes_only_that_and_deletes_nothing(self):
+        (self.out / 'bets.json').write_text('{"bets":[]}')
+        conn = Conn({'matches': 'old', 'clubs/42': 'old', 'clubs/7': 'not in this working copy', 'bets': 'old'})
+        self.assertEqual(export.mirror_site_docs(conn, self.out, only=['bets.json', 'clubs/*.json']), (2, 0))
+        self.assertEqual(sorted(k for k, _, _ in conn.written), ['bets', 'clubs/42'])
+        self.assertEqual(conn.deleted, [])
+        self.assertIsNone(export.mirror_site_docs(Conn({'matches': 'x'}), self.out, only=['nothing.json']))
+
     def test_an_empty_directory_deletes_nothing(self):
         empty = self.out / 'empty'
         empty.mkdir()

@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import tempfile
 import unittest
+from unittest import mock
 
 from thecornerfc import export
 
@@ -30,11 +31,30 @@ class ManifestTests(unittest.TestCase):
             self.assertNotEqual(again['bets.json'], files['bets.json'])
             self.assertEqual(again['matches.json'], files['matches.json'])
 
+    def test_a_job_that_writes_part_of_the_data_keeps_the_other_hashes(self):
+        # its working copy needn't hold the files it didn't write: their hashes are the rows' in site.docs
+        stored = {'matches': 'a' * 64, 'bets': 'b' * 64, 'manifest': 'c' * 64}
+        conn = mock.Mock()
+        conn.execute.side_effect = lambda sql, params=None: mock.Mock(
+            fetchone=lambda: ('site.docs',), fetchall=lambda: [(k, v) for k, v in stored.items() if k != params[0]])
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / 'bets.json').write_text('{"a":1}')
+            (out / 'stats.json').write_text('{"old":true}')          # in the working copy, not written by this job
+            with mock.patch.object(export.config, 'require_db_write'):
+                files = export.write_manifest(out, conn=conn, only=['bets.json'])
+            self.assertEqual(files, {'bets.json': hashlib.sha256(b'{"a":1}').hexdigest()[:16], 'matches.json': 'a' * 16})
+            self.assertEqual(json.loads((out / 'manifest.json').read_text()), {'files': files})
+            # a read-only run (a local one) publishes nothing and doesn't ask the database
+            with mock.patch.object(export.config, 'require_db_write', side_effect=export.config.SafetyError('read-only')):
+                self.assertEqual(set(export.write_manifest(out, conn=None, only=['bets.json'])), {'bets.json'})
+
     def test_every_writer_of_data_files_rewrites_it(self):
         main = (ROOT / 'thecornerfc/__main__.py').read_text()
-        for call in ('export.export_nations(conn)', 'export.export_injuries(conn)'):
+        for call, wrote in (('export.export_nations(conn)', '["nations.json"]'), ('export.export_injuries(conn)', '["bets.json", "injuries.json"]')):
             after = main.split(call, 1)[1].split('return 0', 1)[0]
-            self.assertIn('export.write_manifest()', after, call)
+            self.assertIn(f'export.write_manifest(conn=conn, only={wrote})', after, call)
+            self.assertIn(f'export.mirror_site_docs(conn, only={wrote[:-1]}, ', after, call)       # and writes just those rows
         publish = (ROOT / 'thecornerfc/export.py').read_text().split('def _publish_export', 1)[1].split('\ndef ', 1)[0]
         self.assertLess(publish.index('write_manifest(staged)'), publish.index('_replace_export(staged'))
 

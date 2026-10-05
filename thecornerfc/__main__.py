@@ -158,8 +158,8 @@ def _execute(args):
             return 0
         if args.command == "nations":
             export.export_nations(conn)
-            export.write_manifest()
-            export.mirror_site_docs(conn)
+            export.write_manifest(conn=conn, only=["nations.json"])
+            export.mirror_site_docs(conn, only=["nations.json", "nations/*.json", export.MANIFEST])
             return 0
         if args.command == "suppress":
             from . import suppression
@@ -193,8 +193,8 @@ def _execute(args):
                 matchday.run_matchday(api, conn)
                 export.export_bets(conn)
                 export.export_injuries(conn)
-                export.write_manifest()
-                export.mirror_site_docs(conn)
+                export.write_manifest(conn=conn, only=["bets.json", "injuries.json"])
+                export.mirror_site_docs(conn, only=["bets.json", "injuries.json", export.MANIFEST])
                 return 0
             if args.command == "nightly":
                 failures = ingest.sync_nightly(api, conn, args.leagues)
