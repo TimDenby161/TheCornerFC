@@ -4797,7 +4797,11 @@ const leagueCache = new Map();
 // A league's file (cached), for league pages and the domestic position on club pages
 async function loadLeague(lid) {
   if (leagueCache.has(lid)) return leagueCache.get(lid);
-  const lg = await getJsonOrNull(`data/leagues/${lid}.json`);
+  // site_league gives the whole file to anyone entitled and a cut-down one otherwise
+  // (db/migrations/20261006_site_league.sql); the plain file where the function isn't there
+  const lg = DATA_SOURCE === "db"
+    ? await siteAsk("site_league", { p_id: lid }).catch(() => getJsonOrNull(`data/leagues/${lid}.json`))
+    : await getJsonOrNull(`data/leagues/${lid}.json`);
   if (lg) {
     lg.tableRows = rowsToObjects(lg.table_fields, lg.table);
     // each club's estimated xG and xG conceded per 90 over its last five league games with shot counts
@@ -5041,6 +5045,8 @@ function leagueProjectedTab() {
   const { data } = state.league;
   const rows = data.tableRows;
   const upcoming = data.fixtureRows.filter((f) => f.p_home != null && f.home_xg != null);
+  // cut: the database left the season's projections out for this visitor (the paywall)
+  if (data.cut) return `<div class="empty-state">The projected table and each club's finishing chances are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button></div>`;
   if (!upcoming.length) return `<div class="empty-state">No upcoming matches to project.</div>`;
   const groups = [...new Set(rows.map((r) => r.group))];
   if (!state.league.proj) {
@@ -6824,8 +6830,8 @@ state.account = { user: null, view: "signin", text: "" };
 // is on. PAID_KEY (data.js) is kept for a subscriber so their requests carry their sign-in; when
 // it changes the page starts again, to fetch the data they are now due, or no longer due.
 state.sub = null;
-const SUBSCRIBER_GETS = `<p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings and the betting comparison pages.</p>
-  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and the full model detail behind every prediction.</p>`;
+const SUBSCRIBER_GETS = `<p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings, league tables and the betting comparison pages.</p>
+  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, and every league's projected table with each club's finishing chances.</p>`;
 function paidFlag(on) {
   try {
     const was = localStorage.getItem(PAID_KEY) === "1";

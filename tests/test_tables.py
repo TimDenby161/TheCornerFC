@@ -121,3 +121,45 @@ class LeagueTableTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PaidLeagueFileTests(unittest.TestCase):
+    """A league's free file once the paid tier's function is there: chances for the next 7 days
+    only and no projected goals; the whole file is a paid row (20261006_site_league.sql)."""
+    def test_cut_league_fixtures(self):
+        from thecornerfc import export
+        now = datetime(2026, 10, 6, 12, tzinfo=timezone.utc)
+        row = lambda fid, days, status, hg=None: [fid, (now + timedelta(days=days)).isoformat(), "Regular Season - 9", 1, 2, status,
+                                                  hg, hg, None, None, None if hg is not None else 1.6, None if hg is not None else 1.1,
+                                                  None if hg is not None else 0.5, None if hg is not None else 0.3, None if hg is not None else 0.2]
+        played, soon, later = row(1, -3, "FT", 2), row(2, 3, "NS"), row(3, 30, "NS")
+        cut = export.cut_league_fixtures([played, soon, later], now)
+        self.assertEqual(cut[0], played)
+        self.assertEqual(cut[1], soon[:10] + [None, None, 0.5, 0.3, 0.2])
+        self.assertEqual(cut[2], later[:10] + [None] * 5)
+        self.assertEqual(soon[10], 1.6)                                    # the whole rows are untouched
+
+    def test_paid_files_are_stored_as_paid_rows(self):
+        from unittest.mock import MagicMock, Mock, patch
+        from thecornerfc import export
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "leagues").mkdir()
+            (out / "paid_leagues").mkdir(parents=True)
+            (out / "leagues" / "39.json").write_text('{"cut":true}')
+            (out / "paid_leagues" / "39.json").write_text('{"id":39}')
+            conn, cur = Mock(), MagicMock()
+            conn.execute.return_value.fetchall.return_value = []
+            cur.__enter__.return_value = cur
+            conn.cursor.return_value = cur
+            with patch.object(export.config, "require_db_write"):
+                export.mirror_site_docs(conn, out)
+            sql, rows = cur.executemany.call_args[0]
+            self.assertIn("paid = excluded.paid", sql)
+            self.assertEqual({r[0]: r[3] for r in rows}, {"leagues/39": False, "paid_leagues/39": True})
+
+    def test_the_league_function_never_gives_the_paid_row_to_the_unentitled(self):
+        sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_site_league.sql").read_text()
+        self.assertIn("IF site.entitled() THEN", sql)
+        self.assertIn("d.key = 'paid_leagues/' || p_id AND d.paid", sql)
+        self.assertIn("d.key = 'leagues/' || p_id AND NOT d.paid", sql)

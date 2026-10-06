@@ -56,21 +56,21 @@ class MirrorTests(unittest.TestCase):
     def test_every_file_is_written_under_its_path(self):
         conn = Conn()
         self.assertEqual(export.mirror_site_docs(conn, self.out), (2, 0))
-        self.assertEqual({k: json.loads(body) for k, body, _ in conn.written},
+        self.assertEqual({k: json.loads(body) for k, body, *_ in conn.written},
                          {'matches': {'matches': [1]}, 'clubs/42': {'name': 'É'}})
         self.assertEqual(conn.commits, 1)
 
     def test_unchanged_files_are_left_and_missing_ones_deleted(self):
         conn = Conn({'matches': self.sha('matches.json'), 'clubs/42': 'old', 'clubs/7': 'gone'})
         self.assertEqual(export.mirror_site_docs(conn, self.out), (1, 1))
-        self.assertEqual([(k, sha) for k, _, sha in conn.written], [('clubs/42', self.sha('clubs/42.json'))])
+        self.assertEqual([(k, sha) for k, _, sha, _ in conn.written], [('clubs/42', self.sha('clubs/42.json'))])
         self.assertEqual(conn.deleted, ['clubs/7'])
 
     def test_a_job_that_wrote_part_of_the_data_writes_only_that_and_deletes_nothing(self):
         (self.out / 'bets.json').write_text('{"bets":[]}')
         conn = Conn({'matches': 'old', 'clubs/42': 'old', 'clubs/7': 'not in this working copy', 'bets': 'old'})
         self.assertEqual(export.mirror_site_docs(conn, self.out, only=['bets.json', 'clubs/*.json']), (2, 0))
-        self.assertEqual(sorted(k for k, _, _ in conn.written), ['bets', 'clubs/42'])
+        self.assertEqual(sorted(k for k, *_ in conn.written), ['bets', 'clubs/42'])
         self.assertEqual(conn.deleted, [])
         self.assertIsNone(export.mirror_site_docs(Conn({'matches': 'x'}), self.out, only=['nothing.json']))
 
@@ -160,7 +160,7 @@ class RawMigrationTests(unittest.TestCase):
 
     def test_the_export_sends_the_file_text_without_a_cast(self):
         import inspect
-        self.assertIn("values (%s, %s, %s, now())", inspect.getsource(export.mirror_site_docs))
+        self.assertIn("values (%s, %s, %s, now(), %s)", inspect.getsource(export.mirror_site_docs))
 
 
 class SiteReaderTests(unittest.TestCase):

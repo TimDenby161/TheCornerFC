@@ -287,9 +287,12 @@ def mirror_site_docs(conn, out_dir=OUT_DIR, only=None):
         with conn.cursor() as cur:
             # the file's text as it is: no cast, so it goes in whether the column is json (the text
             # is kept and returned untouched) or, before 20261005_site_doc_raw.sql, jsonb
-            cur.executemany("""insert into site.docs (key, body, sha256, updated_at) values (%s, %s, %s, now())
-                               on conflict (key) do update set body = excluded.body, sha256 = excluded.sha256,
-                                                               updated_at = excluded.updated_at""", changed)
+            # a file in a paid_ directory is a paid row: site_doc() never returns it (PAID_PREFIX)
+            cur.executemany(f"""insert into site.docs (key, body, sha256, updated_at, paid)
+                                values (%s, %s, %s, now(), %s)
+                                on conflict (key) do update set body = excluded.body, sha256 = excluded.sha256,
+                                                                updated_at = excluded.updated_at, paid = excluded.paid""",
+                            [(*row, row[0].startswith(PAID_PREFIX)) for row in changed])
             if gone:
                 cur.execute("delete from site.docs where key = any(%s)", [gone])
         conn.commit()
@@ -1903,6 +1906,34 @@ def export_clubs(conn, out_dir=OUT_DIR, positions=None):
 
 
 XG_RECENT = 5   # league games behind the tables' xG and xG conceded per 90
+PAID_PREFIX = "paid_"        # files in a directory named so are stored as paid rows of site.docs (mirror_site_docs)
+FREE_DAYS = 7                # how far ahead the model's chances are free (the owner's line, 2026-10-04)
+LEAGUE_FIXTURE_FIELDS = ["id", "kickoff", "round", "home", "away", "status", "hg", "ag", "pen_h", "pen_a",
+                         "home_xg", "away_xg", "p_home", "p_draw", "p_away"]
+
+
+def cut_league_fixtures(fixtures, now):
+    """A league's fixtures (LEAGUE_FIXTURE_FIELDS rows) as its free file carries them: no
+    projected goals, and the chances only for kick-offs within FREE_DAYS of now."""
+    at = LEAGUE_FIXTURE_FIELDS.index
+    goals, chances = (at("home_xg"), at("away_xg")), (at("p_home"), at("p_draw"), at("p_away"))
+    limit = (now + timedelta(days=FREE_DAYS)).isoformat()
+    out = []
+    for f in fixtures:
+        hide = set(goals) | (set(chances) if f[at("kickoff")] > limit else set())
+        out.append([None if i in hide else v for i, v in enumerate(f)])
+    return out
+
+
+def _paid_leagues(conn):
+    """Whether to write each league's cut-down and paid files: once the database has
+    site_league() to choose between them (db/migrations/20261006_site_league.sql). Before it,
+    and on a read-only run, a league's one file is whole, as it always was."""
+    try:
+        config.require_db_write("check for site_league")
+    except config.SafetyError:
+        return False
+    return conn.execute("select to_regprocedure('public.site_league(integer)')").fetchone()[0] is not None
 
 
 def export_leagues(conn, out_dir=OUT_DIR):
@@ -1989,20 +2020,31 @@ def export_leagues(conn, out_dir=OUT_DIR):
     for old in league_dir.glob("*.json"):
         if int(old.stem) not in seasons:
             old.unlink()
+    paid = _paid_leagues(conn)
+    now = datetime.now(timezone.utc)
+    paid_dir = out_dir / f"{PAID_PREFIX}leagues"
+    if paid:
+        paid_dir.mkdir(parents=True, exist_ok=True)
+    for old in paid_dir.glob("*.json") if paid_dir.is_dir() else ():
+        if not paid or int(old.stem) not in seasons:
+            old.unlink()
     for lid, (season, start) in seasons.items():
         table = tables.get(lid, [])
         teams = {r[2] for r in table} | {t for f in fixtures[lid] for t in (f[3], f[4])}
         payload = {"id": lid, "season": season, "start": start.isoformat() if start else None,
                    "table_fields": league_tables.FIELDS,
                    "table": table,
-                   "fixture_fields": ["id", "kickoff", "round", "home", "away", "status", "hg", "ag", "pen_h", "pen_a",
-                                      "home_xg", "away_xg", "p_home", "p_draw", "p_away"],
+                   "fixture_fields": LEAGUE_FIXTURE_FIELDS,
                    "fixtures": fixtures[lid],
                    "recent_xg_fields": ["xg90", "xga90", "games"],
                    "recent_xg": recent_xg[lid],
                    "teams": {t: names.get(t) for t in teams}}
+        if paid:
+            # the whole file is the paid row; the one anyone can ask for is cut down
+            (paid_dir / f"{lid}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+            payload = {**payload, "fixtures": cut_league_fixtures(fixtures[lid], now), "cut": True}
         (league_dir / f"{lid}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-    log.info("Exported %d league pages", len(seasons))
+    log.info("Exported %d league pages%s", len(seasons), " (cut down, with a paid row each)" if paid else "")
 
 
 FANTASY_RESULTS = Path(__file__).resolve().parent.parent / "experiments" / "fantasy_v1" / "results.json"
