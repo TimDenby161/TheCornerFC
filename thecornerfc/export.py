@@ -1590,8 +1590,8 @@ SEASON_FIELDS = ["season", "team", "league", "apps", "starts", "minutes", "goals
                  "shots_on", "key_passes", "passes", "pass_acc", "tackles", "interceptions", "blocks",
                  "duels_won", "duels", "dribbles_won", "fouls", "yellow", "red", "saves", "conceded"]
 MATCH_FIELDS = ["fixture", "date", "league", "team", "opponent", "home", "gf", "ga", "started", "minutes",
-                "role", "rank", "goals", "assists", "shots_on", "key_passes", "tackles_int",
-                "duels_won", "duels", "yellow", "red", "saves", "conceded"]
+                "role", "rank", "goals", "assists", "shots_on", "key_passes",
+                "duels_won", "duels", "yellow", "red", "saves"]
 
 
 def build_player_pages(ids, apps, fixtures, other_seasons):
@@ -1630,8 +1630,8 @@ def build_player_pages(ids, apps, fixtures, other_seasons):
             st = [x or 0 for x in r[11:30]]
             matches.append([r[0], f[1].date().isoformat(), r[9], r[1], f[5] if home else f[4], 1 if home else 0,
                             f[6] if home else f[7], f[7] if home else f[6], 1 if r[4] else 0, r[3],
-                            r[6] or r[5], None, st[0], st[1], st[2], st[3], st[6] + st[7],
-                            st[10], st[9], st[13], st[14], st[15], st[16]])
+                            r[6] or r[5], None, st[0], st[1], st[2], st[3],
+                            st[10], st[9], st[13], st[14], st[15]])
         out[player] = {"seasons": seasons, "matches": matches, "injury": None}
     for (player, team, league, season, _, minutes, n, _, goals, assists, shots_on, key_passes, passes, _,
          tackles, interceptions, blocks, duels, duels_won, dribbles_won, fouls, yellow, yellow_red, red,
@@ -1765,8 +1765,8 @@ def export_clubs(conn, out_dir=OUT_DIR, positions=None):
 
     history: every match since 2020 as [date, rank after, opponent, home (1, 0 away, 2 neutral), goals for, against,
     competition, formation (null where the line-up isn't known), attack and defence after,
-    starting XI average rank by line [GK, DEF, MID, FWD] (null outside the line-up leagues)]; plus 12-month home/away goal
-    averages, the current manager and the home kit colours. starts: this season's matches with a
+    starting XI average rank by line [GK, DEF, MID, FWD] (null outside the line-up leagues)]; plus
+    the current manager and the home kit colours. starts: this season's matches with a
     line-up (games), each player's starts by position in them, each match's starters (xi) and
     competition (xi_league) and formation (xi_formation), and per player his starts, substitute appearances and minutes in
     them over the last 12 months (mins, out of mins_matches). positions: its current players'
@@ -1873,8 +1873,6 @@ def export_clubs(conn, out_dir=OUT_DIR, positions=None):
                      gf, ga, league,
                      formations.get((fid, team)), _r(att, 1), _r(dfn, 1), xi_lines.get((fid, team)),
                      *xg_pair(fid, team, opp, is_home)])
-    stats = {t: [_r(x) for x in rest] for t, *rest in conn.execute(
-        "select team_id, hg, ha, ag, aa from team_rankings where team_id = any(%s)", [list(active)])}
     club_dir = out_dir / "clubs"
     club_dir.mkdir(parents=True, exist_ok=True)
     for old in club_dir.glob("*.json"):
@@ -1887,7 +1885,7 @@ def export_clubs(conn, out_dir=OUT_DIR, positions=None):
         payload = {"id": team, "start": h["start"],
                    "fields": ["date", "rank", "opponent", "home", "gf", "ga", "league", "formation",
                               "attack", "defence", "xi_lines", "xgf", "xga", "xg_est"],
-                   "matches": h["matches"], "goal_averages": stats.get(team), "coach": coaches.get(team),
+                   "matches": h["matches"], "coach": coaches.get(team),
                    "colors": colors.get(team), "starts": starts.get(team),
                    "positions": (positions or {}).get(team, {}),
                    "teams": {o: names.get(o) for o in opponents}}
