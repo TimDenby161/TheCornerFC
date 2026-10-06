@@ -3160,7 +3160,7 @@ NOTIFY pgrst, 'reload schema';
 -- Check afterwards (a finished match from the last 21 days):
 --   select public.site_lineups((select fixture_id from fixtures where status_short = 'FT' order by kickoff desc limit 1))::json->'actual' is not null;   -- t, with ranks while the paywall is off
 
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- The free slice of the player ranks is the top 50 overall and the top 10 of the five big
 -- leagues only (owner, 2026-10-06), not the top 10 of every league: with the paywall on, a
 -- nation's page showed lower-league players' ranks above internationals whose ranks were hidden.
