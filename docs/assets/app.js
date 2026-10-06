@@ -2946,7 +2946,7 @@ function showPage(name = "") {            // club, player and nationality pages 
   setTitle(name);
   document.body.dataset.tab = "club";
   state.nation = null;
-  document.querySelectorAll("nav.tabs button").forEach((b) => b.removeAttribute("aria-current"));
+  document.querySelectorAll("nav.tabs button[data-tab]").forEach((b) => b.removeAttribute("aria-current"));
   $("#app-title").textContent = name;        // the page's h1 (the name is drawn again, larger, on the page)
   $("#tab-head").hidden = true;
   document.querySelectorAll(".panel").forEach((p) => p.dataset.active = String(p.dataset.tab === "club"));
@@ -6350,7 +6350,7 @@ function showTab(tab) {
 }
 function syncMenu() {
   let title = "";
-  document.querySelectorAll("nav.tabs button").forEach((b) => {
+  document.querySelectorAll("nav.tabs button[data-tab]").forEach((b) => {
     const on = b.dataset.tab === state.tab && (!b.dataset.view || b.dataset.view === state.tableView);
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     if (on) title = b.textContent;
@@ -6362,7 +6362,7 @@ function syncMenu() {
 // Each tab other than the tables has its own address, so a reload (or a shared link) stays on it
 const TAB_ROUTES = { leagues: "leagues", nations: "nations", matches: "matches", stats: "stats", lineups: "lineups", tips: "model-vs-market", bets: "simulation", fpl: "fpl", myteam: "my-fpl-team", efl: "efl-fantasy" };
 const ROUTE_TABS = Object.fromEntries(Object.entries(TAB_ROUTES).map(([t, r]) => [r, t]));
-document.querySelectorAll("nav.tabs button").forEach((btn) => btn.addEventListener("click", () => {
+document.querySelectorAll("nav.tabs button[data-tab]").forEach((btn) => btn.addEventListener("click", () => {
   const to = TAB_ROUTES[btn.dataset.tab] ? `#/${TAB_ROUTES[btn.dataset.tab]}` : location.pathname + location.search;
   if (TAB_ROUTES[btn.dataset.tab] ? location.hash !== to : location.hash.startsWith("#/")) history.pushState(null, "", to);
   const view = btn.dataset.view && btn.dataset.view !== state.tableView ? btn.dataset.view : null;
@@ -6389,12 +6389,16 @@ $("#menu-btn").addEventListener("click", () => setMenu(!document.body.classList.
 $("#menu-backdrop").addEventListener("click", () => setMenu(false));
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
 // Theme: Device (nothing stored), Light or Dark. assets/theme.js applies the stored choice before the page draws
-$("#theme-select").value = ["light", "dark"].includes(storedText("theme")) ? storedText("theme") : "";
-$("#theme-select").addEventListener("change", (e) => {
-  storeText("theme", e.target.value);
-  if (e.target.value) document.documentElement.dataset.theme = e.target.value;
+function setTheme(theme) {
+  if (theme) document.documentElement.dataset.theme = theme;
   else delete document.documentElement.dataset.theme;
-});
+  document.querySelectorAll("#theme-pick button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.theme === theme)));
+}
+setTheme(["light", "dark"].includes(storedText("theme")) ? storedText("theme") : "");
+document.querySelectorAll("#theme-pick button").forEach((b) => b.addEventListener("click", () => {
+  storeText("theme", b.dataset.theme);
+  setTheme(b.dataset.theme);
+}));
 function route() {
   const club = location.hash.match(/^#\/club\/(\d+)(?:\/(\w+))?$/);
   const player = location.hash.match(/^#\/player\/(\d+)(?:\/(\w+))?$/);

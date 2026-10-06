@@ -164,16 +164,10 @@
   nav.tabs button[aria-current="page"] {
     background: color-mix(in srgb, var(--series-blue) 14%, transparent); color: var(--blue-text);
   }
-  .theme-pick {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px;
-    padding: 10px 12px 0; border-top: 1px solid var(--border);
-    color: var(--text-secondary); font-size: 13px; font-weight: 600;
-  }
-  .theme-pick select {
-    font: inherit; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--chip-bg); color: var(--text-primary);
-  }
-  .theme-pick select:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
+  /* Theme: a three-way toggle at the foot of the menu (the look is .seg's) */
+  nav.tabs .theme-pick { margin: 12px 2px 0; }
+  nav.tabs .theme-pick button { flex: 1; text-align: center; font-size: 12px; padding: 6px 4px; border-radius: 6px; }
+  nav.tabs .theme-pick button[aria-pressed="true"] { background: var(--surface-1); color: var(--text-primary); box-shadow: 0 1px 2px var(--border); }
   .menu-btn {
     appearance: none; border: none; background: transparent; cursor: pointer; color: var(--text-primary);
     font-size: 20px; line-height: 1; padding: 4px 6px; margin: -4px 0 -4px -6px; border-radius: 6px;

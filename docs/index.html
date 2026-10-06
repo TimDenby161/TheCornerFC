@@ -54,13 +54,11 @@
     <button type="button" data-tab="fpl" id="fpl-tab" hidden>FPL</button>
     <button type="button" data-tab="myteam" id="myteam-tab" hidden>My FPL team</button>
     <button type="button" data-tab="efl" id="efl-tab" hidden>EFL Fantasy</button>
-    <label class="theme-pick">Theme
-      <select id="theme-select">
-        <option value="">Device</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
+    <div class="theme-pick seg" id="theme-pick" role="group" aria-label="Theme">
+      <button type="button" data-theme="" aria-pressed="true">Device</button>
+      <button type="button" data-theme="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+    </div>
   </nav>
   <div class="menu-backdrop" id="menu-backdrop" hidden></div>
 </header>
