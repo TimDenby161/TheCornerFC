@@ -2601,7 +2601,7 @@ NOTIFY pgrst, 'reload schema';
 --   select left(public.site_next_xi((select team_id from predicted_lineups limit 1))::text, 80);   -- {"fixture" : ..., "players" : [[...
 --   select public.site_next_xi(-1)::text;                                                          -- null
 
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- The paid tier's foundation, switched off (owner, 2026-10-06: build everything but the
 -- checkout; nothing changes for visitors until the switch is turned on).
 --   subscriptions          who has paid: one row per account, written only by the payment

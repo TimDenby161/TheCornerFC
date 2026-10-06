@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- The paid tier's foundation, switched off (owner, 2026-10-06: build everything but the
 -- checkout; nothing changes for visitors until the switch is turned on).
 --   subscriptions          who has paid: one row per account, written only by the payment
