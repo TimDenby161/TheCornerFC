@@ -2774,7 +2774,7 @@ NOTIFY pgrst, 'reload schema';
 --   select count(*), count(data_free), count(data_locked) from site.matches;                -- three equal numbers
 --   select public.site_matches(p_leagues => '{39}')::json->>'paywall';                      -- false
 
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- A league's page from one question, so the paid tier can cut it down (owner, 2026-10-06). A
 -- league's file carries every remaining fixture's projected goals and chances, which the page
 -- plays out for the projected table: paid content, by the owner's line of 2026-10-04.

@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- A league's page from one question, so the paid tier can cut it down (owner, 2026-10-06). A
 -- league's file carries every remaining fixture's projected goals and chances, which the page
 -- plays out for the projected table: paid content, by the owner's line of 2026-10-04.
