@@ -205,7 +205,8 @@ function needPlayers(ids) {
 function needNextXi(team) {
   if (team == null) return Promise.resolve();
   if (!playerStore.xi.has(team)) playerStore.xi.set(team, siteAsk("site_next_xi", { p_team: team }).then((xi) => {
-    if (xi) {
+    if (xi?.locked) state.paywall = true;      // predicted line-ups are for subscribers (20261006_paid_lineups.sql)
+    else if (xi) {
       for (const r of xi.players) r[1] = decodeEntities(r[1]);
       state.players.nextXi[String(team)] = xi;
     }
@@ -1204,15 +1205,15 @@ function matchCard(m, { lineups = true } = {}) {
   const upcoming = !finished && !LIVE.has(m.status);
   // behind the paywall (state.paywall: the database left the paid fields out for this visitor)
   const locked = !!state.paywall && upcoming && !m.intl && !CALLED_OFF.has(m.status);
-  const toggles = (canLineup ? `<button type="button" class="lineup-toggle" aria-expanded="false">${finished ? "Line-ups" : "Predicted line-ups"}</button>` : "")
+  const toggles = (canLineup && !locked ? `<button type="button" class="lineup-toggle" aria-expanded="false">${finished ? "Line-ups" : "Predicted line-ups"}</button>` : "")
     + (m.p_home != null && !locked ? `<button type="button" class="why-toggle" aria-expanded="false">${finished ? "Pre-match model detail" : "Model detail"}</button>` : "");
   return `
     <div class="match-card${cls}" data-fixture="${m.id}">
       ${matchHead(m, `${badge}${statusTag(m)}`)}
       ${probBars(m, false)}
-      ${locked ? `<div class="market-line paid-lock">${m.p_home == null ? "The model's chances for matches more than 7 days ahead" : "Projected score, key reasons and model detail"} are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button></div>` : ""}
+      ${locked ? `<div class="market-line paid-lock">${m.p_home == null ? "The model's chances for matches more than 7 days ahead" : "Projected score, key reasons, predicted line-ups and model detail"} are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button></div>` : ""}
       ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${reasonsHtml(m)}</div>` : ""}
-      ${upcoming && !m.intl ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
+      ${upcoming && !m.intl && !locked ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
       ${toggles ? `<div class="card-toggles">${toggles}</div>` : ""}
       ${m.p_home != null ? `<div class="why-detail" hidden></div>` : ""}
       ${detail}
@@ -2871,6 +2872,11 @@ async function renderMatchLineups(m, panel) {
   panel.innerHTML = `<div class="empty-state">Loading ${finished ? "actual line-ups" : "predicted line-ups"}…</div>`;
   const [homeData, awayData, fx] = await Promise.all([loadClub(m.home), loadClub(m.away), loadLineups(m.id), needClubPlayers(m.home, m.away)]);
   const exact = (finished ? fx?.actual : fx?.xi) || {};
+  if (!finished && (fx?.locked || state.paywall)) {
+    state.paywall = true;
+    panel.innerHTML = `<div class="empty-state">${PAID_XI}</div>`;
+    return;
+  }
   if (!finished && (!exact[String(m.home)] || !exact[String(m.away)])) {
     state.injuries ||= await getJsonOrNull("data/injuries.json");
   }
@@ -3267,7 +3273,9 @@ function predictedXi(teamId, data = state.club?.data, match = null) {
     });
   return xi.length ? xi : null;
 }
+const PAID_XI = `Predicted line-ups are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
 function clubXiTab() {
+  if (state.paywall) return `<div class="empty-state">${PAID_XI}</div>`;
   const { id } = state.club;
   const xi = predictedXi(id);
   if (!xi) return `<div class="empty-state">No predicted XI for this club (it needs player data from its recent matches).</div>`;
@@ -6831,7 +6839,7 @@ state.account = { user: null, view: "signin", text: "" };
 // it changes the page starts again, to fetch the data they are now due, or no longer due.
 state.sub = null;
 const SUBSCRIBER_GETS = `<p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings, league tables and the betting comparison pages.</p>
-  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, and every league's projected table with each club's finishing chances.</p>`;
+  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, and every league's projected table with each club's finishing chances.</p>`;
 function paidFlag(on) {
   try {
     const was = localStorage.getItem(PAID_KEY) === "1";

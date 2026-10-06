@@ -163,3 +163,30 @@ class PaidLeagueFileTests(unittest.TestCase):
         self.assertIn("IF site.entitled() THEN", sql)
         self.assertIn("d.key = 'paid_leagues/' || p_id AND d.paid", sql)
         self.assertIn("d.key = 'leagues/' || p_id AND NOT d.paid", sql)
+
+
+class PaidLineupsMigrationTests(unittest.TestCase):
+    """20261006_paid_lineups.sql is the two live functions with the lock added and nothing else."""
+    ROOT = Path(__file__).resolve().parents[1] / "db/migrations"
+
+    def body(self, name, function):
+        sql = (self.ROOT / name).read_text()
+        start = sql.index(f"CREATE OR REPLACE FUNCTION public.{function}")
+        return sql[start:sql.index("END; $$;", start)]
+
+    def test_lineups_differ_only_by_the_lock(self):
+        new = self.body("20261006_paid_lineups.sql", "site_lineups")
+        for added in ("DECLARE\n    -- the predicted XI of a match that hasn't kicked off is for the entitled\n    whole boolean := site.entitled()\n"
+                      "        OR coalesce((SELECT f.kickoff <= pg_catalog.now() FROM public.fixtures f WHERE f.fixture_id = p_fixture), true);\n",
+                      "            'locked', NOT whole,\n"):
+            self.assertIn(added, new)
+            new = new.replace(added, "")
+        new = new.replace("'xi', CASE WHEN whole THEN (SELECT", "'xi', (SELECT").replace("GROUP BY pl.team_id) t) END,", "GROUP BY pl.team_id) t),")
+        self.assertEqual(new, self.body("20261005_site_lineups.sql", "site_lineups"))
+
+    def test_next_xi_differs_only_by_the_lock(self):
+        new = self.body("20261006_paid_lineups.sql", "site_next_xi")
+        added = ("    IF next_fixture IS NOT NULL AND NOT site.entitled() THEN\n"
+                 "        RETURN pg_catalog.json_build_object('fixture', next_fixture, 'players', NULL, 'locked', true);\n    END IF;\n")
+        self.assertIn(added, new)
+        self.assertEqual(new.replace(added, ""), self.body("20261005_site_next_xi_fast.sql", "site_next_xi"))
