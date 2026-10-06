@@ -3073,7 +3073,7 @@ NOTIFY pgrst, 'reload schema';
 --   select public.site_players(p_limit => 1)::json->>'paywall';                             -- false
 --   select left(public.site_player_page((select player_id from site.players limit 1))::text, 40);   -- {"id":...
 
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- Ranks in the line-ups of finished matches are for subscribers too (owner, 2026-10-06: "hide
 -- those ranks"): they would give away the paid player ranks one match at a time. site_lineups()
 -- is the function of 20261006_paid_lineups.sql with this added: for anyone not entitled, each
