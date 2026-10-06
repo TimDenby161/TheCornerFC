@@ -1399,11 +1399,14 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
 PLAYER_FIELDS = ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
                  "nationality", "positions_12m", "position_ranks", "future", "season"]
 SITE_PLAYER_FIELDS = PLAYER_FIELDS + ["world", "lg", "lg_of", "lg_rank", "lg_n", "ord"]
-# The paid tier (db/migrations/20261006_paid_players.sql; the owner's line of 2026-10-04): the top
-# FREE_WORLD players by Ability and the top FREE_LEAGUE of each league are free; for everyone
-# else a visitor without a subscription gets the row with these fields null (who he is, his club,
-# age, minutes, goals and assists stay), once the paywall is on.
+# The paid tier (db/migrations/20261006_paid_players.sql): the top FREE_WORLD players by Ability
+# and the top FREE_LEAGUE of each of FREE_LEAGUES are free; for everyone else a visitor without
+# a subscription gets the row with these fields null (who he is, his club, age, minutes, goals
+# and assists stay), once the paywall is on. The owner's line: 2026-10-04 said the top 10 of
+# every league; on 2026-10-06, seeing lower-league players ranked above internationals with
+# theirs hidden, they kept it to the five big leagues (20261006_paid_players_slice.sql).
 FREE_WORLD, FREE_LEAGUE = 50, 10
+FREE_LEAGUES = (39, 140, 135, 78, 61)       # Premier League, La Liga, Serie A, Bundesliga, Ligue 1
 PLAYER_PAID_FIELDS = ("rank", "seasons", "estimated", "position_ranks", "future", "world", "lg", "lg_rank", "ord")
 
 
@@ -1472,7 +1475,8 @@ def site_player_rows(rows, rankings=()):
                 league_place[league][a] if in_league else None, len(by_league[league]) if in_league else None,
                 club_place[league][r[at["rank"]]] if with_club else None, len(club_league[league]) if with_club else None, i]
         out.append({
-            "free": bool((placed and world[a] <= FREE_WORLD) or (in_league and league_place[league][a] <= FREE_LEAGUE)),
+            "free": bool((placed and world[a] <= FREE_WORLD)
+                         or (in_league and league in FREE_LEAGUES and league_place[league][a] <= FREE_LEAGUE)),
             "data_free": blanked_player(data),
             "player_id": r[at["id"]], "ord": i, "name_lc": name.lower(), "name_fold": _fold(name),
             "team_id": team, "league_id": league, "age": r[at["age"]], "nationality": r[at["nationality"]],

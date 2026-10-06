@@ -180,6 +180,7 @@ function playersFailed(err) {
 async function fetchPlayers(params) {
   for (let at = 0, total = 1; at < total;) {
     const d = await siteAsk("site_players", { ...params, p_limit: 2000, p_offset: at });
+    if (d.paywall) state.paywall = true;
     addPlayers(d.rows);
     if (!d.rows.length) break;
     at += d.rows.length; total = d.total;
@@ -1616,6 +1617,7 @@ function askPlayerRows(q, key, groups, seasons, future) {
     playerStore.rowsAsked = id;
     siteAsk("site_players", { ...params, p_limit: FIRST_ROWS }).then((d) => {
       if (playerStore.results.size > 40) playerStore.results.clear();
+      if (d.paywall) state.paywall = true;       // the database blanked the ranks outside the free slice
       playerStore.results.set(id, { total: d.total, rows: addPlayers(d.rows), params });
       if (playerStore.rowsAsked === id) playerStore.rowsAsked = null;
       if (playerStore.want === id && state.tableView === "players") renderPlayers();
@@ -3048,6 +3050,7 @@ function clubMiniTable(id) {
 // Beside the table: the club's five best players by Ability, with this season's goals and assists
 // (all his clubs, as on the Players view)
 function clubBestPlayers(id) {
+  if (state.paywall) return "";              // a best-by-rank list of the few whose ranks aren't hidden would mislead
   const list = (state.players?.list || []).filter((p) => p.team === id && p.rank != null)
     .sort((a, b) => b.rank - a.rank).slice(0, 5);
   if (!list.length) return "";
@@ -3281,7 +3284,7 @@ function predictedXi(teamId, data = state.club?.data, match = null) {
     });
   return xi.length ? xi : null;
 }
-const PAID_RANKS = `Player ranks outside the top 50 overall and the top 10 in each league are for subscribers: his rank, season by season, in each position and projected. <button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
+const PAID_RANKS = `Player ranks outside the top 50 overall and the top 10 of the five big leagues are for subscribers: his rank, season by season, in each position and projected. <button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
 const PAID_XI = `Predicted line-ups are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
 function clubXiTab() {
   if (state.paywall) return `<div class="empty-state">${PAID_XI}</div>`;
@@ -4565,19 +4568,23 @@ function nationOverviewTab() {
     }
   }
   const coach = shape?.spell.coach;
+  // behind the paywall most ranks are hidden, so nothing here is ordered or picked by rank: the
+  // pitch has the coach's picks by position and the list is by name, both without ranks
+  const paid = !!state.paywall;
+  const byName = (a, b) => a.name.localeCompare(b.name);
   const pitchRow = (p, unpicked) => {
     const tip = `${p.name}${p.team ? ` · ${teamName(p.team)}` : ""}${unpicked ? ` · not picked by ${coach || "the current coach"}` : ""}`;
-    const inner = `<span class="dp-name">${escapeHtml(shortName(p.name))}</span><span class="dp-rank${p.rank == null ? "" : ` t${rankTier(p.rank)}`}">${p.rank == null ? "–" : Math.round(p.rank)}</span>`;
+    const inner = `<span class="dp-name">${escapeHtml(shortName(p.name))}</span><span class="dp-rank${p.rank == null || paid ? "" : ` t${rankTier(p.rank)}`}">${paid ? "" : p.rank == null ? "–" : Math.round(p.rank)}</span>`;
     const cls = `dp-row nat-row${unpicked ? " nat-unpicked" : ""}`;
     return playerById(p.id) ? `<a class="${cls}" href="#/player/${p.id}" title="${escapeHtml(tip)}">${inner}</a>`
       : `<span class="${cls}" title="${escapeHtml(tip)}">${inner}</span>`;
   };
   const spots = layout.map(([label, max, row, col]) => {
-    const top = list.filter((p) => slotOf(p.position) === label).slice(0, max);
+    const top = paid ? [] : list.filter((p) => slotOf(p.position) === label).slice(0, max);
     const topIds = new Set(top.map((p) => p.id));
     const extra = [...picked.values()].filter((p) => p.position && slotOf(p.position) === label && !topIds.has(p.id));
     const ps = [...top.map((p) => [p, shape != null && !picked.has(p.id)]), ...extra.map((p) => [p, false])]
-      .sort((a, b) => (b[0].rank ?? -1) - (a[0].rank ?? -1));
+      .sort((a, b) => paid ? byName(a[0], b[0]) : (b[0].rank ?? -1) - (a[0].rank ?? -1));
     const cell = `data-srow="${row}" data-scol="${col}"`;
     if (!ps.length) return `<div class="dp-spot empty" ${cell}><span class="dp-pos">${label}</span></div>`;
     return `<div class="dp-spot" ${cell}><span class="dp-pos">${label}</span>${ps.map(([p, unpicked]) => pitchRow(p, unpicked)).join("")}</div>`;
@@ -4585,13 +4592,19 @@ function nationOverviewTab() {
   const LIMIT = 100;
   const row = (p, i) => `<div class="team-row"><span class="team-row-date">${i + 1}. ${escapeHtml(p.position || "")}</span>
     <span class="team-row-opp">${playerLink(p.id, p.name)} <span class="club-sub u-inline">${playerClub(p)}${p.age != null ? ` · ${p.age}` : ""}</span></span>
-    <span class="team-row-res">${rankChipSmall(p.rank)}</span></div>`;
-  const shown = allPlayers ? list : list.slice(0, LIMIT);
-  return `
-    <div class="club-section"><div class="modal-section">${shape ? `Best by current rank in their usual ${escapeHtml(shape.formation)}` : "Top 3 in each position by current rank"}</div>
+    ${paid ? "" : `<span class="team-row-res">${rankChipSmall(p.rank)}</span>`}</div>`;
+  const ordered = paid ? [...list].sort(byName) : list;
+  const shown = allPlayers ? ordered : ordered.slice(0, LIMIT);
+  const pitch = paid
+    ? (shape ? `<div class="club-section"><div class="modal-section">Everyone ${escapeHtml(coach || "the current coach")} has picked, in their usual ${escapeHtml(shape.formation)}</div>
+        <div class="pp-section"><div class="pitch dp-pitch">${PITCH_LINES}${spots}</div></div></div>` : "")
+      + `<div class="pl-callout">${PAID_RANKS}</div>`
+    : `<div class="club-section"><div class="modal-section">${shape ? `Best by current rank in their usual ${escapeHtml(shape.formation)}` : "Top 3 in each position by current rank"}</div>
       <div class="pp-section"><div class="pitch dp-pitch">${PITCH_LINES}${spots}</div>
-        ${shape ? `<div class="page-note u-center">Plus everyone ${escapeHtml(coach || "the current coach")} has picked. <span class="nat-unpicked-key">Red</span>: not picked by him.</div>` : ""}</div></div>
-    <div class="club-section"><div class="modal-section">All players</div><div>${shown.map(row).join("")}</div>
+        ${shape ? `<div class="page-note u-center">Plus everyone ${escapeHtml(coach || "the current coach")} has picked. <span class="nat-unpicked-key">Red</span>: not picked by him.</div>` : ""}</div></div>`;
+  return `
+    ${pitch}
+    <div class="club-section"><div class="modal-section">All players${paid ? " · by name" : ""}</div><div>${shown.map(row).join("")}</div>
       ${shown.length < list.length ? `<button type="button" class="show-all" data-nat-more>Show all ${list.length.toLocaleString()}</button>` : ""}</div>`;
 }
 
@@ -4712,7 +4725,7 @@ function nationXiTab() {
   const name = (pid) => names[pid] || playerById(pid)?.name || "Unknown";
   const order = (r) => ROLE_ORDER.indexOf(r) + 1 || 99;
   const picks = pred.picks.slice().sort((a, b) => order(a.role) - order(b.role));
-  const xi = picks.map((c) => ({ b: { label: c.role }, p: { id: c.pid, name: name(c.pid) }, rank: playerById(c.pid)?.rank ?? null }));
+  const xi = picks.map((c) => ({ b: { label: c.role }, p: { id: c.pid, name: name(c.pid) }, rank: state.paywall ? null : playerById(c.pid)?.rank ?? null }));
   const who = (pid) => `${personChip(name(pid))}${
     playerById(pid) ? playerLink(pid, shortName(name(pid))) : `<span title="${escapeHtml(name(pid))}">${escapeHtml(shortName(name(pid)))}</span>`}`;
   const side = `
@@ -6868,7 +6881,7 @@ state.account = { user: null, view: "signin", text: "" };
 // it changes the page starts again, to fetch the data they are now due, or no longer due.
 state.sub = null;
 const SUBSCRIBER_GETS = `<p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings, league tables and the betting comparison pages.</p>
-  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall and the top 10 in each league are free).</p>`;
+  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall and the top 10 of each of the five big leagues are free).</p>`;
 function paidFlag(on) {
   try {
     const was = localStorage.getItem(PAID_KEY) === "1";

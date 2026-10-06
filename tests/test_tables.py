@@ -202,14 +202,17 @@ class PaidPlayersTests(unittest.TestCase):
                 "England", ["CM"], {"CM": 95 - i * 0.5}, [90.0], [900, 3, 2]] for i in range(n)]
         return export.site_player_rows(raw)
 
-    def test_the_free_slice_is_the_top_50_and_each_leagues_top_10(self):
+    def test_the_free_slice_is_the_top_50_and_each_big_leagues_top_10(self):
         rows = self.rows()
         free = [p["player_id"] for p in rows if p["free"]]
         self.assertEqual(free, list(range(1, 51)))            # two leagues' top 10s fall inside the overall 50 here
         from thecornerfc import export
         with unittest.mock.patch.object(export, "FREE_WORLD", 4), unittest.mock.patch.object(export, "FREE_LEAGUE", 3):
             free = {p["player_id"] for p in self.rows() if p["free"]}
-        self.assertEqual(free, {1, 2, 3, 4, 5, 6})            # the top 4, and the third of each league (5 and 6)
+        self.assertEqual(free, {1, 2, 3, 4, 5})               # the top 4, and the third of league 39 (5); league 40 isn't a big league
+        self.assertEqual(export.FREE_LEAGUES, (39, 140, 135, 78, 61))
+        sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_paid_players_slice.sql").read_text()
+        self.assertIn("ARRAY[39, 140, 135, 78, 61]", sql)
 
     def test_the_blanked_row_keeps_who_he_is_and_loses_every_rank(self):
         from thecornerfc import export
