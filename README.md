@@ -281,6 +281,20 @@ This differs from the sheet, which uses (home × 1.09 − away) / 100, × 10 and
 
 `team_rank_history.act_diff` still holds the actual goal difference.
 
+**On results alone.** The whole match model was replayed with nothing but dates, competitions, clubs and scores: no xG, no predicted line-ups, no injury lists (`experiments/results_only`, October 2026; 44,632 matches from 2024/25 onwards).
+
+| Model | W/D/L log loss | Right result |
+|---|---|---|
+| As it runs | 0.99744 | 51.0% |
+| Results only | 1.00046 | 50.8% |
+| Always the base rates | 1.07016 | |
+
+- Results alone keep 96% of the gain over the base rates. Nearly all of the loss is the xG (0.0026 of 0.0030); line-ups and injury lists together are worth 0.0006.
+- The loss is about 0.006 to 0.009 in the biggest leagues, where xG, line-ups and injury lists exist, and close to nothing in cups and the leagues without xG.
+- The club ratings keep their order (rank correlation 0.992) and move 9 points on average, 60 at most.
+- K 6 is still the best K for goals alone: 4 to 10 were tried.
+- The full tables are in `experiments/results_only/REPORT.md`.
+
 **Attack, defence, home and away.** These are worked out alongside the rank from the same replay (`side_ratings` in `thecornerfc/ranking.py`). They don't change the rank.
 - **Attack and defence** average to the rank (Form), on the same scale. Expected home goals = the competition's average home goals + ((home attack − away defence) / 2 + 15) / 100, and the same the other way round for away goals. So 200 points of attack over the other side's defence is about one more goal. After each match, both sides move by 1.0 × (actual total goals − expected total) / 2: a club in high-scoring games drifts towards attack, one in low-scoring games towards defence. Goals are capped at 5 a side and blended with xG like the rank. Replaying 2024/25 onwards, this cut the error on total goals from 1.4205 to 1.4083. On its own, learning rates from 0.5 to 1 scored about the same; 1.0 was best for the projections. For example, Arsenal lean on defence and Barcelona and Bayern on attack.
 - **Home and away** are the rank plus or minus the club's own home edge, on top of the standard 30 points. Both sides' edge moves by 0.2 × (result − expected), so a club doing better at home than away builds a positive edge. The gain was small (goal-difference error 1.3220 → 1.3205). Most clubs' edges are within a few points, because home advantage is mostly the same for everyone.
