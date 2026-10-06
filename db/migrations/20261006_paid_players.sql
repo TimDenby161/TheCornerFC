@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- Player ranks for the paid tier (owner's line of 2026-10-04: the top 50 overall and the top 10
 -- of each league are free, the full list is paid). While the paywall is off (site.entitled()
 -- true for everyone) every answer is as before, plus "paywall": false.

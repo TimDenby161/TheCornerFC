@@ -2824,7 +2824,7 @@ NOTIFY pgrst, 'reload schema';
 --   select count(*) from site.docs where paid;                                      -- after the next export: one per league (70)
 --   select public.site_doc('paid_leagues/39')::text;                                -- null, always
 
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- Predicted line-ups for the paid tier (owner's line of 2026-10-04: predicted line-ups are
 -- paid). Both functions are the ones already live with one thing added; while the paywall is
 -- off (site.entitled() true for everyone) they answer exactly as before, plus "locked": false.
@@ -2944,7 +2944,7 @@ NOTIFY pgrst, 'reload schema';
 --   select public.site_lineups((select fixture_id from predicted_lineups limit 1))::json->>'locked';        -- false
 --   select left(public.site_next_xi((select team_id from predicted_lineups limit 1))::text, 80);            -- {"fixture" : ..., "players" : [[...
 
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- Player ranks for the paid tier (owner's line of 2026-10-04: the top 50 overall and the top 10
 -- of each league are free, the full list is paid). While the paywall is off (site.entitled()
 -- true for everyone) every answer is as before, plus "paywall": false.

@@ -1,4 +1,4 @@
--- Repeatable. Not applied yet: the owner runs it in the Supabase SQL editor.
+-- Repeatable. Applied 2026-10-06.
 -- Predicted line-ups for the paid tier (owner's line of 2026-10-04: predicted line-ups are
 -- paid). Both functions are the ones already live with one thing added; while the paywall is
 -- off (site.entitled() true for everyone) they answer exactly as before, plus "locked": false.
