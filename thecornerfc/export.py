@@ -500,8 +500,8 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     export_bets(conn, out_dir)
     store_matches(conn, matches, match_explanations(conn, now))
     export_methodology(conn, out_dir, now)
-    export_injuries(conn, out_dir)
     player_team, listed = export_players(conn, out_dir, rankings)
+    export_injuries(conn, out_dir, listed["free"])
     # the players are rows of site.players: the site asks for the ones a view shows, and needs the
     # order of a row, the seasons and the names of their clubs outside the rankings
     site.update(player_fields=SITE_PLAYER_FIELDS, player_season_fields=PLAYER_SEASON_FIELDS,
@@ -1144,7 +1144,7 @@ def _injured(kind, reason):
     return 1 if kind == "Missing Fixture" and INJURY_REASON.search(reason or "") else 0
 
 
-def export_injuries(conn, out_dir=OUT_DIR):
+def export_injuries(conn, out_dir=OUT_DIR, free=None):
     """Each club's injury list for the club page (docs/data/injuries.json): out and doubtful
     players for its next match that has a list, else its latest list from the last
     INJURY_LOOKBACK_DAYS (API-Football publishes a match's list only shortly before it), less
@@ -1155,6 +1155,8 @@ def export_injuries(conn, out_dir=OUT_DIR):
     missed: how many of the club's played matches in a row he has been on its list, back from its
     latest (matches with no list for the club, e.g. cups, are skipped). season_rank: his latest
     season rank, for players off the current players list. injured: 1 when he is out injured or ill.
+    free: the players in the paid tier's free slice (export_players). Once the paywall is on, a
+    season rank is published only for them: the file is one anyone can ask for.
     """
     teams = {}
     for team, fid, kickoff, upcoming, player, name, kind, reason in conn.execute(
@@ -1211,6 +1213,8 @@ def export_injuries(conn, out_dir=OUT_DIR):
         """select distinct on (player_id) player_id, season_rank from player_season_ranks
            where player_id = any(%s) and season_rank is not null
            order by player_id, season desc""", [ids])}
+    if free is not None and _paywall_on(conn):
+        season_rank = {p: r for p, r in season_rank.items() if p in free}
     for entry in teams.values():
         for row in entry["players"]:
             row.append(season_rank.get(row[0]))
@@ -1970,6 +1974,48 @@ def cut_league_fixtures(fixtures, now):
     return out
 
 
+def headline_projection(table, fixtures):
+    """A league's projected final table as its free file carries it: [[group, place, club,
+    matches left, points]], each club's points so far plus the points the model expects from its
+    remaining fixtures (3 x its chance of winning + its chance of a draw), level clubs by goal
+    difference so far plus projected goals. The full version (wins, draws, losses, and each
+    club's chance of finishing in every place) is played out by the page from the paid file.
+    table: tables.FIELDS rows; fixtures: LEAGUE_FIXTURE_FIELDS rows, whole."""
+    at = LEAGUE_FIXTURE_FIELDS.index
+    extra = defaultdict(lambda: [0, 0.0, 0.0])            # club: matches left, expected points, expected goal difference
+    for f in fixtures:
+        ph, pd, pa, hx, ax = (f[at(k)] for k in ("p_home", "p_draw", "p_away", "home_xg", "away_xg"))
+        if ph is None or pd is None or pa is None or hx is None or ax is None:
+            continue
+        for team, win, diff in ((f[at("home")], ph, hx - ax), (f[at("away")], pa, ax - hx)):
+            e = extra[team]
+            e[0] += 1
+            e[1] += 3 * win + pd
+            e[2] += diff
+    if not extra:
+        return []
+    groups = defaultdict(list)
+    for row in table:
+        r = dict(zip(league_tables.FIELDS, row))
+        left, pts, gd = extra.get(r["team"], (0, 0.0, 0.0))
+        groups[r["group"]].append((-(r["points"] + pts), -(r["gd"] + gd), r["rank"], r["team"], left))
+    return [[group, i + 1, team, left, round(-pts)]
+            for group, rows in groups.items() for i, (pts, _, _, team, left) in enumerate(sorted(rows))]
+
+
+def _paywall_on(conn):
+    """Whether the paid tier's paywall is switched on (site.settings; 20261006_paid_tier.sql).
+    False on a read-only run and for a database from before it."""
+    try:
+        config.require_db_write("read the paywall switch")
+    except config.SafetyError:
+        return False
+    if conn.execute("select to_regclass('site.settings')").fetchone()[0] is None:
+        return False
+    row = conn.execute("select value from site.settings where key = 'paywall'").fetchone()
+    return bool(row and row[0] is True)
+
+
 def _paid_rows(conn, function):
     """Whether to write cut-down and paid files for a kind of page: once the database has the
     function that chooses between them (site_league: db/migrations/20261006_site_league.sql;
@@ -2088,7 +2134,9 @@ def export_leagues(conn, out_dir=OUT_DIR):
         if paid:
             # the whole file is the paid row; the one anyone can ask for is cut down
             (paid_dir / f"{lid}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-            payload = {**payload, "fixtures": cut_league_fixtures(fixtures[lid], now), "cut": True}
+            payload = {**payload, "fixtures": cut_league_fixtures(fixtures[lid], now), "cut": True,
+                       "projected_fields": ["group", "place", "team", "left", "points"],
+                       "projected": headline_projection(table, fixtures[lid])}
         (league_dir / f"{lid}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     log.info("Exported %d league pages%s", len(seasons), " (cut down, with a paid row each)" if paid else "")
 

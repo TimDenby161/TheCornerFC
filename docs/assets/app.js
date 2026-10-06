@@ -5065,7 +5065,25 @@ function leagueProjectedTab() {
   const rows = data.tableRows;
   const upcoming = data.fixtureRows.filter((f) => f.p_home != null && f.home_xg != null);
   // cut: the database left the season's projections out for this visitor (the paywall)
-  if (data.cut) return `<div class="empty-state">The projected table and each club's finishing chances are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button></div>`;
+  if (data.cut) {
+    const more = `<button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
+    const list = rowsToObjects(data.projected_fields || [], data.projected || []);
+    if (!list.length) return `<div class="empty-state">The projected table and each club's finishing chances are for subscribers. ${more}</div>`;
+    const zones = leagueZones(rows), groups = [...new Set(list.map((x) => x.group))];
+    // the headline: where the model expects each club to finish, and on how many points
+    return groups.map((g) => {
+      const byRank = new Map(rows.filter((r) => r.group === g).map((r) => [r.rank, r.description]));
+      return `${groups.length > 1 ? `<div class="modal-section">${escapeHtml(g)}</div>` : ""}
+      <div class="table-scroll"><table class="league-table">
+        <thead><tr><th class="lt-pos">#</th><th></th><th class="lt-club">Club</th>
+          <th class="lt-wide" title="Matches left to play">Left</th><th title="Projected points: points so far plus the points the model expects from the matches left">Pts</th></tr></thead>
+        <tbody>${list.filter((x) => x.group === g).map((x) => `<tr><td class="lt-pos" data-sedge="${zones.get(byRank.get(x.place)) || "transparent"}">${x.place}</td>
+          <td class="lt-badge">${clubCrest(x.team, "club-logo", `data-club="${x.team}"`)}</td>
+          <td class="lt-club">${clubLink(x.team, data.teams[x.team] || teamName(x.team))}</td>
+          <td class="lt-wide">${x.left}</td><td><b>${x.points}</b></td></tr>`).join("")}</tbody></table></div>`;
+    }).join("") + zoneLegend(zones)
+      + `<div class="page-note">Projected places and points. Projected wins, draws, losses and goal difference, and each club's chance of finishing in every place, are for subscribers. ${more}</div>`;
+  }
   if (!upcoming.length) return `<div class="empty-state">No upcoming matches to project.</div>`;
   const groups = [...new Set(rows.map((r) => r.group))];
   if (!state.league.proj) {

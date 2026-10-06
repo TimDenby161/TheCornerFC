@@ -239,3 +239,34 @@ class PaidPlayersTests(unittest.TestCase):
         self.assertNotIn("movement", cut)
         self.assertEqual((cut["cut"], cut["seasons"], cut["born"]), (True, page["seasons"], "2000-01-01"))
         self.assertEqual(page["matches"][0][export.MATCH_FIELDS.index("rank")], 71.5)      # the whole page is untouched
+
+
+class HeadlineProjectionTests(unittest.TestCase):
+    """The free projected table: places and points only (export.headline_projection)."""
+    def test_points_so_far_plus_expected_points_and_the_order(self):
+        from thecornerfc import export
+        table = [["League", 1, 1, 10, 6, 2, 2, 20, 10, 10, 20, "WWW", None], ["League", 2, 2, 10, 6, 1, 3, 15, 10, 5, 19, "WLW", None],
+                 ["League", 3, 3, 10, 2, 2, 6, 8, 16, -8, 8, "LLD", None]]
+        fx = lambda fid, home, away, ph, pd, pa, hx=1.5, ax=1.0: [fid, "2026-11-01T15:00:00+00:00", "Regular Season - 11", home, away, "NS", None, None, None, None, hx, ax, ph, pd, pa]
+        fixtures = [fx(1, 2, 3, 0.8, 0.1, 0.1), fx(2, 2, 1, 0.5, 0.25, 0.25), fx(3, 3, 1, 0.2, 0.3, 0.5),
+                    [4, "2026-10-01T15:00:00+00:00", "Regular Season - 9", 1, 2, "FT", 1, 0, None, None, None, None, None, None, None]]
+        got = export.headline_projection(table, fixtures)
+        # club 2: 19 + (2.4 + 0.1) + (1.5 + 0.25) = 23.25; club 1: 20 + (0.75 + 0.25) + (1.5 + 0.3) = 22.8
+        self.assertEqual(got, [["League", 1, 2, 2, 23], ["League", 2, 1, 2, 23], ["League", 3, 3, 2, 9]])
+
+    def test_nothing_without_projections(self):
+        from thecornerfc import export
+        self.assertEqual(export.headline_projection([["League", 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, None, None]], []), [])
+
+    def test_the_rank_migration_differs_from_the_line_ups_one_only_by_the_ranks(self):
+        root = Path(__file__).resolve().parents[1] / "db/migrations"
+        body = lambda name: (lambda sql: sql[sql.index("CREATE OR REPLACE FUNCTION public.site_lineups"):sql.index("END; $$;")])((root / name).read_text())
+        new = body("20261006_paid_lineup_ranks.sql")
+        for a, b in (("    paid boolean := site.entitled();\n    whole boolean := paid\n", "    whole boolean := site.entitled()\n"),
+                     ("CASE WHEN paid THEN coalesce(r.player_rank, p.current_rank)::float8 END)", "coalesce(r.player_rank, p.current_rank)::float8)"),
+                     ("CASE WHEN paid THEN (e.v->>'player_rating')::float8 END)", "(e.v->>'player_rating')::float8)"),
+                     ("    -- the predicted XI of a match that hasn't kicked off is for the entitled (whole), and so is\n    -- each player's rank in the line-ups of one that has (paid)\n",
+                      "    -- the predicted XI of a match that hasn't kicked off is for the entitled\n")):
+            self.assertEqual(new.count(a), 1, a)
+            new = new.replace(a, b)
+        self.assertEqual(new, body("20261006_paid_lineups.sql"))
