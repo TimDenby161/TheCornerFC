@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .health import monitored
 from . import config, availability, predictions
+from . import tables as league_tables
 from .cache import WEEK, cached_rows, finished_fixtures, rank_history
 from .betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_cautious
 from .predictions import GOAL_LINES, UPCOMING_STATUSES, goal_lines
@@ -1586,12 +1587,12 @@ def _club_positions(player_team, positions):
 
 
 PLAYER_MATCHES = 20      # match log on a player's page: his last this-many appearances
-SEASON_FIELDS = ["season", "team", "league", "apps", "starts", "minutes", "goals", "assists",
-                 "shots_on", "key_passes", "passes", "pass_acc", "tackles", "interceptions", "blocks",
-                 "duels_won", "duels", "dribbles_won", "fouls", "yellow", "red", "saves", "conceded"]
+# What a player's page publishes of his matches: what a match report states (appearances, minutes,
+# goals, assists, cards) and the site's own rank. API-Football's other counts (shots, passes,
+# tackles, duels, dribbles, saves) feed the ranks but aren't published.
+SEASON_FIELDS = ["season", "team", "league", "apps", "starts", "minutes", "goals", "assists", "yellow", "red"]
 MATCH_FIELDS = ["fixture", "date", "league", "team", "opponent", "home", "gf", "ga", "started", "minutes",
-                "role", "rank", "goals", "assists", "shots_on", "key_passes",
-                "duels_won", "duels", "yellow", "red", "saves"]
+                "role", "rank", "goals", "assists", "yellow", "red"]
 
 
 def build_player_pages(ids, apps, fixtures, other_seasons):
@@ -1600,47 +1601,39 @@ def build_player_pages(ids, apps, fixtures, other_seasons):
     apps: player_ratings._appearances rows; fixtures: cache.finished_fixtures rows;
     other_seasons: player_ratings._other_seasons rows. Season lines are per club and league: from
     his appearances in the per-match leagues, and the season totals (player_seasons) elsewhere,
-    where starts and pass accuracy aren't known. A match's rank (going into it) is filled in later.
+    where starts aren't known. A match's rank (going into it) is filled in later.
     """
     ids = set(ids)
     fx = {r[0]: r for r in fixtures}
-    # per (season, team, league): apps, starts, minutes, goals, assists, shots_on, key_passes,
-    # passes, accurate passes, tackles, interceptions, blocks, duels_won, duels, dribbles_won,
-    # fouls, yellow, red, saves, conceded
-    lines = defaultdict(lambda: defaultdict(lambda: [0] * 20))
+    # per (season, team, league): apps, starts, minutes, goals, assists, yellow, red
+    lines = defaultdict(lambda: defaultdict(lambda: [0] * 7))
     recent = defaultdict(list)
     for r in apps:
         if r[2] not in ids or r[3] <= 0 or r[10] not in config.FINISHED_STATUSES or r[0] not in fx:
             continue
-        (goals, assists, shots_on, key_passes, passes, passes_acc, tackles, interceptions, blocks, duels,
-         duels_won, dribbles_won, fouls, yellow, red, saves, conceded, _, _) = (x or 0 for x in r[11:30])
+        goals, assists = r[11] or 0, r[12] or 0
+        yellow, red = r[24] or 0, r[25] or 0
         s = lines[r[2]][(r[8], r[1], r[9])]
-        for i, v in enumerate((1, 1 if r[4] else 0, r[3], goals, assists, shots_on, key_passes, passes, passes_acc, tackles, interceptions,
-                               blocks, duels_won, duels, dribbles_won, fouls, yellow, red, saves, conceded)):
+        for i, v in enumerate((1, 1 if r[4] else 0, r[3], goals, assists, yellow, red)):
             s[i] += v
         recent[r[2]].append(r)
     out = {}
     for player in ids:
-        seasons = [[season, team, league, *s[:8], round(100 * s[8] / s[7]) if s[7] else None, *s[9:]]
-                   for (season, team, league), s in lines.get(player, {}).items()]
+        seasons = [[season, team, league, *s] for (season, team, league), s in lines.get(player, {}).items()]
         matches = []
         for r in sorted(recent.get(player, []), key=lambda r: fx[r[0]][1], reverse=True)[:PLAYER_MATCHES]:
             f = fx[r[0]]
             home = r[1] == f[4]
-            st = [x or 0 for x in r[11:30]]
             matches.append([r[0], f[1].date().isoformat(), r[9], r[1], f[5] if home else f[4], 1 if home else 0,
                             f[6] if home else f[7], f[7] if home else f[6], 1 if r[4] else 0, r[3],
-                            r[6] or r[5], None, st[0], st[1], st[2], st[3],
-                            st[10], st[9], st[13], st[14], st[15]])
+                            r[6] or r[5], None, r[11] or 0, r[12] or 0, r[24] or 0, r[25] or 0])
         out[player] = {"seasons": seasons, "matches": matches, "injury": None}
-    for (player, team, league, season, _, minutes, n, _, goals, assists, shots_on, key_passes, passes, _,
-         tackles, interceptions, blocks, duels, duels_won, dribbles_won, fouls, yellow, yellow_red, red,
-         saves, conceded, _, _) in other_seasons:
+    for (player, team, league, season, _, minutes, n, _, goals, assists, _, _, _, _,
+         _, _, _, _, _, _, _, yellow, yellow_red, red, *_) in other_seasons:
         if player in out:
             out[player]["seasons"].append(
-                [season, team, league, n or 0, None, minutes, goals or 0, assists or 0, shots_on,
-                 key_passes, passes, None, tackles, interceptions, blocks, duels_won, duels, dribbles_won,
-                 fouls, yellow, (red or 0) + (yellow_red or 0), saves, conceded])
+                [season, team, league, n or 0, None, minutes, goals or 0, assists or 0,
+                 yellow, (red or 0) + (yellow_red or 0)])
     for page in out.values():
         page["seasons"].sort(key=lambda x: (-x[0], -x[5]))     # newest season first, then most minutes
     return out
@@ -1727,7 +1720,8 @@ def export_player_pages(conn, out_dir=OUT_DIR, detail=None):
 
 
 CLUB_ACTIVE_DAYS = 400
-# xG estimated from shots where API-Football gives none (most cup and European matches): a
+# The xG the club pages and league tables show: the site's own estimate from shot counts, for
+# every match with them (API-Football's xG goes into the model but isn't published). A
 # least-squares fit over two years of team matches with both (35,664 of them, September 2026),
 # xG = 0.12 per shot inside the box + 0.002 per shot outside it + 0.101 per shot on target
 # - 0.022 per blocked shot + 0.026. R^2 0.62, typical error 0.4 goals a team a match.
@@ -1846,22 +1840,17 @@ def export_clubs(conn, out_dir=OUT_DIR, positions=None):
                where fp.team_id = any(%s) and f.kickoff > now() - interval '365 days' group by 1, 2""", [list(active)]):
         if team in starts:
             starts[team].setdefault("mins", {})[str(player)] = [n_start, m_start, n_sub, m_sub]
-    match_xg = {r[0]: (r[9], r[10]) for r in finished_fixtures(conn)}   # fixture -> (home xG, away xG)
-    # estimates from shots for matches without xG: {(fixture, team): xG}
-    shot_xg = {(f, t): _xg_from_shots(i, o, on, bl) for f, t, i, o, on, bl in cached_rows(conn, "shots_without_xg", f"""
+    # the site's estimate from shots, for every match with shot counts: {(fixture, team): xG}
+    shot_xg = {(f, t): _xg_from_shots(i, o, on, bl) for f, t, i, o, on, bl in cached_rows(conn, "shot_counts", f"""
             select {WEEK.format('f.kickoff')} as part, s.fixture_id, s.team_id, s.shots_inside_box,
                    s.shots_outside_box, s.shots_on_goal, s.blocked_shots
             from fixture_team_stats s join fixtures f using (fixture_id)
-            where s.expected_goals is null and s.shots_inside_box is not null
+            where s.shots_inside_box is not null
               and s.shots_outside_box is not null and s.shots_on_goal is not null""",
             order_by="fixture_id, team_id")}
 
-    def xg_pair(fid, team, opp, is_home):
-        """(xG for, xG against, estimated?) for the club in this match."""
-        h, a = match_xg.get(fid, (None, None))
-        f_, a_ = (h, a) if is_home else (a, h)
-        if f_ is not None and a_ is not None:
-            return _r(f_, 2), _r(a_, 2), 0
+    def xg_pair(fid, team, opp):
+        """(xG for, xG against, estimated: always 1) for the club in this match, from shots."""
         ef, ea = shot_xg.get((fid, team)), shot_xg.get((fid, opp))
         return (_r(ef, 2), _r(ea, 2), 1) if ef is not None and ea is not None else (None, None, 0)
     history = {}
@@ -1872,7 +1861,7 @@ def export_clubs(conn, out_dir=OUT_DIR, positions=None):
         rows.append([kickoff.date().isoformat(), round(rank_after, 1), opp, 2 if fid in neutral else 1 if is_home else 0,
                      gf, ga, league,
                      formations.get((fid, team)), _r(att, 1), _r(dfn, 1), xi_lines.get((fid, team)),
-                     *xg_pair(fid, team, opp, is_home)])
+                     *xg_pair(fid, team, opp)])
     club_dir = out_dir / "clubs"
     club_dir.mkdir(parents=True, exist_ok=True)
     for old in club_dir.glob("*.json"):
@@ -1899,22 +1888,47 @@ XG_RECENT = 5   # league games behind the tables' xG and xG conceded per 90
 def export_leagues(conn, out_dir=OUT_DIR):
     """One file per competition for its league page: docs/data/leagues/<league_id>.json.
 
-    The current season's table (every group, as API-Football sends it) and all its fixtures, the
+    The current season's table (every group, worked out from the results: tables.py) and all its fixtures, the
     upcoming ones with the model's projected goals and home / draw / away chances (for the page's
-    projected table), and each club's recent xG for and against (for the table). Loaded only when
+    projected table), and each club's recent xG for and against (for the table): the site's
+    estimate from shots (XG_FROM_SHOTS), not API-Football's xG. Loaded only when
     the page opens.
     """
     seasons = {lid: (season, start) for lid, season, start in conn.execute(
         """select distinct on (league_id) league_id, season, start_date from league_seasons
            where is_current order by league_id, season desc""")}
-    tables = defaultdict(list)
-    for (lid, season, group, team, rank, pts, gd, form, desc, pl, w, d, l, gf, ga) in conn.execute(
-            """select league_id, season, group_name, team_id, rank, points, goal_diff, form, description,
+    # API-Football's standings give the groups and what each place leads to; the figures and
+    # the order are worked out from the results (tables.py)
+    standing, feed = defaultdict(list), defaultdict(list)
+    for (lid, group, team, rank, pts, desc, pl, w, d, l, gf, ga) in conn.execute(
+            """select league_id, group_name, team_id, rank, points, description,
                       played, win, draw, lose, goals_for, goals_against
                from standings where (league_id, season) in (select league_id, max(season) from league_seasons
                                                              where is_current group by league_id)
                order by league_id, group_name, rank"""):
-        tables[lid].append([group, rank, team, pl, w, d, l, gf, ga, gd, pts, form, desc])
+        standing[lid].append((group, team, rank, desc))
+        feed[lid].append((group, team, pl, w, d, l, gf, ga, pts))
+    results = defaultdict(list)
+    for lid, kickoff, rnd, home, away, hg, ag in conn.execute(
+            """select f.league_id, f.kickoff, f.round, f.home_team_id, f.away_team_id,
+                      coalesce(f.ft_home, f.home_goals), coalesce(f.ft_away, f.away_goals)
+               from fixtures f
+               where f.status_short = any(%s) and f.home_goals is not null and f.away_goals is not null
+                 and (f.league_id, f.season) in (select league_id, max(season) from league_seasons
+                                                 where is_current group by league_id)""",
+            [list(config.FINISHED_STATUSES)]):
+        results[lid].append((kickoff, rnd, home, away, hg, ag))
+    cups = {lid for lid, in conn.execute("select league_id from leagues where type <> 'League'")}
+    names = dict(conn.execute("select team_id, name from teams"))
+    tables = {}
+    for lid, rows in standing.items():
+        season = seasons[lid][0] if lid in seasons else None
+        tables[lid] = league_tables.league_table(rows, results[lid], league_tables.adjustments(lid, season), names,
+                                                 league_tables.ORDER.get(lid), lid in cups)
+        differ = league_tables.differences(tables[lid], feed[lid])
+        if differ:
+            log.warning("League %s: the table from results differs from API-Football's for %d club(s), e.g. %s "
+                        "(a deduction or an annulled club goes in table_adjustments.json)", lid, len(differ), differ[0])
     fixtures = defaultdict(list)
     for fid, lid, kickoff, rnd, home, away, status, hg, ag, ph, pa_, xh, xa, p1, px, p2 in conn.execute(
             """select f.fixture_id, f.league_id, f.kickoff, f.round, f.home_team_id, f.away_team_id, f.status_short,
@@ -1927,38 +1941,40 @@ def export_leagues(conn, out_dir=OUT_DIR):
                order by f.kickoff, f.fixture_id""", [list(UPCOMING_STATUSES)]):
         fixtures[lid].append([fid, kickoff.isoformat(), rnd, home, away, status, hg, ag, ph, pa_,
                               _r(xh), _r(xa), _r(p1, 3), _r(px, 3), _r(p2, 3)])
-    # each club's xG and xG conceded per 90 over its last XG_RECENT league games with xG for both sides
-    # (a match that went to extra time counts as 120 minutes)
+    # each club's estimated xG and xG conceded per 90 over its last XG_RECENT league games with
+    # shot counts for both sides (a match that went to extra time counts as 120 minutes)
+    xg_sql = ("greatest(0, %s::float8 * {0}.shots_inside_box + %s::float8 * {0}.shots_outside_box + %s::float8 * {0}.shots_on_goal"
+              " + %s::float8 * coalesce({0}.blocked_shots, 0) + %s::float8)")
+    counted = "{0}.shots_inside_box is not null and {0}.shots_outside_box is not null and {0}.shots_on_goal is not null"
     recent_xg = defaultdict(dict)
     for lid, team, xg, xga, n in conn.execute(
-            """with games as (
+            f"""with games as (
                  select f.league_id, s.team_id, f.kickoff,
-                        s.expected_goals * 90 / case when f.status_short in ('AET', 'PEN') then 120 else 90 end as xg,
-                        o.expected_goals * 90 / case when f.status_short in ('AET', 'PEN') then 120 else 90 end as xga
+                        {xg_sql.format('s')} * 90 / case when f.status_short in ('AET', 'PEN') then 120 else 90 end as xg,
+                        {xg_sql.format('o')} * 90 / case when f.status_short in ('AET', 'PEN') then 120 else 90 end as xga
                  from fixtures f
                  join fixture_team_stats s on s.fixture_id = f.fixture_id
                  join fixture_team_stats o on o.fixture_id = f.fixture_id and o.team_id <> s.team_id
-                 where f.status_short = any(%s) and s.expected_goals is not null and o.expected_goals is not null
+                 where f.status_short = any(%s) and {counted.format('s')} and {counted.format('o')}
                    and (f.league_id, f.season) in (select league_id, max(season) from league_seasons
                                                    where is_current group by league_id)),
                ranked as (select *, row_number() over (partition by league_id, team_id order by kickoff desc) as n
                           from games)
                select league_id, team_id, avg(xg)::float8, avg(xga)::float8, count(*)
                from ranked where n <= %s group by 1, 2""",
-            [list(config.FINISHED_STATUSES), XG_RECENT]):
+            [*XG_FROM_SHOTS, *XG_FROM_SHOTS, list(config.FINISHED_STATUSES), XG_RECENT]):
         recent_xg[lid][team] = [_r(xg), _r(xga), n]
-    names = dict(conn.execute("select team_id, name from teams"))
     league_dir = out_dir / "leagues"
     league_dir.mkdir(parents=True, exist_ok=True)
     for old in league_dir.glob("*.json"):
         if int(old.stem) not in seasons:
             old.unlink()
     for lid, (season, start) in seasons.items():
-        teams = {r[2] for r in tables[lid]} | {t for f in fixtures[lid] for t in (f[3], f[4])}
+        table = tables.get(lid, [])
+        teams = {r[2] for r in table} | {t for f in fixtures[lid] for t in (f[3], f[4])}
         payload = {"id": lid, "season": season, "start": start.isoformat() if start else None,
-                   "table_fields": ["group", "rank", "team", "played", "win", "draw", "lose", "gf", "ga", "gd",
-                                    "points", "form", "description"],
-                   "table": tables[lid],
+                   "table_fields": league_tables.FIELDS,
+                   "table": table,
                    "fixture_fields": ["id", "kickoff", "round", "home", "away", "status", "hg", "ag", "pen_h", "pen_a",
                                       "home_xg", "away_xg", "p_home", "p_draw", "p_away"],
                    "fixtures": fixtures[lid],

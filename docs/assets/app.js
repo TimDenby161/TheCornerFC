@@ -3128,7 +3128,7 @@ function clubOverviewTab() {
         ${clubCrest(m.opponent, "club-logo", `data-club="${m.opponent}"`, clubOpp(m.opponent))}
         <span class="form-ha">${m.home === 2 ? "N" : m.home ? "H" : "A"}</span>
         ${leagueCrest(m.league, "next5-comp", `data-league="${m.league}" title="${escapeHtml(compLabel(m.league))}"`, compLabel(m.league))}
-        <span class="form-xg${m.xg_est ? " est" : ""}" title="${m.xg_est ? "Estimated from shots (API-Football has no xG for this match): for – against" : "Expected goals: for – against"}">${
+        <span class="form-xg${m.xg_est ? " est" : ""}" title="${m.xg_est ? "Expected goals estimated from shots: for – against" : "Expected goals: for – against"}">${
           m.xgf != null && m.xga != null ? `${m.xg_est ? "≈" : ""}${m.xgf.toFixed(1)}–${m.xga.toFixed(1)}` : "–"}</span>
         <span class="form-move">${moveHtml(move)}</span></div>`).join("")}
     </div>` : "";
@@ -4160,8 +4160,8 @@ function playerOverviewTab() {
   if (now?.minutes) {
     seasonBody = `<div class="team-stats compact">
         ${plTile("Minutes", now.minutes.toLocaleString(), now.apps != null ? `${now.apps} apps${now.starts != null ? ` · ${now.starts} started` : ""}` : "")}
-        ${gk ? plTile("Saves", now.saves ?? "–") : plTile("Goals", now.goals ?? "–")}
-        ${gk ? plTile("Conceded", now.conceded ?? "–") : plTile("Assists", now.assists ?? "–")}
+        ${gk ? "" : plTile("Goals", now.goals ?? "–")}
+        ${gk ? "" : plTile("Assists", now.assists ?? "–")}
       </div>`;
   } else {
     seasonBody = `<div class="pl-callout">No league minutes in ${y != null ? seasonName(y) : "this season"} yet${
@@ -4285,10 +4285,10 @@ function drawPlayerChart(wrap) {
 }
 window.addEventListener("resize", () => { if (state.player) drawPlayerChart($("#pl-chart")); });
 
-// ---- Stats: one season (all his clubs added up), as totals or per 90 minutes
-const SUM_KEYS = ["apps", "starts", "minutes", "goals", "assists", "shots_on", "key_passes", "passes", "tackles",
-                  "interceptions", "blocks", "duels_won", "duels", "dribbles_won", "fouls", "yellow", "red", "saves", "conceded"];
-// a season's lines added up (null where no line has the stat); pass accuracy weighted by passes
+// ---- Stats: one season (all his clubs added up), as totals or per 90 minutes: appearances,
+// minutes, goals, assists and cards only (the feed's other counts aren't published)
+const SUM_KEYS = ["apps", "starts", "minutes", "goals", "assists", "yellow", "red"];
+// a season's lines added up (null where no line has the stat)
 function sumSeason(rows) {
   if (!rows.length) return null;
   const out = {};
@@ -4296,40 +4296,21 @@ function sumSeason(rows) {
     const vs = rows.map((r) => r[k]).filter((v) => v != null);
     out[k] = vs.length ? vs.reduce((a, b) => a + b, 0) : null;
   }
-  const wavg = (key, weight) => {
-    const rs = rows.filter((r) => r[key] != null && r[weight]);
-    return rs.length ? rs.reduce((a, r) => a + r[key] * r[weight], 0) / rs.reduce((a, r) => a + r[weight], 0) : null;
-  };
-  out.pass_acc = wavg("pass_acc", "passes");
   return out;
 }
-const STAT_GROUPS = [
-  ["Goalkeeping", [["saves", "Saves"], ["conceded", "Goals conceded"], ["save_pct", "Save %", "pct"]]],
-  ["Attacking", [["goals", "Goals"], ["assists", "Assists"], ["shots_on", "Shots on target"], ["key_passes", "Key passes"],
-                 ["dribbles_won", "Dribbles won"]]],
-  ["Passing", [["passes", "Passes"], ["pass_acc", "Pass accuracy", "pct"]]],
-  ["Defending", [["tackles", "Tackles"], ["interceptions", "Interceptions"], ["blocks", "Blocks"], ["duels_won", "Duels won"],
-                 ["duel_pct", "Duels won %", "pct"]]],
-  ["Discipline", [["fouls", "Fouls"], ["yellow", "Yellow cards"], ["red", "Red cards"]]],
-];
 function playerStatsTab() {
-  const { p, page } = state.player;
+  const { page } = state.player;
   if (!page?.seasonRows.length) return `<div class="empty-state">No season stats for him yet.</div>`;
   const years = [...new Set(page.seasonRows.map((r) => r.season))].sort((a, b) => b - a);
   const year = years.includes(state.player.season) ? state.player.season : years[0];
   const rows = page.seasonRows.filter((r) => r.season === year);
   const s = sumSeason(rows);
-  s.save_pct = s.saves != null && s.saves + (s.conceded || 0) ? 100 * s.saves / (s.saves + (s.conceded || 0)) : null;
-  s.duel_pct = s.duels ? 100 * s.duels_won / s.duels : null;
   const per90 = !!state.playerPer90 && s.minutes > 0;
-  const fmt = (k, kind) => {
+  const fmt = (k) => {
     const v = s[k];
     if (v == null) return "–";
-    if (kind === "pct") return `${Math.round(v)}%`;
     return per90 ? (v * 90 / s.minutes).toFixed(2) : v.toLocaleString();
   };
-  const gk = GROUP_OF[p.position] === "GK";
-  const groups = STAT_GROUPS.filter(([name]) => gk ? name !== "Attacking" : name !== "Goalkeeping");
   const tile = (label, value, sub = "") => `<div class="team-stat"><div class="team-stat-label">${label}</div><div class="team-stat-value">${value}</div>${sub ? `<div class="team-stat-sub">${sub}</div>` : ""}</div>`;
   const partial = rows.some((r) => r.starts == null);
   return `
@@ -4343,25 +4324,22 @@ function playerStatsTab() {
     <div class="team-stats compact">
       ${tile("Apps", s.apps, s.starts != null && !partial ? `${s.starts} started` : "")}
       ${tile("Minutes", s.minutes.toLocaleString())}
-      ${gk ? tile("Saves", fmt("saves")) : tile("Goals", fmt("goals"))}
-      ${gk ? tile("Save %", fmt("save_pct", "pct")) : tile("Assists", fmt("assists"))}
+      ${tile("Goals", fmt("goals"))}
+      ${tile("Assists", fmt("assists"))}
+      ${tile("Yellow cards", fmt("yellow"))}
+      ${tile("Red cards", fmt("red"))}
     </div>
-    <div class="stat-groups">${groups.map(([name, items]) => `<div class="stat-group"><div class="stat-group-title">${name}</div>
-      ${items.map(([k, label, kind]) => `<div class="stat-line"><span>${label}</span><b>${fmt(k, kind)}</b></div>`).join("")}</div>`).join("")}</div>
-    <div class="page-note">League matches only${per90 ? `, per 90 minutes (${s.minutes.toLocaleString()} minutes)` : ""}.${partial ? " Leagues without match-by-match data give season totals only, so starts and pass accuracy are missing there." : ""}</div>`;
+    <div class="page-note">League matches only${per90 ? `, per 90 minutes (${s.minutes.toLocaleString()} minutes)` : ""}.${partial ? " Leagues without match-by-match data give season totals only, so starts are missing there." : ""}</div>`;
 }
 
 // ---- Matches: his last league appearances, newest first
 function playerMatchesTab() {
   const { page } = state.player;
   if (!page?.matchRows.length) return `<div class="empty-state">No match-by-match data for him (only the leagues with per-match player stats have it).</div>`;
-  const gk = GROUP_OF[state.player.p.position] === "GK";
   const row = (m) => {
     const bits = [
       `${m.minutes}′${m.started ? "" : " off the bench"}`, m.started && m.role ? POS_WORD[m.role] || m.role : "",
       m.goals ? `${m.goals} goal${m.goals > 1 ? "s" : ""}` : "", m.assists ? `${m.assists} assist${m.assists > 1 ? "s" : ""}` : "",
-      gk ? `${m.saves} save${m.saves === 1 ? "" : "s"}` : m.key_passes ? `${m.key_passes} key pass${m.key_passes > 1 ? "es" : ""}` : "",
-      !gk && m.shots_on ? `${m.shots_on} on target` : "", m.duels ? `duels ${m.duels_won}/${m.duels}` : "",
       m.red ? `<span class="card red"></span>` : m.yellow ? `<span class="card"></span>` : "",
     ].filter(Boolean);
     return `<div class="match-row">
@@ -4818,7 +4796,7 @@ async function loadLeague(lid) {
   const lg = await getJsonOrNull(`data/leagues/${lid}.json`);
   if (lg) {
     lg.tableRows = rowsToObjects(lg.table_fields, lg.table);
-    // each club's xG and xG conceded per 90 over its last five league games with xG (older files: none)
+    // each club's estimated xG and xG conceded per 90 over its last five league games with shot counts
     const xf = lg.recent_xg_fields || [];
     for (const r of lg.tableRows) {
       const x = lg.recent_xg?.[r.team];
@@ -4956,7 +4934,7 @@ function leagueTableTab() {
   const th = (key, label, title, cls) => sortTh("table", s, key, label, title, cls);
   const hasXg = rows.some((r) => r.xg90 != null);   // leagues without xG data don't get the columns
   if (!hasXg && s.key.startsWith("xg")) Object.assign(s, { key: "rank", dir: 1 });
-  const xgTip = (r) => r.xg_games ? ` title="Over the last ${r.xg_games} league game${r.xg_games === 1 ? "" : "s"} with xG"` : "";
+  const xgTip = (r) => r.xg_games ? ` title="Over the last ${r.xg_games} league game${r.xg_games === 1 ? "" : "s"} with shot counts"` : "";
   const zones = leagueZones(rows);
   const groups = [...new Set(rows.map((r) => r.group))];
   const table = (g) => `
@@ -4965,7 +4943,7 @@ function leagueTableTab() {
       <thead><tr>${th("rank", "#", "Position", "lt-pos")}<th></th>${th("club", "Club", "Club name", "lt-club")}
         ${th("played", "P", "Played")}${th("win", "W", "Won", "lt-wdl")}${th("draw", "D", "Drawn", "lt-wdl")}${th("lose", "L", "Lost", "lt-wdl")}
         ${th("gf", "GF", "Goals for", "lt-wide")}${th("ga", "GA", "Goals against", "lt-wide")}${th("gd", "GD", "Goal difference", "lt-gd")}${th("points", "Pts", "Points")}
-        ${hasXg ? th("xg90", "xG/90", "Expected goals per 90 minutes over the club's last five league games") + th("xga90", "xGC/90", "Expected goals conceded per 90 minutes over the club's last five league games") : ""}
+        ${hasXg ? th("xg90", "xG/90", "Expected goals per 90 minutes over the club's last five league games, estimated from its shots") + th("xga90", "xGC/90", "Expected goals conceded per 90 minutes over the club's last five league games, estimated from the shots it faced") : ""}
         ${th("form", "Form", "Last five league games, newest first: green won, grey drawn, red lost. Sorts by points from them", "lt-formcol")}${th("current", "Current", "Current Strength: the club's current Elo rating")}</tr></thead>
       <tbody>${sortLeagueRows(rows.filter((r) => r.group === g), s, STANDINGS_COLS).map((r) => {
         const rk = state.rankByTeam.get(r.team);
