@@ -163,9 +163,12 @@ function addPlayers(rows) {
     const p = Object.fromEntries(fields.map((f, i) => [f, r[i]]));
     p.name = decodeEntities(p.name);        // API-Football sends some names HTML-encoded ("O&apos;Reilly")
     p.season = p.season && Object.fromEntries(seasonFields.map((f, i) => [f, p.season[i]]));
+    // no place in the export's order: the database blanked his ranks for this visitor (the
+    // paywall, db/migrations/20261006_paid_players.sql). Such players follow the ranked ones
+    if (p.ord == null) { p.locked = true; state.paywall = true; }
     playerStore.byId.set(p.id, p);
   }
-  state.players.list = [...playerStore.byId.values()].sort((a, b) => a.ord - b.ord);
+  state.players.list = [...playerStore.byId.values()].sort((a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || a.name.localeCompare(b.name));
   state.playersById = null;
   return rows.map((r) => playerStore.byId.get(r[0]));
 }
@@ -1501,7 +1504,12 @@ function fitYearsBox(wrap) {
 // it: asked for once, null if he has none
 const playerFiles = new Map(), playerFileData = new Map();     // on its way, and once it's in
 function loadPlayerFile(id) {
-  if (!playerFiles.has(id)) playerFiles.set(id, getJsonOrNull(`data/players/${id}.json`).then((d) => {
+  // site_player_page gives the whole file to anyone entitled and a cut-down one otherwise
+  // (db/migrations/20261006_paid_players.sql); the plain file where the function isn't there
+  const ask = DATA_SOURCE === "db"
+    ? () => siteAsk("site_player_page", { p_id: id }).catch(() => getJsonOrNull(`data/players/${id}.json`))
+    : () => getJsonOrNull(`data/players/${id}.json`);
+  if (!playerFiles.has(id)) playerFiles.set(id, ask().then((d) => {
     playerFileData.set(id, d);
     return d;
   }));
@@ -1674,7 +1682,7 @@ function renderPlayers() {
         ${open ? future.map((y, j) => th(`f${y}`, `${String(y).slice(2)}/${String(y + 1).slice(2)}`, `Projected for ${seasonName(y)}: his Ability moved along the typical age curve for his position, from his age now to his age that season (young players rise, from 31 (33 for keepers) they decline, faster each year). A guide, not a forecast of his form.`, ` col-season col-future col-f${j}`)).join("") : ""}
       </tr></thead>
       <tbody>${rows.slice(0, FIRST_ROWS).map((p, i) => playerRow(p, i, shown, groups, open ? future : [])).join("")}</tbody>
-    </table></div>`;
+    </table></div>${state.paywall ? `<div class="page-note">${PAID_RANKS}</div>` : ""}`;
   fitTopRows(wrap, all || !!q);
   fitYearsBox(wrap);
   // The rest of the rows go in BATCH_ROWS at a time as the bottom of the list scrolls into view
@@ -3273,6 +3281,7 @@ function predictedXi(teamId, data = state.club?.data, match = null) {
     });
   return xi.length ? xi : null;
 }
+const PAID_RANKS = `Player ranks outside the top 50 overall and the top 10 in each league are for subscribers: his rank, season by season, in each position and projected. <button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
 const PAID_XI = `Predicted line-ups are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
 function clubXiTab() {
   if (state.paywall) return `<div class="empty-state">${PAID_XI}</div>`;
@@ -4063,9 +4072,11 @@ function renderPlayerPage() {
           <span class="pl-meta"${born ? ` title="Born ${escapeHtml(parseDateInput(born).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }))}"` : ""}>${p.age}</span>` : ""}</div>
       </div>
       <div class="hero-ranks">${heroGoalsAssists(p)}
-        <div class="pl-hero-rank rel-${rankTier(p.rank)}" title="${escapeHtml(ABILITY_TIP)}">
-        <span class="val">${Math.round(p.rank)}</span><span class="lbl">Ability</span></div></div>
+        ${p.rank == null ? `<div class="pl-hero-rank" title="His rank is for subscribers"><span class="val">–</span><span class="lbl">Ability</span></div></div>`
+          : `<div class="pl-hero-rank rel-${rankTier(p.rank)}" title="${escapeHtml(ABILITY_TIP)}">
+        <span class="val">${Math.round(p.rank)}</span><span class="lbl">Ability</span></div></div>`}
     </div>
+    ${p.locked ? `<div class="pl-callout">${PAID_RANKS}</div>` : ""}
     ${playerKeyFigures(p)}
     ${playerRecentSection()}
     <div class="page-tabs" role="tablist">${PLAYER_TABS.map(([k, label]) =>
@@ -4116,7 +4127,7 @@ function playerKeyFigures(p) {
   const season = y != null ? seasonShort(y) : "Season";
 
   // first row: his league rank, then this season's minutes, and goals and assists
-  const main = (leagueOf ? kfTile("League rank", `#${leaguePlace.toLocaleString()}`, `of ${leagueOf.toLocaleString()} in ${escapeHtml(league)}`,
+  const main = (leagueOf && leaguePlace != null ? kfTile("League rank", `#${leaguePlace.toLocaleString()}`, `of ${leagueOf.toLocaleString()} in ${escapeHtml(league)}`,
       `Place by Ability among ranked players at ${league} clubs`, tier(leaguePlace, leagueOf)) : "")
     + kfTile(`${season} minutes`, now ? now.minutes.toLocaleString() : "–",
       now?.apps != null ? `${now.apps} apps${now.starts != null ? ` · ${now.starts} started` : ""}` : "league matches",
@@ -4178,7 +4189,7 @@ function playerOverviewTab() {
   } else {
     seasonBody = `<div class="pl-callout">No league minutes in ${y != null ? seasonName(y) : "this season"} yet${
       injury ? ` · listed ${availabilityWord(injury).toLowerCase()}` : ""}.
-      His Ability of ${Math.round(p.rank)} comes from earlier seasons and his age curve, not from current form.</div>`;
+      ${p.rank == null ? "" : `His Ability of ${Math.round(p.rank)} comes from earlier seasons and his age curve, not from current form.`}</div>`;
   }
   const seasonNote = now?.minutes && now.minutes < 900
     ? `Only ${now.minutes.toLocaleString()} minutes so far: this season moves his Ability only a little until he plays more.`
@@ -6839,7 +6850,7 @@ state.account = { user: null, view: "signin", text: "" };
 // it changes the page starts again, to fetch the data they are now due, or no longer due.
 state.sub = null;
 const SUBSCRIBER_GETS = `<p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings, league tables and the betting comparison pages.</p>
-  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, and every league's projected table with each club's finishing chances.</p>`;
+  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall and the top 10 in each league are free).</p>`;
 function paidFlag(on) {
   try {
     const was = localStorage.getItem(PAID_KEY) === "1";

@@ -512,7 +512,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     detail = export_player_seasons(conn, out_dir)
     export_clubs(conn, out_dir, _club_positions(player_team, detail["positions"]))
     export_leagues(conn, out_dir)
-    export_player_pages(conn, out_dir, detail)
+    export_player_pages(conn, out_dir, detail, listed["free"])
     export_fantasy(conn, out_dir)
     export_fantasy_predictions(conn)
     export_efl_fantasy(conn, out_dir)
@@ -1285,7 +1285,8 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
     here: the site asks the database for the match it opens (site_lineups) and for a club's next
     predicted XI (site_next_xi). rankings: the rows of rankings.json, for each club's world
     rank. Returns ({player: his club}, {"stored": whether the table was written,
-    "future_seasons", "teams": the names of the players' clubs})."""
+    "future_seasons", "teams": the names of the players' clubs, "free": the players in the paid
+    tier's free slice})."""
     # Listed: 450+ minutes in his last 20 appearances, a 1,500+ minute season in the seasons
     # shown (an established player back from injury, e.g. John Stones), or in a current squad
     # (a new signing). His club: the squad he's in now (team_squads), else the club the weekly
@@ -1379,9 +1380,11 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
     teams = {t: n for t, n in conn.execute(
         "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])}
     log.info("Exported %d player ranks", len(players))
-    stored = store_players(conn, site_player_rows(rows, rankings))
+    site_rows = site_player_rows(rows, rankings)
+    stored = store_players(conn, site_rows)
     # {player: his club}, for the club files' positions
-    return {r[0]: r[5] for r in players}, {"stored": stored, "future_seasons": future_seasons, "teams": teams}
+    return {r[0]: r[5] for r in players}, {"stored": stored, "future_seasons": future_seasons, "teams": teams,
+                                           "free": {p["player_id"] for p in site_rows if p["free"]}}
 
 
 # A player as the site draws him: the order of his row in site.players.data (SITE_PLAYER_FIELDS):
@@ -1392,6 +1395,18 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
 PLAYER_FIELDS = ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
                  "nationality", "positions_12m", "position_ranks", "future", "season"]
 SITE_PLAYER_FIELDS = PLAYER_FIELDS + ["world", "lg", "lg_of", "lg_rank", "lg_n", "ord"]
+# The paid tier (db/migrations/20261006_paid_players.sql; the owner's line of 2026-10-04): the top
+# FREE_WORLD players by Ability and the top FREE_LEAGUE of each league are free; for everyone
+# else a visitor without a subscription gets the row with these fields null (who he is, his club,
+# age, minutes, goals and assists stay), once the paywall is on.
+FREE_WORLD, FREE_LEAGUE = 50, 10
+PLAYER_PAID_FIELDS = ("rank", "seasons", "estimated", "position_ranks", "future", "world", "lg", "lg_rank", "ord")
+
+
+def blanked_player(data):
+    """A player's row (SITE_PLAYER_FIELDS order) with the paid fields null."""
+    hide = {SITE_PLAYER_FIELDS.index(f) for f in PLAYER_PAID_FIELDS}
+    return [None if i in hide else v for i, v in enumerate(data)]
 
 
 def _fold(text):
@@ -1449,16 +1464,19 @@ def site_player_rows(rows, rankings=()):
         goals, assists = (season[PLAYER_SEASON_FIELDS.index("goals")], season[PLAYER_SEASON_FIELDS.index("assists")]) if season else (None, None)
         name = _decode(r[at["name"]])
         plays = [x for x in dict.fromkeys([r[at["position"]], *r[at["positions_12m"]]]) if x]
+        data = [*r, world[a] if placed else None,
+                league_place[league][a] if in_league else None, len(by_league[league]) if in_league else None,
+                club_place[league][r[at["rank"]]] if with_club else None, len(club_league[league]) if with_club else None, i]
         out.append({
+            "free": bool((placed and world[a] <= FREE_WORLD) or (in_league and league_place[league][a] <= FREE_LEAGUE)),
+            "data_free": blanked_player(data),
             "player_id": r[at["id"]], "ord": i, "name_lc": name.lower(), "name_fold": _fold(name),
             "team_id": team, "league_id": league, "age": r[at["age"]], "nationality": r[at["nationality"]],
             "plays": plays, "ability": None if a is None else math.floor(a + 0.5),
             "club_world": club_world.get(team), "minutes": r[at["minutes"]],
             "seasons": r[at["seasons"]], "future": r[at["future"]], "pos_ranks": r[at["position_ranks"]],
             "ga": None if season is None else goals + assists + goals / 1000,
-            "data": [*r, world[a] if placed else None,
-                     league_place[league][a] if in_league else None, len(by_league[league]) if in_league else None,
-                     club_place[league][r[at["rank"]]] if with_club else None, len(club_league[league]) if with_club else None, i],
+            "data": data,
         })
     return out
 
@@ -1491,6 +1509,10 @@ def store_players(conn, players):
     text = lambda value: json.dumps(value, separators=(",", ":"), ensure_ascii=False)
     columns = ["player_id", "ord", "name_lc", "name_fold", "team_id", "league_id", "age", "nationality", "plays",
                "ability", "club_world", "minutes", "seasons", "future", "pos_ranks", "ga", "data"]
+    # the free slice and the blanked rows, once the paid tier's migration has added their columns
+    if conn.execute("""select 1 from pg_attribute where attrelid = 'site.players'::regclass and attname = 'data_free'
+                       and not attisdropped""").fetchone() is not None:
+        columns += ["free", "data_free"]
     if len(players) < MIN_PLAYERS:
         raise ExportValidationError(f"only {len(players)} players to store; expected at least {MIN_PLAYERS}")
     with conn.cursor() as cur:
@@ -1498,7 +1520,7 @@ def store_players(conn, players):
         cur.execute("delete from site.players")
         with cur.copy(f"copy site.players ({', '.join(columns)}) from stdin") as copy:
             for p in players:
-                copy.write_row([text(p[c]) if c in ("pos_ranks", "data") else p[c] for c in columns])
+                copy.write_row([text(p[c]) if c in ("pos_ranks", "data", "data_free") else p[c] for c in columns])
         cur.execute("analyze site.players")
     conn.commit()
     log.info("Stored %d players", len(players))
@@ -1684,7 +1706,15 @@ def _player_movement(conn, ids):
     return out
 
 
-def export_player_pages(conn, out_dir=OUT_DIR, detail=None):
+def cut_player_page(page):
+    """A player's page file as anyone can ask for it when he is outside the free slice: no rank
+    going into each match and no rating movement, and "cut": true."""
+    at = MATCH_FIELDS.index("rank")
+    return {**{k: v for k, v in page.items() if k != "movement"},
+            "matches": [[None if i == at else v for i, v in enumerate(m)] for m in page["matches"]], "cut": True}
+
+
+def export_player_pages(conn, out_dir=OUT_DIR, detail=None, free=None):
     """One small file per listed player for his page: docs/data/players/<player_id>.json, with his
     stats per season and club, his last PLAYER_MATCHES appearances (with his rank going into each)
     and his injury status for his next fixture ([fixture, type, ban]: no medical reason), plus his
@@ -1730,15 +1760,30 @@ def export_player_pages(conn, out_dir=OUT_DIR, detail=None):
     for old in player_dir.glob("*.json"):
         if int(old.stem) not in pages:
             old.unlink()
+    # the paid tier: a player outside the free slice (free: export_players) has a whole file stored
+    # as a paid row and a cut-down one anyone can ask for, once site_player_page() is there to choose
+    paid = free is not None and _paid_rows(conn, "site_player_page")
+    paid_dir = out_dir / f"{PAID_PREFIX}players"
+    if paid:
+        paid_dir.mkdir(parents=True, exist_ok=True)
+    for old in paid_dir.glob("*.json") if paid_dir.is_dir() else ():
+        if not paid or int(old.stem) not in pages or int(old.stem) in free:
+            old.unlink()
+
+    def write(path, page):
+        payload = json.dumps(page, separators=(",", ":"), ensure_ascii=False)
+        if not path.exists() or path.read_text(encoding="utf-8") != payload:
+            path.write_text(payload, encoding="utf-8")
     for pid, page in pages.items():
         teams = ({s[1] for s in page["seasons"]} | {m[4] for m in page["matches"]}
                  | {sp[0] for v in page["spells"].values() for sp in v})
-        payload = json.dumps({"id": pid, "season_fields": SEASON_FIELDS, "match_fields": MATCH_FIELDS, **page,
-                              "teams": {str(t): names.get(t) for t in sorted(teams)}},
-                             separators=(",", ":"), ensure_ascii=False)
-        path = player_dir / f"{pid}.json"
-        if not path.exists() or path.read_text(encoding="utf-8") != payload:
-            path.write_text(payload, encoding="utf-8")
+        whole = {"id": pid, "season_fields": SEASON_FIELDS, "match_fields": MATCH_FIELDS, **page,
+                 "teams": {str(t): names.get(t) for t in sorted(teams)}}
+        if paid and pid not in free:
+            write(paid_dir / f"{pid}.json", whole)
+            write(player_dir / f"{pid}.json", cut_player_page(whole))
+        else:
+            write(player_dir / f"{pid}.json", whole)
     log.info("Exported %d player pages", len(pages))
 
 
@@ -1925,15 +1970,16 @@ def cut_league_fixtures(fixtures, now):
     return out
 
 
-def _paid_leagues(conn):
-    """Whether to write each league's cut-down and paid files: once the database has
-    site_league() to choose between them (db/migrations/20261006_site_league.sql). Before it,
-    and on a read-only run, a league's one file is whole, as it always was."""
+def _paid_rows(conn, function):
+    """Whether to write cut-down and paid files for a kind of page: once the database has the
+    function that chooses between them (site_league: db/migrations/20261006_site_league.sql;
+    site_player_page: 20261006_paid_players.sql). Before it, and on a read-only run, a page's
+    one file is whole, as it always was."""
     try:
-        config.require_db_write("check for site_league")
+        config.require_db_write(f"check for {function}")
     except config.SafetyError:
         return False
-    return conn.execute("select to_regprocedure('public.site_league(integer)')").fetchone()[0] is not None
+    return conn.execute("select to_regprocedure(%s)", [f"public.{function}(integer)"]).fetchone()[0] is not None
 
 
 def export_leagues(conn, out_dir=OUT_DIR):
@@ -2020,7 +2066,7 @@ def export_leagues(conn, out_dir=OUT_DIR):
     for old in league_dir.glob("*.json"):
         if int(old.stem) not in seasons:
             old.unlink()
-    paid = _paid_leagues(conn)
+    paid = _paid_rows(conn, "site_league")
     now = datetime.now(timezone.utc)
     paid_dir = out_dir / f"{PAID_PREFIX}leagues"
     if paid:

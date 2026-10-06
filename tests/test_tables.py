@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import unittest.mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -190,3 +191,51 @@ class PaidLineupsMigrationTests(unittest.TestCase):
                  "        RETURN pg_catalog.json_build_object('fixture', next_fixture, 'players', NULL, 'locked', true);\n    END IF;\n")
         self.assertIn(added, new)
         self.assertEqual(new.replace(added, ""), self.body("20261005_site_next_xi_fast.sql", "site_next_xi"))
+
+
+class PaidPlayersTests(unittest.TestCase):
+    """The paid tier's players: a free slice, a blanked row for the rest, a cut-down page file
+    (db/migrations/20261006_paid_players.sql)."""
+    def rows(self, n=120):
+        from thecornerfc import export
+        raw = [[i + 1, f"Player {i:03d}", "CM", 95 - i * 0.5, 900, 100 + i % 6, 39 + i % 2, [95 - i * 0.5, None], 24, [],
+                "England", ["CM"], {"CM": 95 - i * 0.5}, [90.0], [900, 3, 2]] for i in range(n)]
+        return export.site_player_rows(raw)
+
+    def test_the_free_slice_is_the_top_50_and_each_leagues_top_10(self):
+        rows = self.rows()
+        free = [p["player_id"] for p in rows if p["free"]]
+        self.assertEqual(free, list(range(1, 51)))            # two leagues' top 10s fall inside the overall 50 here
+        from thecornerfc import export
+        with unittest.mock.patch.object(export, "FREE_WORLD", 4), unittest.mock.patch.object(export, "FREE_LEAGUE", 3):
+            free = {p["player_id"] for p in self.rows() if p["free"]}
+        self.assertEqual(free, {1, 2, 3, 4, 5, 6})            # the top 4, and the third of each league (5 and 6)
+
+    def test_the_blanked_row_keeps_who_he_is_and_loses_every_rank(self):
+        from thecornerfc import export
+        p = self.rows()[70]
+        got = dict(zip(export.SITE_PLAYER_FIELDS, p["data_free"]))
+        whole = dict(zip(export.SITE_PLAYER_FIELDS, p["data"]))
+        for f in export.SITE_PLAYER_FIELDS:
+            self.assertEqual(got[f], None if f in export.PLAYER_PAID_FIELDS else whole[f], f)
+        self.assertEqual((got["name"], got["team"], got["age"], got["minutes"], got["season"]), ("Player 070", 104, 24, 900, [900, 3, 2]))
+
+    def test_the_migration_blanks_the_same_fields_and_marks_the_same_slice(self):
+        from thecornerfc import export
+        sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_paid_players.sql").read_text()
+        at = export.SITE_PLAYER_FIELDS.index
+        self.assertIn(f"ARRAY[{','.join(str(i) for i in sorted(at(f) for f in export.PLAYER_PAID_FIELDS))}]", sql)
+        self.assertIn(f"(p.data->>{at('world')})::integer <= {export.FREE_WORLD}", sql)
+        self.assertIn(f"(p.data->>{at('lg')})::integer <= {export.FREE_LEAGUE}", sql)
+        self.assertIn("WHERE (whole OR p.free OR p.data_free IS NOT NULL)", sql)      # never the whole row for want of a blanked one
+
+    def test_the_cut_down_page_has_no_rank_per_match_or_movement(self):
+        from thecornerfc import export
+        match = dict.fromkeys(export.MATCH_FIELDS, 1)
+        match["rank"] = 71.5
+        page = {"id": 9, "matches": [list(match.values())], "seasons": [[2026, 1, 39, 5, 5, 450, 1, 0, 1, 0]], "movement": {"rows": [[7, 0.4, 2, "x"]]}, "born": "2000-01-01"}
+        cut = export.cut_player_page(page)
+        self.assertEqual(dict(zip(export.MATCH_FIELDS, cut["matches"][0]))["rank"], None)
+        self.assertNotIn("movement", cut)
+        self.assertEqual((cut["cut"], cut["seasons"], cut["born"]), (True, page["seasons"], "2000-01-01"))
+        self.assertEqual(page["matches"][0][export.MATCH_FIELDS.index("rank")], 71.5)      # the whole page is untouched
