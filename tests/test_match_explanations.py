@@ -145,8 +145,53 @@ class FixturePageTests(unittest.TestCase):
         self.assertEqual(first[:7], (11, "2026-10-10T14:00:00+00:00", 39, 1, 2, "NS", False))
         self.assertEqual(json.loads(first[7]), self.match(11))
         self.assertEqual((json.loads(first[8]), json.loads(first[9])), ([["strength", 0.4]], why["11"]))
-        self.assertEqual(second[8:], (None, None))                 # no breakdown for that prediction
+        self.assertEqual(second[8:10], (None, None))               # no breakdown for that prediction
         conn.commit.assert_called_once()
+
+    def test_matches_are_stored_with_their_blanked_copies_for_the_paid_tier(self):
+        row = dict(zip(export.SITE_MATCH_FIELDS, self.match(11)))
+        row.update(p_home=0.5, p_draw=0.3, p_away=0.2, home_xg=1.6, away_xg=1.1, likely="1-1", home_rank=900, away_rank=850,
+                   p_over25=0.5, p_btts=0.5, home_missing=0.2, away_missing=0.0, home_xi=70.0, home_recent_xi=71.0,
+                   away_xi=65.0, away_recent_xi=66.0, m_home=0.48, m_draw=0.29)
+        match = [row[k] for k in export.SITE_MATCH_FIELDS]
+        conn, cur = Mock(), MagicMock()
+        conn.execute.return_value.fetchone.return_value = ("site.matches",)
+        cur.__enter__.return_value = cur
+        conn.cursor.return_value = cur
+        cur.execute.return_value.fetchone.return_value = (1,)
+        with patch.object(export.config, "require_db_write"):
+            store_matches(conn, [match], {})
+        self.assertIn("data_free, data_locked", cur.copy.call_args[0][0])
+        stored = cur.copy.return_value.__enter__.return_value.write_row.call_args[0][0]
+        free, locked = (dict(zip(export.SITE_MATCH_FIELDS, json.loads(x))) for x in stored[10:12])
+        kept = {"id", "kickoff", "league", "home", "away", "status", "intl", "home_rank", "away_rank", "m_home", "m_draw"}
+        self.assertEqual({k for k, v in free.items() if v is not None}, kept | {"p_home", "p_draw", "p_away"})
+        self.assertEqual({k for k, v in locked.items() if v is not None}, kept)
+        self.assertEqual((free["p_home"], free["home_rank"], free["m_home"]), (0.5, 900, 0.48))
+
+    def test_the_paid_tier_migration_blanks_the_same_fields_as_the_export(self):
+        sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_paid_tier.sql").read_text()
+        at = export.SITE_MATCH_FIELDS.index
+        depth = sorted(at(f) for f in export.MATCH_PAID_DEPTH)
+        both = sorted(at(f) for f in export.MATCH_PAID_DEPTH + export.MATCH_PAID_CHANCES)
+        self.assertIn(f"ARRAY[{','.join(map(str, depth))}]", sql)
+        self.assertIn(f"ARRAY[{','.join(map(str, both))}]", sql)
+        self.assertIn("VALUES ('paywall', 'false')", sql)                      # off until the owner turns it on
+        for name in ("public.subscriptions", "site.settings"):
+            self.assertIn(f"ALTER TABLE {name} ENABLE ROW LEVEL SECURITY", sql)
+            self.assertIn(f"REVOKE ALL ON {name} FROM PUBLIC", sql)
+
+    def test_without_the_paid_tier_columns_the_matches_are_stored_as_before(self):
+        conn, cur = Mock(), MagicMock()
+        answers = iter([("site.matches",), (1,), None])        # the table; intl is there; data_locked isn't
+        conn.execute.return_value.fetchone.side_effect = lambda: next(answers)
+        cur.__enter__.return_value = cur
+        conn.cursor.return_value = cur
+        cur.execute.return_value.fetchone.return_value = (1,)
+        with patch.object(export.config, "require_db_write"):
+            self.assertTrue(store_matches(conn, [self.match(11)], {}))
+        self.assertNotIn("data_locked", cur.copy.call_args[0][0])
+        self.assertEqual(len(cur.copy.return_value.__enter__.return_value.write_row.call_args[0][0]), 10)
 
     def test_without_the_table_nothing_is_stored_and_the_files_are_written(self):
         conn = Mock()

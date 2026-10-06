@@ -615,6 +615,20 @@ SITE_MATCH_FIELDS = ["id", "kickoff", "league", "round", "home", "away", "status
                      "home_xi", "home_recent_xi", "away_xi", "away_recent_xi", "intl"]
 
 
+# What a visitor without a subscription doesn't get of a match that hasn't kicked off, once
+# the paywall is on (db/migrations/20261006_paid_tier.sql; the line is the owner's of
+# 2026-10-04): the depth always, and the chances themselves more than 7 days ahead.
+MATCH_PAID_DEPTH = ("home_xg", "away_xg", "likely", "home_missing", "away_missing", "p_over25", "p_btts",
+                    "home_xi", "home_recent_xi", "away_xi", "away_recent_xi")
+MATCH_PAID_CHANCES = ("p_home", "p_draw", "p_away")
+
+
+def blanked(row, fields):
+    """A match's row (SITE_MATCH_FIELDS order) with these fields null."""
+    hide = {SITE_MATCH_FIELDS.index(f) for f in fields}
+    return [None if i in hide else v for i, v in enumerate(row)]
+
+
 def store_matches(conn, matches, explained=None):
     """site.matches: every match on the site as a row, with the key reasons its card shows and
     its full model detail (match_explanations), for the database functions the site asks
@@ -632,23 +646,29 @@ def store_matches(conn, matches, explained=None):
         log.info("Matches not stored: %s", exc)
         return False
     (table,) = conn.execute("select to_regclass(%s)", ["site.matches"]).fetchone()
-    ready = table is not None and conn.execute(
-        "select 1 from pg_attribute where attrelid = 'site.matches'::regclass and attname = 'intl' and not attisdropped").fetchone()
+    has = lambda column: conn.execute(
+        "select 1 from pg_attribute where attrelid = 'site.matches'::regclass and attname = %s and not attisdropped",
+        [column]).fetchone() is not None
+    ready = table is not None and has("intl")
     if not ready:
         log.warning("site.matches isn't ready (db/migrations/20261005_site_matches.sql and "
                     "20261005_site_matches_queries.sql): the matches weren't stored")
         return False
     text = lambda value: None if value is None else json.dumps(value, separators=(",", ":"), ensure_ascii=False)
     at = {name: i for i, name in enumerate(SITE_MATCH_FIELDS)}
+    # the blanked copies the paid tier's migration added (20261006_paid_tier.sql), once it is applied
+    paid = has("data_locked")
     with conn.cursor() as cur:
         _check_table_collapse(cur, "site.matches", len(matches))
         cur.execute("delete from site.matches")
-        with cur.copy("""copy site.matches (fixture_id, kickoff, league_id, home_id, away_id, status, intl, data, reasons, why)
-                         from stdin""") as copy:
+        with cur.copy(f"""copy site.matches (fixture_id, kickoff, league_id, home_id, away_id, status, intl, data, reasons, why
+                          {', data_free, data_locked' if paid else ''}) from stdin""") as copy:
             for row in matches:
                 why = explained.get(str(row[at["id"]]))
                 copy.write_row((row[at["id"]], row[at["kickoff"]], row[at["league"]], row[at["home"]], row[at["away"]],
-                                row[at["status"]], bool(row[at["intl"]]), text(row), text(why and why["reasons"]), text(why)))
+                                row[at["status"]], bool(row[at["intl"]]), text(row), text(why and why["reasons"]), text(why),
+                                *((text(blanked(row, MATCH_PAID_DEPTH)),
+                                   text(blanked(row, MATCH_PAID_DEPTH + MATCH_PAID_CHANCES))) if paid else ())))
         cur.execute("analyze site.matches")
     conn.commit()
     log.info("Stored %d matches (%d with model detail)", len(matches), sum(str(m[0]) in explained for m in matches))

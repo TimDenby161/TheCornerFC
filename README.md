@@ -1344,6 +1344,18 @@ answer only the sign-in named in `fpl_team_owners` (My FPL team, below). The cod
   (`thecornerfc/accounts.py`; the privacy page promises the same). Confirmed accounts are kept
   until their owner deletes them.
 
+
+### Paid tier (built in part, switched off)
+
+`db/migrations/20261006_paid_tier.sql` lays the foundation for a subscription. Nothing changes for any visitor while its switch is off, which is how it ships.
+
+- **The switch** is the row `paywall` in `site.settings` (`false`). While it is false, `site.entitled()` is true for everyone and every query answers as before.
+- **Who subscribes** is `public.subscriptions`, one row per account (status, plan, paid-up-to date, the payment provider's ids). No key can read or write it; a payment provider's webhook will write it, and until one exists a row can be added by hand in the SQL editor. `site.subscriber()` is true for a signed-in account with a live row (a failed renewal keeps it for 3 days) and for the site's owner (`fpl_team_owners`).
+- **What is gated so far: matches.** With the switch on, `site_matches()` gives anyone who isn't entitled a cut-down row for a match that hasn't kicked off: within 7 days the win, draw and loss chances stay and the projected goals, likely score, over 2.5, both-to-score, absences and line-up ratings go (`export.MATCH_PAID_DEPTH`); further ahead the chances go too (`MATCH_PAID_CHANCES`); the key reasons go for both, and `site_match_detail()` answers `"locked": true`. Matches that have kicked off are always whole. The export stores the cut-down rows beside the full one (`site.matches.data_free`, `data_locked`), so nothing is worked out per request.
+- **The page.** A subscriber's requests carry their sign-in (`siteAuth` in `data.js`), set up once `my_subscription()` has said this account subscribes; nobody else's requests change. Where the database left the paid fields out, a match card says what is behind the lock, with a "What subscribers get" box. The account box shows the subscription once the switch is on.
+- **Not gated yet, so the switch must stay off:** the league pages (their files carry the season's projected goals and chances, for the projected table), predicted line-ups (`site_lineups`, `site_next_xi`), the player ranks (`site_players`) and the club pages' next-match figures. There is no checkout: taking payment comes last.
+- **Checked** on a throwaway Postgres with the migration applied twice: switched off, the answers are the same as before it; switched on, a signed-out visitor, a plain account and a lapsed subscriber get the cut-down rows, and a subscriber, a late payer inside 3 days and the owner get everything; neither key can read the tables.
+
 ### Retention and removing a person
 
 What the privacy page promises, and where it is kept (`thecornerfc/retention.py`, run at the end

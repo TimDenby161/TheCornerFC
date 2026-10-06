@@ -477,6 +477,7 @@ function askMatches(key, params) {
   if (haveMatches(key)) return Promise.resolve();
   if (!matchStore.asking.has(key)) matchStore.asking.set(key, siteAsk("site_matches", params).then((d) => {
     addMatches(state.data.match_fields, d.matches, d.reasons);
+    if (d.paywall) state.paywall = true;        // the paid fields of matches to come were left out
     matchStore.got.add(key);
   }).finally(() => matchStore.asking.delete(key)));
   return matchStore.asking.get(key);
@@ -1201,12 +1202,15 @@ function matchCard(m, { lineups = true } = {}) {
   // Up front: projected goals and likely score (in the head), model and market chances, key
   // reasons; the line-ups and everything else behind "Line-ups" and "Model detail"
   const upcoming = !finished && !LIVE.has(m.status);
+  // behind the paywall (state.paywall: the database left the paid fields out for this visitor)
+  const locked = !!state.paywall && upcoming && !m.intl && !CALLED_OFF.has(m.status);
   const toggles = (canLineup ? `<button type="button" class="lineup-toggle" aria-expanded="false">${finished ? "Line-ups" : "Predicted line-ups"}</button>` : "")
-    + (m.p_home != null ? `<button type="button" class="why-toggle" aria-expanded="false">${finished ? "Pre-match model detail" : "Model detail"}</button>` : "");
+    + (m.p_home != null && !locked ? `<button type="button" class="why-toggle" aria-expanded="false">${finished ? "Pre-match model detail" : "Model detail"}</button>` : "");
   return `
     <div class="match-card${cls}" data-fixture="${m.id}">
       ${matchHead(m, `${badge}${statusTag(m)}`)}
       ${probBars(m, false)}
+      ${locked ? `<div class="market-line paid-lock">${m.p_home == null ? "The model's chances for matches more than 7 days ahead" : "Projected score, key reasons and model detail"} are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button></div>` : ""}
       ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${reasonsHtml(m)}</div>` : ""}
       ${upcoming && !m.intl ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
       ${toggles ? `<div class="card-toggles">${toggles}</div>` : ""}
@@ -6810,10 +6814,43 @@ const AUTH_LIB = "assets/lib/supabase-js-2.117.2.js";
 const AUTH_KEY = "fc.auth";
 const AUTH_LINK_TYPES = new Set(["signup", "email", "recovery", "magiclink", "invite", "email_change"]);
 const ACCOUNT_TITLES = { signin: "Sign in", signup: "Create an account", reset: "Reset your password",
-  newpass: "Choose a new password", note: "Check your email", account: "Your account", delete: "Delete your account" };
+  newpass: "Choose a new password", note: "Check your email", account: "Your account", delete: "Delete your account",
+  subscribe: "Subscribe" };
 const GOOGLE_MARK = `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>`;
 // state.account: user (null when signed out), view (a key of ACCOUNT_TITLES), text (the "note" view's message)
 state.account = { user: null, view: "signin", text: "" };
+// state.sub: what the database says of this visitor's subscription (my_subscription), null until
+// asked or where the paid tier isn't there. Nothing about subscriptions shows unless its paywall
+// is on. PAID_KEY (data.js) is kept for a subscriber so their requests carry their sign-in; when
+// it changes the page starts again, to fetch the data they are now due, or no longer due.
+state.sub = null;
+const SUBSCRIBER_GETS = `<p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings and the betting comparison pages.</p>
+  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and the full model detail behind every prediction.</p>`;
+function paidFlag(on) {
+  try {
+    const was = localStorage.getItem(PAID_KEY) === "1";
+    if (on) localStorage.setItem(PAID_KEY, "1"); else localStorage.removeItem(PAID_KEY);
+    return was !== on;
+  } catch { return false; }
+}
+async function refreshSubscription(client, user) {
+  let sub = null;
+  if (user) {
+    const { data, error } = await client.rpc("my_subscription");       // db/migrations/20261006_paid_tier.sql
+    if (!error) sub = data;
+  }
+  if (state.account.user?.id !== user?.id) return;                     // someone else signed in meanwhile
+  state.sub = sub;
+  const changed = paidFlag(!!(sub?.paywall && sub.subscriber));
+  // start again only where it matters: a subscriber who was sent the cut-down data, or data
+  // fetched as a subscriber by someone who no longer is one
+  if (changed && (state.paywall || !sub?.subscriber) && (sub?.paywall || !user)) return location.reload();
+  renderAccount();
+}
+const subscriptionLine = (sub) => !sub?.paywall ? ""
+  : sub.subscriber ? `<p class="account-text">Subscription: <b>${sub.status ? escapeHtml(sub.status === "past_due" ? "payment due" : sub.status) : "active"}</b>${sub.plan ? ` (${escapeHtml(sub.plan)})` : ""}${
+      sub.renews_at ? ` · ${sub.ends ? "ends" : "renews"} ${escapeHtml(fmtLongDate(sub.renews_at.slice(0, 10)))}` : ""}</p>`
+  : `<p class="account-text">No subscription on this account. <button type="button" class="link-btn" data-account="subscribe">What subscribers get</button></p>`;
 let authClient;                               // a promise for the Supabase client, once asked for
 
 function auth() {
@@ -6828,6 +6865,7 @@ function auth() {
     client.auth.onAuthStateChange((event, session) => {
       const was = state.account.user?.id;
       state.account.user = session?.user || null;
+      if (was !== state.account.user?.id || event === "INITIAL_SESSION") setTimeout(() => refreshSubscription(client, state.account.user), 0);
       // The owner question is asked afresh for a different visitor, and once the stored session has
       // been read (it may have lapsed). Outside this callback, as the library asks; a question
       // already on its way is for this visitor
@@ -6880,14 +6918,15 @@ function openAccount(view, msg = "", bad = false) {
 function closeAccount() {
   if ($("#account-modal").hidden) return;
   $("#account-modal").hidden = true;
-  if (["note", "newpass", "delete"].includes(state.account.view)) state.account.view = "signin";
+  if (["note", "newpass", "delete", "subscribe"].includes(state.account.view)) state.account.view = "signin";
   $("#account-btn").focus();
 }
 function renderAccount() {
   const a = state.account;
   $("#account-btn").textContent = a.user ? "Account" : "Sign in";
   if ($("#account-modal").hidden) return;
-  const view = !a.user ? (a.view === "delete" ? "signin" : a.view) : ["newpass", "delete"].includes(a.view) ? a.view : "account";
+  const view = a.view === "subscribe" ? "subscribe"
+    : !a.user ? (a.view === "delete" ? "signin" : a.view) : ["newpass", "delete"].includes(a.view) ? a.view : "account";
   const field = (name, label, type, autocomplete, extra = "") =>
     `<label>${label}<input type="${type}" name="${name}" class="table-search" autocomplete="${autocomplete}" required ${extra}></label>`;
   const google = `<button type="button" class="google-btn" data-account="google">${GOOGLE_MARK}<span>Continue with Google</span></button><div class="account-or">or</div>`;
@@ -6904,7 +6943,9 @@ function renderAccount() {
       + form(field("email", "Email", "email", "username"), "Send the link") + `<div class="account-links">${link("signin", "Back to sign in")}</div>`,
     newpass: () => form(field("password", "New password (8 characters or more)", "password", "new-password", 'minlength="8"'), "Save password"),
     note: () => `<p class="account-text">${escapeHtml(a.text)}</p><div class="account-links">${link("signin", "Back to sign in")}</div>`,
-    account: () => `<p class="account-text">Signed in as <b>${escapeHtml(a.user.email)}</b></p>
+    subscribe: () => `${SUBSCRIBER_GETS}<p class="account-text"><b>Subscriptions aren't open yet.</b></p>
+      <div class="account-links">${link(a.user ? "account" : "signin", a.user ? "Back to your account" : "Sign in")}</div>`,
+    account: () => `<p class="account-text">Signed in as <b>${escapeHtml(a.user.email)}</b></p>${subscriptionLine(state.sub)}
       <button type="button" class="mt-btn account-out" data-account="signout">Sign out</button>
       <div class="account-links">${link("delete", "Delete account")}</div>`,
     delete: () => `<p class="account-text">This deletes your account (<b>${escapeHtml(a.user.email)}</b>) and its sign-in details for good. It can't be undone.</p>
@@ -6912,6 +6953,7 @@ function renderAccount() {
       <div class="account-links">${link("account", "Keep my account")}</div>`,
   })[view]() + `<div class="stats-note" id="account-msg" role="status"></div>`;
 }
+document.addEventListener("click", (e) => { if (e.target.closest("[data-subscribe]")) openAccount("subscribe"); });
 $("#account-btn").addEventListener("click", () => {
   openAccount();
   auth().catch((err) => accountMsg(accountError(err), true));

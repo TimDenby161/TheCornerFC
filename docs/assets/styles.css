@@ -398,6 +398,8 @@
   @media (max-width: 600px) { .why-detail { grid-template-columns: 1fr; } }
   .market-line { margin-top: 4px; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: center; }
   .market-line b { color: var(--text-secondary); font-weight: 700; }
+  .paid-lock { text-align: left; }
+  .paid-lock .link-btn { font-size: inherit; }
   .club-card-extra { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
     display: flex; justify-content: space-between; gap: 8px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
   .club-card-extra b { color: var(--text-secondary); }
