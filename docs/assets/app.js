@@ -7179,7 +7179,7 @@ const subscriptionLine = (sub) => !sub?.paywall ? ""
 // The bot check on the sign-in, sign-up and reset forms (Cloudflare Turnstile), off while
 // TURNSTILE_KEY is empty: nothing of Cloudflare's is loaded and the forms are as before. Turning it
 // on takes more than the key (the page's policy, the privacy page, Supabase): README, Accounts.
-const TURNSTILE_KEY = "";
+const TURNSTILE_KEY = "0x4AAAAAAFQgIiqxiuE9dqIM";
 const TURNSTILE_LIB = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 const BOT_CHECK_VIEWS = new Set(["signin", "signup", "reset"]);
 const botChecked = (view) => !!TURNSTILE_KEY && BOT_CHECK_VIEWS.has(view);

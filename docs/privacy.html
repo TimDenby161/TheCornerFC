@@ -16,7 +16,7 @@
 <main>
 <p class="back"><a href="./">The Corner FC</a></p>
 <h1>Privacy, corrections and security</h1>
-<p class="updated">Last updated 4 October 2026</p>
+<p class="updated">Last updated 7 October 2026</p>
 
 <h2 id="privacy">Privacy</h2>
 <p>The Corner FC is a static website with no cookies, advertising or analytics. You can use all of
@@ -43,6 +43,13 @@ it without an account, and it stores nothing about you unless you choose to crea
     and last signed in, and either a scrambled (hashed) copy of your password or, if you use
     "Continue with Google", the name, email address and profile picture address that Google
     passes on. Supabase also receives your IP address and browser details when you sign in.
+    The forms for signing in with a password, signing up and resetting a password run a check that
+    you aren't a bot, Cloudflare Turnstile (<code>challenges.cloudflare.com</code>), which loads
+    only when you open one of them. Cloudflare receives your IP address and browser details to
+    make that check, and uses them to tell people from bots and to improve the check, not to
+    identify you or show you adverts; the site relies on its legitimate interest in keeping
+    automated sign-ups out (UK GDPR Article 6(1)(f)). See Cloudflare's
+    <a href="https://www.cloudflare.com/turnstile-privacy-policy/">Turnstile Privacy Addendum</a>.
     Google doesn't share your password with the site, and its own privacy policy
     covers its sign-in pages. This is used only to sign you in and to send the emails that
     confirm your address or reset your password, which go out through Resend

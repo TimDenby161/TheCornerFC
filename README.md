@@ -1348,10 +1348,10 @@ answer only the sign-in named in `fpl_team_owners` (My FPL team, below). The cod
 - **Retention.** The nightly run deletes email sign-ups never confirmed within 7 days
   (`thecornerfc/accounts.py`; the privacy page promises the same). Confirmed accounts are kept
   until their owner deletes them.
-- **Bot check (built, switched off).** The sign-in, sign-up and reset forms can carry a
-  Cloudflare Turnstile check, whose token Supabase verifies before it acts. While
-  `TURNSTILE_KEY` in `app.js` is empty nothing of Cloudflare's is loaded. To turn it on, in
-  this order:
+- **Bot check (on the site since 2026-10-07; Supabase enforces it once step 3 is done).** The
+  sign-in, sign-up and reset forms carry a Cloudflare Turnstile check, whose token Supabase
+  verifies before it acts. Steps 1 and 2 below are done. While `TURNSTILE_KEY` in `app.js` is
+  empty nothing of Cloudflare's is loaded. To turn it on, in this order:
   1. Cloudflare dashboard → Turnstile → add a widget for `thecornerfc.com` (and `localhost` for
      the local preview), mode Managed. It gives a site key (public) and a secret key.
   2. Put the site key in `TURNSTILE_KEY`. In `docs/index.html`'s policy make `script-src 'self'`
