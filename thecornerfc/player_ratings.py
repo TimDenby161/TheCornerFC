@@ -982,6 +982,19 @@ def compute_player_ratings(conn):
            from fixtures where league_id = any(%s)
              and (status_short in ('FT', 'AET', 'PEN') or (status_short in ('NS', 'TBD') and kickoff > now()))
            order by kickoff, fixture_id""", [config.MATCH_PLAYER_LEAGUES]).fetchall()
+    # Cup and European matches of the clubs in those leagues that season, since the cup line-ups
+    # begin: each such club gets a predicted XI from its league matches, for the site and the
+    # line-up record. Nothing else here reads them: no player stats are stored for them, so they
+    # don't move a rank, a team rating or the recent minutes
+    league_teams = {(t, y) for _, _, home, away, _, y in fixtures for t in (home, away)}
+    cups = [f for f in conn.execute(
+        """select fixture_id, kickoff, home_team_id, away_team_id, status_short in ('NS', 'TBD'), season
+           from fixtures where not (league_id = any(%s)) and kickoff >= %s
+             and (status_short in ('FT', 'AET', 'PEN') or (status_short in ('NS', 'TBD') and kickoff > now()))
+           order by kickoff, fixture_id""", [config.MATCH_PLAYER_LEAGUES, config.CUP_LINEUPS_FROM]).fetchall()
+            if (f[2], f[5]) in league_teams or (f[3], f[5]) in league_teams]
+    cup_ids = {f[0] for f in cups}
+    cup_predicted = []         # (fixture, team, player, position group, raw score, role) for upcoming cup matches
     apps = defaultdict(list)
     fixture_league = {r[0]: r[9] for r in appearances}
     for r in appearances:
@@ -994,7 +1007,7 @@ def compute_player_ratings(conn):
             order_by="fixture_id, team_id, player_id"):
         injured[(fid, team)].add(player)
 
-    live_availability = availability.load(conn, [f for f in fixtures if f[4]])
+    live_availability = availability.load(conn, [f for f in fixtures + cups if f[4]])
     for key, evidence in live_availability.items():
         injured[key] = {p for p, state in evidence.items() if state['excluded']}
     selection_inputs = {}
@@ -1027,8 +1040,10 @@ def compute_player_ratings(conn):
     appearance_scores = []     # (fixture, player, (stat score, club rank), position)
     team_rows = []             # (fixture, team, predicted XI [(player, pos, raw, role)], actual XI [(raw, pos, line)], upcoming)
     history = []               # (fixture, team, [(player, role)]): the full predicted XI for each finished match
-    for fid, kickoff, home, away, upcoming, _season in fixtures:
+    for fid, kickoff, home, away, upcoming, season in sorted(fixtures + cups, key=lambda f: (f[1], f[0])):
         for team in (home, away):
+            if fid in cup_ids and (team, season) not in league_teams:
+                continue     # the cup opponent from a league without player data
             # predicted XI from recent matches, excluding the injury list
             minutes = Counter()
             for g in team_recent[team]:
@@ -1048,6 +1063,13 @@ def compute_player_ratings(conn):
                     'slots': [{'player':x[0],'role':x[4]} for x in predicted],
                     'unscored_candidates': [p for p,m in candidates if p not in {x[0] for x in scored}],
                 }
+            if fid in cup_ids:
+                if upcoming:
+                    cup_predicted.extend((fid, team, p, pos, s, slot or windows[p].label())
+                                         for p, pos, s, _, slot in predicted)
+                elif len(predicted) == 11:
+                    history.append((fid, team, [(p, slot or windows[p].label()) for p, _, _, _, slot in predicted]))
+                continue
             actual = []
             for a in apps.get(fid, []):
                 if a["team"] != team:
@@ -1063,6 +1085,8 @@ def compute_player_ratings(conn):
                               actual, upcoming))
             if not upcoming and len(predicted) == 11:
                 history.append((fid, team, [(p, slot or windows[p].label()) for p, _, _, _, slot in predicted]))
+        if fid in cup_ids:
+            continue
         # after the match: update windows and team history
         for a in apps.get(fid, []):
             st = _row_stats(a)
@@ -1107,6 +1131,7 @@ def compute_player_ratings(conn):
             xi_hist[team].append(act_xi)
         if upcoming:
             lineups.extend((fid, team, p, label, to_rank(s, pos)) for p, pos, s, label in predicted)
+    lineups.extend((fid, team, p, label, to_rank(s, pos)) for fid, team, p, pos, s, label in cup_predicted)
 
     # Current rank per player (the players list): his season rank for the current season from
     # the season model, so it follows the same age curve and minutes weighting as his seasons;
@@ -1147,7 +1172,12 @@ def compute_player_ratings(conn):
     for evidence in selection_inputs.values():
         for candidate in evidence['scored_candidates']:
             candidate['player_rating'] = to_rank(candidate['raw_score'], candidate['position'])
-    lineup_snapshots.capture_predictions(conn, fixtures, lineups, selection_inputs, live_availability)
+    # a cup match is captured only for the clubs given a predicted XI
+    cup_teams = {f[0]: set() for f in cups if f[4]}
+    for fid, team, *_ in cup_predicted:
+        cup_teams[fid].add(team)
+    lineup_snapshots.capture_predictions(conn, fixtures + cups, lineups, selection_inputs, live_availability,
+                                         teams=cup_teams)
     _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_rows, position_ranks, projections,
            components, history)
 

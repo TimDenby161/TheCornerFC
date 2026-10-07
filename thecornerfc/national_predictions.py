@@ -12,32 +12,39 @@ the club one, and only the parts national teams have data for:
                  goal_markets, unchanged
 
 Left out, because there is no data behind them for national teams: Baseline Strength (the rank
-is the current one), attack/defence tendencies and each side's own home edge, injury lists,
-predicted line-up ratings and bookmakers' odds.
+is the current one), attack/defence tendencies and each side's own home edge, injury lists and
+predicted line-up ratings. Bookmakers' odds are collected for them (ingest.sync_national_odds)
+and shown beside the projection; nothing here reads them.
 
 Backtest (experiments/nations_proj, see REPORT.md): LEVEL_GOALS tuned on 2000-13, checked on
 2014-26 (11,071 matches). Log loss, with guessing the base rates in brackets: W/D/L 0.8703
 (1.0522), over 2.5 0.6724 (0.6922), both to score 0.6752 (0.6816).
 
 Rows go in national_fixture_predictions, never fixture_predictions: the stats, the paper bets and
-the prediction ratings read every row of that. As for clubs, a match's row is left alone once it
+the prediction ratings read every row of that, and each reads this table beside it (export.py's
+national_stat_rows, betting.py's place_bets and rate_fixtures below). As for clubs, a match's row is left alone once it
 has kicked off, so it keeps the last projection made before it. Projections are made by the
 nightly run only: nothing they use changes on the day.
 
-A finished match with no row (played before its projection could be made) gets one afterwards
+A finished match of the last year with no row (played before its projection could be made) gets one afterwards
 from the ranks both sides had going into it (backfill_predictions), as predictions.py does for
 clubs. Such a row was written after kickoff (updated_at > kickoff): the export calls it
 'backfill' and the site says it was reconstructed.
 """
+import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from . import config, nations, rating
+from . import config, match_snapshots, nations, rating
+from .model_versions import ModelType, current_code_sha, register_model_version
 from .predictions import UPCOMING_STATUSES, goal_markets, outcome_probabilities, project
 
 log = logging.getLogger(__name__)
 
-BACKFILL_DAYS = 21           # the export's PAST_DAYS: the finished matches the site shows
+# A year: the Stats tab's longest range (export.STAT_RANGES), so it can mark the projections
+# against a past tournament (the 2026 World Cup). It was 21, the finished matches the site shows
+BACKFILL_DAYS = 365
 LEVEL_GOALS = 1.1            # goals each of two level sides is expected to score (1.1-1.15 scored best)
 # API-Football's ids of the tournaments whose finals are played at neutral grounds (the hosts'
 # own matches aside): World Cup, Euros, Africa Cup of Nations, Asian Cup, Copa America, Gold Cup
@@ -99,11 +106,39 @@ def update_predictions(conn, matches=None):
         neutral = is_neutral(neutral, league_id)
         rows.append((fid, kickoff, league_id, home, away, h_rank, a_rank, neutral,
                      *predict_match(h_rank, a_rank, neutral)))
+    capture_snapshots(conn, rows, now)
     _store(conn, rows)
     conn.commit()
     log.info("National predictions: %d upcoming matches (%d left out: no rank for %s)",
              len(rows), len(upcoming) - len(rows), sorted(unranked)[:20] or "-")
     return len(rows)
+
+
+def register_version(conn):
+    """The national projection's entry in model_versions: a match model of its own, so its
+    snapshots are never read as the club model's."""
+    root = Path(__file__).parent
+    settings = {"LEVEL_GOALS": LEVEL_GOALS, "FINALS_LEAGUES": sorted(FINALS_LEAGUES),
+                "HOME_ADVANTAGE_POINTS": nations.HOME_ADVANTAGE_POINTS,
+                "source_digests": {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+                                   for name in ("national_predictions.py", "nations.py", "predictions.py")}}
+    return register_model_version(conn, ModelType.MATCH, "national-match-prediction",
+                                  code_sha=current_code_sha(), configuration=settings,
+                                  notes="National team ranking projection; no injuries, line-ups or odds.")
+
+
+def capture_snapshots(conn, rows, now):
+    """Each upcoming projection as an append-only match_prediction_snapshots row, as the club
+    projections are (match_snapshots.py): the paper bets record the snapshot they were decided
+    on (paper_evidence.record_decision). Everything that scores the club model reads that table
+    joined to fixtures, where a national match never is. Skipped before that table exists."""
+    if not rows or conn.execute("select to_regclass('public.match_prediction_snapshots')").fetchone()[0] is None:
+        return
+    version = register_version(conn)
+    match_snapshots.append_snapshots(conn, [
+        match_snapshots.make_snapshot((*r[:7], *r[8:]), {"home_rank": r[5], "away_rank": r[6], "neutral": r[7]},
+                                      version_id=version, captured_at=now, reference_at=now, source="prospective")
+        for r in rows])
 
 
 def _store(conn, rows, overwrite=True):

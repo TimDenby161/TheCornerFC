@@ -7,7 +7,7 @@ from psycopg.types.json import Jsonb
 from .lineup_snapshots import capture_official
 from .paper_evidence import record_odds
 from .health import monitored, CURRENT
-from . import betting, config, fantasy_snapshots, national_predictions, positions, squad_evidence, suppression
+from . import betting, config, fantasy_snapshots, national_lineups, national_predictions, positions, squad_evidence, suppression
 from .api import QuotaExhausted
 from .db import upsert
 from .player_ratings import compute_player_ratings
@@ -186,11 +186,28 @@ def sync_national_fixtures(api, conn, league_ids=None, seasons=None):
             league_seasons = [s["year"] for s in resp[0].get("seasons", []) if s.get("current")]
         for season in league_seasons:
             resp = api.get("fixtures", league=league_id, season=season)
-            rows = [_national_row(f) for f in resp]
+            rows = _national_rows(conn, resp)
             upsert(conn, "national_fixtures", rows, ["fixture_id"])
             conn.commit()
             name = resp[0]["league"]["name"] if resp else config.NATIONAL_TEAM_LEAGUES.get(league_id)
             log.info("National fixtures league=%s (%s) season=%s: %d", league_id, name, season, len(rows))
+
+
+ODDS_DAYS_AHEAD = 14     # API-Football has odds from about this long before kickoff (sync_odds)
+
+
+def sync_national_odds(api, conn):
+    """Bookmakers' odds for the national team competitions with a match in the next
+    ODDS_DAYS_AHEAD days (sync_odds, one call or more per competition; none outside an
+    international window). They go in odds with the clubs': a fixture id is one or the other."""
+    now = datetime.now(timezone.utc)
+    pairs = [tuple(r) for r in conn.execute(
+        """select distinct league_id, season from national_fixtures
+           where status_short in ('NS', 'TBD') and kickoff > %s and kickoff <= %s
+           order by league_id, season""", [now, now + timedelta(days=ODDS_DAYS_AHEAD)])]
+    log.info("National competitions with matches in the next %d days: %d", ODDS_DAYS_AHEAD, len(pairs))
+    if pairs:
+        sync_odds(api, conn, pairs)
 
 
 def sync_national_lineups(api, conn, batch_size=20):
@@ -208,6 +225,7 @@ def sync_national_lineups(api, conn, batch_size=20):
     for i in range(0, len(pending), batch_size):
         formations, lineups, players, done = [], [], [], []
         for f in api.get("fixtures", ids="-".join(map(str, pending[i:i + batch_size]))):
+            capture_official(conn, f)      # what the predicted XI is scored against (national_lineups.py)
             start = len(lineups)
             _starting_xis(f, formations, lineups, names=True)
             grids, xi = {}, {}
@@ -241,7 +259,20 @@ def _national_row(f):
         "home_team_id": teams["home"]["id"], "away_team_id": teams["away"]["id"],
         "home_name": teams["home"]["name"], "away_name": teams["away"]["name"],
         "home_goals": goals.get("home"), "away_goals": goals.get("away"),
+        "ft_home": ((f.get("score") or {}).get("fulltime") or {}).get("home"),
+        "ft_away": ((f.get("score") or {}).get("fulltime") or {}).get("away"),
     }
+
+
+def _national_rows(conn, items):
+    """national_fixtures rows for /fixtures items. The 90-minute score (ft_home, ft_away) is left
+    out until its columns exist (db/migrations/20261007_national_ft_scores.sql)."""
+    rows = [_national_row(f) for f in items]
+    if rows and not conn.execute(
+            """select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'national_fixtures' and column_name = 'ft_home'""").fetchone():
+        rows = [{k: v for k, v in r.items() if k not in ("ft_home", "ft_away")} for r in rows]
+    return rows
 
 
 # --------------------------------------------------------------------------- match statistics
@@ -540,6 +571,7 @@ def sync_nightly(api, conn, league_ids):
         step("national fixtures", sync_national_fixtures)
         step("national line-ups", sync_national_lineups)
         step("national coaches", sync_national_coaches)
+        step("national odds", sync_national_odds)
     step("rankings", lambda api, conn: update_rankings(conn))
     step("retirement checks", check_retired)
     step("squads", sync_squads)
@@ -552,6 +584,7 @@ def sync_nightly(api, conn, league_ids):
     step("predictions", lambda api, conn: update_predictions(conn))
     if config.NATIONAL_SYNC:
         national_predictions.update_safely(conn)     # never counts as a failure
+        national_lineups.update_safely(conn)         # nor this
     fantasy_snapshots.capture_safely(conn)       # evidence only: never counts as a failure
     step("prediction backfill", lambda api, conn: backfill_predictions(conn))
     step("prediction ratings", lambda api, conn: rate_fixtures(conn))
@@ -946,7 +979,7 @@ def sync_team_colors(api, conn, batch_size=20):
         conn.commit()
 
 
-CUP_LINEUPS_FROM = "2020-07-01"
+CUP_LINEUPS_FROM = config.CUP_LINEUPS_FROM
 
 
 def _starting_xis(f, formations, lineups, names=False):

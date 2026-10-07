@@ -28,9 +28,12 @@ class NationalLineupsTests(unittest.TestCase):
         api = mock.Mock()
         api.get.return_value = [_fixture(1, 1), _fixture(2, 1, players=False)]
         stored = {}
-        with mock.patch.object(ingest, "upsert", side_effect=lambda c, table, rows, *a, **k: stored.setdefault(table, rows)):
+        with mock.patch.object(ingest, "upsert", side_effect=lambda c, table, rows, *a, **k: stored.setdefault(table, rows)), \
+                mock.patch.object(ingest, "capture_official") as official:
             ingest.sync_national_lineups(api, conn)
 
+        # each match's official XI is recorded: what its predicted XI is scored against
+        self.assertEqual([c.args[1]["fixture"]["id"] for c in official.call_args_list], [1, 2])
         self.assertEqual(stored["national_fixture_formations"][0]["coach_name"], "T. Tuchel")
         self.assertEqual(stored["national_fixture_lineups"][0]["player_name"], "H. Kane")
         lines = {r["player_id"]: r for r in stored["national_fixture_players"]}

@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from thecornerfc import betting, config, paper_evidence
 
@@ -89,6 +89,7 @@ class PaperEvidenceTests(unittest.TestCase):
                 'fair':{'Home':.45,'Draw':.3,'Away':.25},'books':{8:{'Home':2.,'Draw':3.,'Away':4.}}}
         with patch('thecornerfc.betting.load_prices',return_value={1:{'1X2':market}}), \
              patch('thecornerfc.betting.match_tags',return_value={}), \
+             patch('thecornerfc.betting._has_national',return_value=False), \
              patch('thecornerfc.paper_evidence.strategy_version',return_value='strategy'), \
              patch('thecornerfc.paper_evidence.record_decision') as record:
             self.assertEqual(betting.place_bets(conn,'early',timedelta(hours=36)),1)
@@ -96,6 +97,58 @@ class PaperEvidenceTests(unittest.TestCase):
         self.assertIn('selection_context',record.call_args.kwargs)
         conn.commit.assert_called_once()
         self.assertTrue(conn.execute.call_args_list[0].kwargs['binary'])
+
+    def test_a_national_match_is_bet_on_from_its_own_projection_and_snapshot(self):
+        conn=Mock()
+        prediction=(7,5,self.kickoff,.6,.2,.2,.5,.5,1.7,.9)
+        # club predictions (none), national predictions, already-taken groups, INSERT RETURNING
+        conn.execute.side_effect=[Mock(fetchall=Mock(return_value=[])),Mock(fetchall=Mock(return_value=[prediction])),
+                                  [],Mock(fetchone=Mock(return_value=(99,)))]
+        market={'best':{'Home':(2.,8),'Draw':(3.,8),'Away':(4.,8)},
+                'fair':{'Home':.45,'Draw':.3,'Away':.25},'books':{8:{'Home':2.,'Draw':3.,'Away':4.}}}
+        with patch('thecornerfc.betting.load_prices',return_value={7:{'1X2':market}}), \
+             patch('thecornerfc.betting.match_tags',return_value={7:['intl']}), \
+             patch('thecornerfc.betting._has_national',return_value=True), \
+             patch('thecornerfc.paper_evidence.strategy_version',return_value='strategy'), \
+             patch('thecornerfc.paper_evidence.record_decision') as record:
+            self.assertEqual(betting.place_bets(conn,'early',timedelta(hours=36)),1)
+        sql=conn.execute.call_args_list[1].args[0]
+        self.assertIn('from national_fixture_predictions p join national_fixtures f',sql)
+        self.assertIn('from match_prediction_snapshots s',sql)         # only with its snapshot stored
+        self.assertTrue(conn.execute.call_args_list[1].kwargs['binary'])
+        row=record.call_args.args[2]
+        self.assertEqual((row[1],row[2],row[5],row[-1]),(7,5,'Home',['intl','favourite','gap10']))
+        self.assertEqual(record.call_args.args[4],prediction)
+
+    def test_a_national_match_is_settled_on_ninety_minutes(self):
+        conn=Mock()
+        conn.execute.return_value.fetchone.return_value=(1,)            # the 90-minute columns exist
+        home,away=betting._national_scores(conn)
+        self.assertEqual(home,"coalesce(f.ft_home, case when f.status_short = 'FT' then f.home_goals end)")
+        conn.execute.return_value.fetchone.return_value=None            # before the migration
+        self.assertEqual(betting._national_scores(conn)[1],"coalesce(case when f.status_short = 'FT' then f.away_goals end)")
+        # went to extra time with no 90-minute score: void, never settled on the extra-time total
+        club,national=Mock(fetchall=Mock(return_value=[])),Mock(fetchall=Mock(return_value=[(5,7,'1X2','Home',2.,1,'AET',None,None)]))
+        conn=MagicMock()
+        conn.execute.side_effect=[club,national]
+        with patch('thecornerfc.betting._has_national',return_value=True), \
+             patch('thecornerfc.betting._national_scores',return_value=('x','y')), \
+             patch('thecornerfc.betting.load_prices',return_value={}), \
+             patch('thecornerfc.paper_evidence.attach_outcome') as outcome:
+            self.assertEqual(betting.settle_bets(conn),1)
+        self.assertEqual(outcome.call_args.args[1:4],(5,'void',0))
+
+    def test_a_national_match_s_only_tag_is_intl(self):
+        conn=MagicMock()
+        def execute(sql,params=None):
+            if 'to_regclass' in sql:
+                return Mock(fetchone=lambda:('x',))
+            rows=[(7,)] if 'from national_fixtures where fixture_id' in sql else []
+            result=MagicMock(fetchall=lambda:rows)
+            result.__iter__.side_effect=lambda:iter(rows)
+            return result
+        conn.execute.side_effect=execute
+        self.assertEqual(betting.match_tags(conn,{7}),{7:['intl']})
 
     def test_schema_contains_migration(self):
         root=Path(__file__).resolve().parents[1]

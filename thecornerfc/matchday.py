@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import betting, config, fantasy_snapshots, predictions
 from .db import upsert
-from .ingest import _national_row, _store_fixtures, sync_injuries_fixtures, sync_odds_fixtures
+from .ingest import _national_rows, _store_fixtures, sync_injuries_fixtures, sync_odds_fixtures
 from .lineup_snapshots import capture_official
 
 log = logging.getLogger(__name__)
@@ -44,7 +44,8 @@ def run_matchday(api, conn):
         """select fixture_id, league_id from fixtures
            where status_short in ('NS', 'TBD') and kickoff > %s and kickoff <= %s
            order by kickoff""", [now, now + timedelta(hours=WINDOW_HOURS)]).fetchall()
-    with_odds = [f for f, l in upcoming if l in odds_leagues][:MAX_ODDS_CALLS]
+    national = national_with_odds(conn, now)
+    with_odds = ([f for f, l in upcoming if l in odds_leagues] + national)[:MAX_ODDS_CALLS]
     injury_fixtures = [f for f, l in upcoming if l in config.INJURY_MODEL_LEAGUES]
     log.info("Match day: %d upcoming in %dh (%d with odds, %d with injury lists), %d recent results",
              len(upcoming), WINDOW_HOURS, len(with_odds), len(injury_fixtures), len(recent))
@@ -57,6 +58,7 @@ def run_matchday(api, conn):
     if upcoming:
         predictions.update_predictions(conn, [f for f, _ in upcoming])
         fantasy_snapshots.capture_safely(conn, [f for f, _ in upcoming])   # evidence only
+    if upcoming or national:      # a national match keeps the nightly run's projection
         betting.place_late(conn)
     betting.settle_bets(conn)
 
@@ -81,6 +83,20 @@ def capture_prekickoff_lineups(api, conn, now):
         log.info("Pre-kickoff line-ups checked for %d fixtures", len(due))
 
 
+def national_with_odds(conn, now):
+    """Projected national team matches kicking off within WINDOW_HOURS that the nightly run found
+    odds for (ingest.sync_national_odds), so their last price before kickoff is refreshed like a
+    club's. One call each, so not the youth and unranked sides' matches, which nothing compares."""
+    if not conn.execute("select to_regclass('public.national_fixture_predictions')").fetchone()[0]:
+        return []
+    return [r[0] for r in conn.execute(
+        """select nf.fixture_id from national_fixtures nf
+           where nf.status_short in ('NS', 'TBD') and nf.kickoff > %s and nf.kickoff <= %s
+             and exists (select 1 from national_fixture_predictions p where p.fixture_id = nf.fixture_id)
+             and exists (select 1 from odds o where o.fixture_id = nf.fixture_id)
+           order by nf.kickoff""", [now, now + timedelta(hours=WINDOW_HOURS)])]
+
+
 def refresh_national_results(api, conn, now):
     """Scores and statuses of national team matches that kicked off in the last few hours, as
     run_matchday does for club matches (20 per call). Nothing before the national_fixtures
@@ -93,7 +109,7 @@ def refresh_national_results(api, conn, now):
         [now - timedelta(hours=5), now])]
     for i in range(0, len(recent), 20):
         items = api.get("fixtures", ids="-".join(map(str, recent[i:i + 20])))
-        upsert(conn, "national_fixtures", [_national_row(f) for f in items], ["fixture_id"])
+        upsert(conn, "national_fixtures", _national_rows(conn, items), ["fixture_id"])
         conn.commit()
     if recent:
         log.info("Match day: %d recent national team results", len(recent))

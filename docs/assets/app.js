@@ -749,7 +749,7 @@ function renderFilterMenu(wrap, f, countries, countOf, titles) {
   const cupsGroup = titles.domestic ? `<div class="cgroup${f.startsWith("k:") ? " open" : ""}">${chip("k:all", "Domestic cups", titles.domestic, caret,
     `cchip${f.startsWith("k:") && f !== "k:all" ? " has-active" : ""}`)}${list(DOMESTIC_CUPS.map((lid) =>
       chip(`k:${lid}`, escapeHtml(leagueName(lid)), titles.domesticCup(leagueName(lid)))).join(""))}</div>` : "";
-  const intl = titles.intl ? intlLeagues() : [];
+  const intl = titles.intl ? countries.intl || intlLeagues() : [];
   const intlGroup = intl.length ? `<div class="cgroup${f.startsWith("i:") ? " open" : ""}">${chip("i:all", "Internationals", titles.intl, caret,
     `cchip${f.startsWith("i:") && f !== "i:all" ? " has-active" : ""}`)}${list(intl.map((lid) =>
       chip(`i:${lid}`, escapeHtml(leagueName(lid)), titles.cup(leagueName(lid)))).join(""))}</div>` : "";
@@ -826,7 +826,7 @@ function filterLeagueIds(f, countries) {
   if (f === "all") return null;
   if (f === "e:all") return EURO_CUPS;
   if (f === "k:all") return DOMESTIC_CUPS;
-  if (f === "i:all") return intlLeagues();
+  if (f === "i:all") return countries.intl || intlLeagues();
   if (f.startsWith("e:") || f.startsWith("k:") || f.startsWith("i:")) return [Number(f.slice(2))];
   if (f.startsWith("c:")) return countries.find((c) => c.name === f.slice(2))?.leagues || [];
   if (f.startsWith("r:")) return countries.filter((c) => c.region === f.slice(2)).flatMap((c) => c.leagues);
@@ -841,17 +841,30 @@ function intlLeagues() {
   return matchStore.days ? state.intlLeagues ||= matchStore.days.intl.map(([lid]) => lid) : [];
 }
 // Stats: every competition with stats in any range, so the menu stays put when the range changes
+// The national team competitions among some competition ids, for a menu's Internationals group
+const intlAmong = (ids) => [...new Set([...ids].map(Number))].filter((id) => state.data.competitions[id]?.type === "International");
+// (.intl: the national team competitions among them, most matches first)
 function statsCountries() {
-  return state.statsCountries ||= compCountries(Object.values(state.stats?.ranges || {}).flatMap(Object.keys).filter((k) => /^\d+$/.test(k)));
+  if (state.statsCountries) return state.statsCountries;
+  const ids = [...new Set(Object.values(state.stats?.ranges || {}).flatMap(Object.keys).filter((k) => /^\d+$/.test(k)))];
+  const n = (id) => state.stats.ranges["365d"]?.[id]?.n || 0;
+  state.statsCountries = compCountries(ids);
+  state.statsCountries.intl = intlAmong(ids).sort((a, b) => n(b) - n(a) || a - b);
+  return state.statsCountries;
 }
 function renderStatsFilters() {
   renderFilterMenu($("#stats-filters"), state.statsFilter, statsCountries(), null, {
     all: "All competitions", country: (c) => `All ${c} competitions`, region: (r) => `All competitions in ${r}`,
     euro: "Champions League, Europa League and Conference League", cup: (name) => name,
+    intl: "National team matches: World Cup, qualifiers, Nations League, friendlies and others",
   });
 }
 function betCountries() {
-  return state.betCountries ||= compCountries((state.bets?.bets || []).map((b) => b.league));
+  if (state.betCountries) return state.betCountries;
+  const bets = state.bets?.bets || [];
+  state.betCountries = compCountries(bets.map((b) => b.league));
+  state.betCountries.intl = intlAmong(bets.filter((b) => b.intl).map((b) => b.league));
+  return state.betCountries;
 }
 // Each kind of bet placed once per match (result, goal line, both teams score): when both runs
 // bet it, the night-before bet (placed first) counts
@@ -862,7 +875,7 @@ function onePerPick(bets) {
 }
 // The badge of the team a bet backs, or both teams' for a draw or goals bet
 function betBadges(b) {
-  const img = (id) => id ? clubCrest(id, "club-logo", `data-club="${id}"`) : "";
+  const img = (id) => id ? clubCrest(id, "club-logo", b.intl ? "" : `data-club="${id}"`) : "";     // a national team has no club page
   const ids = b.market === "1X2" && b.selection !== "Draw" ? [b.selection === "Home" ? b.home_id : b.away_id] : [b.home_id, b.away_id];
   return `<span class="tip-badges">${ids.map(img).join("")}</span>`;
 }
@@ -884,6 +897,7 @@ function renderBetFilters() {
   renderFilterMenu($("#bet-filters"), state.betFilter, countries, countOf, {
     all: "All competitions", country: (c) => `All ${c} bets`, region: (r) => `All bets in ${r}`,
     euro: "Champions League, Europa League and Conference League bets", cup: (name) => `${name} bets`,
+    intl: "Bets on national team matches",
   });
 }
 function renderMatchFilters() {
@@ -1205,7 +1219,8 @@ function matchHead(m, right = "") {
 function matchCard(m, { lineups = true } = {}) {
   const finished = FINISHED.has(m.status) && m.hg != null;
   const rated = finished && m.rating;
-  const canLineup = lineups && !m.intl && !LIVE.has(m.status) && !CALLED_OFF.has(m.status);
+  // a national match has a predicted XI only (with its model detail), so none once it has been played
+  const canLineup = lineups && !LIVE.has(m.status) && !CALLED_OFF.has(m.status) && (!m.intl || (!finished && m.p_home != null));
   const cls = (rated ? ` rated acc-${m.rating}` : "") + (canLineup ? " lineup-card" : "");
   const badge = rated
     ? `<span class="rating-badge badge-${m.rating}" title="${m.rating}/5 ${RATING_LABELS[m.rating]}">${m.rating}/5</span>` : "";
@@ -2443,9 +2458,22 @@ function loadLineupHistory() {
 const lineupData = () => state.lineupSource === "live" ? state.lineupRec : state.lineupHist;
 const lrTeam = (id) => state.data.teams[id] || lineupData()?.teams?.[id] || `Team ${id}`;
 const lrPlayer = (id) => lineupData()?.players?.[id] || `Player ${id}`;
+// A team's name as a link: a club's page, or for a national team (one with a line-up in a national
+// team competition) its nation page
+function lrTeamLink(id) {
+  const d = lineupData(), name = lrTeam(id);
+  d.intlTeams ||= new Set((d.rows || []).filter((r) => state.data.competitions[r.league]?.type === "International").map((r) => r.team));
+  return d.intlTeams.has(id)
+    ? `<a class="team-link" href="#/nation/${encodeURIComponent(state.data.nation_pages?.[id] || name)}">${escapeHtml(name)}</a>`
+    : clubLink(id, name);
+}
 function lineupCountries() {
-  const d = lineupData();
-  return state.lineupCountries[state.lineupSource] ||= compCountries(state.lineupSource === "live" ? d.rows.map((r) => r.league) : d.leagues);
+  const d = lineupData(), src = state.lineupSource;
+  if (state.lineupCountries[src]) return state.lineupCountries[src];
+  const ids = src === "live" ? d.rows.map((r) => r.league) : d.leagues;
+  state.lineupCountries[src] = compCountries(ids);
+  state.lineupCountries[src].intl = intlAmong(ids);      // national team line-ups: the live record only
+  return state.lineupCountries[src];
 }
 // The live record's line-ups in the chosen range, before the competition menu
 function lineupScope() {
@@ -2469,6 +2497,7 @@ function renderLineupFilters() {
   renderFilterMenu($("#lineup-filters"), state.lineupFilter, countries, countOf, {
     all: "All competitions", country: (c) => `All ${c} line-ups`, region: (r) => `All line-ups in ${r}`,
     euro: "Champions League, Europa League and Conference League line-ups", cup: (name) => `${name} line-ups`,
+    intl: "National team line-ups",
   });
 }
 // [key, line-ups, starters named, perfect XIs, right position, positions known] for each group of rows
@@ -2594,7 +2623,7 @@ function renderLineupRecord() {
     `<tr data-league="${id}"${String(id) === state.lineupFilter ? ` class="u-bold"` : ""}><td>${escapeHtml(compLabel(id))}</td>
       <td>${n}</td><td>${lrOf11(correct / n)}</td><td>${lrShare(perfect, n)}</td><td>${lrShare(right, known)}</td></tr>`);
 
-  const clubRow = ([id, n, correct, perfect]) => `<tr><td>${clubLink(id, lrTeam(id))}</td><td>${n}</td><td>${lrOf11(correct / n)}</td><td>${lrShare(perfect, n)}</td></tr>`;
+  const clubRow = ([id, n, correct, perfect]) => `<tr><td>${lrTeamLink(id)}</td><td>${n}</td><td>${lrOf11(correct / n)}</td><td>${lrShare(perfect, n)}</td></tr>`;
   const clubHead = ["Club", "Line-ups", "Named", "Perfect"];
   const ranked = s.clubs.filter((c) => c[1] >= LR_CLUB_MIN).sort((a, b) => b[2] / b[1] - a[2] / a[1] || b[1] - a[1]);
   const k = Math.min(10, Math.floor(ranked.length / 2));
@@ -2619,7 +2648,7 @@ function renderLineupRecord() {
   });
 
   const every = s.rows.map((r) => `<tr><td>${dateOf(r.time)}</td>
-    <td>${clubLink(r.team, lrTeam(r.team))} ${r.home ? "v" : "at"} ${escapeHtml(lrTeam(r.opponent))}<span class="lr-sub">${escapeHtml(compLabel(r.league))}</span></td>
+    <td>${lrTeamLink(r.team)} ${r.home ? "v" : "at"} ${escapeHtml(lrTeam(r.opponent))}<span class="lr-sub">${escapeHtml(compLabel(r.league))}</span></td>
     <td>${lrScore(r.correct)}</td><td>${r.missed.length ? r.missed.map((p) => escapeHtml(lrPlayer(p))).join(", ") : "–"}</td></tr>`);
   // more to list, unless the database has already sent all it will (1,000 at most)
   const more = s.n > s.rows.length && s.rows.length >= state.lineupShown
@@ -2886,7 +2915,22 @@ function xiBlock(teamId) {
       <span class="team-row-opp">${playerLink(pid, name)}</span><span class="team-row-res">${rankChipSmall(rank)}</span></div>`).join("")}`;
 }
 
+// A national match: each side's predicted XI comes with the match's model detail (site_match_detail)
+async function renderIntlLineups(m, panel) {
+  panel.innerHTML = `<div class="empty-state">Loading predicted line-ups…</div>`;
+  const why = await loadWhy(m.id);
+  const side = (id) => {
+    const rows = why?.xi?.[id];
+    const head = `<div class="modal-section">${escapeHtml(teamName(id))}</div>`;
+    if (!rows?.length) return `<div>${head}<div class="page-note">No predicted XI for this team.</div></div>`;
+    const xi = rows.map(([pid, name, role]) => ({ p: { id: pid, name }, b: { label: role }, rank: null, chance: null, mins: null }));
+    return `<div>${head}${xiPitch(xi, null, { note: "", ranks: false })}</div>`;     // no player ranks for national sides
+  };
+  panel.innerHTML = `<div class="fixture-lineups">${side(m.home)}${side(m.away)}</div>
+    <div class="page-note">From each side's recent national team matches. Call-ups, injuries and suspensions aren't known before the team sheet.</div>`;
+}
 async function renderMatchLineups(m, panel) {
+  if (m.intl) return renderIntlLineups(m, panel);
   const finished = FINISHED.has(m.status) && m.hg != null;
   panel.innerHTML = `<div class="empty-state">Loading ${finished ? "actual line-ups" : "predicted line-ups"}…</div>`;
   const [homeData, awayData, fx] = await Promise.all([loadClub(m.home), loadClub(m.away), loadLineups(m.id), needClubPlayers(m.home, m.away)]);
@@ -3347,8 +3391,8 @@ function xiPitch(xi, data = state.club?.data, opts = {}) {
       const verdict = !marked ? "" : predicted ? " · predicted to start" : ` · not predicted${instead ? `; the model picked ${predName} (rank ${predRank != null ? Number(predRank).toFixed(1) : "–"})` : ""}`;
       // the square in the start-chance colour (or ringed green / red when marked), the rating in its own
       return `<a class="pp-spot xi-spot ${cls}" href="#/player/${p.id}" data-sx="${x}%" data-sy="${y}%"
-          title="${escapeHtml(`${p.name} · ${b.label} · rank ${rank != null ? Number(rank).toFixed(1) : "–"}${hasChance ? ` · ${Math.round(chance)}% to start` : ""}${hasMins ? ` · ${mins}′ expected` : ""}${verdict}`)}">
-        <span class="pp-rank rk-${rankTier(rank)}">${rankText}</span><span class="pp-name">${escapeHtml(shortName(p.name))}</span>
+          title="${escapeHtml(`${p.name} · ${b.label}${opts.ranks === false ? "" : ` · rank ${rank != null ? Number(rank).toFixed(1) : "–"}`}${hasChance ? ` · ${Math.round(chance)}% to start` : ""}${hasMins ? ` · ${mins}′ expected` : ""}${verdict}`)}">
+        ${opts.ranks === false ? "" : `<span class="pp-rank rk-${rankTier(rank)}">${rankText}</span>`}<span class="pp-name">${escapeHtml(shortName(p.name))}</span>
         ${meta}${instead ? `<span class="pp-instead"><span class="pp-instead-name">${escapeHtml(shortName(predName))}</span><span class="pp-instead-rank rk-${rankTier(predRank)}">${predRank == null ? "–" : Math.round(predRank)}</span></span>` : ""}</a>`;
     });
   }).join("");
@@ -6356,7 +6400,7 @@ const TAB_INFO = {
     ["Market", "The bookmakers' chances for the same match: their odds with the bookmaker's margin taken out, averaged across bookmakers."],
     ["Projected goals", "The goals the model expects each side to score, such as 1.6–0.9. An average over many possible games, not a score prediction."],
     ["The number by each club", "Its Current Strength."]] },
-  stats: { intro: "How accurate the model's match predictions have been, and how they compare with the bookmakers'.", more: "glossary", key: [
+  stats: { intro: "How accurate the model's match predictions have been, and how they compare with the bookmakers'. Club and national team matches together: pick a competition to see one on its own.", more: "glossary", key: [
     ["Log loss", "Punishes the model for being confident and wrong. Lower is better. Giving every result a one-in-three chance scores 1.099."],
     ["Brier score", "The average squared gap between the chances given and what happened. Lower is better. One-in-three for everything scores 0.667."],
     ["Goal error", "How many goals out the projected score was, on average, for each team."],
@@ -6689,7 +6733,7 @@ const TAB_QUERY = {
     set: (q) => {
       if (oneOf("#stats-ranges", "range", q.r)) state.statsRange = q.r;
       pressOne("#stats-ranges", "range", state.statsRange);
-      if (knownFilter(q.c, "e")) { state.statsFilter = q.c; renderStatsFilters(); }
+      if (knownFilter(q.c, "ei")) { state.statsFilter = q.c; renderStatsFilters(); }
     },
     draw: () => renderStats() },
   lineups: {
@@ -6698,13 +6742,13 @@ const TAB_QUERY = {
       if (oneOf("#lineup-source", "source", q.src)) state.lineupSource = q.src;
       if (oneOf("#lineup-ranges", "range", q.r)) state.lineupRange = q.r;
       pressOne("#lineup-source", "source", state.lineupSource); pressOne("#lineup-ranges", "range", state.lineupRange);
-      if (knownFilter(q.c, "e")) { state.lineupFilter = q.c; renderLineupFilters(); }
+      if (knownFilter(q.c, "ei")) { state.lineupFilter = q.c; renderLineupFilters(); }
     } },
   bets: {
     get: () => ({ ...filterQuery(state.betFilter), ...(state.betStrategy !== "all" ? { s: state.betStrategy } : {}), ...(state.betMarket !== "all" ? { m: state.betMarket } : {}),
       ...(state.betView !== "all" ? { v: state.betView } : {}) }),
     set: (q) => {
-      if (knownFilter(q.c, "e")) state.betFilter = q.c;
+      if (knownFilter(q.c, "ei")) state.betFilter = q.c;
       if (oneOf("#bet-strategy", "strategy", q.s)) state.betStrategy = q.s;
       if (oneOf("#bet-market", "market", q.m)) state.betMarket = q.m;
       if (oneOf("#bet-view", "view", q.v)) state.betView = q.v;

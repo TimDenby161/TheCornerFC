@@ -78,15 +78,22 @@ class MethodologyExportTests(unittest.TestCase):
         self.load_matches.assert_not_called()
 
 
-def record_conn(tables=True, history=(), starters=()):
+def record_conn(tables=True, history=(), starters=(), cup_starters=()):
     """A connection for the line-up exports: fixture 7 is team 1 (home) against team 2, in league
-    39; history is reconstructed_lineups rows and starters fixture_players rows."""
+    39; history is reconstructed_lineups rows, starters fixture_players rows and cup_starters
+    fixture_lineups rows (a cup match's XI)."""
     def execute(sql, params=None):
         rows = []
         if "to_regclass(%s)" in sql:
             return Mock(fetchone=lambda: (params[0] if tables else None,))
         if "from reconstructed_lineups r join fixtures" in sql:
             rows = list(history)
+        elif "from national_fixtures where fixture_id" in sql:
+            rows = [(70, 5, "UEFA Nations League", 10, 770, "England", "Bosnia &amp; Herzegovina")] if 70 in params[0] else []
+        elif "from national_fixture_players" in sql:
+            rows = [(p, f"National {p}") for p in params["p"]]
+        elif "from fixture_lineups fl" in sql:
+            rows = list(cup_starters)
         elif "from fixture_players" in sql:
             rows = list(starters)
         elif "from fixtures" in sql:
@@ -98,7 +105,7 @@ def record_conn(tables=True, history=(), starters=()):
         elif "from leagues" in sql:
             rows = [(39, "Premier League", "England")]
         elif "from players" in sql:
-            rows = [(p, f"Player {p}") for p in params[0]]
+            rows = [(p, f"Player {p}") for p in params[0] if p < 40]         # 40 and up: internationals not in players
         result = MagicMock(fetchall=lambda: rows)
         result.__iter__.side_effect = lambda: iter(rows)
         return result
@@ -150,6 +157,19 @@ class LineupRecordExportTests(unittest.TestCase):
         self.assertEqual(set(out["players"]), {"9", "10", "11", "12"})
         self.assertEqual(out["excluded_no_official_xi"], 3)
 
+    def test_a_national_team_line_up_is_listed_with_the_fixture_s_names(self):
+        row = {**lineup(770, "mv_nat", list(range(9)) + [41, 42]), "fixture_id": 70}
+        with patch.object(evaluation, "load_lineups", return_value=([row], {"missing_or_incomplete_official_xi": 0})) as load, \
+                patch.object(export, "export_lineup_history"), tempfile.TemporaryDirectory() as d:
+            export_lineup_record(record_conn(), Path(d), now=T2)
+            out = json.loads((Path(d) / "lineups.json").read_text())
+        self.assertTrue(load.call_args.kwargs["national"])              # the methodology record keeps to clubs
+        r = dict(zip(out["fields"], out["rows"][0]))
+        self.assertEqual((r["fixture"], r["league"], r["team"], r["opponent"], r["home"], r["correct"]), (70, 5, 770, 10, 0, 9))
+        self.assertEqual(out["teams"]["770"], "Bosnia & Herzegovina")
+        self.assertEqual(out["leagues"]["5"], {"name": "UEFA Nations League", "country": "World"})
+        self.assertEqual((out["players"]["9"], out["players"]["41"]), ("Player 9", "National 41"))
+
     def test_no_tables_writes_an_empty_record(self):
         out = self.export(record_conn(tables=False))
         self.assertEqual(out["rows"], [])
@@ -181,6 +201,16 @@ class LineupHistoryExportTests(unittest.TestCase):
         self.assertEqual((row["correct"], row["roles_right"], row["roles_known"]), (9, 8, 9))
         self.assertEqual(row["lines"], [1, 1, 4, 4, 4, 4, 2, 0])
         self.assertEqual((row["missed"], row["wrong"]), ([9, 10], [11, 12]))
+
+    def test_a_cup_match_is_scored_against_its_stored_xi(self):
+        # no player stats for a cup match: the XI is fixture_lineups', a role each and no broad
+        # position, so the starter with no role (10) is in no line
+        xi = [(8, 2, i, self.ROLES[i] if i < 10 else None) for i in range(11)]
+        rows = self.export(record_conn(history=[(8, 2, list(range(11)), self.ROLES, T1, 45, 1, 2)], cup_starters=xi))
+        row = dict(zip(self.FIELDS, rows[0]))
+        self.assertEqual((row["fixture"], row["league"], row["correct"]), (8, 45, 11))
+        self.assertEqual((row["roles_right"], row["roles_known"]), (10, 10))
+        self.assertEqual(row["lines"], [1, 1, 4, 4, 4, 4, 1, 1])
 
     def test_skips_a_match_without_a_full_team_sheet(self):
         starters = [(7, 2, i, "CB", None) for i in range(10)]

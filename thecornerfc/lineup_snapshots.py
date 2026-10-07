@@ -43,7 +43,8 @@ def append(conn,table,payload):
     conn.execute(f"INSERT INTO {table} ({','.join(values)}) VALUES ({placeholders}) ON CONFLICT DO NOTHING",values)
 
 
-def capture_predictions(conn,fixtures,lineups,selection_inputs,availability):
+def capture_predictions(conn,fixtures,lineups,selection_inputs,availability,teams=None):
+    # teams: {fixture: the teams to capture}; a fixture not in it has both captured.
     from .player_ratings import line_of
     fixtures={f[0]:f for f in fixtures if f[4]}
     if not fixtures:
@@ -58,6 +59,8 @@ def capture_predictions(conn,fixtures,lineups,selection_inputs,availability):
     captured=datetime.now(timezone.utc)
     for fid,f in fixtures.items():
         for team in f[2:4]:
+            if teams and fid in teams and team not in teams[fid]:
+                continue
             append(conn,'lineup_prediction_snapshots',dict(fixture_id=fid,team_id=team,
                 model_version_id=version,source='prospective' if captured<f[1] else 'late_observation',
                 **snapshot_times(captured_at=captured,effective_at=f[1]),

@@ -175,7 +175,9 @@ def load_matches(conn,args,market=True):
     return valid,{'selected':len(rows),'missing_regulation_score':len(rows)-len(valid)}
 
 
-def load_lineups(conn,args):
+def load_lineups(conn,args,national=False):
+    """national=False keeps to club fixtures: national team XIs (national_lineups.py) are another
+    model's, shown on the site's Line-up record and left out of every club evaluation."""
     rows=query(conn,'''SELECT DISTINCT ON(s.fixture_id,s.team_id) s.*,o.players AS official,o.snapshot_id AS official_snapshot_id,
         o.captured_at AS official_captured_at FROM lineup_prediction_snapshots s
         LEFT JOIN LATERAL (SELECT * FROM official_lineup_snapshots o
@@ -188,8 +190,9 @@ def load_lineups(conn,args):
           AND s.captured_at < coalesce((SELECT min(first_xi.captured_at) FROM official_lineup_snapshots first_xi
               WHERE first_xi.fixture_id=s.fixture_id AND first_xi.team_id=s.team_id
                 AND first_xi.effective_at=s.effective_at),'infinity'::timestamptz)
+          AND (%s OR EXISTS (SELECT 1 FROM fixtures f WHERE f.fixture_id=s.fixture_id))
         ORDER BY s.fixture_id,s.team_id,s.captured_at DESC,s.snapshot_id DESC''',
-        [args.as_of,args.as_of,args.start,args.end,args.as_of,args.as_of,args.hours_before*3600,args.hours_before*3600])
+        [args.as_of,args.as_of,args.start,args.end,args.as_of,args.as_of,args.hours_before*3600,args.hours_before*3600,national])
     valid=[r for r in rows if r['official'] and len({p['player'] for p in r['official'] if p.get('starter')})==11]
     return valid,{'selected':len(rows),'missing_or_incomplete_official_xi':len(rows)-len(valid)}
 

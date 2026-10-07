@@ -76,6 +76,14 @@ class LineupEvidenceTests(unittest.TestCase):
         self.assertEqual(player['availability_state'],'not_reported')
         self.assertEqual(json.loads(old['availability'])['2']['state'],'unavailable')
 
+    @patch('thecornerfc.lineup_snapshots.register_version',return_value='mv_'+'a'*64)
+    def test_a_cup_match_is_captured_only_for_the_teams_given(self,version):
+        # fixture 2 is a cup match against a club with no player data (20): only team 10 is captured
+        fixtures=[(1,self.kickoff,10,20,True),(2,self.kickoff,10,20,True),(3,self.kickoff,10,20,True)]
+        lineup_snapshots.capture_predictions(self.conn,fixtures,[(1,10,1,'CM',65.),(2,10,1,'CM',65.)],{},{},
+                                             teams={2:{10},3:set()})
+        self.assertEqual(sorted((r['fixture_id'],r['team_id']) for r in self.conn.rows.values()),[(1,10),(1,20),(2,10)])
+
     def test_official_corrections_append_and_empty_responses_do_not_invent_xi(self):
         fixture={'fixture':{'id':1,'date':self.kickoff.isoformat()},'lineups':[
             {'team':{'id':10},'formation':'4-4-2','startXI':[{'player':{'id':1,'grid':'1:1','pos':'G'}}]}]}

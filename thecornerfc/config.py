@@ -218,6 +218,10 @@ MATCH_PLAYER_LEAGUES = INJURY_MODEL_LEAGUES + [41, 42, 307]
 # the "regulars" sample), so adding a league doesn't move everyone else's rank
 RATING_REFERENCE_LEAGUES = INJURY_MODEL_LEAGUES
 
+# Cup and European matches of those leagues' clubs have their starting XIs stored from this day
+# (ingest.sync_cup_lineups) and a predicted XI worked out (player_ratings.py)
+CUP_LINEUPS_FROM = "2020-07-01"
+
 FINISHED_STATUSES = ("FT", "AET", "PEN")
 
 # Odds markets to keep (API-Football bet ids). Everything else is discarded.

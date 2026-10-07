@@ -13,6 +13,10 @@ teams score; see GROUP): of several candidates the best is kept (pick_best). Set
 Closing line value: clv = odds_taken * closing fair probability - 1. Consistently positive CLV
 is the standard early sign of a real edge, long before profit is statistically meaningful.
 
+National team matches are bet on as club matches are (owner, 2026-10-07), from their own
+projections (national_predictions.py) and the odds collected for them, in the same bank: their
+competition is the bet's league_id, and their only match tag is 'intl'.
+
 Tags (paper_bets.tags, see bet_tags): what kind of disagreement each bet is, so returns and CLV
 can be compared by kind as bets build up. From the check of the first 82 model-vs-bookmaker
 disagreements (README), the model did worst backing outsiders and in streak matches, so the
@@ -118,6 +122,7 @@ def match_tags(conn, fixture_ids):
         """select f.fixture_id, f.league_id, l.type, f.home_team_id, f.away_team_id, f.kickoff
            from fixtures f join leagues l using (league_id) where f.fixture_id = any(%s)""",
         [fixture_ids]).fetchall()
+    national = {fid: ["intl"] for fid in _national_ids(conn, fixture_ids)}
     teams = list({t for r in info for t in r[3:5]})
     before = {(fid, team): (now, lt) for fid, team, now, lt in conn.execute(
         """select fixture_id, team_id, rank_before, lt_before from team_rank_history
@@ -143,7 +148,7 @@ def match_tags(conn, fixture_ids):
         now, old = league_between(team, ko, 0, 60), league_between(team, ko, 90, 365)
         return now is not None and old is not None and now != old
 
-    out = {}
+    out = national
     for fid, league, ltype, home, away, ko in info:
         tags = ["cup" if ltype == "Cup" or league in EUROPE else "big5" if league in BIG5 else "league"]
         if moved(home, ko) or moved(away, ko):
@@ -157,6 +162,31 @@ def match_tags(conn, fixture_ids):
             tags.append("streak")
         out[fid] = tags
     return out
+
+
+def _has_national(conn):
+    """Whether national team matches have projections to bet on (the 20261007 migrations)."""
+    return all(conn.execute("select to_regclass(%s)", [f"public.{t}"]).fetchone()[0] is not None
+               for t in ("national_fixtures", "national_fixture_predictions"))
+
+
+def _national_ids(conn, fixture_ids):
+    """Those of the fixtures that are national team matches."""
+    if not fixture_ids or not _has_national(conn):
+        return []
+    return [r[0] for r in conn.execute(
+        "select fixture_id from national_fixtures where fixture_id = any(%s)", [list(fixture_ids)])]
+
+
+def _national_scores(conn):
+    """SQL for a national match's 90-minute score, as (home, away) expressions on national_fixtures f.
+    Only the score after extra time is stored until 20261007_national_ft_scores.sql adds the
+    90-minute one; a match that went to extra time without it has none (its bets are void)."""
+    ft = conn.execute(
+        """select 1 from information_schema.columns
+           where table_schema = 'public' and table_name = 'national_fixtures' and column_name = 'ft_home'""").fetchone()
+    return [f"coalesce({'f.ft_' + side + ', ' if ft else ''}case when f.status_short = 'FT' then f.{side}_goals end)"
+            for side in ("home", "away")]
 
 
 def bet_tags(match, sel, prob, fair):
@@ -198,6 +228,18 @@ def place_bets(conn, strategy, within):
         # Preserve float8 values exactly for immutable snapshot matching. Some
         # databases use extra_float_digits=0, which rounds text query results.
         [now, now + within], binary=True).fetchall()
+    if _has_national(conn):
+        # a national match is bet on only from a projection with its snapshot stored, which
+        # record_decision needs (national_predictions.capture_snapshots)
+        preds += conn.execute(
+            """select p.fixture_id, f.league_id, f.kickoff, p.p_home, p.p_draw, p.p_away,
+                      p.p_over25, p.p_btts, p.home_xg, p.away_xg
+               from national_fixture_predictions p join national_fixtures f using (fixture_id)
+               where f.status_short in ('NS', 'TBD') and f.kickoff > %s and f.kickoff <= %s
+                 and exists (select 1 from match_prediction_snapshots s
+                             where s.fixture_id = p.fixture_id and s.source = 'prospective'
+                               and s.effective_at = f.kickoff and s.p_home = p.p_home and s.home_xg = p.home_xg)""",
+            [now, now + within], binary=True).fetchall()
     if not preds:
         log.info("Paper bets (%s): no fixtures in window", strategy)
         return 0
@@ -275,6 +317,14 @@ def settle_bets(conn):
            from paper_bets b join fixtures f using (fixture_id)
            where b.settled_at is null
              and f.status_short in ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD', 'AWD', 'WO')""").fetchall()
+    if _has_national(conn):
+        home, away = _national_scores(conn)
+        open_bets += conn.execute(
+            f"""select b.bet_id, b.fixture_id, b.market, b.selection, b.odds_taken, b.stake,
+                       f.status_short, {home}, {away}
+                from paper_bets b join national_fixtures f using (fixture_id)
+                where b.settled_at is null
+                  and f.status_short in ('FT', 'AET', 'PEN', 'PST', 'CANC', 'ABD', 'AWD', 'WO')""").fetchall()
     if not open_bets:
         return 0
     prices = load_prices(conn, [r[1] for r in open_bets])     # odds stop updating at kickoff

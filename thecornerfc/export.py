@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .health import monitored
-from . import config, availability, national_predictions, predictions
+from . import config, availability, national_lineups, national_predictions, predictions
 from . import tables as league_tables
 from .cache import WEEK, cached_rows, finished_fixtures, rank_history
 from .betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_cautious
@@ -429,18 +429,31 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     # National team matches (national_fixtures), on the Matches tab only and flagged intl = 1 so
     # the site links them to the nation pages. Their projections are national_predictions.py's:
     # the same fields as a club match's, without the parts national teams have no data for
-    # (bookmakers' odds, absences, line-up ratings)
+    # (absences, line-up ratings)
     since, until = now - timedelta(days=PAST_DAYS), now + timedelta(days=FUTURE_DAYS)
     national_why = {}
+    national_xi = national_xis(conn, now)
     for row in national_matches(conn, since, until):
         fid, lid, tournament, home, away, h_name, a_name = row[0], row[2], row[3], *row[5:9]
         competitions.setdefault(lid, {"name": tournament or config.NATIONAL_TEAM_LEAGUES.get(lid, f"Competition {lid}"),
                                       "country": "World", "type": "International"})
         teams_extra[home], teams_extra[away] = html.unescape(h_name), html.unescape(a_name)
-        match, why = national_match(row)
+        match, why = national_match(row, market.get(fid))
         matches.append(match)
         if why:
-            national_why[str(fid)] = why
+            # each side's predicted XI, for the card's line-ups (national_lineups.py)
+            xi = {str(t): national_xi[fid, t] for t in (home, away) if (fid, t) in national_xi}
+            national_why[str(fid)] = {**why, "xi": xi} if xi else why
+    # and the national team competitions with a projected match in the Stats tab's longest range,
+    # so its menu can name the ones no longer on the Matches tab
+    if _table_exists(conn, "national_fixtures") and _table_exists(conn, national_predictions.TABLE):
+        for lid, tournament in conn.execute(
+                f"""select distinct on (f.league_id) f.league_id, f.tournament
+                    from national_fixtures f join {national_predictions.TABLE} p using (fixture_id)
+                    where f.kickoff >= %s order by f.league_id, f.kickoff desc""",
+                [now - timedelta(days=max(STAT_RANGES.values()))]):
+            competitions.setdefault(lid, {"name": tournament or config.NATIONAL_TEAM_LEAGUES.get(lid, f"Competition {lid}"),
+                                          "country": "World", "type": "International"})
     matches.sort(key=lambda m: (m[1], m[0]))
     nation_pages = {t: nat for t, nat in national_nationalities(conn, list(teams_extra)).items()
                     if nat != teams_extra[t]}
@@ -764,14 +777,18 @@ def market_consensus(conn, since):
     first seen before kickoff (odds loaded after a match was played have no real opening)."""
     lines = [f"{side} {l}" for l in GOAL_LINES for side in ("Over", "Under")]
     out = defaultdict(lambda: {"close": {}, "open": {}})
+    # club matches and, once their table exists, national team matches
+    matches = "select fixture_id, status_short, kickoff from fixtures" + (
+        " union all select fixture_id, status_short, kickoff from national_fixtures"
+        if _table_exists(conn, "national_fixtures") else "")
     for fid, bet, line, sel, close, open_ in conn.execute(
-            """with o as (
+            f"""with o as (
                  select o.fixture_id, o.bookmaker_id, o.bet_id,
                         case when o.bet_id = 5 then split_part(o.selection, ' ', 2) else '' end as line,
                         case when o.bet_id = 5 then split_part(o.selection, ' ', 1) else o.selection end as sel,
                         o.odd::float8 as odd, o.first_odd::float8 as first_odd,
                         o.first_seen_at < f.kickoff and o.first_odd > 1 as has_open
-                 from odds o join fixtures f using (fixture_id)
+                 from odds o join ({matches}) f using (fixture_id)
                  where f.status_short = any(%s) and f.kickoff >= %s and o.odd > 1
                    and (o.bet_id in (1, 8) or (o.bet_id = 5 and o.selection = any(%s)))),
                s as (
@@ -832,6 +849,7 @@ def export_stats(conn, out_dir=OUT_DIR):
            from fixture_predictions p join fixtures f using (fixture_id)
            where f.status_short = any(%s) and f.home_goals is not null and f.kickoff >= %s""",
         [["FT", "AET", "PEN"], now - timedelta(days=max(STAT_RANGES.values()))]).fetchall()
+    rows += national_stat_rows(conn, now - timedelta(days=max(STAT_RANGES.values())))
     market = market_probabilities(conn)
     rows = [(*r, market.get(r[-1])) for r in rows]
 
@@ -841,12 +859,22 @@ def export_stats(conn, out_dir=OUT_DIR):
     cons = market_consensus(conn, since)
     with_odds = {fid for fid, _ in cons}
     per_fixture = {}
-    for fid, ph, pd, pa, pb, hx, ax, hg, ag in conn.execute(
+    scored = conn.execute(
             """select f.fixture_id, p.p_home, p.p_draw, p.p_away, p.p_btts, p.home_xg, p.away_xg,
                       f.ft_home, f.ft_away
                from fixture_predictions p join fixtures f using (fixture_id)
                where f.fixture_id = any(%s) and f.ft_home is not null and p.home_xg is not null""",
-            [list(with_odds)]):
+            [list(with_odds)]).fetchall()
+    # national team matches: only the score after extra time is stored, so the ones that went to
+    # extra time are left out rather than marked against a 90-minute price
+    if _table_exists(conn, "national_fixtures") and _table_exists(conn, national_predictions.TABLE):
+        scored += conn.execute(
+            f"""select f.fixture_id, p.p_home, p.p_draw, p.p_away, p.p_btts, p.home_xg, p.away_xg,
+                       f.home_goals, f.away_goals
+                from {national_predictions.TABLE} p join national_fixtures f using (fixture_id)
+                where f.fixture_id = any(%s) and f.status_short = 'FT' and f.home_goals is not null
+                  and p.p_home is not null and p.home_xg is not null""", [list(with_odds)]).fetchall()
+    for fid, ph, pd, pa, pb, hx, ax, hg, ag in scored:
         model = {"1X2": [float(ph), float(pd), float(pa)]}
         if pb is not None:
             model["BTTS"] = [float(pb), 1 - float(pb)]
@@ -869,6 +897,25 @@ def export_stats(conn, out_dir=OUT_DIR):
     (out_dir / "stats.json").write_text(json.dumps(
         {"generated_at": now.isoformat(), "ranges": stats}, separators=(",", ":")), encoding="utf-8")
     log.info("Exported prediction stats for %d finished fixtures", len(rows))
+
+
+def national_stat_rows(conn, since):
+    """Finished national team matches since `since` that had a projection, in export_stats' row
+    shape, so the Stats tab counts them with the club matches (under their own competitions).
+    source is 'live' for a projection made before kickoff, else 'backfill', as national_match
+    has it. Empty until national_fixture_predictions exists."""
+    if not _table_exists(conn, "national_fixtures") or not _table_exists(conn, national_predictions.TABLE):
+        return []
+    return conn.execute(
+        f"""select f.kickoff, f.league_id, p.p_home, p.p_draw, p.p_away, p.home_xg, p.away_xg,
+                   p.likely_score, f.home_goals, f.away_goals,
+                   case when p.updated_at > f.kickoff then 'backfill' else 'live' end, p.rating,
+                   p.rating_winner, p.rating_margin, p.rating_clean_sheets, p.rating_shape,
+                   p.rating_goals, f.fixture_id
+            from {national_predictions.TABLE} p join national_fixtures f using (fixture_id)
+            where f.status_short = any(%s) and f.home_goals is not null and f.kickoff >= %s
+              and p.p_home is not null and p.home_xg is not null""",
+        [["FT", "AET", "PEN"], since]).fetchall()
 
 
 def _table_exists(conn, name):
@@ -901,9 +948,24 @@ def national_matches(conn, since, until):
             order by nf.kickoff, nf.fixture_id""", [since, until]).fetchall()
 
 
-def national_match(row):
+def national_xis(conn, now=None):
+    """{(fixture, team): [[player, name, role], ...]}: the predicted XI of each national team with
+    a match coming (national_lineups.replay). Not critical: empty if it can't be worked out."""
+    try:
+        if not national_lineups.ready(conn):
+            return {}
+        predicted, names = national_lineups.replay(conn, now)
+    except Exception:
+        log.exception("National line-ups not exported")
+        return {}
+    return {key: [[p, html.unescape(names.get(p) or f"Player {p}"), role] for p, role in m["xi"]]
+            for key, m in predicted.items()}
+
+
+def national_match(row, market=None):
     """(a national_matches row as the site draws it, in SITE_MATCH_FIELDS order; its model detail,
-    or None where it has no projection)."""
+    or None where it has no projection). market: the bookmakers' (home, draw, away) chances with
+    their margin removed, where odds were collected for it."""
     (fid, kickoff, lid, _, rnd, home, away, _, _, status, hg, ag,
      p_h, p_d, p_a, hxg, axg, likely, hr, ar, neutral, exp_diff, p_over, p_btts, projected_at, *ratings) = row
     # a projection written after kickoff was reconstructed (national_predictions.backfill_predictions)
@@ -911,7 +973,7 @@ def national_match(row):
     match = [fid, kickoff.isoformat(), lid, rnd, home, away, status, hg, ag, None, None,
              _r(p_h, 3), _r(p_d, 3), _r(p_a, 3), _r(hxg), _r(axg), likely, _r(hr, 0), _r(ar, 0),
              source, *ratings,
-             None, None, None, None, _r(p_over, 3), _r(p_btts, 3),
+             *[_r(x, 3) for x in (market or (None, None))[:2]], None, None, _r(p_over, 3), _r(p_btts, 3),
              None, None, None, None, 1]
     why = (national_predictions.explanation(hr, ar, neutral, exp_diff, projected_at, source == "backfill")
            if p_h is not None else None)
@@ -1042,11 +1104,22 @@ def export_lineup_record(conn, out_dir=OUT_DIR, now=None):
     if _table_exists(conn, "lineup_prediction_snapshots") and _table_exists(conn, "official_lineup_snapshots"):
         args = SimpleNamespace(source="prospective", start=datetime(2000, 1, 1, tzinfo=timezone.utc),
                                end=now, as_of=now, hours_before=0)
-        rows, coverage = evaluation.load_lineups(conn, args)
+        # national team XIs too (national_lineups.py): the methodology record keeps to clubs
+        rows, coverage = evaluation.load_lineups(conn, args, national=True)
         out["excluded_no_official_xi"] = coverage["missing_or_incomplete_official_xi"]
         fixtures = {f: (league, home, away) for f, league, home, away in conn.execute(
             "select fixture_id, league_id, home_team_id, away_team_id from fixtures where fixture_id = any(%s)",
             [list({r["fixture_id"] for r in rows})]).fetchall()} if rows else {}
+        national = {"teams": {}, "leagues": {}}     # names the club tables don't have
+        if rows and _table_exists(conn, "national_fixtures"):
+            for f, league, tournament, home, away, h_name, a_name in conn.execute(
+                    """select fixture_id, league_id, tournament, home_team_id, away_team_id, home_name, away_name
+                       from national_fixtures where fixture_id = any(%s)""",
+                    [list({r["fixture_id"] for r in rows} - fixtures.keys())]).fetchall():
+                fixtures[f] = (league, home, away)
+                national["teams"].update({str(home): html.unescape(h_name), str(away): html.unescape(a_name)})
+                national["leagues"][str(league)] = {
+                    "name": tournament or config.NATIONAL_TEAM_LEAGUES.get(league, f"Competition {league}"), "country": "World"}
         version_ids = sorted({r["model_version_id"] for r in rows})
         registered = {v: (name, created) for v, name, created in conn.execute(
             "select model_version_id, version_name, created_at from model_versions where model_version_id = any(%s)",
@@ -1067,6 +1140,15 @@ def export_lineup_record(conn, out_dir=OUT_DIR, now=None):
                 away if r["team_id"] == home else home, int(r["team_id"] == home), correct, right, known, lines,
                 _r(r["seconds_to_kickoff"] / 3600, 1), index[r["model_version_id"]], missed, wrong])
         _lineup_names(conn, out, out["rows"], 3, 2, 12)
+        for key in national:
+            out[key] = {**national[key], **out[key]}
+        unnamed = [p for row in out["rows"] for p in row[12] + row[13] if str(p) not in out["players"]]
+        if unnamed and _table_exists(conn, "national_fixture_players"):
+            out["players"].update({str(p): html.unescape(n) for p, n in conn.execute(
+                """select distinct on (player_id) player_id, player_name from (
+                       select player_id, player_name from national_fixture_players where player_id = any(%(p)s)
+                       union all select player_id, player_name from national_fixture_lineups where player_id = any(%(p)s)) x
+                   where player_name is not null order by player_id""", {"p": unnamed}).fetchall()})
     _write_json_file(out_dir / "lineups.json", out)
     log.info("Exported the line-up record (%s team line-ups)", len(out["rows"]))
     export_lineup_history(conn, out_dir, now)
@@ -1095,6 +1177,14 @@ def export_lineup_history(conn, out_dir=OUT_DIR, now=None):
                    from fixture_players fp join reconstructed_lineups r using (fixture_id, team_id)
                    where fp.started"""):
             starters[(fid, team)][player] = (role, broad)
+        # cup and European matches: the XI alone is stored (fixture_lineups), with each starter's
+        # role but no broad position, so a starter whose role isn't known counts in no line
+        for fid, team, player, role in conn.execute(
+                """select fl.fixture_id, fl.team_id, fl.player_id, fl.role
+                   from fixture_lineups fl join reconstructed_lineups r using (fixture_id, team_id)
+                   where not exists (select 1 from fixture_players fp
+                                     where fp.fixture_id = fl.fixture_id and fp.team_id = fl.team_id)"""):
+            starters[(fid, team)][player] = (role, None)
         for fid, team, players, roles, kickoff, league, home, away in conn.execute(
                 """select r.fixture_id, r.team_id, r.players, r.roles, f.kickoff, f.league_id,
                           f.home_team_id, f.away_team_id
@@ -1257,6 +1347,23 @@ def export_bets(conn, out_dir=OUT_DIR):
            left join bookmakers bk on bk.bookmaker_id = b.bookmaker_id
            where b.bookmaker_id = %s       -- bets taken elsewhere before Bet365-only stay in the table
            order by b.kickoff desc, b.bet_id""", [BOOKMAKER]).fetchall()
+    # bets on national team matches: the sides' names are the fixture's (national teams aren't in
+    # teams) and the score is the 90-minute one the bet was settled on
+    national = set()
+    if _table_exists(conn, "national_fixtures"):
+        from .betting import _national_scores
+        home, away = _national_scores(conn)
+        more = conn.execute(
+            f"""select b.bet_id, b.strategy, b.fixture_id, b.kickoff, b.league_id, b.market, b.selection,
+                       b.model_prob, b.fair_prob, b.odds_taken, bk.name, b.edge, b.closing_odds, b.clv,
+                       b.result, b.profit, b.placed_at, b.settled_at, f.home_name, f.away_name,
+                       {home}, {away}, b.tags, f.home_team_id, f.away_team_id
+                from paper_bets b join national_fixtures f using (fixture_id)
+                left join bookmakers bk on bk.bookmaker_id = b.bookmaker_id
+                where b.bookmaker_id = %s""", [BOOKMAKER]).fetchall()
+        national = {r[0] for r in more}
+        rows = sorted(rows + [(*r[:18], html.unescape(r[18]), html.unescape(r[19]), *r[20:]) for r in more],
+                      key=lambda r: (-r[3].timestamp(), r[0]))
     bets = [{
         "id": r[0], "strategy": r[1], "fixture": r[2], "kickoff": r[3].isoformat(), "league": r[4],
         "market": r[5], "selection": r[6], "model_prob": _r(r[7], 3), "fair_prob": _r(r[8], 3),
@@ -1265,6 +1372,7 @@ def export_bets(conn, out_dir=OUT_DIR):
         "result": r[14], "profit": float(r[15]) if r[15] is not None else None,
         "home": r[18], "away": r[19], "home_id": r[23], "away_id": r[24], "score": f"{r[20]}-{r[21]}" if r[20] is not None else None,
         "cautious": is_cautious(r[5], r[22]),       # the tags themselves stay in the database
+        **({"intl": 1} if r[0] in national else {}),
     } for r in rows]
     # Only what the Bets tab reads: it adds up its own totals from the bets (app.js, summarise).
     # No generation timestamp, so the file only changes when bets do
