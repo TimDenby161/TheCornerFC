@@ -1,12 +1,19 @@
-/* Plain text pages (privacy.html, methodology.html): the site's colours without the app layout */
+/* Plain text pages (privacy.html, methodology.html, terms.html): the site's look (styles.css) without
+   the app layout. Ruled, not boxed; square corners; Archivo, narrow for the headings */
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 100 900; font-stretch: 62% 125%; font-display: swap;
+  src: url("fonts/archivo-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 100 900; font-stretch: 62% 125%; font-display: swap;
+  src: url("fonts/archivo-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 :root {
   color-scheme: light;
-  --page-plane: #f9f9f7;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --border: rgba(11,11,11,0.10);
-  --link: #2770c8;
-  --surface: #ffffff;
+  --page-plane: #f4f5ef;
+  --text-primary: #0d1410;
+  --text-secondary: #414b45;
+  --border: rgba(13,20,16,0.18);
+  --link: #1e589e;
+  --surface: #f4f5ef;
   --live: #1f7a4d;
   --hist: #8a5a00;
   --warn-bg: #fff6e0;
@@ -14,12 +21,12 @@
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
     color-scheme: dark;
-    --page-plane: #0d0d0d;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --border: rgba(255,255,255,0.10);
-    --link: #448ee6;
-    --surface: #181817;
+    --page-plane: #0b110e;
+    --text-primary: #eef1e8;
+    --text-secondary: #b8c1b7;
+    --border: rgba(238,241,232,0.18);
+    --link: #73aaed;
+    --surface: #0b110e;
     --live: #5cc08c;
     --hist: #e0b050;
     --warn-bg: #2a2412;
@@ -28,50 +35,51 @@
 /* Dark chosen in the site menu (assets/theme.js sets data-theme) */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page-plane: #0d0d0d;
-  --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --border: rgba(255,255,255,0.10);
-  --link: #448ee6;
-  --surface: #181817;
+  --page-plane: #0b110e;
+  --text-primary: #eef1e8;
+  --text-secondary: #b8c1b7;
+  --border: rgba(238,241,232,0.18);
+  --link: #73aaed;
+  --surface: #0b110e;
   --live: #5cc08c;
   --hist: #e0b050;
   --warn-bg: #2a2412;
 }
 html, body { margin: 0; background: var(--page-plane); color: var(--text-primary); }
 body {
-  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 15px/1.6 "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   padding: calc(env(safe-area-inset-top) + 24px) 16px calc(env(safe-area-inset-bottom) + 48px);
 }
 a { color: var(--link); }
-h1 { font-size: 24px; margin: 8px 0 4px; }
-h2 { font-size: 18px; margin: 32px 0 6px; padding-top: 16px; border-top: 1px solid var(--border); }
+h1 { font-size: clamp(40px, 7vw, 72px); line-height: 0.9; font-weight: 900; font-stretch: 62%; text-transform: uppercase; margin: 12px 0 10px; }
+h2 { font-size: 26px; line-height: 1.1; font-weight: 800; font-stretch: 76%; margin: 40px 0 6px; padding-top: 14px; border-top: 2px solid var(--text-primary); }
 p, li { color: var(--text-secondary); }
 ul { padding-left: 20px; }
 code { font-size: 13px; overflow-wrap: anywhere; }
-.back { font-size: 14px; }
+.back { font-size: 14px; font-weight: 800; font-stretch: 76%; letter-spacing: 0.06em; text-transform: uppercase; }
+.back a { color: inherit; }
 .updated { font-size: 13px; color: var(--text-secondary); margin: 0; }
 
 /* methodology.html */
 h3 { font-size: 15px; margin: 22px 0 4px; }
 strong { color: var(--text-primary); }
-.callout { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px 16px; margin: 20px 0 8px; }
+.callout { border-left: 2px solid var(--text-primary); padding: 0 0 0 16px; margin: 20px 0 8px; }
 .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
-  border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; margin-right: 6px; vertical-align: 2px; }
+  border: 1px solid currentColor; padding: 1px 8px; margin-right: 6px; vertical-align: 2px; }
 .live-badge { color: var(--live); }
 .hist-badge { color: var(--hist); }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 8px; margin: 12px 0; }
-.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
-.stat-v { display: block; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 16px 8px; margin: 16px 0; }
+.stat { border-left: 1px solid var(--text-secondary); padding: 1px 12px; }
+.stat-v { display: block; font-size: 34px; line-height: 1.05; font-weight: 800; font-stretch: 68%; font-variant-numeric: tabular-nums; }
 .stat-l { display: block; font-size: 13px; color: var(--text-secondary); line-height: 1.35; }
 table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 14px; font-variant-numeric: tabular-nums; }
 th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--border); }
 th:first-child, td:first-child { text-align: left; }
-th { font-weight: 600; font-size: 13px; }
+th { font-weight: 700; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; border-bottom: 2px solid var(--text-primary); }
 td { color: var(--text-secondary); }
 .muted { font-size: 13px; }
-.warn { background: var(--warn-bg); border-radius: 8px; padding: 8px 12px; color: var(--text-primary); font-size: 14px; }
+.warn { background: var(--warn-bg); border-left: 4px solid var(--hist); padding: 8px 12px; color: var(--text-primary); font-size: 14px; }
 .fresh { list-style: none; padding: 0; margin: 8px 0; }
 dl { margin: 8px 0; }
 dt { font-weight: 600; margin-top: 12px; }
