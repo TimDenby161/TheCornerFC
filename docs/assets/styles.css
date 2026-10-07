@@ -217,9 +217,7 @@
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     padding: 12px 16px 40px;
-    max-width: 720px;
     width: 100%;
-    margin: 0 auto;
   }
   .panel { display: none; }
   .panel[data-active="true"] { display: block; }
@@ -658,9 +656,7 @@
   .bet-tag.warn { border-color: #f08a5a; color: #f08a5a; }
   .pos { color: var(--good-text); font-weight: 700; } .neg { color: var(--critical-text); font-weight: 700; }
   .bets-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-  #tips-top, #tips-body { max-width: 640px; margin: 0 auto; }
 
-  #fpl-body, #efl-body { max-width: 760px; margin: 0 auto; }
   #fpl-body .stats-card, #efl-body .stats-card { margin-bottom: 12px; }
   .efl-club-logo { width: 28px; height: 28px; object-fit: contain; flex: none; }
   #fpl-body .stats-grid .stats-card { margin-bottom: 0; }
@@ -1054,7 +1050,6 @@
   .lg-sub { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Home: the site's front door. A floodlit pitch corner (dark in both themes) carrying the claim
      and the five strongest clubs, then the facts, one match's chances and a card for each tab */
-  body[data-tab="home"] main { max-width: 1120px; }
   .home-hero { position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr);
     gap: 32px; align-items: end; min-height: min(600px, 76vh); margin-top: 4px; padding: clamp(20px, 4.4vw, 52px); border-radius: 22px;
     color-scheme: dark; color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.07);
@@ -1584,11 +1579,10 @@
   .age-slider input::-moz-range-thumb { pointer-events: auto; width: 12px; height: 12px; border-radius: 50%;
     background: var(--surface-1); border: 2px solid var(--series-blue); cursor: grab; }
   .age-slider input:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--series-blue); outline-offset: 2px; }
-  /* Wide screens: the panel becomes a column in the left margin, so the ranked list stays
-     centred; the header drops the name row on this tab to fit a full league on one screen */
+  /* Wide screens: the panel becomes a column down the left of the page; the header drops the name row on this tab to fit a full league on one screen */
   @media (min-width: 1160px) {
     section:is([data-tab="table"], [data-tab="matches"], [data-tab="stats"], [data-tab="lineups"], [data-tab="bets"]) { position: relative; }
-    body:is([data-tab="table"], [data-tab="matches"], [data-tab="stats"], [data-tab="lineups"], [data-tab="bets"]) main { max-width: 954px; padding-left: 250px; }
+    body:is([data-tab="table"], [data-tab="matches"], [data-tab="stats"], [data-tab="lineups"], [data-tab="bets"]) main { padding-left: 250px; }
     #table-side, #match-side, #stats-side, #lineup-side, #bet-side { position: absolute; top: 0; bottom: 0; right: calc(100% + 24px); width: 210px; }
     :is(#table-side, #match-side, #stats-side, #lineup-side, #bet-side) .side-stick { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow-y: auto; padding-right: 4px; }
     /* the league menu already sticks in the side column; only the date bar pins to the top */

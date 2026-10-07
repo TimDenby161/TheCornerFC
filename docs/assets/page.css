@@ -42,7 +42,6 @@ html, body { margin: 0; background: var(--page-plane); color: var(--text-primary
 body {
   font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
-  max-width: 44rem; margin: 0 auto;
   padding: calc(env(safe-area-inset-top) + 24px) 16px calc(env(safe-area-inset-bottom) + 48px);
 }
 a { color: var(--link); }
