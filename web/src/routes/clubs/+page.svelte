@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { columnTips, fitClubTable } from '#lib/actions.ts';
+	import { columnTips, fitTable } from '#lib/actions.ts';
 	import Crest from '#lib/components/Crest.svelte';
+	import ExcludeChips from '#lib/components/ExcludeChips.svelte';
 	import FilterMenu from '#lib/components/FilterMenu.svelte';
 	import Flag from '#lib/components/Flag.svelte';
 	import Move from '#lib/components/Move.svelte';
 	import { pageHref } from '#lib/menu.ts';
-	import { COUNTRY_FIRST, CONTINENTS, regionLabel } from '#lib/names.ts';
 	import { ordinal } from '#lib/site.ts';
 	import type { Sort } from '#lib/rankings.ts';
 
@@ -24,21 +24,14 @@
 	// The page's choices as they go in the address; a default is left out.
 	const choices = $derived({
 		...(data.filter !== 'all' ? { c: data.filter } : {}),
-		...(data.excluded.length ? { x: data.excluded.join(',') } : {}),
+		...(data.excluded.length ? { ex: data.excluded.join('|') } : {}),
 		...(data.search ? { q: data.search } : {}),
 		...(data.sort !== 'lt' ? { sort: data.sort } : {})
 	} as Record<string, string>);
 	const without = (...keys: string[]) => Object.fromEntries(Object.entries(choices).filter(([k]) => !keys.includes(k)));
 	const address = (q: Record<string, string>) => { const s = new URLSearchParams(q).toString(); return s ? `?${s}` : page.url.pathname; };
 
-	// Exclude: each chip's button carries the list as it would be after the press
 	const ex = $derived(new Set(data.excluded));
-	const toggled = (...keys: string[]) => {
-		const next = new Set(ex);
-		const all = keys.every((k) => next.has(k));
-		for (const k of keys) if (all) next.delete(k); else next.add(k);
-		return [...next].join(',');
-	};
 	let filtersOpen = $state(false);
 
 	// the search narrows the list as it is typed
@@ -66,23 +59,7 @@
 	<div id="table-side" class:filters-open={filtersOpen}>
 		<div class="side-stick">
 			<div class="more-panel" id="more-panel">
-				<div id="exclude-filter">
-					<form class="contents" method="get" action="/clubs" data-sveltekit-reset="false">
-						{#each Object.entries(without('x', 'q')) as [k, v] (k)}<input type="hidden" name={k} value={v} />{/each}
-						<div class="pos-head"><span>Exclude</span>
-							<button type="submit" class="pos-clear" hidden={!ex.size}>Clear</button></div>
-						<div class="ex-chips">
-							<button type="submit" name="x" value={toggled(...COUNTRY_FIRST)} class="filter-chip ex-chip" aria-pressed={COUNTRY_FIRST.every((c) => ex.has(c))} title="Exclude {COUNTRY_FIRST.join(', ')}">Big 5</button>
-							{#each COUNTRY_FIRST as c (c)}
-								<button type="submit" name="x" value={toggled(c)} class="filter-chip ex-chip" aria-pressed={ex.has(c)} title="Exclude {c}'s clubs">{c}</button>
-							{/each}
-							<span class="ex-break"></span>
-							{#each CONTINENTS as r (r)}
-								<button type="submit" name="x" value={toggled(`r:${r}`)} class="filter-chip ex-chip" aria-pressed={ex.has(`r:${r}`)} title="Exclude every club in {r}{r === 'Europe' ? ' (the big five included)' : ''}">{regionLabel(r)}</button>
-							{/each}
-						</div>
-					</form>
-				</div>
+				<ExcludeChips excluded={data.excluded} action="/clubs" keep={without('ex', 'q')} />
 			</div>
 			<FilterMenu id="table-filters" menu={data.menu} action="/clubs" keep={without('c', 'q')} />
 			<button type="button" class="filter-chip" id="more-filters" aria-expanded={filtersOpen} aria-controls="more-panel" onclick={() => (filtersOpen = !filtersOpen)}>
@@ -94,7 +71,7 @@
 		{#each Object.entries(without('q')) as [k, v] (k)}<input type="hidden" name={k} value={v} />{/each}
 		<input type="search" name="q" id="table-search" class="table-search" placeholder="Search clubs, leagues or countries" aria-label="Search" value={data.search} oninput={typed} autocomplete="off" />
 	</form>
-	<div id="table-wrap" use:columnTips use:fitClubTable={showMeta}>
+	<div id="table-wrap" use:columnTips use:fitTable={showMeta}>
 		{#if data.rows.length}
 			<div class="table-scroll">
 				<table class="leaderboard clubs">

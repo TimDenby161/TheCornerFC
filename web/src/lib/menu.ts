@@ -6,7 +6,7 @@ export type Section = { tab: string; label: string; path?: string; old?: string 
 export const MENU: { label: string; sections: Section[] }[] = [
 	{ label: 'Ratings', sections: [
 		{ tab: 'table', label: 'Clubs', path: '/clubs' },
-		{ tab: 'table', label: 'Players', old: '#/players' },
+		{ tab: 'table', label: 'Players', path: '/players' },
 		{ tab: 'leagues', label: 'Leagues', old: '#/leagues' },
 		{ tab: 'nations', label: 'Nations', old: '#/nations' }
 	] },

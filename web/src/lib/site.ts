@@ -7,6 +7,10 @@ export type Site = {
 	competitions: Record<string, Competition>;
 	teams: Record<string, string>;
 	match_fields: string[];
+	player_fields: string[];
+	player_season_fields: string[];
+	player_seasons: number[];
+	player_future_seasons: number[];
 };
 
 export const teamName = (site: Site, id: number) => site.teams[id] || `Team ${id}`;

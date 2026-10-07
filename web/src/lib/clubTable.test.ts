@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clubSearchText, filterMenu, isExcluded, knownFilter, tableCountries, tableRows, type Cups } from './clubTable';
+import { CLUB_TITLES, clubCounts, clubSearchText, filterMenu, isExcluded, knownFilter, tableCountries, tableRows, type Cups } from './clubTable';
 import { clubs } from './rankings';
 import type { Site } from './site';
 
@@ -14,7 +14,7 @@ const site: Site = {
 		307: { name: 'Pro League', country: 'Saudi-Arabia', type: 'League' }
 	},
 	teams: { 33: 'Manchester United', 42: 'Arsenal', 63: 'Leeds', 157: 'Bayern München', 364: 'Djurgården', 2932: 'Al-Hilal', 900: 'Old Club' },
-	match_fields: []
+	match_fields: [], player_fields: [], player_season_fields: [], player_seasons: [], player_future_seasons: []
 };
 const fields = ['team', 'league', 'current', 'st', 'lt', 'played', 'form', 'in_league', 'attack', 'defence', 'home', 'away'];
 const row = (team: number, league: number, lt: number, in_league = 1) => [team, league, lt + 5, lt, lt, 100, 1, in_league, lt, lt, lt, lt];
@@ -80,7 +80,7 @@ describe('isExcluded', () => {
 });
 
 describe('filterMenu', () => {
-	const menu = filterMenu(site, all, countries, cups, '40', new Set());
+	const menu = filterMenu(site, countries, '40', clubCounts(site, all, countries, cups, new Set()), CLUB_TITLES);
 	const chips = menu.nodes.flatMap((n) => (n.sep ? [] : [n, ...(n.children || []).flatMap((c) => (c.sep ? [] : [c, ...(c.children || [])]))])).flatMap((n) => (n.sep ? [] : [n]));
 	const find = (v: string) => chips.find((n) => n.chip.value === v)!;
 	it('names the choice in full and counts it', () => {

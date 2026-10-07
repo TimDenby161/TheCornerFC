@@ -20,3 +20,6 @@ form.contents { display: contents; }
 .page-tabs a[aria-current="page"] { color: var(--text-primary); border-bottom-color: var(--text-primary); }
 .page-tabs a:focus-visible { outline: 2px solid var(--series-blue); outline-offset: -2px; }
 @media (max-width: 759px) { .page-tabs a { padding: 8px 10px 7px; min-height: 44px; display: inline-flex; align-items: center; } }
+/* Players: the Ability heading holds its sort link and the + that opens the other seasons */
+table.leaderboard th.sortable .now-head a { display: inline; }
+table.leaderboard th.sortable a.years-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; }

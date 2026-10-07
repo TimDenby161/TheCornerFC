@@ -32,13 +32,13 @@ export function columnTips(wrap: HTMLElement) {
 	return { destroy() { tip.remove(); } };
 }
 
-// The Clubs table. Each club is one line (name, flag, league), so every row is the same height:
+// The Clubs and Players tables. On Clubs, each club is one line (name, flag, league), so every row is the same height:
 // where the name would be cut short, drop the league and keep just the flag; where it still would
 // be, use the club's short name if it has one (data-short); past that it ends in "…" (the full
 // name on hover). And a list that spans leagues sits in a box no taller than the window, never
 // showing fewer than its first ten rows. `capped`: whether the list is one of those.
 const TOP_ROWS = 10;
-export function fitClubTable(wrap: HTMLElement, capped: boolean) {
+export function fitTable(wrap: HTMLElement, capped: boolean) {
 	function fitNames() {
 		const names = [...wrap.querySelectorAll<HTMLElement>('table.clubs .club-cell > .team-link')];
 		for (const a of names) {
@@ -74,11 +74,33 @@ export function fitClubTable(wrap: HTMLElement, capped: boolean) {
 		width = w;
 		fitNames();
 	});
-	const again = () => { fitNames(); fitRows(); const box = wrap.querySelector('.table-scroll'); seen.disconnect(); if (box) seen.observe(box); };
+	// Players with the other seasons open: the box widens to the right, as far as the window allows
+	// (16px short of its edge), to fit the extra columns, and the search box above widens with it;
+	// their left edges and the page don't move
+	function fitYears() {
+		const box = wrap.querySelector<HTMLElement>('.table-scroll'), search = document.querySelector<HTMLElement>('#table-search');
+		if (search) search.style.width = '';
+		if (!box) return;
+		box.style.width = '';
+		const table = box.querySelector<HTMLTableElement>('table.players.years');
+		if (!table) return;
+		const room = document.documentElement.clientWidth - box.getBoundingClientRect().left - 16;
+		const need = table.scrollWidth + box.offsetWidth - box.clientWidth; // plus its borders
+		if (need > box.offsetWidth) { box.style.width = `${Math.max(box.offsetWidth, Math.min(need, room))}px`; if (search) search.style.width = box.style.width; }
+		// #, Player, Pos and Age stay put when it scrolls sideways: each column's left edge, for the
+		// stylesheet (summed widths: a sticky cell's offsetLeft moves as it sticks)
+		let left = 0;
+		[...table.tHead!.rows[0].cells].slice(0, 4).forEach((c, i) => {
+			table.style.setProperty(`--fz${i + 1}`, `${left}px`);
+			left += c.getBoundingClientRect().width;
+		});
+	}
+	const again = () => { fitNames(); fitRows(); fitYears(); const box = wrap.querySelector('.table-scroll'); seen.disconnect(); if (box) seen.observe(box); };
 	again();
-	window.addEventListener('resize', fitRows);
+	const resized = () => { fitRows(); fitYears(); };
+	window.addEventListener('resize', resized);
 	return {
 		update(now: boolean) { capped = now; width = -1; again(); },
-		destroy() { seen.disconnect(); window.removeEventListener('resize', fitRows); }
+		destroy() { seen.disconnect(); window.removeEventListener('resize', resized); }
 	};
 }

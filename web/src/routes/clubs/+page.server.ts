@@ -1,36 +1,24 @@
 import { keptDoc } from '#lib/server/database.ts';
-import { cupEntrants, cupTeamsLeft, type LeagueDoc } from '#lib/cups.ts';
-import { countryDisplay, filterMenu, isExcludeKey, knownFilter, tableCountries, tableRows, type Cups } from '#lib/clubTable.ts';
-import { CLUB_SHORT, DOMESTIC_CUPS, EURO_CUPS } from '#lib/names.ts';
+import { loadCups } from '#lib/server/cups.ts';
+import { CLUB_TITLES, clubCounts, countryDisplay, filterMenu, isExcludeKey, knownFilter, tableCountries, tableRows } from '#lib/clubTable.ts';
+import { CLUB_SHORT } from '#lib/names.ts';
 import { clubPlaces, clubs, SORTS, tiers, type RankingsDoc, type Sort } from '#lib/rankings.ts';
 import { leagueShort, teamName, type Site } from '#lib/site.ts';
 
-const FIVE_MINUTES = 300_000;
-
 export async function load({ fetch, url, setHeaders }) {
-	// the cups' own files say which clubs are in each; one that can't be read shows no clubs
-	const cupIds = [...EURO_CUPS, ...DOMESTIC_CUPS];
-	const [site, doc, ...cupDocs] = await Promise.all([
-		keptDoc<Site>(fetch, 'site'),
-		keptDoc<RankingsDoc>(fetch, 'rankings'),
-		...cupIds.map((id) => keptDoc<LeagueDoc>(fetch, `leagues/${id}`, FIVE_MINUTES).catch(() => null))
-	]);
+	const [site, doc, cups] = await Promise.all([keptDoc<Site>(fetch, 'site'), keptDoc<RankingsDoc>(fetch, 'rankings'), loadCups(fetch)]);
 	const all = clubs(doc);
 	const countries = tableCountries(site, all);
-	const cups: Cups = new Map(cupIds.map((id, i) => {
-		const lg = cupDocs[i];
-		return [id, !lg ? new Set<number>() : DOMESTIC_CUPS.includes(id) ? cupTeamsLeft(lg) : cupEntrants(lg)];
-	}));
 
 	const q = url.searchParams;
 	const asked = q.get('sort') as Sort;
 	const sort: Sort = SORTS.includes(asked) ? asked : 'lt';
 	const filter = knownFilter(q.get('c'), site, countries) ? q.get('c')! : 'all';
-	const excluded = new Set((q.get('x') || '').split(',').filter(isExcludeKey));
+	const excluded = new Set((q.get('ex') || '').split('|').filter(isExcludeKey));
 	const search = (q.get('q') || '').slice(0, 80);
 
 	const { rows, wide } = tableRows(site, all, countries, cups, { filter, excluded, search, sort });
-	const menu = filterMenu(site, all, countries, cups, filter, excluded);
+	const menu = filterMenu(site, countries, filter, clubCounts(site, all, countries, cups, excluded), CLUB_TITLES);
 	const places = clubPlaces(all);
 	const baseTier = tiers(all, 'lt'), currentTier = tiers(all, 'current');
 	// the same answer for every visitor: a shared cache may keep it for a minute

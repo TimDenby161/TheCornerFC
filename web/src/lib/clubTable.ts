@@ -122,16 +122,28 @@ export type Chip = { value: string; label: string; full: string; title: string; 
 export type MenuNode = { sep: true } | { sep?: false; chip: Chip; region?: boolean; open?: boolean; children?: MenuNode[] };
 export type Menu = { nodes: MenuNode[]; name: string; count: number };
 
-export function filterMenu(site: Site, all: Club[], countries: Country[], cups: Cups, f: string, ex: Set<string>): Menu {
+export type MenuTitles = { all: string; country: (c: string) => string; region: (r: string) => string; euro: string; cup: (n: string) => string; domestic: string; domesticCup: (n: string) => string };
+export const CLUB_TITLES: MenuTitles = {
+	all: 'All leagues', country: (c) => `All ${c} clubs`, region: (r) => `All clubs in ${r}`,
+	euro: "Clubs in this season's Champions League, Europa League or Conference League",
+	cup: (n) => `Clubs in the ${n} league phase`,
+	domestic: "Clubs still in a domestic cup (clubs yet to enter aren't counted)",
+	domesticCup: (n) => `Clubs still in the ${n} (clubs yet to enter aren't counted)`
+};
+// how many clubs each choice shows, with the exclusions applied
+export function clubCounts(site: Site, all: Club[], countries: Country[], cups: Cups, ex: Set<string>): (value: string) => number {
 	const counts = new Map<number, number>();
 	let total = 0;
 	for (const r of all) if (r.in_league && !isExcluded(site, ex, r.league)) { counts.set(r.league, (counts.get(r.league) || 0) + 1); total++; }
 	const sum = (ids: number[]) => ids.reduce((n, id) => n + (counts.get(id) || 0), 0);
-	const countOf = (value: string) => {
+	return (value) => {
 		if (value === 'all') return total;
 		if (isCupFilter(value)) { const teams = cupTeams(value, cups); return all.filter((r) => teams.has(r.team) && !isExcluded(site, ex, r.league)).length; }
 		return sum(filterLeagues(value, countries) || []);
 	};
+}
+
+export function filterMenu(site: Site, countries: Country[], f: string, countOf: (value: string) => number, titles: MenuTitles): Menu {
 	const names = new Map<string, string>();
 	const chip = (value: string, label: string, title: string, o: { group?: boolean; hasActive?: boolean; full?: string } = {}): Chip => {
 		names.set(value, o.full ?? label);
@@ -144,7 +156,7 @@ export function filterMenu(site: Site, all: Club[], countries: Country[], cups: 
 	const countryNode = (c: Country): MenuNode => {
 		if (c.leagues.length === 1) return { chip: chip(String(c.leagues[0]), c.name, `${c.name} · ${leagueName(site, c.leagues[0])}`) };
 		return {
-			chip: chip(`c:${c.name}`, c.name, `All ${c.name} clubs`, { group: true, hasActive: c.leagues.includes(Number(f)) }),
+			chip: chip(`c:${c.name}`, c.name, titles.country(c.name), { group: true, hasActive: c.leagues.includes(Number(f)) }),
 			open: activeCountry === c,
 			children: c.leagues.map((id) => ({ chip: chip(String(id), leagueName(site, id), leagueName(site, id), { full: `${c.name} · ${leagueName(site, id)}` }) }))
 		};
@@ -158,14 +170,14 @@ export function filterMenu(site: Site, all: Club[], countries: Country[], cups: 
 		const members = countries.filter((c) => c.region === region);
 		if (!members.length) return [];
 		return [{
-			chip: chip(`r:${region}`, regionLabel(region), `All clubs in ${region}`, { group: true, hasActive: activeRegion === region && f !== `r:${region}` }),
+			chip: chip(`r:${region}`, regionLabel(region), titles.region(region), { group: true, hasActive: activeRegion === region && f !== `r:${region}` }),
 			region: true, open: activeRegion === region, children: members.map(countryNode)
 		}];
 	});
 	const nodes: MenuNode[] = [
-		{ chip: chip('all', 'All', 'All leagues') },
-		cupNode('e', 'European cups', "Clubs in this season's Champions League, Europa League or Conference League", EURO_CUPS, (n) => `Clubs in the ${n} league phase`),
-		cupNode('k', 'Domestic cups', "Clubs still in a domestic cup (clubs yet to enter aren't counted)", DOMESTIC_CUPS, (n) => `Clubs still in the ${n} (clubs yet to enter aren't counted)`),
+		{ chip: chip('all', 'All', titles.all) },
+		cupNode('e', 'European cups', titles.euro, EURO_CUPS, titles.cup),
+		cupNode('k', 'Domestic cups', titles.domestic, DOMESTIC_CUPS, titles.domesticCup),
 		{ sep: true },
 		...countries.filter((c) => !c.region).map(countryNode),
 		{ sep: true },
