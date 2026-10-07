@@ -5601,7 +5601,8 @@ const FPL_ENTRY = 3996593;   // the owner's FPL entry (FPL_TEAM_ENTRY)
 const storedText = (k) => { try { return localStorage.getItem(`fc.${k}`) || ""; } catch { return ""; } };
 const storeText = (k, v) => { try { if (v) localStorage.setItem(`fc.${k}`, v); else localStorage.removeItem(`fc.${k}`); } catch { /* not stored */ } };
 
-// state.owner: undefined = not asked yet; { busy } while asking; { ok: true, docs, locks }; { ok: false, error }.
+// state.owner: undefined = not asked yet; { busy } while asking; { ok: true, docs, locks, marks }; { ok: false, error }.
+// marks: the owner's own ticks on the FPL tab, player -> [in my team, a target] (db/migrations/20261007_fpl_player_marks.sql)
 // Asked when a visitor is signed in (ownerReset), and by the three tabs when they open.
 function loadOwnerData() {
   if (state.owner) return;
@@ -5611,7 +5612,8 @@ function loadOwnerData() {
   auth().then((client) => client.rpc("fpl_owner_data", { p_entry: FPL_ENTRY }))
     .then(({ data, error }) => {
       if (error) throw error;
-      state.owner = data.ok ? { ok: true, docs: data.docs || {}, locks: data.locks || [] } : { ok: false, error: data.error };
+      state.owner = data.ok ? { ok: true, docs: data.docs || {}, locks: data.locks || [], marks: new Map((data.marks || []).map(([id, mine, target]) => [id, [mine, target]])) }
+        : { ok: false, error: data.error };
       storeFlag("fplOwner", data.ok);
     })
     .catch(() => { state.owner = { ok: false, error: "Couldn't reach the database just now." }; })
@@ -5677,14 +5679,38 @@ function fplRows() {
     return p;
   });
 }
-function renderFplNext() {
+// The prices the slider stops at: every £0.5m from the cheapest player to the dearest
+function fplPriceStops() {
+  const d = state.fplPred;
+  if (d.priceStops) return d.priceStops;
+  const prices = d.players.map((r) => r[d.fields.indexOf("price")]).filter((v) => v != null);
+  if (!prices.length) return d.priceStops = [];
+  const lo = Math.floor(Math.min(...prices) / 5), hi = Math.ceil(Math.max(...prices) / 5);
+  return d.priceStops = Array.from({ length: hi - lo + 1 }, (_, i) => (lo + i) / 2);
+}
+// handles, fill and label of the price slider, from state.fplView.price ([from, to] in £m; null = open)
+function drawFplPrice() {
+  const row = $("#fpl-price"), stops = fplPriceStops(), n = stops.length - 1;
+  if (!row || n < 1) return;
+  const [lo, hi] = state.fplView.price, a = stopIndex(stops, lo, 0), b = stopIndex(stops, hi, 1);
+  row.querySelector('[data-end="0"]').value = a;
+  row.querySelector('[data-end="1"]').value = b;
+  const fill = row.querySelector(".age-fill");
+  fill.style.left = `${(a / n) * 100}%`;
+  fill.style.right = `${100 - (b / n) * 100}%`;
+  const m = (v) => `£${v.toFixed(1)}m`;
+  row.querySelector(".rng-val").textContent = a === 0 && b === n ? "Any price" : a === 0 ? `Up to ${m(stops[b])}` : b === n ? `${m(stops[a])} and over` : `${m(stops[a])} to ${m(stops[b])}`;
+}
+// listOnly: the table alone is redrawn (the slider being dragged stays where it is)
+function renderFplNext(listOnly = false) {
   const el = $("#fpl-next");
   if (!el) return;
   const d = state.fplPred;
   if (d === undefined) { el.innerHTML = ownerGate("Predictions"); return; }
   if (d === null) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">Loading…</div>`; return; }
   if (!d || !d.players.length) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">No upcoming Premier League gameweeks yet.</div>`; return; }
-  const fp = state.fplView ||= { pos: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0 };
+  const fp = state.fplView ||= { pos: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0, price: [null, null], mark: "" };
+  const marks = state.owner?.marks || new Map(), [priceLo, priceHi] = fp.price;
   const gws = d.gameweeks, n = fp.mode === "gw" ? 1 : Math.min(+fp.mode, gws.length);
   fp.gw = Math.max(0, Math.min(fp.gw, gws.length - 1));
   const span = fp.mode === "gw" ? [fp.gw] : gws.slice(0, n).map((_, i) => i);
@@ -5699,6 +5725,8 @@ function renderFplNext() {
     return { p, cells, xp, minutes: sum("minutes"), goals: sum("goals"), assists: sum("assists"),
       price: price(p) ?? -1, value: price(p) ? xp / price(p) : -1 };
   }).filter((r) => (fp.pos === "all" || r.p.pos === fp.pos)
+      && (priceLo == null && priceHi == null || r.price > 0 && (priceLo == null || r.price >= priceLo) && (priceHi == null || r.price <= priceHi))
+      && (!fp.mark || marks.get(r.p.player)?.[fp.mark === "mine" ? 0 : 1])
       && (!q || r.p.name.toLowerCase().includes(q) || team(r.p.team).toLowerCase().includes(q)))
     .sort((a, b) => b[fp.sort] - a[fp.sort] || b.xp - a.xp);
   const list = fp.all ? rows : rows.slice(0, FPL_SHOWN);
@@ -5736,20 +5764,24 @@ function renderFplNext() {
     return `<tr class="fpl-break"><td class="fpl-parts-cell" colspan="${cols}"><div class="fpl-parts">
       ${parts.map(([k, v]) => line(labels[k] || k, stat[k], v)).join("")}</div></td></tr>`;
   };
+  // his two boxes: in my team, and a target. Saved to the owner's account as they're ticked
+  const boxes = (r) => ["mine", "target"].map((k, j) => `<td class="fpl-mark"><input type="checkbox" data-fpl-mark="${k}" data-player="${r.p.player}"${marks.get(r.p.player)?.[j] ? " checked" : ""}
+      aria-label="${escapeHtml(`${r.p.name}: ${j ? "a target" : "in my team"}`)}"></td>`).join("");
+  const markTh = `<th title="In my team">Mine</th><th title="A player I want">Target</th>`;
   const sortTh = (k, label, title = "") => `<th${title ? ` title="${title}"` : ""}><button type="button" class="fpl-sort${fp.sort === k ? " on" : ""}" data-fpl-sort="${k}" aria-pressed="${fp.sort === k}"${title ? ` aria-label="${title}"` : ""}>${label}</button></th>`;
   let head, body;
   if (fp.mode === "gw") {
-    head = `<th>#</th><th>Player</th>${sortTh("xp", "Pts")}${sortTh("minutes", "Mins")}${sortTh("goals", "G", "Expected goals")}${sortTh("assists", "A", "Expected assists")}`;
-    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td>${pts(r)}</td><td>${r.minutes}</td>
-      <td>${r.goals.toFixed(2)}</td><td>${r.assists.toFixed(2)}</td></tr>${breakdown(r, 6)}`).join("");
+    head = `<th>#</th><th>Player</th>${markTh}${sortTh("xp", "Pts")}${sortTh("minutes", "Mins")}${sortTh("goals", "G", "Expected goals")}${sortTh("assists", "A", "Expected assists")}`;
+    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}${boxes(r)}<td>${pts(r)}</td><td>${r.minutes}</td>
+      <td>${r.goals.toFixed(2)}</td><td>${r.assists.toFixed(2)}</td></tr>${breakdown(r, 8)}`).join("");
   } else {
-    head = `<th>#</th><th>Player</th>${sortTh("xp", "Total")}${sortTh("value", "Pts/£m")}`
+    head = `<th>#</th><th>Player</th>${markTh}${sortTh("xp", "Total")}${sortTh("value", "Pts/£m")}`
       + span.map((i) => `<th title="${day(gws[i].first_kickoff)}">${gwLabel(gws[i])}</th>`).join("");
-    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}<td>${pts(r)}</td>
+    body = list.map((r, i) => `<tr><td>${i + 1}</td>${who(r)}${boxes(r)}<td>${pts(r)}</td>
       <td>${r.value > 0 ? r.value.toFixed(2) : "–"}</td>${span.map((g) => {
         const cs = r.cells.filter((c) => c.gw === g);
         return !cs.length ? `<td class="fpl-gw dim-text">–</td>` : `<td class="fpl-gw${cs.length > 1 ? " double" : ""}">${cs.reduce((a, c) => a + c.xp, 0).toFixed(1)}<span>${cs.map(opp).join(" ")}</span></td>`;
-      }).join("")}</tr>${breakdown(r, 4 + span.length)}`).join("");
+      }).join("")}</tr>${breakdown(r, 6 + span.length)}`).join("");
   }
   const modes = [["gw", "Gameweek"], ["2", "Next 2"], ["5", "Next 5"], ["10", "Next 10"]].map(([k, label]) =>
     `<button type="button" class="filter-chip" data-fpl-mode="${k}" aria-pressed="${fp.mode === k}">${label}</button>`).join("");
@@ -5760,16 +5792,27 @@ function renderFplNext() {
        <button type="button" class="filter-chip" data-fpl-step="1" aria-label="Next gameweek" ${fp.gw === gws.length - 1 ? "disabled" : ""}>▶</button></span>`;
   const chips = [["all", "All"], ["G", "GK"], ["D", "DEF"], ["M", "MID"], ["F", "FWD"]].map(([k, label]) =>
     `<button type="button" class="filter-chip" data-fpl-pos="${k}" aria-pressed="${fp.pos === k}">${label}</button>`).join("");
-  const cols = (fp.mode === "gw" ? 6 : 4 + span.length);
-  el.innerHTML = `
-    <div class="stats-label">Predicted points</div>
-    <div class="fpl-filters">${modes}${pager}</div>
-    <div class="fpl-filters">${chips}
-      <input type="search" class="table-search fpl-search" id="fpl-q" placeholder="Search players or clubs" aria-label="Search players or clubs" value="${escapeHtml(fp.q)}"></div>
-    <div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table fpl-table${fp.mode === "gw" ? "" : " multi"}">
+  const cols = (fp.mode === "gw" ? 8 : 6 + span.length);
+  const count = (j) => [...marks.values()].filter((v) => v[j]).length;
+  const markChips = [["mine", "My team", 0], ["target", "Targets", 1]].map(([k, label, j]) =>
+    `<button type="button" class="filter-chip" data-fpl-marked="${k}" aria-pressed="${fp.mark === k}">${label} ${count(j)}</button>`).join("");
+  const stops = fplPriceStops().length - 1;
+  const slider = (end, label) => `<input type="range" min="0" max="${stops}" step="1" data-fpl-price data-end="${end}" aria-label="${label}">`;
+  const table = `<div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table fpl-table${fp.mode === "gw" ? "" : " multi"}">
       <thead><tr>${head}</tr></thead>
       <tbody>${body || `<tr><td colspan="${cols}">No players match.</td></tr>`}</tbody></table></div>
-    ${rows.length > FPL_SHOWN ? `<button type="button" class="show-all" id="fpl-more">${fp.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}
+    ${rows.length > FPL_SHOWN ? `<button type="button" class="show-all" id="fpl-more">${fp.all ? "Show fewer" : `Show all ${rows.length}`}</button>` : ""}`;
+  if (listOnly && $("#fpl-list")) $("#fpl-list").innerHTML = table;
+  else el.innerHTML = `
+    <div class="stats-label">Predicted points</div>
+    <div class="fpl-filters">${modes}${pager}</div>
+    <div class="fpl-filters">${chips}${markChips}
+      <input type="search" class="table-search fpl-search" id="fpl-q" placeholder="Search players or clubs" aria-label="Search players or clubs" value="${escapeHtml(fp.q)}"></div>
+    ${stops < 1 ? "" : `<div class="fpl-price" id="fpl-price">
+      <div class="age-head"><span>Price</span><span class="rng-val"></span></div>
+      <div class="age-slider"><div class="age-track"><div class="age-fill"></div></div>${slider(0, "Price: from")}${slider(1, "Price: to")}</div></div>`}
+    <div class="stats-note mt-warn" id="fpl-mark-msg" role="alert" hidden></div>
+    <div id="fpl-list">${table}</div>
     <div class="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, penalties, assists, FPL assists, clean sheets,
       goals conceded, saves, penalty saves, cards, bonus and defensive contributions. Bonus is rebuilt from match stats (it tracks FPL's own closely).
       Defensive contributions combine each player's tackles, blocks and interceptions with his own FPL record this season, which also counts clearances.
@@ -5781,15 +5824,17 @@ function renderFplNext() {
       In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
       This is ${escapeHtml(d.model)}, designed after the backtest below and still being tested on upcoming gameweeks: a guide, not a pick list.</div>`;
   // multi-gameweek: # and Player freeze when the table scrolls sideways; Player's left edge is #'s width
-  const table = el.querySelector(".fpl-table.multi");
-  if (table) table.style.setProperty("--fz2", `${table.tHead.rows[0].cells[0].getBoundingClientRect().width}px`);
+  drawFplPrice();
+  const multi = el.querySelector(".fpl-table.multi");
+  if (multi) multi.style.setProperty("--fz2", `${multi.tHead.rows[0].cells[0].getBoundingClientRect().width}px`);
 }
 $("#fpl-body").addEventListener("click", (e) => {
   const t = (sel) => e.target.closest(sel);
   const pos = t("[data-fpl-pos]"), sort = t("[data-fpl-sort]"), mode = t("[data-fpl-mode]"), step = t("[data-fpl-step]");
-  const brk = t("[data-fpl-break]");
-  if (!pos && !sort && !mode && !step && !brk && e.target.id !== "fpl-more") return;
+  const brk = t("[data-fpl-break]"), marked = t("[data-fpl-marked]");
+  if (!pos && !sort && !mode && !step && !brk && !marked && e.target.id !== "fpl-more") return;
   const fp = state.fplView;
+  if (marked) { fp.mark = fp.mark === marked.dataset.fplMarked ? "" : marked.dataset.fplMarked; fp.all = false; }
   if (brk) fp.open = fp.open === +brk.dataset.fplBreak ? null : +brk.dataset.fplBreak;
   if (pos) { fp.pos = pos.dataset.fplPos; fp.all = false; }
   if (sort) fp.sort = sort.dataset.fplSort;
@@ -5798,7 +5843,36 @@ $("#fpl-body").addEventListener("click", (e) => {
   if (e.target.id === "fpl-more") fp.all = !fp.all;
   renderFplNext();
 });
+// A tick is shown at once and saved to the owner's account; one that can't be saved is undone
+$("#fpl-body").addEventListener("change", async (e) => {
+  const box = e.target.closest("[data-fpl-mark]");
+  if (!box || !state.owner?.ok) return;
+  const id = +box.dataset.player, marks = state.owner.marks, was = marks.get(id) || [false, false];
+  const now = box.dataset.fplMark === "mine" ? [box.checked, was[1]] : [was[0], box.checked];
+  const put = (v) => { if (v[0] || v[1]) marks.set(id, v); else marks.delete(id); };
+  put(now);
+  $("#fpl-mark-msg").hidden = true;
+  let failed = "";
+  try {
+    const { data, error } = await (await auth()).rpc("mark_fpl_player", { p_entry: FPL_ENTRY, p_player: id, p_mine: now[0], p_target: now[1] });
+    if (error || !data?.ok) failed = data?.error || "Couldn't save that just now.";
+  } catch { failed = "Couldn't save that just now."; }
+  if (failed && (marks.get(id) || [false, false]).join() === now.join()) put(was);          // unless he has changed it again since
+  renderFplNext();
+  if (failed && $("#fpl-mark-msg")) { $("#fpl-mark-msg").textContent = `${failed} The box has been put back.`; $("#fpl-mark-msg").hidden = false; }
+});
 $("#fpl-body").addEventListener("input", (e) => {
+  if (e.target.matches("[data-fpl-price]")) {
+    // handles can't cross; the handle and label move straight away, the table at most once a frame
+    const row = $("#fpl-price"), stops = fplPriceStops(), n = stops.length - 1;
+    let a = +row.querySelector('[data-end="0"]').value, b = +row.querySelector('[data-end="1"]').value;
+    if (a > b) { if (e.target.dataset.end === "0") a = b; else b = a; }
+    state.fplView.price = [a === 0 ? null : stops[a], b === n ? null : stops[b]];
+    state.fplView.all = false;
+    drawFplPrice();
+    state.fplFrame ||= requestAnimationFrame(() => { state.fplFrame = 0; renderFplNext(true); });
+    return;
+  }
   if (e.target.id !== "fpl-q") return;
   state.fplView.q = e.target.value;
   state.fplView.all = false;
