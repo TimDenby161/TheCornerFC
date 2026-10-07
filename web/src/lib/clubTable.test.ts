@@ -13,7 +13,8 @@ const site: Site = {
 		113: { name: 'Allsvenskan', country: 'Sweden', type: 'League' },
 		307: { name: 'Pro League', country: 'Saudi-Arabia', type: 'League' }
 	},
-	teams: { 33: 'Manchester United', 42: 'Arsenal', 63: 'Leeds', 157: 'Bayern München', 364: 'Djurgården', 2932: 'Al-Hilal', 900: 'Old Club' }
+	teams: { 33: 'Manchester United', 42: 'Arsenal', 63: 'Leeds', 157: 'Bayern München', 364: 'Djurgården', 2932: 'Al-Hilal', 900: 'Old Club' },
+	match_fields: []
 };
 const fields = ['team', 'league', 'current', 'st', 'lt', 'played', 'form', 'in_league', 'attack', 'defence', 'home', 'away'];
 const row = (team: number, league: number, lt: number, in_league = 1) => [team, league, lt + 5, lt, lt, 100, 1, in_league, lt, lt, lt, lt];

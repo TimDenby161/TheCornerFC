@@ -6,6 +6,7 @@ export type Site = {
 	generated_at: string;
 	competitions: Record<string, Competition>;
 	teams: Record<string, string>;
+	match_fields: string[];
 };
 
 export const teamName = (site: Site, id: number) => site.teams[id] || `Team ${id}`;
@@ -33,3 +34,19 @@ export function crestInitials(name: string, skip: boolean) {
 	).toUpperCase();
 }
 export const crestHue = (id: number) => Math.round(((Number(id) || 0) * 137.508) % 360) % 360;
+
+// A competition's name where competitions from several countries are listed together: its short
+// name, or its own name with the country added when another competition shares it
+const nameCounts = new WeakMap<Site, Map<string, number>>();
+export function compLabel(site: Site, id: number): string {
+	const c = site.competitions[id];
+	if (!c) return `Competition ${id}`;
+	if (SHORT_NAMES[id]) return SHORT_NAMES[id];
+	let counts = nameCounts.get(site);
+	if (!counts) {
+		counts = new Map();
+		for (const x of Object.values(site.competitions)) counts.set(x.name, (counts.get(x.name) || 0) + 1);
+		nameCounts.set(site, counts);
+	}
+	return c.country === 'England' || c.country === 'World' || counts.get(c.name) === 1 ? c.name : `${c.name} (${countryName(c)})`;
+}

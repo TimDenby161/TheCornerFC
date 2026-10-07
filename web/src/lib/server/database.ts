@@ -45,7 +45,7 @@ export async function siteDoc<T>(fetch: Fetch, key: string, wait?: number): Prom
 export async function siteAsk<T>(
 	fetch: Fetch,
 	fn: string,
-	params: Record<string, string>,
+	params: Record<string, unknown>,
 	token?: string
 ): Promise<T> {
 	const r = await ask(() =>
@@ -74,3 +74,20 @@ export function keptDoc<T>(fetch: Fetch, key: string, forMs = 60_000): Promise<T
 	doc.catch(() => kept.delete(key));
 	return doc;
 }
+
+// The same for a question every visitor who isn't signed in gets the same answer to (a club's
+// matches, say). Never for a signed-in visitor's: theirs may hold paid rows.
+export function keptAsk<T>(fetch: Fetch, fn: string, params: Record<string, unknown>, forMs = 60_000): Promise<T> {
+	const key = `${fn}?${JSON.stringify(params)}`;
+	const have = kept.get(key);
+	if (have && Date.now() - have.at < forMs) return have.doc as Promise<T>;
+	const doc = siteAsk<T>(fetch, fn, params);
+	kept.set(key, { at: Date.now(), doc });
+	doc.catch(() => kept.delete(key));
+	// a Worker lives a long time: don't let the answers to one-off questions pile up
+	if (kept.size > 500) for (const [k, v] of kept) if (Date.now() - v.at > forMs) kept.delete(k);
+	return doc;
+}
+// A row that may not be there (a club with no file of its own): null in place of "not found"
+export const keptDocOrNull = <T>(fetch: Fetch, key: string, forMs?: number): Promise<T | null> =>
+	keptDoc<T>(fetch, key, forMs).catch((err) => { if (err instanceof DatabaseError && err.missing) return null; throw err; });

@@ -51,7 +51,7 @@
 	// a row opens its club's page, wherever on it the click lands
 	function rowClick(e: MouseEvent, team: number) {
 		if ((e.target as HTMLElement).closest('a')) return;
-		location.href = pageHref('club', team);
+		goto(pageHref('club', team));
 	}
 	const showMeta = $derived(!!data.search || data.wide);
 	const title = $derived(data.filter === 'all' ? 'Clubs' : `${data.menu.name} clubs`);
