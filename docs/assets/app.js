@@ -5312,17 +5312,21 @@ function renderCountryClubs() {
 // ------------------------------------------------------------------ Leagues
 // Every league with rated clubs, laid out like the Clubs ranking: strongest first by the average
 // Baseline Strength of its clubs (the number on each league page), or by another column
-function renderLeagues() {
-  const body = $("#leagues-body");
-  if (!state.rankings) { body.innerHTML = `<div class="empty-state">Loading leagues…</div>`; return; }
+// Every league with rated clubs this season, with the averages of their ratings
+function leagueAverages() {
   const avgOf = (rows, k) => rows.reduce((t, r) => t + r[k], 0) / rows.length;
-  const key = state.leaguesSort ||= "lt";
-  const leagues = Object.entries(state.data.competitions).filter(([, c]) => c.type === "League").map(([lid, c]) => {
+  return Object.entries(state.data.competitions).filter(([, c]) => c.type === "League").map(([lid, c]) => {
     const clubs = leagueClubs(Number(lid));
     if (!clubs.length) return null;
     const lt = avgOf(clubs, "lt"), current = avgOf(clubs, "current");
     return { lid: Number(lid), ...c, clubs: clubs.length, lt, current, trend: Math.round(current) - Math.round(lt) };
-  }).filter(Boolean).sort((a, b) => b[key] - a[key] || b.lt - a.lt);
+  }).filter(Boolean);
+}
+function renderLeagues() {
+  const body = $("#leagues-body");
+  if (!state.rankings) { body.innerHTML = `<div class="empty-state">Loading leagues…</div>`; return; }
+  const key = state.leaguesSort ||= "lt";
+  const leagues = leagueAverages().sort((a, b) => b[key] - a[key] || b.lt - a.lt);
   if (!leagues.length) { body.innerHTML = `<div class="empty-state">No leagues yet.</div>`; return; }
   const th = (k, label, tip, cls = "") =>
     `<th class="num sortable${key === k ? " active" : ""}${cls}" tabindex="0"${key === k ? ` aria-sort="descending"` : ""} data-lgsort="${k}" title="${escapeHtml(tip + " Click to sort.")}">${label}</th>`;
@@ -6397,10 +6401,14 @@ function renderTabHead(key) {
 // (homeTab), and the menu's Home opens it for anyone. Drawn from what every visit already has
 // (the names and the club ratings), so it asks the database for nothing of its own.
 const homeTab = () => state.account?.user || storedText("auth") ? "table" : "home";
-const HOME_CARDS = [
-  ["clubs", "Clubs", "Who is actually the strongest?"], ["players", "Players", "Every player, from 0 to 100"],
-  ["matches", "Matches", "The chances before kick-off"], ["leagues", "Leagues", "League against league"],
-  ["nations", "Nations", "Every international since 1872"], ["stats", "Stats", "The model, marked against results"]];
+// Home's showcase, a panel for each part of the site: [tab its link opens, the link's words, its
+// headline, columns of 12 it takes on a wide screen]. Each is drawn with its words at once and
+// a sample of the real thing (#home-s-<tab>) when that arrives; a sample that can't be had is left out.
+const HOME_PANELS = [
+  ["players", "Players", "Every player, from 0 to 100", 7], ["lineups", "Line-up record", "The eleven, before the team sheet", 5],
+  ["matches", "Matches", "The chances before kick-off", 6], ["stats", "Stats", "The model, marked against results", 6],
+  ["leagues", "Leagues", "League against league", 6], ["nations", "Nations", "Every international since 1872", 6]];
+const HOME_INTRO = { lineups: "Each club's predicted starting eleven for its next match, marked against the real team sheet afterwards." };
 function renderHome() {
   state.drawn.add("home");
   const clubs = state.rankings.length, comps = Object.keys(state.data.competitions).length;
@@ -6416,9 +6424,83 @@ function renderHome() {
     ["1872", "where the national team ratings begin"],
     [fmtShortDate(state.data.generated_at), "ratings last updated"],
   ].map(([n, what]) => `<div><dt>${escapeHtml(n)}</dt><dd>${escapeHtml(what)}</dd></div>`).join("");
-  $("#home-cards").innerHTML = HOME_CARDS.map(([key, name, line], i) =>
-    `<a class="home-card" href="#/${TAB_ROUTES[key] || key}"><span class="home-card-no">${pad(i + 1)}</span><span class="home-card-line">${line}</span><span class="home-card-sub">${escapeHtml(TAB_INFO[key].intro)}</span><span class="home-card-name">${name}</span></a>`).join("");
-  if (top[0]) quiet(ensureTeam(top[0].team)).then(() => renderHomeCall(top[0].team));
+  $("#home-show").innerHTML = HOME_PANELS.map(([key, name, line, wide], i) =>
+    `<section class="home-panel hp-w${wide}"><span class="home-card-no">${pad(i + 1)}</span><h4 class="home-card-line">${line}</h4><p class="home-card-sub">${escapeHtml(HOME_INTRO[key] || TAB_INFO[key].intro)}</p>
+      <div class="home-sample" id="home-s-${key}"></div><a class="home-card-name" id="home-l-${key}" href="#/${TAB_ROUTES[key] || key}">${name}</a></section>`).join("");
+  homeLeagues();
+  quiet(homePlayers());
+  quiet(homeStats());
+  quiet(homeNations());
+  quiet(homeXi());
+  if (top[0]) quiet(ensureTeam(top[0].team)).then(() => homeCall(top[0].team));
+}
+const homeSample = (key, html) => { const el = $(`#home-s-${key}`); if (el) el.innerHTML = html; };
+// The first ten of the Players list, as it opens
+async function homePlayers() {
+  const d = await siteAsk("site_players", { p_limit: 10 });
+  if (d.paywall) state.paywall = true;
+  const rows = addPlayers(d.rows).filter((p) => p.seasons?.[0] != null);
+  if (!rows.length) return;
+  homeSample("players", `<ol class="home-top">${rows.map((p) =>
+    `<li>${p.team ? clubCrest(p.team, "club-logo") : `<span class="club-logo"></span>`}<span class="lg-main"><span class="home-who"><a class="team-link" href="#/player/${p.id}">${escapeHtml(p.name)}</a>${playerFlag(p.nationality)}</span><span class="lg-sub">${escapeHtml(p.team ? teamName(p.team) : "Club not known")}${p.league != null && leagueShort(p.league) ? ` · ${escapeHtml(leagueShort(p.league))}` : ""}</span></span><span class="home-pos">${POS_LABEL[p.position] || escapeHtml(p.position || "")}</span>${rankChipSmall(p.seasons[0])}</li>`).join("")}</ol>`);
+}
+// The example line-up: the one predicted XI the database gives everyone (site_sample_xi, the
+// strongest club's next match; db/migrations/20261007_site_sample_xi.sql), on a pitch. Where it
+// has none, a line-up from the Line-up record instead: the XI that started, marked against the
+// one predicted for it, for the strongest club with a match in the record's last three weeks
+// (as far back as site_lineups keeps them).
+async function homeXi() {
+  const toXi = (rows) => rows.map(([pid, name, pos, rank]) => ({ p: { id: pid, name }, b: { label: pos }, rank, chance: null, mins: null }));
+  const versus = (name, team, home, away, kickoff) => `${name(team)} ${home === team ? "v" : "at"} ${name(home === team ? away : home)} · ${fmtDay(kickoff)}`;
+  const one = await siteAsk("site_sample_xi", {}).catch((err) => { console.error(err); return null; });
+  let xi, tag = "Predicted XI", what, score = "";
+  if (one?.players?.length) {
+    for (const r of one.players) r[1] = decodeEntities(r[1]);
+    xi = toXi(one.players);
+    what = versus(teamName, one.team, one.home, one.away, one.kickoff);
+  } else {
+    const rec = await getJsonOrNull("data/lineups.json");
+    const at = Object.fromEntries((rec?.fields || []).map((k, i) => [k, i]));
+    const strength = (r) => state.rankByTeam.get(r[at.team])?.current ?? 0;
+    const r = (rec?.rows || []).filter((x) => Date.parse(x[at.kickoff]) > Date.now() - 20 * 864e5)
+      .sort((a, b) => strength(b) - strength(a) || Date.parse(b[at.kickoff]) - Date.parse(a[at.kickoff]))[0];
+    const fx = r && await loadLineups(r[at.fixture]);
+    const started = fx?.actual?.[String(r[at.team])], predicted = fx?.prematch?.[String(r[at.team])];
+    if (!started?.length || !predicted?.length) return;
+    xi = toXi(started);
+    const hits = markPredicted(xi, predicted);
+    for (const c of xi) delete c.instead;        // no room here for the model's other pick under each miss
+    const name = (id) => state.data.teams[id] || rec.teams?.[id] || teamName(id);
+    tag = "Predicted against the team sheet";
+    what = versus(name, r[at.team], r[at.home] ? r[at.team] : r[at.opponent], r[at.home] ? r[at.opponent] : r[at.team], r[at.kickoff]);
+    score = `<span class="xi-score xi-score-${hits >= 9 ? "good" : hits >= 7 ? "ok" : "poor"}" title="Starters the model predicted">${hits}/${xi.length} predicted</span>`;
+  }
+  homeSample("lineups", `<p class="home-xi-head${xi.some((c) => c.rank != null) ? "" : " home-xi-bare"}"><span><span class="home-call-tag">${tag}</span>${escapeHtml(what)}</span>${score}</p>${xiPitch(xi, null, { note: "" })}
+    ${score ? `<div class="xi-legend"><span><i class="xi-key xi-hit"></i>Predicted to start</span><span><i class="xi-key xi-miss"></i>Not predicted</span></div>` : ""}`);
+}
+// The last 30 days of the Stats tab in three numbers
+async function homeStats() {
+  await loadStats();
+  const s = state.stats?.ranges?.["30d"]?.all;
+  if (!s) return;
+  homeSample("stats", `<dl class="home-nums">${[
+    [pct(s.correct, 0), "right result, last 30 days"],
+    [pct(s.home_rate, 0), "by picking the home team every time"],
+    [s.n.toLocaleString(), "matches marked"],
+  ].map(([n, what]) => `<div><dt>${n}</dt><dd>${what}</dd></div>`).join("")}</dl>`);
+}
+function homeLeagues() {
+  const rows = leagueAverages().sort((a, b) => b.lt - a.lt).slice(0, 5);
+  if (!rows.length) return;
+  homeSample("leagues", `<ol class="home-top">${rows.map((c) =>
+    `<li>${leagueCrest(c.lid)}<span class="lg-main"><a class="team-link" href="${leagueHref(c.lid)}">${escapeHtml(c.name)}</a><span class="lg-sub">${escapeHtml(countryDisplay(c.country))} · ${c.clubs} clubs</span></span><span class="rel-chip rel-${ratingTierOf(c.lt)}">${Math.round(c.lt)}</span></li>`).join("")}</ol>`);
+}
+async function homeNations() {
+  await loadNations();
+  const d = state.nations;
+  if (!d) return;
+  homeSample("nations", `<ol class="home-top">${[...d.nations].sort((a, b) => b.current - a.current).slice(0, 5).map((n) =>
+    `<li><span class="home-flag-cell">${flagImg(n.name)}</span><span class="lg-main"><span class="team-link">${escapeHtml(n.name)}</span><span class="lg-sub">${escapeHtml(n.confed || "")}</span></span><span class="rel-chip rel-${nationTier(d, n.current)}">${Math.round(n.current).toLocaleString()}</span><span class="home-form">${n.change == null ? "" : signedHtml(n.change)}</span></li>`).join("")}</ol>`);
 }
 // The headline's number, counted up to once; set outright where motion is turned down
 function countUp(el, n) {
@@ -6432,19 +6514,17 @@ function countUp(el, n) {
   requestAnimationFrame(step);
 }
 // One match's chances as a taste of the Matches tab: the top club's next match that has the
-// model's chances (the one request Home makes of its own). Left out when there isn't one.
-function renderHomeCall(team) {
+// model's chances. Left out when there isn't one.
+function homeCall(team) {
   const m = state.data.matches.find((x) => (x.home === team || x.away === team) && x.status === "NS" && x.p_home != null && new Date(x.kickoff) > Date.now());
   if (!m) return;
-  const [h, d, a] = shownProbs(m, "p"), el = $("#home-call");
-  el.href = `#/matches?d=${localDateStr(new Date(m.kickoff))}`;
-  el.innerHTML = `<span><span class="home-call-tag">The model's call</span>
-      <span class="home-call-teams">${escapeHtml(teamName(m.home))} <i>v</i> ${escapeHtml(teamName(m.away))}</span>
-      <span class="home-call-when">${escapeHtml(compLabel(m.league))} · ${fmtDay(m.kickoff)}, ${fmtTime(m.kickoff)}</span></span>
-    <span><span class="home-call-bar" role="img" aria-label="${escapeHtml(`${teamName(m.home)} ${h}%, draw ${d}%, ${teamName(m.away)} ${a}%`)}">
-        <span class="prob-home" data-sw="${h}%"></span><span class="prob-draw" data-sw="${d}%"></span><span class="prob-away" data-sw="${a}%"></span></span>
-      <span class="home-call-key" aria-hidden="true"><span><b>${h}%</b>${escapeHtml(teamName(m.home))}</span><span><b>${d}%</b>Draw</span><span><b>${a}%</b>${escapeHtml(teamName(m.away))}</span></span></span>`;
-  el.hidden = false;
+  const [h, d, a] = shownProbs(m, "p");
+  $("#home-l-matches").href = `#/matches?d=${localDateStr(new Date(m.kickoff))}`;
+  homeSample("matches", `<span class="home-call-teams">${escapeHtml(teamName(m.home))} <i>v</i> ${escapeHtml(teamName(m.away))}</span>
+    <span class="home-call-when">${escapeHtml(compLabel(m.league))} · ${fmtDay(m.kickoff)}, ${fmtTime(m.kickoff)}</span>
+    <span class="home-call-bar" role="img" aria-label="${escapeHtml(`${teamName(m.home)} ${h}%, draw ${d}%, ${teamName(m.away)} ${a}%`)}">
+      <span class="prob-home" data-sw="${h}%"></span><span class="prob-draw" data-sw="${d}%"></span><span class="prob-away" data-sw="${a}%"></span></span>
+    <span class="home-call-key" aria-hidden="true"><span><b>${h}%</b>${escapeHtml(teamName(m.home))}</span><span><b>${d}%</b>Draw</span><span><b>${a}%</b>${escapeHtml(teamName(m.away))}</span></span>`);
 }
 $("#home-join").addEventListener("click", () => {
   openAccount("signup");

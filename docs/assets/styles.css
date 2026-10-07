@@ -1073,7 +1073,7 @@
   .home-ghost { appearance: none; color: inherit; background: transparent; border: 1px solid color-mix(in srgb, currentColor 32%, transparent); padding: 12px 19px; }
   .home-ghost[hidden] { display: none; }
   .home-ghost:hover { background: color-mix(in srgb, currentColor 9%, transparent); }
-  .home-ghost:focus-visible, .home-go:focus-visible, .home-card:focus-visible, .home-call:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
+  .home-ghost:focus-visible, .home-go:focus-visible, .home-card-name:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
   .home-board { min-width: 0; padding: 14px 16px 12px; border: 1px solid var(--border); border-radius: 16px; background: rgba(13,16,20,0.62);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 24px 60px -24px rgba(0,0,0,0.8); }
   .home-board-head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
@@ -1097,15 +1097,10 @@
   .home-facts div + div { border-left: 1px solid var(--gridline); }
   .home-facts dt { font-size: clamp(24px, 3vw, 34px); line-height: 1; font-weight: 900; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
   .home-facts dd { margin: 6px 0 0; font-size: 13px; line-height: 1.35; color: var(--text-secondary); }
-  .home-call { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 14px 28px; align-items: center; margin-top: 14px; padding: 20px 22px;
-    border: 1px solid var(--border); border-radius: 16px; background: var(--surface-1); color: inherit; text-decoration: none; }
-  .home-call[hidden] { display: none; }
-  .home-call:hover, .home-card:hover { border-color: var(--series-blue); }
-  .home-call > span { display: block; min-width: 0; }
   .home-call-tag { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue-text); }
-  .home-call-teams { display: block; margin: 6px 0 4px; font-size: clamp(20px, 2.6vw, 28px); line-height: 1.1; font-weight: 900; letter-spacing: -0.02em; text-wrap: balance; }
+  .home-call-teams { display: block; margin: 0 0 4px; font-size: clamp(20px, 2.6vw, 28px); line-height: 1.1; font-weight: 900; letter-spacing: -0.02em; text-wrap: balance; }
   .home-call-teams i { font-style: normal; font-weight: 600; color: var(--text-muted); }
-  .home-call-when { display: block; font-size: 13px; color: var(--text-secondary); }
+  .home-call-when { display: block; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
   .home-call-bar { display: flex; gap: 3px; height: 14px; border-radius: 7px; overflow: hidden; }
   .home-call-bar span { display: block; height: 100%; min-width: 4px; }
   .home-call-key { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--text-secondary); }
@@ -1113,19 +1108,42 @@
   .home-call-key span:nth-child(2) { text-align: center; } .home-call-key span:nth-child(3) { text-align: right; }
   .home-call-key b { display: block; font-size: clamp(20px, 2.4vw, 26px); line-height: 1.1; font-weight: 900; color: var(--text-primary); font-variant-numeric: tabular-nums; }
   .home-head { margin: 40px 0 14px; font-size: clamp(24px, 3vw, 34px); line-height: 1.05; font-weight: 900; letter-spacing: -0.03em; }
-  .home-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
-  .home-card { display: flex; flex-direction: column; gap: 8px; min-height: 172px; padding: 18px 18px 16px; border: 1px solid var(--border); border-radius: 16px;
-    background: var(--surface-1); color: inherit; text-decoration: none; transition: transform .18s ease, border-color .18s ease; }
+  /* the showcase: a panel for each part of the site, twelve columns on a wide screen */
+  .home-show { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+  .home-panel { grid-column: span 12; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 18px 18px 16px; border: 1px solid var(--border); border-radius: 16px;
+    background: var(--surface-1); }
+  .home-panel :is(h4, p) { margin: 0; }
+  .home-sample { margin: 10px 0 6px; }
+  .home-sample:empty { display: none; }
+  .home-panel .home-top .rel-chip { min-width: 40px; text-align: center; font-size: 14px; }
+  .home-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .home-who .flag { flex: none; }
+  .home-pos { min-width: 34px; text-align: right; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+  .home-flag-cell { display: flex; align-items: center; justify-content: center; width: 32px; flex: none; }
+  .home-flag-cell .flag { width: 28px; height: auto; }
+  .home-xi-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin: 0 0 10px; font-size: 14px; font-weight: 700; }
+  .home-xi-head .home-call-tag { margin-bottom: 3px; }
+  .home-sample .pp-section { margin: 0; }
+  .home-xi-bare + .pp-section .pp-rank { display: none; }      /* a line-up from the record whose players have no rank */
+  .home-sample .pitch.pp-pitch { max-width: 400px; }
+  .home-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
+  .home-nums dt { font-size: clamp(28px, 3.4vw, 44px); line-height: 1; font-weight: 900; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .home-nums div:first-child dt { color: var(--blue-text); }
+  .home-nums dd { margin: 6px 0 0; font-size: 13px; line-height: 1.35; color: var(--text-secondary); }
   .home-card-no { font-size: 12px; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   .home-card-line { font-size: 21px; line-height: 1.12; font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
   .home-card-sub { font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
-  .home-card-name { margin-top: auto; padding-top: 6px; font-size: 13px; font-weight: 700; color: var(--blue-text); }
+  .home-card-name { align-self: flex-start; margin-top: auto; padding-top: 6px; font-size: 13px; font-weight: 700; color: var(--blue-text); text-decoration: none; }
+  .home-card-name:hover { text-decoration: underline; }
   .home-close { margin: 44px 0 8px; padding: clamp(28px, 5vw, 52px) clamp(20px, 4vw, 44px); border-radius: 22px; background: var(--chip-bg); }
   .home-close-line { margin: 0 0 10px; font-size: clamp(30px, 4.6vw, 54px); line-height: 0.98; font-weight: 900; letter-spacing: -0.04em; }
   .home-close-sub { margin: 0 0 22px; max-width: 52ch; font-size: 16px; line-height: 1.5; color: var(--text-secondary); }
   .home-close .home-go { box-shadow: none; }
   @media (max-width: 1099px) {
     .home-hero { grid-template-columns: minmax(0, 1fr); min-height: 0; padding-top: clamp(28px, 7vw, 64px); }
+  }
+  @media (min-width: 1100px) {
+    .hp-w5 { grid-column: span 5; } .hp-w6 { grid-column: span 6; } .hp-w7 { grid-column: span 7; }
   }
   @media (max-width: 640px) {
     .home-hero { border-radius: 18px; gap: 24px; }
@@ -1134,8 +1152,6 @@
     .home-facts { grid-template-columns: repeat(2, 1fr); }
     .home-facts div:nth-child(3) { border-left: 0; }
     .home-facts div:nth-child(n+3) { border-top: 1px solid var(--gridline); }
-    .home-call { grid-template-columns: minmax(0, 1fr); }
-    .home-card { min-height: 0; }
   }
   @media (prefers-reduced-motion: no-preference) {
     .panel[data-tab="home"][data-active="true"] :is(.home-copy > *, .home-board) { animation: home-rise .7s cubic-bezier(.2,.7,.2,1) both; }
@@ -1145,7 +1161,6 @@
     .panel[data-tab="home"][data-active="true"] .home-board { animation-delay: .3s; }
     .home-flag { animation: home-wave 2.6s ease-in-out infinite alternate; }
     .home-dot { animation: home-pulse 2s ease-out infinite; }
-    .home-card:hover { transform: translateY(-3px); }
   }
   @keyframes home-rise { from { opacity: 0; transform: translateY(18px); } }
   @keyframes home-wave { from { transform: skewY(-5deg) scaleX(1); } to { transform: skewY(5deg) scaleX(0.93); } }
