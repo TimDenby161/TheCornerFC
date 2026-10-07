@@ -40,11 +40,10 @@
     <button type="button" class="menu-btn" id="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="main-menu">&#9776;</button>
     <a class="brand" id="brand" href="./"><span class="brand-mark" aria-hidden="true"></span><span>The Corner FC</span></a>
     <h1 class="app-title" id="app-title">Clubs</h1>
-    <button type="button" class="account-btn" id="account-btn" aria-haspopup="dialog">Sign in</button>
   </div>
   <nav class="tabs" id="main-menu" aria-label="Main">
-    <button type="button" data-tab="home">Home</button>
-    <!-- the menu in groups, each under its name: a short list to read, not one long one -->
+    <!-- the menu in groups, each under its name: a short list to read, not one long one. Home is the site's name, above -->
+    <div class="menu-links">
     <p class="nav-label">Ratings</p>
     <button type="button" data-tab="table" data-view="clubs" aria-current="page">Clubs</button>
     <button type="button" data-tab="table" data-view="players">Players</button>
@@ -61,13 +60,18 @@
     <button type="button" data-tab="fpl" id="fpl-tab" hidden>FPL</button>
     <button type="button" data-tab="myteam" id="myteam-tab" hidden>My FPL team</button>
     <button type="button" data-tab="efl" id="efl-tab" hidden>EFL Fantasy</button>
-    <div class="theme-pick seg" id="theme-pick" role="group" aria-label="Theme">
-      <button type="button" data-theme="" aria-pressed="true">Device</button>
-      <button type="button" data-theme="light" aria-pressed="false">Light</button>
-      <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
-    </div>
     <!-- Room kept for an advert (see ADS in app.js). Empty and out of the layout until adverts are switched on -->
     <div class="ad-slot ad-rail" id="ad-rail" aria-hidden="true"></div>
+    </div>
+    <!-- the foot of the menu, always in view: the theme, then the visitor's own button in the bottom left corner -->
+    <div class="menu-foot">
+      <div class="theme-pick seg" id="theme-pick" role="group" aria-label="Theme">
+        <button type="button" data-theme="" aria-pressed="true">Device</button>
+        <button type="button" data-theme="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+      </div>
+      <button type="button" class="account-btn" id="account-btn" aria-haspopup="dialog"><span class="account-mark" aria-hidden="true"></span><span id="account-label">Sign in</span></button>
+    </div>
   </nav>
   <div class="menu-backdrop" id="menu-backdrop" hidden></div>
 </header>

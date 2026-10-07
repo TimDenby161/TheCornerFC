@@ -93,7 +93,6 @@
   html {
     height: 100%;
     overflow: hidden;
-    scrollbar-gutter: stable;
   }
   html, body {
     margin: 0; padding: 0;
@@ -183,6 +182,9 @@
   /* Main menu: a column down the left. Wide screens keep it open as a sidebar;
      phones slide it in from the menu button. */
   nav.tabs { display: flex; flex-direction: column; }
+  /* the links scroll if the window is short; the foot (theme, sign in or profile) stays in view below them */
+  .menu-links { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .menu-foot { flex: none; display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
   nav.tabs button {
     appearance: none; border: none; background: transparent; cursor: pointer; text-align: left;
     color: var(--text-secondary); font-family: inherit; font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
@@ -192,7 +194,6 @@
   nav.tabs button:focus-visible { outline: 2px solid var(--text-primary); outline-offset: -2px; }
   nav.tabs button[aria-current="page"] { background: var(--text-primary); color: var(--surface-1); }
   /* Theme: a three-way toggle at the foot of the menu (the look is .seg's) */
-  nav.tabs .theme-pick { margin: 16px 0 0; }
   nav.tabs .theme-pick button { flex: 1; text-align: center; font-size: 12px; padding: 6px 4px; }
   .menu-btn {
     appearance: none; border: none; background: transparent; cursor: pointer; color: var(--text-primary);
@@ -200,13 +201,18 @@
   }
   .app-title { margin: 0 0 0 auto; font-size: 13px; font-weight: 600; color: var(--text-secondary);
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .account-btn {
-    appearance: none; flex: none; border: 1px solid var(--text-muted); background: transparent; cursor: pointer;
-    color: var(--text-primary); font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-    padding: 6px 12px; white-space: nowrap;
+  nav.tabs .account-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--text-muted);
+    color: var(--text-primary); font-size: 13px; padding: 8px 12px; white-space: nowrap;
   }
-  .account-btn:hover { background: var(--text-primary); color: var(--surface-1); }
-  .account-btn:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+  nav.tabs .account-btn:hover { background: var(--text-primary); color: var(--surface-1); }
+  nav.tabs .account-btn:focus-visible { outline-offset: 2px; }
+  /* signed in, it's the visitor's profile: their initial in a disc, at the left */
+  .account-btn.is-profile { justify-content: flex-start; }
+  .account-mark { display: none; flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--text-primary); color: var(--surface-1);
+    font-size: 12px; line-height: 22px; text-align: center; letter-spacing: 0; }
+  .account-btn.is-profile .account-mark { display: block; }
+  .account-btn.is-profile:hover .account-mark { background: var(--surface-1); color: var(--text-primary); }
   .framed { margin: 24px 16px; font-size: 15px; }
   .framed a { color: var(--blue-text); }
   .menu-backdrop { position: fixed; inset: 0; z-index: 1; background: rgba(0,0,0,0.45); }
@@ -215,10 +221,11 @@
     header {
       position: fixed; top: 0; bottom: 0; left: 0; width: 220px; z-index: 10;
       border-bottom: none; border-right: 1px solid var(--border);
-      padding: calc(env(safe-area-inset-top) + 16px) 12px 16px; overflow-y: auto;
+      padding: calc(env(safe-area-inset-top) + 16px) 12px 16px;
+      display: flex; flex-direction: column;
     }
-    header .app-bar { margin: 2px 4px 16px; flex-wrap: wrap; }
-    .account-btn { flex: 1 0 100%; margin-top: 12px; padding: 8px 12px; }
+    header .app-bar { flex: none; margin: 2px 4px 16px; }
+    nav.tabs { flex: 1 1 auto; min-height: 0; }
     .menu-btn, .menu-backdrop { display: none; }
     .app-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }  /* the page's h1: read out, not shown beside the menu */
     body { padding-left: 220px; }
@@ -228,7 +235,7 @@
     nav.tabs {
       position: fixed; top: 0; bottom: 0; left: 0; z-index: 2; width: 240px; max-width: 80vw;
       background: var(--surface-1); border-right: 1px solid var(--border);
-      padding: calc(env(safe-area-inset-top) + 14px) 10px 16px;
+      padding: calc(env(safe-area-inset-top) + 14px) 10px calc(env(safe-area-inset-bottom) + 16px);
       transform: translateX(-100%); visibility: hidden; transition: transform .22s ease, visibility .22s;
     }
     body.menu-open header { z-index: 60; }
@@ -240,6 +247,7 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-gutter: stable;          /* the page keeps its width when a list gets short; on main, which scrolls, so the bar sits on the window's edge */
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     padding: 12px 16px 40px;
@@ -1843,7 +1851,6 @@
   nav.tabs .nav-label { margin: 14px 12px 4px; font-size: 11px; line-height: 1.2; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
   nav.tabs .nav-owner { display: none; }
   nav.tabs .nav-owner:has(~ #fpl-tab:not([hidden])) { display: block; }
-  @media (max-width: 759px) { nav.tabs { overflow-y: auto; overscroll-behavior: contain; } }
   .filter-label { flex: none; width: 56px; align-self: center; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
   .modal-close { min-width: 36px; min-height: 36px; margin: -8px -10px -8px 0; }
   .modal-close:hover { color: var(--text-primary); }
@@ -1857,11 +1864,11 @@
     .match-team.away .score-badges { justify-content: flex-start; }
   }
   @media (pointer: coarse) {
-    /* the bar keeps its height: its two buttons take touches from a wider area than they draw */
-    .menu-btn, .account-btn, header a.brand { position: relative; }
-    .menu-btn::after, .account-btn::after { content: ""; position: absolute; inset: -8px -7px; }
+    /* the bar keeps its height: its button and the site's name take touches from a wider area than they draw */
+    .menu-btn, header a.brand { position: relative; }
+    .menu-btn::after { content: ""; position: absolute; inset: -8px -7px; }
     header a.brand::after { content: ""; position: absolute; inset: -13px 0; }
-    nav.tabs button[data-tab] { min-height: 44px; }
+    nav.tabs button[data-tab], nav.tabs .account-btn { min-height: 44px; }
     nav.tabs .theme-pick button { min-height: 40px; }
     .filter-chip, .seg button { min-height: 40px; }
     .side-filters .filter-chip, .side-filters .league-list .filter-chip { min-height: 44px; }

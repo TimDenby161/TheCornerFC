@@ -3000,6 +3000,7 @@ function showPage(name = "") {            // club, player and nationality pages 
   document.body.dataset.tab = "club";
   state.nation = null;
   document.querySelectorAll("nav.tabs button[data-tab]").forEach((b) => b.removeAttribute("aria-current"));
+  $("#brand").removeAttribute("aria-current");
   $("#app-title").textContent = name;        // the page's h1 (the name is drawn again, larger, on the page)
   $("#tab-head").hidden = true;
   document.querySelectorAll(".panel").forEach((p) => p.dataset.active = String(p.dataset.tab === "club"));
@@ -6601,7 +6602,8 @@ function showTab(tab) {
   syncTabUrl(tab);
 }
 function syncMenu() {
-  let title = "";
+  let title = state.tab === "home" ? "Home" : "";          // Home has no button in the menu: the site's name is its link
+  if (state.tab === "home") $("#brand").setAttribute("aria-current", "page"); else $("#brand").removeAttribute("aria-current");
   document.querySelectorAll("nav.tabs button[data-tab]").forEach((b) => {
     const on = b.dataset.tab === state.tab && (!b.dataset.view || b.dataset.view === state.tableView);
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
@@ -6615,21 +6617,22 @@ function syncMenu() {
 // Each tab other than the tables has its own address, so a reload (or a shared link) stays on it
 const TAB_ROUTES = { leagues: "leagues", nations: "nations", matches: "matches", stats: "stats", lineups: "lineups", tips: "model-vs-market", bets: "simulation", fpl: "fpl", myteam: "my-fpl-team", efl: "efl-fantasy" };
 const ROUTE_TABS = Object.fromEntries(Object.entries(TAB_ROUTES).map(([t, r]) => [r, t]));
-document.querySelectorAll("nav.tabs button[data-tab]").forEach((btn) => btn.addEventListener("click", () => {
-  const to = TAB_ROUTES[btn.dataset.tab] ? `#/${TAB_ROUTES[btn.dataset.tab]}` : location.pathname + location.search;
-  if (TAB_ROUTES[btn.dataset.tab] ? location.hash !== to : location.hash.startsWith("#/")) history.pushState(null, "", to);
-  const view = btn.dataset.view && btn.dataset.view !== state.tableView ? btn.dataset.view : null;
+function openTab(tab, tableView) {
+  const to = TAB_ROUTES[tab] ? `#/${TAB_ROUTES[tab]}` : location.pathname + location.search;
+  if (TAB_ROUTES[tab] ? location.hash !== to : location.hash.startsWith("#/")) history.pushState(null, "", to);
+  const view = tableView && tableView !== state.tableView ? tableView : null;
   if (view) state.drawn.add("table");          // setTableView draws it
-  showTab(btn.dataset.tab);
+  showTab(tab);
   if (view) setTableView(view);
-  else if (btn.dataset.tab === "table") syncTableUrl();
+  else if (tab === "table") syncTableUrl();
   setMenu(false);
-}));
-// The site's name is the way home, as on any site (a new tab or window is left to the browser)
-$("#brand")?.addEventListener("click", (e) => {      // ?.: a copy of the page kept from before it was a link
+}
+document.querySelectorAll("nav.tabs button[data-tab]").forEach((btn) => btn.addEventListener("click", () => openTab(btn.dataset.tab, btn.dataset.view)));
+// The site's name is the way home, as on any site, and the menu has no Home of its own (a new tab or window is left to the browser)
+$("#brand").addEventListener("click", (e) => {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
-  $('nav.tabs button[data-tab="home"]').click();
+  openTab("home");
 });
 // Phones: the menu slides in from the left behind the menu button
 function setMenu(open) {
@@ -7136,7 +7139,7 @@ const AUTH_LIB = "assets/lib/supabase-js-2.117.2.js";
 const AUTH_KEY = "fc.auth";
 const AUTH_LINK_TYPES = new Set(["signup", "email", "recovery", "magiclink", "invite", "email_change"]);
 const ACCOUNT_TITLES = { signin: "Sign in", signup: "Create an account", reset: "Reset your password",
-  newpass: "Choose a new password", note: "Check your email", account: "Your account", delete: "Delete your account",
+  newpass: "Choose a new password", note: "Check your email", account: "Your profile", delete: "Delete your account",
   subscribe: "Subscribe" };
 const GOOGLE_MARK = `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.96 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z"/></svg>`;
 // state.account: user (null when signed out), view (a key of ACCOUNT_TITLES), text (the "note" view's message)
@@ -7280,11 +7283,16 @@ function closeAccount() {
   if ($("#account-modal").hidden) return;
   $("#account-modal").hidden = true;
   if (["note", "newpass", "delete", "subscribe"].includes(state.account.view)) state.account.view = "signin";
-  $("#account-btn").focus();
+  // back to the button that opened it, or on a phone, where that's in the closed menu, to the menu's
+  const btn = $("#account-btn");
+  (btn.checkVisibility?.({ visibilityProperty: true }) === false ? $("#menu-btn") : btn).focus();
 }
 function renderAccount() {
   const a = state.account;
-  $("#account-btn").textContent = a.user ? "Account" : "Sign in";
+  // the button at the foot of the menu: Sign in, or the signed-in visitor's profile under their initial
+  $("#account-label").textContent = a.user ? "Profile" : "Sign in";
+  $("#account-btn").classList.toggle("is-profile", !!a.user);
+  $("#account-btn .account-mark").textContent = (a.user?.email || "").trim().charAt(0).toUpperCase();
   if ($("#account-modal").hidden) return;
   const view = a.view === "subscribe" ? "subscribe"
     : !a.user ? (a.view === "delete" ? "signin" : a.view) : ["newpass", "delete"].includes(a.view) ? a.view : "account";
