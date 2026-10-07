@@ -39,6 +39,10 @@ class ModelTests(unittest.TestCase):
         self.assertGreater(ranks["A"], ranks["B"])
 
 
+def writable():
+    return patch.object(np_.config, "require_db_write")
+
+
 def conn_with(upcoming, table=True):
     conn = MagicMock()
     def execute(sql, params=None):
@@ -58,7 +62,8 @@ class UpdateTests(unittest.TestCase):
                     (2, KICKOFF, 10, 10, 99, "England", "England U21", None),
                     (3, KICKOFF, 10, 776, 10, "Rep. Of Ireland", "England", True)]     # API-Football's name
         conn = conn_with(upcoming)
-        self.assertEqual(np_.update_predictions(conn, self.MATCHES), 2)
+        with writable():
+            self.assertEqual(np_.update_predictions(conn, self.MATCHES), 2)
         rows = conn.cursor.return_value.__enter__.return_value.executemany.call_args.args[1]
         self.assertEqual([r[0] for r in rows], [1, 3])
         ranks = np_.current_ranks(self.MATCHES)
@@ -75,9 +80,56 @@ class UpdateTests(unittest.TestCase):
 
     def test_a_failure_is_rolled_back_and_does_not_raise(self):
         conn = MagicMock()
-        with patch.object(np_, "update_predictions", side_effect=RuntimeError("no results file")):
+        with patch.object(np_.nations, "load", side_effect=RuntimeError("no results file")), \
+                self.assertLogs(np_.log, "ERROR"):
             np_.update_safely(conn)
         conn.rollback.assert_called_once()
+
+    def test_nightly_step_projects_backfills_and_rates_from_one_load(self):
+        conn = MagicMock()
+        with patch.object(np_.nations, "load", return_value=self.MATCHES) as load, \
+                patch.object(np_, "update_predictions") as update, \
+                patch.object(np_, "backfill_predictions") as backfill, patch.object(np_, "rate_fixtures") as rate:
+            np_.update_safely(conn)
+        load.assert_called_once_with(conn)
+        update.assert_called_once_with(conn, self.MATCHES)
+        backfill.assert_called_once_with(conn, self.MATCHES)
+        rate.assert_called_once_with(conn)
+
+
+class BackfillTests(unittest.TestCase):
+    PLAYED = datetime(2026, 10, 6, 18, 45, tzinfo=timezone.utc)
+    MATCHES = [Result("2026-09-29", "Czech Republic", "England", 0, 2, "UEFA Nations League", False),
+               Result("2026-10-06", "England", "Czech Republic", 3, 0, "UEFA Nations League", False),
+               Result("2026-10-07", "England", "Jersey", 9, 0, "Island Games", True)]
+
+    def test_finished_match_is_projected_from_the_ranks_going_into_it(self):
+        finished = [(1528953, self.PLAYED, 5, 10, 770, "England", "Czech Republic"),
+                    (2, self.PLAYED, 10, 10, 99, "England", "England U21"),            # not in the ranking
+                    (3, self.PLAYED + timedelta(days=1), 10, 10, 98, "England", "Jersey")]   # a tournament it leaves out
+        conn = conn_with(finished)
+        with writable():
+            self.assertEqual(np_.backfill_predictions(conn, self.MATCHES), 1)
+        cur = conn.cursor.return_value.__enter__.return_value
+        sql, rows = cur.executemany.call_args.args
+        self.assertIn("do nothing", sql)                # never over a projection made before the match
+        self.assertEqual(len(rows), 1)
+        # after the first leg only: England's 2-0 away win, not the 3-0 being projected
+        after_first = np_.current_ranks(self.MATCHES[:1])
+        self.assertEqual(rows[0][:8], (1528953, self.PLAYED, 5, 10, 770,
+                                       after_first["England"], after_first["Czech Republic"], False))
+        self.assertEqual(rows[0][8:], np_.predict_match(after_first["England"], after_first["Czech Republic"], False))
+
+    def test_dataset_day_either_side_of_the_utc_kickoff(self):
+        late = datetime(2026, 10, 7, 1, 0, tzinfo=timezone.utc)       # the evening of the 6th where it was played
+        conn = conn_with([(1, late, 5, 10, 770, "England", "Czech Republic")])
+        with writable():
+            self.assertEqual(np_.backfill_predictions(conn, self.MATCHES), 1)
+
+    def test_nothing_to_do_makes_no_write(self):
+        conn = conn_with([])
+        self.assertEqual(np_.backfill_predictions(conn, self.MATCHES), 0)
+        conn.cursor.assert_not_called()
 
 
 class ExplanationTests(unittest.TestCase):
@@ -129,6 +181,14 @@ class ExportRowTests(unittest.TestCase):
                4, 5, 4, 3, 4, 3)
         m = dict(zip(export.SITE_MATCH_FIELDS, export.national_match(row)[0]))
         self.assertEqual((m["hg"], m["ag"], m["rating"], m["r_winner"], m["r_goals"]), (2, 1, 4, 5, 3))
+        self.assertEqual(m["source"], "live")           # projected before its kickoff
+
+    def test_projection_written_after_kickoff_is_a_reconstruction(self):
+        row = (*self.BASE[:9], "FT", 2, 1, 0.5, 0.3, 0.2, 1.6, 0.9, "1-0", 1950.0, 1800.0, False, 0.7, 0.5, 0.5,
+               KICKOFF + timedelta(days=1), 4, 5, 4, 3, 4, 3)
+        match, why = export.national_match(row)
+        self.assertEqual(dict(zip(export.SITE_MATCH_FIELDS, match))["source"], "backfill")
+        self.assertEqual(why["source"], "reconstruction")
 
 
 class MatchdayTests(unittest.TestCase):

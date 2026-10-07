@@ -23,16 +23,21 @@ Rows go in national_fixture_predictions, never fixture_predictions: the stats, t
 the prediction ratings read every row of that. As for clubs, a match's row is left alone once it
 has kicked off, so it keeps the last projection made before it. Projections are made by the
 nightly run only: nothing they use changes on the day.
-"""
-import json
-import logging
-from datetime import datetime, timezone
 
-from . import nations, rating
+A finished match with no row (played before its projection could be made) gets one afterwards
+from the ranks both sides had going into it (backfill_predictions), as predictions.py does for
+clubs. Such a row was written after kickoff (updated_at > kickoff): the export calls it
+'backfill' and the site says it was reconstructed.
+"""
+import logging
+from datetime import datetime, timedelta, timezone
+
+from . import config, nations, rating
 from .predictions import UPCOMING_STATUSES, goal_markets, outcome_probabilities, project
 
 log = logging.getLogger(__name__)
 
+BACKFILL_DAYS = 21           # the export's PAST_DAYS: the finished matches the site shows
 LEVEL_GOALS = 1.1            # goals each of two level sides is expected to score (1.1-1.15 scored best)
 # API-Football's ids of the tournaments whose finals are played at neutral grounds (the hosts'
 # own matches aside): World Cup, Euros, Africa Cup of Nations, Asian Cup, Copa America, Gold Cup
@@ -94,13 +99,17 @@ def update_predictions(conn, matches=None):
         neutral = is_neutral(neutral, league_id)
         rows.append((fid, kickoff, league_id, home, away, h_rank, a_rank, neutral,
                      *predict_match(h_rank, a_rank, neutral)))
-    with conn.cursor() as cur:
-        cur.executemany(
-            f"""insert into {TABLE} (fixture_id, kickoff, league_id, home_team_id, away_team_id,
-                   home_rank, away_rank, neutral, exp_diff, home_xg, away_xg, p_home, p_draw, p_away,
-                   likely_score, p_over25, p_btts)
-               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-               on conflict (fixture_id) do update set
+    _store(conn, rows)
+    conn.commit()
+    log.info("National predictions: %d upcoming matches (%d left out: no rank for %s)",
+             len(rows), len(upcoming) - len(rows), sorted(unranked)[:20] or "-")
+    return len(rows)
+
+
+def _store(conn, rows, overwrite=True):
+    """Insert projection rows; overwrite=False leaves a match that already has one alone."""
+    config.require_db_write("store national predictions")
+    update = """do update set
                  kickoff = excluded.kickoff, league_id = excluded.league_id,
                  home_team_id = excluded.home_team_id, away_team_id = excluded.away_team_id,
                  home_rank = excluded.home_rank, away_rank = excluded.away_rank,
@@ -108,10 +117,59 @@ def update_predictions(conn, matches=None):
                  home_xg = excluded.home_xg, away_xg = excluded.away_xg,
                  p_home = excluded.p_home, p_draw = excluded.p_draw, p_away = excluded.p_away,
                  likely_score = excluded.likely_score, p_over25 = excluded.p_over25,
-                 p_btts = excluded.p_btts, updated_at = now()""", rows)
+                 p_btts = excluded.p_btts, updated_at = now()"""
+    with conn.cursor() as cur:
+        cur.executemany(
+            f"""insert into {TABLE} (fixture_id, kickoff, league_id, home_team_id, away_team_id,
+                   home_rank, away_rank, neutral, exp_diff, home_xg, away_xg, p_home, p_draw, p_away,
+                   likely_score, p_over25, p_btts)
+               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               on conflict (fixture_id) {update if overwrite else "do nothing"}""", rows)
+
+
+def ranks_before(matches):
+    """{(day, {home, away}): ({nation: its rank going into that match}, neutral)} for every rated
+    match, by the dataset's names and day."""
+    out = {}
+    nations.replay(matches, on_match=lambda m, h, a, _: out.__setitem__(
+        (m.day, frozenset((m.home, m.away))), ({m.home: h, m.away: a}, m.neutral)))
+    return out
+
+
+def backfill_predictions(conn, matches=None):
+    """Project the finished matches of the last BACKFILL_DAYS that have no projection, from the
+    ranks both sides had going into them. A match the ranking didn't rate (a side it doesn't
+    know, or a tournament it leaves out) gets none. Returns the number added."""
+    if not ready(conn):
+        return 0
+    now = datetime.now(timezone.utc)
+    finished = conn.execute(
+        f"""select nf.fixture_id, nf.kickoff, nf.league_id, nf.home_team_id, nf.away_team_id,
+                   nf.home_name, nf.away_name
+            from national_fixtures nf
+            where nf.status_short in ('FT', 'AET', 'PEN') and nf.home_goals is not null
+              and nf.kickoff between %s and %s
+              and not exists (select 1 from {TABLE} p where p.fixture_id = nf.fixture_id)
+            order by nf.kickoff""", [now - timedelta(days=BACKFILL_DAYS), now]).fetchall()
+    if not finished:
+        return 0
+    before = ranks_before(matches if matches is not None else nations.load(conn))
+    rows = []
+    for fid, kickoff, league_id, home, away, h_name, a_name in finished:
+        h_name, a_name = nations.api_name(h_name), nations.api_name(a_name)
+        day = kickoff.date()
+        # the dataset's day is the local one, so it can be a day either side of the UTC kickoff
+        found = next((before[key] for off in (0, -1, 1)
+                      if (key := (str(day + timedelta(days=off)), frozenset((h_name, a_name)))) in before), None)
+        if found is None:
+            continue
+        ranks, neutral = found
+        rows.append((fid, kickoff, league_id, home, away, ranks[h_name], ranks[a_name], neutral,
+                     *predict_match(ranks[h_name], ranks[a_name], neutral)))
+    _store(conn, rows, overwrite=False)
     conn.commit()
-    log.info("National predictions: %d upcoming matches (%d left out: no rank for %s)",
-             len(rows), len(upcoming) - len(rows), sorted(unranked)[:20] or "-")
+    log.info("National predictions: %d finished matches projected afterwards (%d had no rated match)",
+             len(rows), len(finished) - len(rows))
     return len(rows)
 
 
@@ -121,7 +179,9 @@ def update_safely(conn):
     and the club pipeline and the export mustn't wait on it. The matches then keep the
     projections they had."""
     try:
-        update_predictions(conn)
+        matches = nations.load(conn)
+        update_predictions(conn, matches)
+        backfill_predictions(conn, matches)
         rate_fixtures(conn)
     except Exception:
         conn.rollback()
@@ -157,9 +217,10 @@ def rate_fixtures(conn):
 REASON_MIN_GOALS = 0.05       # as predictions.REASON_MIN_GOALS
 
 
-def explanation(h_rank, a_rank, neutral, exp_diff, updated_at):
+def explanation(h_rank, a_rank, neutral, exp_diff, updated_at, backfill=False):
     """One match's model detail for the site, in the shape export.explanation gives a club match
-    (what a national projection has no part for is left out or null)."""
+    (what a national projection has no part for is left out or null). backfill: the projection
+    was made after the match, from the ranks going into it."""
     parts = margin(h_rank, a_rank, neutral)
     if neutral:
         del parts["home_advantage"]
@@ -170,5 +231,5 @@ def explanation(h_rank, a_rank, neutral, exp_diff, updated_at):
         "exp_diff": round(exp_diff, 2), "tendencies": None, "league_goals": round(2 * LEVEL_GOALS, 2),
         "missing": [None, None], "lines": None,
         "reasons": [[k, round(v, 2)] for k, v in reasons],
-        "neutral": bool(neutral), "source": "prospective", "captured_at": updated_at.isoformat(),
+        "neutral": bool(neutral), "source": "reconstruction" if backfill else "prospective", "captured_at": updated_at.isoformat(),
     }

@@ -906,12 +906,15 @@ def national_match(row):
     or None where it has no projection)."""
     (fid, kickoff, lid, _, rnd, home, away, _, _, status, hg, ag,
      p_h, p_d, p_a, hxg, axg, likely, hr, ar, neutral, exp_diff, p_over, p_btts, projected_at, *ratings) = row
+    # a projection written after kickoff was reconstructed (national_predictions.backfill_predictions)
+    source = None if p_h is None else "backfill" if projected_at > kickoff else "live"
     match = [fid, kickoff.isoformat(), lid, rnd, home, away, status, hg, ag, None, None,
              _r(p_h, 3), _r(p_d, 3), _r(p_a, 3), _r(hxg), _r(axg), likely, _r(hr, 0), _r(ar, 0),
-             "live" if p_h is not None else None, *ratings,
+             source, *ratings,
              None, None, None, None, _r(p_over, 3), _r(p_btts, 3),
              None, None, None, None, 1]
-    why = national_predictions.explanation(hr, ar, neutral, exp_diff, projected_at) if p_h is not None else None
+    why = (national_predictions.explanation(hr, ar, neutral, exp_diff, projected_at, source == "backfill")
+           if p_h is not None else None)
     return match, why
 
 
