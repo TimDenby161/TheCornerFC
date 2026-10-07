@@ -63,14 +63,14 @@
     <!-- Room kept for an advert (see ADS in app.js). Empty and out of the layout until adverts are switched on -->
     <div class="ad-slot ad-rail" id="ad-rail" aria-hidden="true"></div>
     </div>
-    <!-- the foot of the menu, always in view: the theme, then the visitor's own button in the bottom left corner -->
+    <!-- the foot of the menu, always in view: the visitor's own button (sign in, or their profile), then the theme -->
     <div class="menu-foot">
+      <button type="button" class="account-btn" id="account-btn" aria-haspopup="dialog"><span class="account-mark" aria-hidden="true"></span><span id="account-label">Sign in</span></button>
       <div class="theme-pick seg" id="theme-pick" role="group" aria-label="Theme">
         <button type="button" data-theme="" aria-pressed="true">Device</button>
         <button type="button" data-theme="light" aria-pressed="false">Light</button>
         <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
       </div>
-      <button type="button" class="account-btn" id="account-btn" aria-haspopup="dialog"><span class="account-mark" aria-hidden="true"></span><span id="account-label">Sign in</span></button>
     </div>
   </nav>
   <div class="menu-backdrop" id="menu-backdrop" hidden></div>
