@@ -6458,12 +6458,13 @@ const HOME_SLIDES = [
   ["stats", "Stats", "", "Matches.", "See the record", "The last 12 months", ""],
   ["leagues", "Leagues", "Leagues.", "Compared.", "See the leagues", "Strongest leagues now", "Average rating"],
   ["nations", "Nations", "Nations.", "Since 1872.", "See the nations", "Strongest national teams", "Rating"]];
+const HOME_TOP = 7;      // rows in a slide's list: all of them on a wide screen, the first five on a narrower one (styles.css)
 const HOME_INTRO = { lineups: "Each club's predicted starting eleven for its next match, marked against the real team sheet afterwards.",
   stats: "The last year's match predictions, each one marked against the real result, so you can see how often the model is right." };
 function renderHome() {
   state.drawn.add("home");
   const clubs = state.rankings.length;
-  const top = [...state.rankings].sort((a, b) => b.current - a.current).slice(0, 5);
+  const top = [...state.rankings].sort((a, b) => b.current - a.current).slice(0, HOME_TOP);
   countUp($("#home-count"), clubs);
   $("#home-lede").textContent = "One strength rating for every club, from the Premier League to the lower divisions, with ranks for players and national teams and the model's chances for the matches they play.";
   $("#home-top").innerHTML = top.map((x) =>
@@ -6529,9 +6530,9 @@ $("#home-slides").addEventListener("scroll", () => {
     if (near !== state.homeSlide) homeTurn(near);
   }, 120);
 }, { passive: true });
-// The first five of the Players list, as it opens
+// The first of the Players list, as it opens
 async function homePlayers() {
-  const d = await siteAsk("site_players", { p_limit: 5 });
+  const d = await siteAsk("site_players", { p_limit: HOME_TOP });
   if (d.paywall) state.paywall = true;
   const rows = addPlayers(d.rows).filter((p) => p.seasons?.[0] != null);
   if (!rows.length) return;
@@ -6540,11 +6541,14 @@ async function homePlayers() {
 }
 // The example line-up: the XI that started, on a pitch, marked against the one the model predicted
 // for it. Always a club in the world's top ten, so a name a visitor knows (owner, 2026-10-07): its
-// latest match where the model named nine or more of the eleven. From the Line-up record where it
+// latest match where the model named nine or ten of the eleven, not all of them, so the slide
+// shows a miss marked too (owner, 2026-10-07). From the Line-up record where it
 // has one (data/lineups.json, the last three weeks); where it doesn't, as while the record is new,
 // from the reconstructed history's last 30 days (site_lineup_history, asked for those clubs'
-// leagues only), and the slide says so. A top-ten club with no nine: its latest. None at all: left out.
+// leagues only), and the slide says so. No top-ten club with a nine or a ten there: the latest of
+// theirs with all eleven, then their latest of any. None at all: left out.
 const HOME_XI_CLUBS = 10, HOME_XI_RIGHT = 9, HOME_XI_DAYS = 30;
+const homeXiFair = (right) => right >= HOME_XI_RIGHT && right < 11;
 async function homeXi() {
   const top = [...state.rankings].sort((a, b) => b.current - a.current).slice(0, HOME_XI_CLUBS);
   const known = new Set(top.map((x) => x.team));
@@ -6557,7 +6561,7 @@ async function homeXi() {
   const cells = (started) => started.map(([pid, name, pos, rank]) => ({ p: { id: pid, name }, b: { label: pos }, rank, chance: null, mins: null }));
   const rec = await getJsonOrNull("data/lineups.json");
   const at = Object.fromEntries((rec?.fields || []).map((k, i) => [k, i]));
-  const live = (rec?.rows || []).filter((x) => known.has(x[at.team]) && x[at.correct] >= HOME_XI_RIGHT && Date.parse(x[at.kickoff]) > Date.now() - 20 * 864e5)
+  const live = (rec?.rows || []).filter((x) => known.has(x[at.team]) && homeXiFair(x[at.correct]) && Date.parse(x[at.kickoff]) > Date.now() - 20 * 864e5)
     .sort((a, b) => Date.parse(b[at.kickoff]) - Date.parse(a[at.kickoff]))[0];
   if (live) {
     const fx = await loadLineups(live[at.fixture]);
@@ -6572,7 +6576,7 @@ async function homeXi() {
   // the history's rows, newest first: [date, team, opponent, home, competition, right, missed]
   const hist = await siteAsk("site_lineup_history", { p_days: HOME_XI_DAYS, p_limit: 300, p_leagues: `{${[...new Set(top.map((x) => x.league).filter((l) => l != null))].join(",")}}` });
   const rows = (hist?.rows || []).filter((x) => known.has(x[1]));
-  const r = rows.find((x) => x[5] >= HOME_XI_RIGHT) || rows[0];
+  const r = rows.find((x) => homeXiFair(x[5])) || rows.find((x) => x[5] >= HOME_XI_RIGHT) || rows[0];
   if (!r) return;
   const [day, team, opponent, home, , , missed] = r;
   await ensureTeam(team);
@@ -6586,7 +6590,9 @@ async function homeXi() {
 // The last year of the Stats tab, by its strongest true figures (owner, 2026-10-07): how many
 // matches were marked, in the headline, and under it how often a result the model gave 70% or more
 // came in (from the calibration's top bands), the right-result rate against always picking the
-// home team, and the exact scores. With the Stats tab's own note of how many were recorded before kickoff.
+// home team, the exact scores, the goals it was off by, how far the chances it gave were from how
+// often they happened (the calibration's bands, weighted by their size) and the competitions
+// marked. With the Stats tab's own note of how many were recorded before kickoff.
 const HOME_SURE = 0.7;
 async function homeStats() {
   await loadStats();
@@ -6594,16 +6600,21 @@ async function homeStats() {
   if (!s?.n) return;
   const sure = (s.calibration || []).filter(([count, said]) => count && said >= HOME_SURE);
   const calls = sure.reduce((t, b) => t + b[0], 0), came = sure.reduce((t, b) => t + b[0] * b[2], 0);
+  const bands = (s.calibration || []).filter(([count]) => count), said = bands.reduce((t, b) => t + b[0], 0);
+  const comps = Object.keys(state.stats.ranges["365d"]).filter((k) => k !== "all").length;
   $("#home-t-stats").textContent = s.n.toLocaleString();          // the headline: "18,679 matches."
   homeSample("stats", `<dl class="home-nums">${[
     calls ? [pct(came / calls, 0), `of the results the model gave ${pct(HOME_SURE, 0)} or more came in`] : null,
     [pct(s.correct, 0), `right result, against ${pct(s.home_rate, 0)} by picking the home team every time`],
     s.exact ? [`1 in ${Math.round(1 / s.exact)}`, "exact scores right"] : null,
+    s.goal_error != null ? [s.goal_error.toFixed(2), "goals off per team, on average"] : null,
+    said ? [`${(100 * bands.reduce((t, b) => t + b[0] * Math.abs(b[1] - b[2]), 0) / said).toFixed(1)}<small> pts</small>`, "between the chance it gave and how often it happened"] : null,
+    comps ? [comps.toLocaleString(), "competitions marked"] : null,
   ].filter(Boolean).map(([n, what]) => `<div><dt>${n}</dt><dd>${what}</dd></div>`).join("")}</dl>
     ${s.live < s.n ? `<p class="home-nums-note">${s.live.toLocaleString()} recorded before kickoff, the rest reconstructed from pre-match data.</p>` : ""}`);
 }
 function homeLeagues() {
-  const rows = leagueAverages().sort((a, b) => b.lt - a.lt).slice(0, 5);
+  const rows = leagueAverages().sort((a, b) => b.lt - a.lt).slice(0, HOME_TOP);
   if (!rows.length) return;
   homeSample("leagues", `<ol class="home-top">${rows.map((c) =>
     `<li>${leagueCrest(c.lid)}<span class="lg-main"><a class="team-link" href="${leagueHref(c.lid)}">${escapeHtml(c.name)}</a><span class="lg-sub">${escapeHtml(countryDisplay(c.country))} · ${c.clubs} clubs</span></span><span class="rel-chip rel-${ratingTierOf(c.lt)}">${Math.round(c.lt)}</span></li>`).join("")}</ol>`);
@@ -6612,7 +6623,7 @@ async function homeNations() {
   await loadNations();
   const d = state.nations;
   if (!d) return;
-  homeSample("nations", `<ol class="home-top">${[...d.nations].sort((a, b) => b.current - a.current).slice(0, 5).map((n) =>
+  homeSample("nations", `<ol class="home-top">${[...d.nations].sort((a, b) => b.current - a.current).slice(0, HOME_TOP).map((n) =>
     `<li><span class="home-flag-cell">${flagImg(n.name)}</span><span class="lg-main"><span class="team-link">${escapeHtml(n.name)}</span><span class="lg-sub">${escapeHtml(n.confed || "")}</span></span><span class="rel-chip rel-${nationTier(d, n.current)}">${Math.round(n.current).toLocaleString()}</span><span class="home-form">${n.change == null ? "" : signedHtml(n.change)}</span></li>`).join("")}</ol>`);
 }
 // The headline's number, counted up to once; set outright where motion is turned down

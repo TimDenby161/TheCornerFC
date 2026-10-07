@@ -1209,9 +1209,10 @@
   .home-sample .pp-section { margin: 0; }
   .home-xi-bare + .pp-section .pp-rank { display: none; }      /* a line-up from the record whose players have no rank */
   .home-sample .pitch.pp-pitch { max-width: 260px; outline: 1px solid var(--gridline); }      /* small enough that its slide is no taller than the rest; lined off from the grass around it */
-  .home-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
-  .home-nums div + div { padding-left: 12px; border-left: 1px solid var(--gridline); }
+  .home-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 12px; margin: 0; }
+  .home-nums div:not(:nth-child(3n + 1)) { padding-left: 12px; border-left: 1px solid var(--gridline); }
   .home-nums dt { font-size: clamp(34px, 4vw, 56px); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .home-nums dt { white-space: nowrap; } .home-nums dt small { font-size: 0.45em; }
   .home-nums dd { margin: 6px 0 0; font-size: 13px; line-height: 1.35; color: var(--text-secondary); }
   .home-nums-note { margin: 14px 0 0; font-size: 12px; line-height: 1.35; color: var(--text-muted); }
   .home-close { margin: 72px 0 8px; padding-top: 18px; border-top: 2px solid var(--text-primary); }
@@ -1220,6 +1221,7 @@
   @media (max-width: 1099px) {
     .home-hero { min-height: 0; }
     .home-slide { grid-template-columns: minmax(0, 1fr); }
+    .home-top li:nth-child(n + 6) { display: none; }      /* the lists' sixth and seventh rows are for a wide screen */
   }
   @media (min-width: 1100px) {
     .home-brief { grid-template-columns: repeat(4, minmax(0, 1fr)); }
