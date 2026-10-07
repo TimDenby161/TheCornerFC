@@ -1,3 +1,5 @@
+import { SHORT_NAMES } from './names.ts';
+
 // The "site" row: names for every competition and club, and when each source was last fetched.
 export type Competition = { name: string; country: string; type: string };
 export type Site = {
@@ -6,16 +8,11 @@ export type Site = {
 	teams: Record<string, string>;
 };
 
-export const SHORT_NAMES: Record<number, string> = {
-	2: 'Champions League', 3: 'Europa League', 848: 'Conference League', 531: 'UEFA Super Cup',
-	15: 'Club World Cup', 45: 'FA Cup', 48: 'EFL Cup', 46: 'EFL Trophy', 47: 'FA Trophy',
-	528: 'Community Shield', 181: 'Scottish Cup', 185: 'Scottish League Cup'
-};
-
 export const teamName = (site: Site, id: number) => site.teams[id] || `Team ${id}`;
 export const leagueShort = (site: Site, id: number) =>
 	SHORT_NAMES[id] || site.competitions[id]?.name || '';
 export const countryName = (c: Competition) => c.country.replace(/-/g, ' ');
+export const leagueName = (site: Site, id: number) => SHORT_NAMES[id] || site.competitions[id]?.name || `Competition ${id}`;
 
 export const ordinal = (n: number) => {
 	const s = ['th', 'st', 'nd', 'rd'], v = n % 100;

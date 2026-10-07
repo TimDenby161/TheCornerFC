@@ -3,13 +3,16 @@
 	import '#lib/crest-hues.css';
 	import '../app.css';
 	import { page } from '$app/state';
-	import { MENU, sectionHref, tabFor } from '#lib/menu.ts';
+	import { MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
 
 	let { children } = $props();
 	let menuOpen = $state(false);
 	let theme = $state('');
 
 	const tab = $derived(tabFor(page.url.pathname));
+	// the page's name, a line on what it shows and what its figures mean, where the page gives one
+	type TabHead = { title: string; intro: string; more: string; key: [string, string][] };
+	const head = $derived(page.data.tabHead as TabHead | undefined);
 	const current = $derived(MENU.flatMap((g) => g.sections).find((s) => s.path && page.url.pathname.startsWith(s.path)));
 
 	// The server writes <body data-tab>; after a move between pages in the browser it follows here.
@@ -66,6 +69,17 @@
 </header>
 
 <main id="main" tabindex="-1" inert={menuOpen}>
+	{#if head}
+		<div class="tab-head" id="tab-head">
+			<p class="tab-title" id="tab-title" aria-hidden="true">{head.title}</p>
+			<p class="tab-intro" id="tab-intro">{head.intro}{#if head.more}{' '}<a href={methodologyHref(head.more)}>How it works</a>{/if}</p>
+			{#if head.key.length}
+				<details class="tab-key" id="tab-key"><summary>What the numbers mean</summary>
+					<dl id="tab-key-list">{#each head.key as [term, meaning] (term)}<dt>{term}</dt><dd>{meaning}</dd>{/each}</dl>
+				</details>
+			{/if}
+		</div>
+	{/if}
 	<div class="ad-slot ad-top" id="ad-top" aria-hidden="true"></div>
 	{@render children()}
 </main>

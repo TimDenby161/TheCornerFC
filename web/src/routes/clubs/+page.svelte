@@ -1,63 +1,127 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { columnTips, fitClubTable } from '#lib/actions.ts';
 	import Crest from '#lib/components/Crest.svelte';
+	import FilterMenu from '#lib/components/FilterMenu.svelte';
+	import Flag from '#lib/components/Flag.svelte';
 	import Move from '#lib/components/Move.svelte';
+	import { pageHref } from '#lib/menu.ts';
+	import { COUNTRY_FIRST, CONTINENTS, regionLabel } from '#lib/names.ts';
 	import { ordinal } from '#lib/site.ts';
 	import type { Sort } from '#lib/rankings.ts';
 
 	let { data } = $props();
 
-	const COLUMNS: { key: Sort; label: string; cls: string; tip: string }[] = [
-		{ key: 'lt', label: 'Baseline', cls: '', tip: 'Baseline Strength: the long-term Elo rating, a smoothed rating weighted mostly to the average over the last 100 matches. Slow to move, and the better guide for matches months away.' },
-		{ key: 'trend', label: 'Gap', cls: 'col-gap', tip: 'Gap: Current Strength minus Baseline Strength. Green: rated above its long-term level; red: below it.' },
-		{ key: 'current', label: 'Current', cls: '', tip: 'Current Strength: the Elo rating after the latest match. 100 points is worth a goal a game.' },
-		{ key: 'form', label: 'Last 6', cls: 'col-recent', tip: "Recent movement: how much the club's Elo rating has changed over its last 6 matches." }
+	const COLUMNS: { key: Sort; cls: string; tip: string }[] = [
+		{ key: 'lt', cls: '', tip: 'Baseline Strength: the long-term Elo rating (LT ALGO), a smoothed rating weighted mostly to the average over the last 100 matches. Slow to move, and the better guide for matches months away.' },
+		{ key: 'trend', cls: 'col-gap', tip: 'Gap: Current Strength minus Baseline Strength. Green: rated above its long-term level; red: below it. A difference in level, not recent movement (see Last 6).' },
+		{ key: 'current', cls: '', tip: 'Current Strength: the Elo rating after the latest match. 100 points is worth a goal a game. It rises when a club does better than expected against that opponent, and falls when it does worse. Colour: green is the top 5% of all clubs, amber the top 20%, orange the top half, red the rest.' },
+		{ key: 'form', cls: 'col-recent', tip: "Recent movement: how much the club's Elo rating has changed over its last 6 matches." }
 	];
+	const LABELS: Record<Sort, string> = { lt: 'Baseline', trend: 'Gap', current: 'Current', form: 'Last 6' };
 
-	// this page's address with some of its choices changed (a default is left out of the address)
-	function href(change: Record<string, string | null>) {
-		const q = new URLSearchParams(page.url.search);
-		for (const [k, v] of Object.entries(change)) if (v === null) q.delete(k); else q.set(k, v);
-		const s = q.toString();
-		return s ? `?${s}` : page.url.pathname;
+	// The page's choices as they go in the address; a default is left out.
+	const choices = $derived({
+		...(data.filter !== 'all' ? { c: data.filter } : {}),
+		...(data.excluded.length ? { x: data.excluded.join(',') } : {}),
+		...(data.search ? { q: data.search } : {}),
+		...(data.sort !== 'lt' ? { sort: data.sort } : {})
+	} as Record<string, string>);
+	const without = (...keys: string[]) => Object.fromEntries(Object.entries(choices).filter(([k]) => !keys.includes(k)));
+	const address = (q: Record<string, string>) => { const s = new URLSearchParams(q).toString(); return s ? `?${s}` : page.url.pathname; };
+
+	// Exclude: each chip's button carries the list as it would be after the press
+	const ex = $derived(new Set(data.excluded));
+	const toggled = (...keys: string[]) => {
+		const next = new Set(ex);
+		const all = keys.every((k) => next.has(k));
+		for (const k of keys) if (all) next.delete(k); else next.add(k);
+		return [...next].join(',');
+	};
+	let filtersOpen = $state(false);
+
+	// the search narrows the list as it is typed
+	let typing: ReturnType<typeof setTimeout> | undefined;
+	function typed(e: Event) {
+		const q = (e.currentTarget as HTMLInputElement).value.trim();
+		clearTimeout(typing);
+		typing = setTimeout(() => goto(address({ ...without('q'), ...(q ? { q } : {}) }), { reset: false, replace: true }), 200);
 	}
-	const title = $derived(data.leagueName ? `${data.leagueName} clubs` : 'Clubs');
+	// a row opens its club's page, wherever on it the click lands
+	function rowClick(e: MouseEvent, team: number) {
+		if ((e.target as HTMLElement).closest('a')) return;
+		location.href = pageHref('club', team);
+	}
+	const showMeta = $derived(!!data.search || data.wide);
+	const title = $derived(data.filter === 'all' ? 'Clubs' : `${data.menu.name} clubs`);
 </script>
 
 <svelte:head>
 	<title>{title} · The Corner FC</title>
-	<meta name="description" content="Strength ratings for {data.total.toLocaleString('en-GB')} clubs{data.leagueName ? ` in the ${data.leagueName}` : ''} on one scale: long-term level, current rating and recent movement." />
+	<meta name="description" content="Strength ratings for {data.rows.length.toLocaleString('en-GB')} clubs{data.filter === 'all' ? '' : ` (${data.menu.name})`} on one scale: long-term level, current rating and recent movement." />
 </svelte:head>
 
 <section class="panel" data-tab="table" data-active="true">
-	<div id="table-wrap">
+	<div id="table-side" class:filters-open={filtersOpen}>
+		<div class="side-stick">
+			<div class="more-panel" id="more-panel">
+				<div id="exclude-filter">
+					<form class="contents" method="get" action="/clubs" data-sveltekit-reset="false">
+						{#each Object.entries(without('x', 'q')) as [k, v] (k)}<input type="hidden" name={k} value={v} />{/each}
+						<div class="pos-head"><span>Exclude</span>
+							<button type="submit" class="pos-clear" hidden={!ex.size}>Clear</button></div>
+						<div class="ex-chips">
+							<button type="submit" name="x" value={toggled(...COUNTRY_FIRST)} class="filter-chip ex-chip" aria-pressed={COUNTRY_FIRST.every((c) => ex.has(c))} title="Exclude {COUNTRY_FIRST.join(', ')}">Big 5</button>
+							{#each COUNTRY_FIRST as c (c)}
+								<button type="submit" name="x" value={toggled(c)} class="filter-chip ex-chip" aria-pressed={ex.has(c)} title="Exclude {c}'s clubs">{c}</button>
+							{/each}
+							<span class="ex-break"></span>
+							{#each CONTINENTS as r (r)}
+								<button type="submit" name="x" value={toggled(`r:${r}`)} class="filter-chip ex-chip" aria-pressed={ex.has(`r:${r}`)} title="Exclude every club in {r}{r === 'Europe' ? ' (the big five included)' : ''}">{regionLabel(r)}</button>
+							{/each}
+						</div>
+					</form>
+				</div>
+			</div>
+			<FilterMenu id="table-filters" menu={data.menu} action="/clubs" keep={without('c', 'q')} />
+			<button type="button" class="filter-chip" id="more-filters" aria-expanded={filtersOpen} aria-controls="more-panel" onclick={() => (filtersOpen = !filtersOpen)}>
+				Exclude{#if ex.size}<span class="n">{ex.size}</span>{/if}<span class="caret" aria-hidden="true">▾</span>
+			</button>
+		</div>
+	</div>
+	<form class="contents" method="get" action="/clubs" role="search" data-sveltekit-reset="false">
+		{#each Object.entries(without('q')) as [k, v] (k)}<input type="hidden" name={k} value={v} />{/each}
+		<input type="search" name="q" id="table-search" class="table-search" placeholder="Search clubs, leagues or countries" aria-label="Search" value={data.search} oninput={typed} autocomplete="off" />
+	</form>
+	<div id="table-wrap" use:columnTips use:fitClubTable={showMeta}>
 		{#if data.rows.length}
 			<div class="table-scroll">
 				<table class="leaderboard clubs">
 					<thead>
 						<tr>
-							<th title="Position in this list, in the current sort order.">#</th>
-							<th><span class="th-club">Club</span></th>
-							<th title="Club name, with its country and league.">Club</th>
-							<th class="num" title="World rank: place among every ranked club by Baseline Strength, whatever this list is filtered or sorted by.">World</th>
-							<th class="num col-dom" title="In league: place by Baseline Strength among the clubs in its league this season.">In lg</th>
+							<th data-tip="Position in this list, in the current sort order.">#</th>
+							<th data-tip="Club badge. Click a club to open its page."><span class="th-club">Club</span></th>
+							<th data-tip="Club name, with its country and league. Click a club to open its page.">Club</th>
+							<th class="num" data-tip="World rank: place among every ranked club by Baseline Strength, whatever this list is filtered or sorted by.">World</th>
+							<th class="num col-dom" data-tip="In league: place by Baseline Strength among the clubs in its league this season. TheCornerFC's ranking, not the league table (that's on the competition's page).">In lg</th>
 							{#each COLUMNS as col (col.key)}
-								<th class="num sortable {col.cls}" class:active={data.sort === col.key} aria-sort={data.sort === col.key ? 'descending' : undefined} title={col.tip}>
-									<a href={href({ sort: col.key === 'lt' ? null : col.key, page: null })} data-sveltekit-noscroll>{#if col.key === 'lt'}<span class="th-full">Baseline</span><span class="th-short">Base</span>{:else}{col.label}{/if}</a>
+								<th class="num sortable {col.cls}" class:active={data.sort === col.key} aria-sort={data.sort === col.key ? 'descending' : undefined} data-tip="{col.tip} Click to sort.">
+									<a href={address({ ...without('sort'), ...(col.key === 'lt' ? {} : { sort: col.key }) })} data-sveltekit-reset="false">{#if col.key === 'lt'}<span class="th-full">Baseline</span><span class="th-short">Base</span>{:else}{LABELS[col.key]}{/if}</a>
 								</th>
 							{/each}
 						</tr>
 					</thead>
 					<tbody>
-						{#each data.rows as r (r.team)}
-							<tr>
-								<td>{r.n}</td>
+						{#each data.rows as r, i (r.team)}
+							<tr onclick={(e) => rowClick(e, r.team)}>
+								<td>{i + 1}</td>
 								<td><Crest id={r.team} name={r.name} /></td>
 								<td>
 									<div class="club-cell">
-										<a class="team-link" href="/club/{r.team}">{r.name}</a>
-										{#if data.league === null}
-											<span class="club-meta"><span class="cm-league">{r.country} · <a class="nat-link" href={href({ c: String(r.league), page: null })}>{r.leagueName}</a></span></span>
+										<a class="team-link" href={pageHref('club', r.team)} data-short={r.short}>{r.name}</a>
+										{#if showMeta && r.country}
+											<span class="club-meta"><Flag key={r.countryKey} name={r.country} /><span class="cm-league"><a class="nat-link" href={pageHref('league', r.league)}>{r.leagueName}</a></span></span>
 										{/if}
 									</div>
 								</td>
@@ -72,19 +136,8 @@
 					</tbody>
 				</table>
 			</div>
-			{#if data.pages > 1}
-				<nav class="pager" aria-label="Pages">
-					{#if data.pageNo > 1}<a class="mt-btn" href={href({ page: data.pageNo === 2 ? null : String(data.pageNo - 1) })}>Previous</a>{/if}
-					<span>Page {data.pageNo} of {data.pages}</span>
-					{#if data.pageNo < data.pages}<a class="mt-btn" href={href({ page: String(data.pageNo + 1) })}>Next</a>{/if}
-				</nav>
-			{/if}
 		{:else}
-			<div class="empty-state">No clubs found.</div>
+			<div class="empty-state">No clubs {data.excluded.length ? 'match these filters' : 'found'}.</div>
 		{/if}
 	</div>
 </section>
-
-<style>
-	.pager { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 16px 0; }
-</style>

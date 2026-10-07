@@ -1,38 +1,67 @@
 import { keptDoc } from '#lib/server/database.ts';
-import { clubPlaces, clubRows, clubs, SORTS, tiers, type RankingsDoc, type Sort } from '#lib/rankings.ts';
-import { countryName, leagueShort, teamName, type Site } from '#lib/site.ts';
+import { cupEntrants, cupTeamsLeft, type LeagueDoc } from '#lib/cups.ts';
+import { countryDisplay, filterMenu, isExcludeKey, knownFilter, tableCountries, tableRows, type Cups } from '#lib/clubTable.ts';
+import { CLUB_SHORT, DOMESTIC_CUPS, EURO_CUPS } from '#lib/names.ts';
+import { clubPlaces, clubs, SORTS, tiers, type RankingsDoc, type Sort } from '#lib/rankings.ts';
+import { leagueShort, teamName, type Site } from '#lib/site.ts';
 
-const PER_PAGE = 100;
+const FIVE_MINUTES = 300_000;
 
 export async function load({ fetch, url, setHeaders }) {
-	const [site, doc] = await Promise.all([keptDoc<Site>(fetch, 'site'), keptDoc<RankingsDoc>(fetch, 'rankings')]);
+	// the cups' own files say which clubs are in each; one that can't be read shows no clubs
+	const cupIds = [...EURO_CUPS, ...DOMESTIC_CUPS];
+	const [site, doc, ...cupDocs] = await Promise.all([
+		keptDoc<Site>(fetch, 'site'),
+		keptDoc<RankingsDoc>(fetch, 'rankings'),
+		...cupIds.map((id) => keptDoc<LeagueDoc>(fetch, `leagues/${id}`, FIVE_MINUTES).catch(() => null))
+	]);
 	const all = clubs(doc);
+	const countries = tableCountries(site, all);
+	const cups: Cups = new Map(cupIds.map((id, i) => {
+		const lg = cupDocs[i];
+		return [id, !lg ? new Set<number>() : DOMESTIC_CUPS.includes(id) ? cupTeamsLeft(lg) : cupEntrants(lg)];
+	}));
 
-	const asked = url.searchParams.get('sort') as Sort;
+	const q = url.searchParams;
+	const asked = q.get('sort') as Sort;
 	const sort: Sort = SORTS.includes(asked) ? asked : 'lt';
-	const c = url.searchParams.get('c') ?? '';
-	const league = /^\d+$/.test(c) && site.competitions[c] ? Number(c) : null;
-	const rows = clubRows(all, sort, league);
-	const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
-	const pageNo = Math.min(pages, Math.max(1, Number(url.searchParams.get('page')) || 1));
+	const filter = knownFilter(q.get('c'), site, countries) ? q.get('c')! : 'all';
+	const excluded = new Set((q.get('x') || '').split(',').filter(isExcludeKey));
+	const search = (q.get('q') || '').slice(0, 80);
 
+	const { rows, wide } = tableRows(site, all, countries, cups, { filter, excluded, search, sort });
+	const menu = filterMenu(site, all, countries, cups, filter, excluded);
 	const places = clubPlaces(all);
 	const baseTier = tiers(all, 'lt'), currentTier = tiers(all, 'current');
 	// the same answer for every visitor: a shared cache may keep it for a minute
 	setHeaders({ 'cache-control': 'public, max-age=60' });
 
 	return {
-		sort, league, pageNo, pages, total: rows.length,
-		leagueName: league === null ? null : leagueShort(site, league),
-		rows: rows.slice((pageNo - 1) * PER_PAGE, pageNo * PER_PAGE).map((r, i) => {
+		sort, filter, search, wide, menu,
+		excluded: [...excluded],
+		tabHead: {
+			title: 'Clubs',
+			intro: 'Every club ranked by strength, on a scale where 100 points is worth about a goal a game.',
+			more: 'terms',
+			key: [
+				['Baseline (Base)', "A club's long-term level: its rating averaged over roughly its last 100 matches. Slow to move."],
+				['Current', 'Its rating after its latest match. It rises when the club does better than expected, and falls when it does worse.'],
+				['Gap', 'Current minus Baseline. Green: playing above its usual level. Red: below it.'],
+				['Last 6', 'How far its rating has moved over its last 6 matches.'],
+				['World', 'Its place among every ranked club, by Baseline.'],
+				['In lg', "Its place among the clubs in its own league, by Baseline. This is the site's ranking, not the league table."]
+			]
+		},
+		rows: rows.map((r) => {
 			const comp = site.competitions[r.league];
 			return {
-				n: (pageNo - 1) * PER_PAGE + i + 1,
 				team: r.team,
 				name: teamName(site, r.team),
+				short: CLUB_SHORT[r.team],
 				league: r.league,
 				leagueName: leagueShort(site, r.league),
-				country: comp ? countryName(comp) : '',
+				countryKey: comp?.country ?? '',
+				country: comp ? countryDisplay(comp.country) : '',
 				place: places.get(r.team)!,
 				lt: Math.round(r.lt), ltTier: baseTier(r.lt),
 				current: Math.round(r.current), currentTier: currentTier(r.current),

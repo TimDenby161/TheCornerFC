@@ -25,3 +25,10 @@ export function tabFor(pathname: string): string {
 	for (const g of MENU) for (const s of g.sections) if (s.path && (pathname === s.path || pathname.startsWith(s.path + '/'))) return s.tab;
 	return 'home';
 }
+
+// A link to a club's, competition's or country's page. Until that kind of page is rebuilt here,
+// the link goes to the old site's.
+const BUILT = new Set<string>([]);
+export const pageHref = (kind: 'club' | 'league' | 'country' | 'player' | 'nation', id: string | number) =>
+	BUILT.has(kind) ? `/${kind}/${encodeURIComponent(id)}` : `${OLD_SITE}#/${kind}/${encodeURIComponent(id)}`;
+export const methodologyHref = (section: string) => `${OLD_SITE}methodology.html#${section}`;
