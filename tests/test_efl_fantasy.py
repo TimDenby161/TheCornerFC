@@ -111,6 +111,18 @@ class OwnerOnlyTest(unittest.TestCase):
             self.assertEqual(list(Path(d).iterdir()), [])
         store.assert_called_once_with(conn, 'efl_predictions', doc)
 
+    def test_owner_store_accepts_every_document_written_to_it(self):
+        # the table's check listed only the FPL names until 2026-10-07, so efl_predictions was refused
+        import re
+        schema = (ROOT / 'db/schema.sql').read_text()
+        allowed = re.findall(r"fpl_owner_docs_name_check\s+CHECK \(name IN \(([^)]*)\)\)", schema)[-1]
+        allowed = set(re.findall(r"'(\w+)'", allowed))
+        written = set()
+        for path in (ROOT / 'thecornerfc').glob('*.py'):
+            written.update(re.findall(r"""store_owner_doc\(conn, ["'](\w+)["']""", path.read_text()))
+        self.assertEqual(written, {'fpl_predictions', 'fpl_team', 'efl_predictions'})
+        self.assertLessEqual(written, allowed)
+
     def test_site_has_no_public_efl_predictions(self):
         self.assertFalse((ROOT / 'docs/data/efl_predictions.json').exists())
         manifest = ROOT / 'docs/data/manifest.json'          # there after a local export; the data isn't in the repository
