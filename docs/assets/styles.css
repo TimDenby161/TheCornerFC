@@ -108,6 +108,7 @@
     .why-toggle, .lineup-toggle, .modal-header, .coach-name, .mt-title b) { font-stretch: 76%; }
   /* ... and the figures a page leads with */
   :where(.stats-value, .kpi-value, .team-stat-value, .kf-value, .final-box, .pl-hero-rank .val, .pos-chip-rank, .pp-rank, .fm-name,
+    .home-nums dt, .home-call-key b, .home-top li::before, .tip-pick .odds, .mt-stats b) { font-stretch: 68%; }
   body {
     height: 100%;
     overflow: hidden;
