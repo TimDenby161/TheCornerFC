@@ -6488,39 +6488,32 @@ async function homePlayers() {
   homeSample("players", `<ol class="home-top">${rows.map((p) =>
     `<li>${p.team ? clubCrest(p.team, "club-logo") : `<span class="club-logo"></span>`}<span class="lg-main"><span class="home-who"><a class="team-link" href="#/player/${p.id}">${escapeHtml(p.name)}</a>${playerFlag(p.nationality)}</span><span class="lg-sub">${escapeHtml(p.team ? teamName(p.team) : "Club not known")}${p.league != null && leagueShort(p.league) ? ` · ${escapeHtml(leagueShort(p.league))}` : ""}</span></span><span class="home-pos">${POS_LABEL[p.position] || escapeHtml(p.position || "")}</span>${rankChipSmall(p.seasons[0])}</li>`).join("")}</ol>`);
 }
-// The example line-up: the one predicted XI the database gives everyone (site_sample_xi, the
-// strongest club's next match; db/migrations/20261007_site_sample_xi.sql), on a pitch. Where it
-// has none, a line-up from the Line-up record instead: the XI that started, marked against the
-// one predicted for it, for the strongest club with a match in the record's last three weeks
-// (as far back as site_lineups keeps them).
+// The example line-up, from the Line-up record: the XI that started, on a pitch, marked against
+// the one the model predicted for it. The latest match of a club in the world's top ten where it
+// named nine or more of the eleven (owner, 2026-10-07). Where no top-ten club has one, the
+// strongest club that does; where no club does, the strongest club's latest. From the record's
+// last three weeks only (as far back as site_lineups keeps them).
+const HOME_XI_CLUBS = 10, HOME_XI_RIGHT = 9;
 async function homeXi() {
-  const toXi = (rows) => rows.map(([pid, name, pos, rank]) => ({ p: { id: pid, name }, b: { label: pos }, rank, chance: null, mins: null }));
-  const versus = (name, team, home, away, kickoff) => `${name(team)} ${home === team ? "v" : "at"} ${name(home === team ? away : home)} · ${fmtDay(kickoff)}`;
-  const one = await siteAsk("site_sample_xi", {}).catch((err) => { console.error(err); return null; });
-  let xi, tag = "Predicted XI", what, score = "";
-  if (one?.players?.length) {
-    for (const r of one.players) r[1] = decodeEntities(r[1]);
-    xi = toXi(one.players);
-    what = versus(teamName, one.team, one.home, one.away, one.kickoff);
-  } else {
-    const rec = await getJsonOrNull("data/lineups.json");
-    const at = Object.fromEntries((rec?.fields || []).map((k, i) => [k, i]));
-    const strength = (r) => state.rankByTeam.get(r[at.team])?.current ?? 0;
-    const r = (rec?.rows || []).filter((x) => Date.parse(x[at.kickoff]) > Date.now() - 20 * 864e5)
-      .sort((a, b) => strength(b) - strength(a) || Date.parse(b[at.kickoff]) - Date.parse(a[at.kickoff]))[0];
-    const fx = r && await loadLineups(r[at.fixture]);
-    const started = fx?.actual?.[String(r[at.team])], predicted = fx?.prematch?.[String(r[at.team])];
-    if (!started?.length || !predicted?.length) return;
-    xi = toXi(started);
-    const hits = markPredicted(xi, predicted);
-    for (const c of xi) delete c.instead;        // no room here for the model's other pick under each miss
-    const name = (id) => state.data.teams[id] || rec.teams?.[id] || teamName(id);
-    tag = "Predicted against the team sheet";
-    what = versus(name, r[at.team], r[at.home] ? r[at.team] : r[at.opponent], r[at.home] ? r[at.opponent] : r[at.team], r[at.kickoff]);
-    score = `<span class="xi-score xi-score-${hits >= 9 ? "good" : hits >= 7 ? "ok" : "poor"}" title="Starters the model predicted">${hits}/${xi.length} predicted</span>`;
-  }
-  homeSample("lineups", `<p class="home-xi-head${xi.some((c) => c.rank != null) ? "" : " home-xi-bare"}"><span><span class="home-call-tag">${tag}</span>${escapeHtml(what)}</span>${score}</p>${xiPitch(xi, null, { note: "" })}
-    ${score ? `<div class="xi-legend"><span><i class="xi-key xi-hit"></i>Predicted to start</span><span><i class="xi-key xi-miss"></i>Not predicted</span></div>` : ""}`);
+  const rec = await getJsonOrNull("data/lineups.json");
+  const at = Object.fromEntries((rec?.fields || []).map((k, i) => [k, i]));
+  const top = new Set([...state.rankings].sort((a, b) => b.current - a.current).slice(0, HOME_XI_CLUBS).map((x) => x.team));
+  const strength = (r) => state.rankByTeam.get(r[at.team])?.current ?? 0;
+  const newest = (a, b) => Date.parse(b[at.kickoff]) - Date.parse(a[at.kickoff]);
+  const strongest = (a, b) => strength(b) - strength(a) || newest(a, b);
+  const recent = (rec?.rows || []).filter((x) => Date.parse(x[at.kickoff]) > Date.now() - 20 * 864e5);
+  const right = recent.filter((x) => x[at.correct] >= HOME_XI_RIGHT);
+  const r = right.filter((x) => top.has(x[at.team])).sort(newest)[0] || right.sort(strongest)[0] || recent.sort(strongest)[0];
+  const fx = r && await loadLineups(r[at.fixture]);
+  const started = fx?.actual?.[String(r[at.team])], predicted = fx?.prematch?.[String(r[at.team])];
+  if (!started?.length || !predicted?.length) return;
+  const xi = started.map(([pid, name, pos, rank]) => ({ p: { id: pid, name }, b: { label: pos }, rank, chance: null, mins: null }));
+  const hits = markPredicted(xi, predicted);
+  for (const c of xi) delete c.instead;        // no room here for the model's other pick under each miss
+  const name = (id) => state.data.teams[id] || rec.teams?.[id] || teamName(id);
+  const what = `${name(r[at.team])} ${r[at.home] ? "v" : "at"} ${name(r[at.opponent])} · ${fmtDay(r[at.kickoff])}`;
+  homeSample("lineups", `<p class="home-xi-head${xi.some((c) => c.rank != null) ? "" : " home-xi-bare"}"><span><span class="home-call-tag">Predicted against the team sheet</span>${escapeHtml(what)}</span><span class="xi-score xi-score-${hits >= 9 ? "good" : hits >= 7 ? "ok" : "poor"}" title="Starters the model predicted">${hits}/${xi.length} predicted</span></p>${xiPitch(xi, null, { note: "" })}
+    <div class="xi-legend"><span><i class="xi-key xi-hit"></i>Predicted to start</span><span><i class="xi-key xi-miss"></i>Not predicted</span></div>`);
 }
 // The last 30 days of the Stats tab in three numbers
 async function homeStats() {
