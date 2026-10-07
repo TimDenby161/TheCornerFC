@@ -6323,14 +6323,54 @@ function renderTabHead(key) {
 // (homeTab), and the menu's Home opens it for anyone. Drawn from what every visit already has
 // (the names and the club ratings), so it asks the database for nothing of its own.
 const homeTab = () => state.account?.user || storedText("auth") ? "table" : "home";
-const HOME_CARDS = [["clubs", "Clubs"], ["players", "Players"], ["matches", "Matches"], ["leagues", "Leagues"], ["nations", "Nations"], ["stats", "Stats"]];
+const HOME_CARDS = [
+  ["clubs", "Clubs", "Who is actually the strongest?"], ["players", "Players", "Every player, from 0 to 100"],
+  ["matches", "Matches", "The chances before kick-off"], ["leagues", "Leagues", "League against league"],
+  ["nations", "Nations", "Every international since 1872"], ["stats", "Stats", "The model, marked against results"]];
 function renderHome() {
   state.drawn.add("home");
-  $("#home-lede").textContent = `Strength ratings for ${state.rankings.length.toLocaleString()} clubs in ${Object.keys(state.data.competitions).length.toLocaleString()} competitions, ranks for players and national teams, and the model's win, draw and loss chances for their matches.`;
-  $("#home-top").innerHTML = [...state.rankings].sort((a, b) => b.current - a.current).slice(0, 5).map((x) =>
-    `<li><a class="team-link" href="${clubHref(x.team)}">${escapeHtml(teamName(x.team))}</a><span class="lg-sub">${escapeHtml(compLabel(x.league))}</span><b>${Math.round(x.current).toLocaleString()}</b></li>`).join("");
-  $("#home-cards").innerHTML = HOME_CARDS.map(([key, name]) =>
-    `<a class="lg-card" href="#/${TAB_ROUTES[key] || key}"><span class="lg-main"><span class="lg-name">${name}</span><span class="lg-sub">${escapeHtml(TAB_INFO[key].intro)}</span></span></a>`).join("");
+  const clubs = state.rankings.length, comps = Object.keys(state.data.competitions).length;
+  const top = [...state.rankings].sort((a, b) => b.current - a.current).slice(0, 5);
+  countUp($("#home-count"), clubs);
+  $("#home-lede").textContent = "One strength rating for every club, from the Premier League to the lower divisions, with ranks for players and national teams and the model's chances for the matches they play.";
+  $("#home-top").innerHTML = top.map((x) =>
+    `<li>${clubCrest(x.team, "club-logo", `data-club="${x.team}"`)}<span class="lg-main"><a class="team-link" href="${clubHref(x.team)}">${escapeHtml(teamName(x.team))}</a><span class="lg-sub">${escapeHtml(compLabel(x.league))}</span></span><b>${Math.round(x.current).toLocaleString()}</b><span class="home-form">${signedHtml(x.form)}</span></li>`).join("");
+  $("#home-board-more").textContent = `All ${clubs.toLocaleString()} clubs`;
+  $("#home-facts").innerHTML = [
+    [comps.toLocaleString(), "competitions followed"],
+    ["100", "rating points is about a goal a game"],
+    ["1872", "where the national team ratings begin"],
+    [fmtShortDate(state.data.generated_at), "ratings last updated"],
+  ].map(([n, what]) => `<div><dt>${escapeHtml(n)}</dt><dd>${escapeHtml(what)}</dd></div>`).join("");
+  $("#home-cards").innerHTML = HOME_CARDS.map(([key, name, line], i) =>
+    `<a class="home-card" href="#/${TAB_ROUTES[key] || key}"><span class="home-card-no">${pad(i + 1)}</span><span class="home-card-line">${line}</span><span class="home-card-sub">${escapeHtml(TAB_INFO[key].intro)}</span><span class="home-card-name">${name}</span></a>`).join("");
+  if (top[0]) quiet(ensureTeam(top[0].team)).then(() => renderHomeCall(top[0].team));
+}
+// The headline's number, counted up to once; set outright where motion is turned down
+function countUp(el, n) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = n.toLocaleString(); return; }
+  const from = performance.now(), ms = 1100;
+  const step = (now) => {
+    const t = Math.min(1, (now - from) / ms);
+    el.textContent = Math.round(n * (1 - (1 - t) ** 3)).toLocaleString();
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+// One match's chances as a taste of the Matches tab: the top club's next match that has the
+// model's chances (the one request Home makes of its own). Left out when there isn't one.
+function renderHomeCall(team) {
+  const m = state.data.matches.find((x) => (x.home === team || x.away === team) && x.status === "NS" && x.p_home != null && new Date(x.kickoff) > Date.now());
+  if (!m) return;
+  const [h, d, a] = shownProbs(m, "p"), el = $("#home-call");
+  el.href = `#/matches?d=${localDateStr(new Date(m.kickoff))}`;
+  el.innerHTML = `<span><span class="home-call-tag">The model's call</span>
+      <span class="home-call-teams">${escapeHtml(teamName(m.home))} <i>v</i> ${escapeHtml(teamName(m.away))}</span>
+      <span class="home-call-when">${escapeHtml(compLabel(m.league))} · ${fmtDay(m.kickoff)}, ${fmtTime(m.kickoff)}</span></span>
+    <span><span class="home-call-bar" role="img" aria-label="${escapeHtml(`${teamName(m.home)} ${h}%, draw ${d}%, ${teamName(m.away)} ${a}%`)}">
+        <span class="prob-home" data-sw="${h}%"></span><span class="prob-draw" data-sw="${d}%"></span><span class="prob-away" data-sw="${a}%"></span></span>
+      <span class="home-call-key" aria-hidden="true"><span><b>${h}%</b>${escapeHtml(teamName(m.home))}</span><span><b>${d}%</b>Draw</span><span><b>${a}%</b>${escapeHtml(teamName(m.away))}</span></span></span>`;
+  el.hidden = false;
 }
 $("#home-join").addEventListener("click", () => {
   openAccount("signup");

@@ -72,17 +72,45 @@
   <div class="empty-state" id="boot-status" role="status">Loading…</div>
   <section class="panel" data-tab="home">
     <div class="home-hero">
-      <h2 class="home-title">Football ratings and match predictions</h2>
-      <p class="home-lede" id="home-lede">Strength ratings for clubs, players and national teams, and the model's win, draw and loss chances for their matches.</p>
-      <div class="home-actions">
-        <a class="mt-btn home-go" href="#/clubs">See the ratings</a>
-        <button type="button" class="link-btn" id="home-join">Create a free account</button>
+      <!-- the corner of a pitch at night: the touchlines, the corner arc and the flag (the site's mark) -->
+      <svg class="home-pitch" viewBox="0 0 420 300" aria-hidden="true" focusable="false">
+        <g fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M0 110H372V300"/>
+          <path d="M328 110a44 44 0 0 0 44 44"/>
+        </g>
+        <path d="M372 110V22" fill="none" stroke="#c9c8c2" stroke-width="3" stroke-linecap="round"/>
+        <g class="home-flag">
+          <path d="M371 24H326V56z" fill="#ffffff"/>
+          <path d="M371 24V56H326z" fill="#2a78d6"/>
+        </g>
+      </svg>
+      <div class="home-copy">
+        <p class="home-kicker"><span class="brand-mark" aria-hidden="true"></span>The Corner FC</p>
+        <h2 class="home-title"><span id="home-count">2,000+</span> clubs. <em>One&nbsp;scale.</em></h2>
+        <p class="home-lede" id="home-lede">Strength ratings for clubs, players and national teams, and the model's win, draw and loss chances for their matches.</p>
+        <div class="home-actions">
+          <a class="mt-btn home-go" href="#/clubs">See the ratings</a>
+          <button type="button" class="home-ghost" id="home-join">Create a free account</button>
+        </div>
+      </div>
+      <div class="home-board">
+        <p class="home-board-head"><span class="home-dot" aria-hidden="true"></span>Strongest clubs now<span class="home-board-key">Rating · last 6</span></p>
+        <ol class="home-top" id="home-top"></ol>
+        <a class="home-board-more" href="#/clubs" id="home-board-more">The full table</a>
       </div>
     </div>
-    <h3 class="home-head">Strongest clubs now</h3>
-    <ol class="home-top" id="home-top"></ol>
-    <h3 class="home-head">On the site</h3>
-    <div class="lg-list home-cards" id="home-cards"></div>
+    <dl class="home-facts" id="home-facts"></dl>
+    <a class="home-call" id="home-call" hidden></a>
+    <h3 class="home-head">What's inside</h3>
+    <div class="home-cards" id="home-cards"></div>
+    <div class="home-close">
+      <p class="home-close-line">Ratings you can check.</p>
+      <p class="home-close-sub">How the models work is written up in full, and the Stats page marks their match predictions against what happened.</p>
+      <div class="home-actions">
+        <a class="mt-btn home-go" href="#/clubs">See the ratings</a>
+        <a class="home-ghost" href="methodology.html">How the models work</a>
+      </div>
+    </div>
   </section>
   <section class="panel" data-tab="matches" data-active="false">
     <div class="match-bar">
