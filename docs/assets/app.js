@@ -6446,14 +6446,20 @@ function renderTabHead(key) {
 // (homeTab), and the menu's Home opens it for anyone. Drawn from what every visit already has
 // (the names and the club ratings), so it asks the database for nothing of its own.
 const homeTab = () => state.account?.user || storedText("auth") ? "table" : "home";
-// Home's showcase, a panel for each part of the site: [tab its link opens, the link's words, its
-// headline, columns of 12 it takes on a wide screen]. Each is drawn with its words at once and
-// a sample of the real thing (#home-s-<tab>) when that arrives; a sample that can't be had is left out.
-const HOME_PANELS = [
-  ["players", "Players", "Every player, from 0 to 100", 7], ["lineups", "Line-up record", "The eleven, before the team sheet", 5],
-  ["matches", "Matches", "The chances before kick-off", 6], ["stats", "Stats", "The model, marked against results", 6],
-  ["leagues", "Leagues", "League against league", 6], ["nations", "Nations", "Every international since 1872", 6]];
-const HOME_INTRO = { lineups: "Each club's predicted starting eleven for its next match, marked against the real team sheet afterwards." };
+// Home's hero turns through a slide for each part of the site: [tab its button opens, its name
+// under the hero, the headline's two lines, the button's words, the heading over its sample, that
+// heading's note]. Clubs, the first, is written in index.html. Each of the others joins the turn
+// when its sample of the real thing (#home-s-<tab>) arrives; one whose sample can't be had is left out.
+// A headline's line is no longer than "2,346 clubs." so that none wraps and makes every slide taller.
+const HOME_SLIDES = [
+  ["players", "Players", "Players.", "0 to 100.", "See the players", "Highest-ranked players", "Position · rank"],
+  ["matches", "Matches", "Matches.", "Forecast.", "See the matches", "The model's chances", ""],
+  ["lineups", "Line-ups", "The eleven.", "Called.", "See the line-up record", "Predicted against the team sheet", ""],
+  ["stats", "Stats", "Every call.", "Marked.", "See the record", "The last 30 days", ""],
+  ["leagues", "Leagues", "Leagues.", "Compared.", "See the leagues", "Strongest leagues now", "Average rating"],
+  ["nations", "Nations", "Nations.", "Since 1872.", "See the nations", "Strongest national teams", "Rating"]];
+const HOME_INTRO = { lineups: "Each club's predicted starting eleven for its next match, marked against the real team sheet afterwards.",
+  stats: "Every match prediction is marked against the real result, so you can see how often the model is right." };
 function renderHome() {
   state.drawn.add("home");
   const clubs = state.rankings.length;
@@ -6463,9 +6469,13 @@ function renderHome() {
   $("#home-top").innerHTML = top.map((x) =>
     `<li>${clubCrest(x.team, "club-logo", `data-club="${x.team}"`)}<span class="lg-main"><a class="team-link" href="${clubHref(x.team)}">${escapeHtml(teamName(x.team))}</a><span class="lg-sub">${escapeHtml(compLabel(x.league))}</span></span><b>${Math.round(x.current).toLocaleString()}</b><span class="home-form">${signedHtml(x.form)}</span></li>`).join("");
   $("#home-board-more").textContent = `All ${clubs.toLocaleString()} clubs`;
-  $("#home-show").innerHTML = HOME_PANELS.map(([key, name, line, wide]) =>
-    `<section class="home-panel hp-w${wide}"><h4 class="home-card-line">${line}</h4><p class="home-card-sub">${escapeHtml(HOME_INTRO[key] || TAB_INFO[key].intro)}</p>
-      <div class="home-sample" id="home-s-${key}"></div><a class="home-card-name" id="home-l-${key}" href="#/${TAB_ROUTES[key] || key}">${name}</a></section>`).join("");
+  $("#home-slides").insertAdjacentHTML("beforeend", HOME_SLIDES.map(([key, name, first, second, go, head, note]) =>
+    `<div class="home-slide" role="group" aria-roledescription="slide" aria-label="${name}" data-name="${name}" hidden>
+      <div class="home-copy"><h2 class="home-title">${first} <em>${second}</em></h2><p class="home-lede">${escapeHtml(HOME_INTRO[key] || TAB_INFO[key].intro)}</p>
+        <div class="home-actions"><a class="mt-btn home-go" id="home-l-${key}" href="#/${TAB_ROUTES[key] || key}">${go}</a></div></div>
+      <div class="home-board"><p class="home-board-head"><span class="home-dot" aria-hidden="true"></span>${escapeHtml(head)}<span class="home-board-key">${note}</span></p>
+        <div class="home-sample" id="home-s-${key}"></div></div></div>`).join(""));
+  homeTurn();
   homeLeagues();
   quiet(homePlayers());
   quiet(homeStats());
@@ -6473,10 +6483,58 @@ function renderHome() {
   quiet(homeXi());
   if (top[0]) quiet(ensureTeam(top[0].team)).then(() => homeCall(top[0].team));
 }
-const homeSample = (key, html) => { const el = $(`#home-s-${key}`); if (el) el.innerHTML = html; };
-// The first ten of the Players list, as it opens
+// A slide's sample is in: the slide joins the turn
+function homeSample(key, html) {
+  const el = $(`#home-s-${key}`);
+  if (!el) return;
+  el.innerHTML = html;
+  el.closest(".home-slide").hidden = false;
+  homeTurn();
+  $("#home-slides").scrollLeft = homeLeft(state.homeSlide);      // a slide that joined to the left of the one that's up has pushed it along
+}
+// The slides in the turn, and the one that's up (state.homeSlide). homeTurn() names them under the
+// hero and marks the one that's up, which is the only one a key or a screen reader can reach.
+// Drawing the names afresh starts the ten seconds again (the rule's fill, home-fill in styles.css,
+// is the clock: when it ends the next slide comes up, so it stops wherever the styles stop it).
+const homeSlides = () => [...$("#home-slides").children].filter((s) => !s.hidden);
+const homeLeft = (slide) => slide.offsetLeft - $("#home-slides").firstElementChild.offsetLeft;
+function homeTurn(to) {
+  const slides = homeSlides(), up = state.homeSlide = to || state.homeSlide || slides[0];
+  for (const s of slides) s.inert = s !== up;
+  $("#home-turn").hidden = slides.length < 2;
+  $("#home-turn-list").innerHTML = slides.map((s, i) =>
+    `<button type="button" data-i="${i}"${s === up ? ` aria-current="true"` : ""}><span>${s.dataset.name}</span></button>`).join("");
+}
+function homeSlideTo(slide, slid = !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (!slide) return;
+  if (slid) { homeTurn(slide); $("#home-slides").scrollTo({ left: homeLeft(slide), behavior: "smooth" }); }
+  else { homeTurn(slide); $("#home-slides").scrollLeft = homeLeft(slide); }
+}
+$("#home-turn-list").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b) homeSlideTo(homeSlides()[+b.dataset.i]);
+});
+$("#home-turn-list").addEventListener("animationend", (e) => {
+  if (e.animationName !== "home-fill") return;
+  const slides = homeSlides();
+  homeSlideTo(slides[(slides.indexOf(state.homeSlide) + 1) % slides.length]);
+});
+$("#home-hold").addEventListener("click", (e) => {
+  const held = $("#home-hero").toggleAttribute("data-held");
+  e.target.textContent = held ? "Play" : "Pause";
+});
+// A swipe (or any scroll of the slides) that comes to rest on another slide makes that one the one that's up
+$("#home-slides").addEventListener("scroll", () => {
+  clearTimeout(state.homeRest);
+  state.homeRest = setTimeout(() => {
+    const x = $("#home-slides").scrollLeft;
+    const near = homeSlides().reduce((a, s) => Math.abs(homeLeft(s) - x) < Math.abs(homeLeft(a) - x) ? s : a);
+    if (near !== state.homeSlide) homeTurn(near);
+  }, 120);
+}, { passive: true });
+// The first five of the Players list, as it opens
 async function homePlayers() {
-  const d = await siteAsk("site_players", { p_limit: 10 });
+  const d = await siteAsk("site_players", { p_limit: 5 });
   if (d.paywall) state.paywall = true;
   const rows = addPlayers(d.rows).filter((p) => p.seasons?.[0] != null);
   if (!rows.length) return;
@@ -6507,7 +6565,7 @@ async function homeXi() {
   for (const c of xi) delete c.instead;        // no room here for the model's other pick under each miss
   const name = (id) => state.data.teams[id] || rec.teams?.[id] || teamName(id);
   const what = `${name(r[at.team])} ${r[at.home] ? "v" : "at"} ${name(r[at.opponent])} · ${fmtDay(r[at.kickoff])}`;
-  homeSample("lineups", `<p class="home-xi-head${xi.some((c) => c.rank != null) ? "" : " home-xi-bare"}"><span><span class="home-call-tag">Predicted against the team sheet</span>${escapeHtml(what)}</span><span class="xi-score xi-score-${hits >= 9 ? "good" : hits >= 7 ? "ok" : "poor"}" title="Starters the model predicted">${hits}/${xi.length} predicted</span></p>${xiPitch(xi, null, { note: "" })}
+  homeSample("lineups", `<p class="home-xi-head${xi.some((c) => c.rank != null) ? "" : " home-xi-bare"}"><span>${escapeHtml(what)}</span><span class="xi-score xi-score-${hits >= 9 ? "good" : hits >= 7 ? "ok" : "poor"}" title="Starters the model predicted">${hits}/${xi.length} predicted</span></p>${xiPitch(xi, null, { note: "" })}
     <div class="xi-legend"><span><i class="xi-key xi-hit"></i>Predicted to start</span><span><i class="xi-key xi-miss"></i>Not predicted</span></div>`);
 }
 // The last 30 days of the Stats tab in three numbers
@@ -6597,7 +6655,7 @@ function showTab(tab) {
   if (tab === "leagues") renderLeagues();
   if (tab === "nations") { loadNations(); if (playersPending()) needFacets().then(renderNations); renderNations(); }
   if (tab === "lineups") { loadLineupRecord(); renderLineupRecord(); }
-  if (tab === "home") $("#home-join").hidden = !!state.account.user;
+  if (tab === "home") { $("#home-join").hidden = !!state.account.user; homeSlideTo($("#home-slides").firstElementChild, false); }
   syncMenu();
   syncTabUrl(tab);
 }

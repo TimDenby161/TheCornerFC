@@ -85,7 +85,8 @@
   <div class="ad-slot ad-top" id="ad-top" aria-hidden="true"></div>
   <div class="empty-state" id="boot-status" role="status">Loading…</div>
   <section class="panel" data-tab="home">
-    <div class="home-hero">
+    <!-- the hero turns through a slide for each part of the site: Clubs is written here, the rest are added by renderHome (app.js) -->
+    <div class="home-hero" id="home-hero" role="region" aria-roledescription="carousel" aria-label="What's on the site">
       <!-- the corner of a pitch: the touchline and goal line (drawn on past the frame, to the hero's edges), the corner arc and the flag (the site's mark) -->
       <svg class="home-pitch" viewBox="0 0 420 300" aria-hidden="true" focusable="false">
         <g fill="none" stroke="currentColor" stroke-width="2">
@@ -98,6 +99,8 @@
           <path d="M371 24V56H326z" fill="#0b110e"/>
         </g>
       </svg>
+      <div class="home-slides" id="home-slides">
+      <div class="home-slide" role="group" aria-roledescription="slide" aria-label="Clubs" data-name="Clubs">
       <div class="home-copy">
         <h2 class="home-title"><span id="home-count">2,000+</span> clubs. <em>One&nbsp;scale.</em></h2>
         <p class="home-lede" id="home-lede">Strength ratings for clubs, players and national teams, and the model's win, draw and loss chances for their matches.</p>
@@ -110,6 +113,13 @@
         <p class="home-board-head"><span class="home-dot" aria-hidden="true"></span>Strongest clubs now<span class="home-board-key">Rating · last 6</span></p>
         <ol class="home-top" id="home-top"></ol>
         <a class="home-board-more" href="#/clubs" id="home-board-more">The full table</a>
+      </div>
+      </div>
+      </div>
+      <!-- which slide is up, and the way to another: the rule over the one that's up fills as its ten seconds pass -->
+      <div class="home-turn" id="home-turn" hidden>
+        <div class="home-turn-list" id="home-turn-list"></div>
+        <button type="button" class="home-hold" id="home-hold">Pause</button>
       </div>
     </div>
     <!-- the four things a first visit asks, each a label, a one-line answer and the detail under it -->
@@ -144,8 +154,6 @@
         </ol>
       </section>
     </div>
-    <h3 class="home-head">What's inside</h3>
-    <div class="home-show" id="home-show"></div>
     <div class="home-close">
       <p class="home-close-line">Ratings you can check.</p>
       <p class="home-close-sub">How the models work is written up in full, and the Stats page marks their match predictions against what happened.</p>

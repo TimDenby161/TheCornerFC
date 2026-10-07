@@ -103,7 +103,7 @@
   }
   /* The narrow width: names and headings ... */
   :where(header .brand, nav.tabs button, .account-btn, .comp-group-header, .tip-day, .page-tabs button, .mt-btn, .home-ghost,
-    .club-head h2, .pl-hero h2, .home-title, .home-head, .home-close-line, .home-card-line, .home-brief-a, .home-call-teams,
+    .club-head h2, .pl-hero h2, .home-title, .home-close-line, .home-turn button, .home-brief-a, .home-call-teams,
     .why-toggle, .lineup-toggle, .modal-header, .coach-name, .mt-title b) { font-stretch: 76%; }
   /* ... and the figures a page leads with */
   :where(.stats-value, .kpi-value, .team-stat-value, .kf-value, .final-box, .pl-hero-rank .val, .pos-chip-rank, .pp-rank, .fm-name,
@@ -1098,10 +1098,11 @@
   .lg-sub { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Home: the site's front door. The field: pitch green to the page's edges in both themes, its
      corner marked in chalk (the touchline across the top, the goal line down the right, the arc
-     and the flag), with the claim and the five strongest clubs standing on the grass. Under it
-     the brief, the facts and a section for each part of the site: all ruled, none boxed */
-  .home-hero { position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr);
-    gap: 40px; align-items: end; min-height: min(640px, 78vh); margin: -12px -16px 0;
+     and the flag), with a slide for each part of the site standing on the grass: its claim and a
+     sample of the real thing. The slides turn every ten seconds, or by their names under them.
+     Under the hero the brief and the close: all ruled, none boxed */
+  .home-hero { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
+    min-height: min(640px, 78vh); margin: -12px -16px 0;
     padding: 150px clamp(72px, 6vw, 96px) clamp(24px, 3.4vw, 44px) 16px;
     color-scheme: dark; color: var(--chalk); background: var(--pitch);
     --text-primary: var(--chalk); --text-secondary: #c9d4c9; --text-muted: #9fb3a6; --border: rgba(242,244,236,0.24); --gridline: rgba(242,244,236,0.24);
@@ -1110,6 +1111,28 @@
   /* the markings run on past the drawing's own edges (index.html), to the hero's */
   .home-pitch { position: absolute; z-index: -1; top: 0; right: 0; width: 420px; height: 300px; overflow: visible; color: rgba(242,244,236,0.5); }
   .home-flag { transform-box: fill-box; transform-origin: right center; }
+  /* the slides side by side in a row that scrolls a slide at a time (a swipe turns it), all as tall
+     as the tallest, each standing on the hero's foot. The 4px is room for a focus ring */
+  .home-slides { display: flex; gap: 40px; margin: -4px; padding: 4px; scroll-padding-inline: 4px; overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .home-slides::-webkit-scrollbar { display: none; }
+  .home-slide { flex: 0 0 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); gap: 40px;
+    align-items: end; align-content: end; scroll-snap-align: start; scroll-snap-stop: always; }
+  .home-slide[hidden] { display: none; }
+  /* the slides' names: a rule over each, and the rule over the one that's up fills as its ten seconds pass */
+  .home-turn { display: flex; align-items: flex-start; gap: 16px; margin-top: 28px; }
+  .home-turn[hidden] { display: none; }
+  .home-turn-list { display: flex; flex: 1; gap: 6px; min-width: 0; }
+  .home-turn button { appearance: none; min-height: 44px; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-muted); cursor: pointer; }
+  .home-turn-list button { position: relative; flex: 1 1 0; min-width: 0; padding: 12px 0 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .home-turn-list button::before, .home-turn-list button::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: var(--gridline); }
+  .home-turn-list button::after { background: var(--text-primary); transform-origin: left; transform: scaleX(0); }
+  .home-turn-list button[aria-current] { color: var(--text-primary); }
+  .home-turn-list button[aria-current]::after { transform: none; }
+  .home-turn button:hover { color: var(--text-primary); }
+  .home-turn button:focus-visible { outline: 2px solid var(--text-primary); outline-offset: -2px; }
+  .home-hold { flex: none; padding: 12px 0 0 12px; }      /* its word level with the names */
   .home-title { margin: 0 0 22px; font-size: clamp(56px, 9.6vw, 152px); line-height: 0.86; font-weight: 900; font-stretch: 62%; letter-spacing: -0.005em;
     text-transform: uppercase; font-variant-numeric: tabular-nums; }
   /* the second line in outline, as if marked on the grass */
@@ -1126,7 +1149,7 @@
   .home-ghost { appearance: none; color: var(--text-primary); background: transparent; border: 1px solid var(--text-muted); font-size: 16px; font-weight: 700; padding: 0 20px; }
   .home-ghost[hidden] { display: none; }
   .home-ghost:hover { background: var(--chip-bg); }
-  :is(.home-ghost, .home-go, .home-card-name, .home-steps a):focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+  :is(.home-ghost, .home-go, .home-steps a):focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
   .home-board { min-width: 0; padding-top: 10px; border-top: 2px solid var(--text-primary); }
   .home-board-head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
   .home-board-key { margin-left: auto; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-muted); }
@@ -1141,11 +1164,11 @@
   .home-top .team-link { font-weight: 700; font-size: 15px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .home-top b { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
   .home-top .home-form { min-width: 34px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
-  /* the way in, under the board and under each section: one line, ruled off, in ink */
-  .home-board-more, .home-card-name { display: block; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-primary); text-decoration: none; }
+  /* the way in, under the board: one line, ruled off, in ink */
+  .home-board-more { display: block; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-primary); text-decoration: none; }
   .home-board-more { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--gridline); }
-  .home-board-more::after, .home-card-name::after, .home-steps a::after { content: " →"; }
-  :is(.home-board-more, .home-card-name, .home-steps a):hover { text-decoration: underline; text-underline-offset: 3px; }
+  .home-board-more::after, .home-steps a::after { content: " →"; }
+  :is(.home-board-more, .home-steps a):hover { text-decoration: underline; text-underline-offset: 3px; }
   /* the brief: what it is, who it's for, why it matters and what to do next, in columns under a rule */
   .home-brief { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px 28px; margin-top: 44px; }
   .home-brief-item { min-width: 0; padding-top: 14px; border-top: 2px solid var(--text-primary); }
@@ -1165,7 +1188,6 @@
   .home-brief-item .home-steps li + li { margin-top: 10px; }
   .home-steps a { display: block; font-size: 15px; font-weight: 700; color: var(--text-primary); text-decoration: none; }
   .home-steps span { display: block; }
-  .home-call-tag { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
   .home-call-teams { display: block; margin: 0 0 4px; font-size: 28px; line-height: 1.05; font-weight: 800; text-transform: uppercase; text-wrap: balance; }
   .home-call-teams i { font-style: normal; font-weight: 600; color: var(--text-muted); text-transform: none; }
   .home-call-when { display: block; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
@@ -1175,47 +1197,40 @@
   .home-call-key span { display: block; min-width: 0; }
   .home-call-key span:nth-child(2) { text-align: center; } .home-call-key span:nth-child(3) { text-align: right; }
   .home-call-key b { display: block; font-size: clamp(28px, 3vw, 38px); line-height: 1; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-  .home-head { margin: 72px 0 20px; font-size: clamp(40px, 6vw, 88px); line-height: 0.88; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }
-  /* the showcase: a section for each part of the site, twelve columns on a wide screen */
-  .home-show { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 44px 40px; }
-  .home-panel { grid-column: span 12; display: flex; flex-direction: column; gap: 8px; min-width: 0; padding-top: 14px; border-top: 2px solid var(--text-primary); }
-  .home-panel :is(h4, p) { margin: 0; }
-  .home-sample { margin: 12px 0 16px; }
+  .home-sample { margin: 12px 0 0; }
   .home-sample:empty { display: none; }
-  .home-panel .home-top .rel-chip { min-width: 40px; text-align: center; font-size: 14px; }
+  .home-board .home-top .rel-chip { min-width: 40px; text-align: center; font-size: 14px; }
   .home-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .home-who .flag { flex: none; }
   .home-pos { min-width: 34px; text-align: right; font-size: 12px; font-weight: 700; color: var(--text-muted); }
   .home-flag-cell { display: flex; align-items: center; justify-content: center; width: 32px; flex: none; }
   .home-flag-cell .flag { width: 28px; height: auto; }
   .home-xi-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin: 0 0 10px; font-size: 14px; font-weight: 700; }
-  .home-xi-head .home-call-tag { margin-bottom: 3px; }
   .home-sample .pp-section { margin: 0; }
   .home-xi-bare + .pp-section .pp-rank { display: none; }      /* a line-up from the record whose players have no rank */
-  .home-sample .pitch.pp-pitch { max-width: 400px; }
+  .home-sample .pitch.pp-pitch { max-width: 260px; outline: 1px solid var(--gridline); }      /* small enough that its slide is no taller than the rest; lined off from the grass around it */
   .home-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
   .home-nums div + div { padding-left: 12px; border-left: 1px solid var(--gridline); }
   .home-nums dt { font-size: clamp(34px, 4vw, 56px); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
   .home-nums dd { margin: 6px 0 0; font-size: 13px; line-height: 1.35; color: var(--text-secondary); }
-  .home-card-line { font-size: 30px; line-height: 1.02; font-weight: 800; text-wrap: balance; }
-  .home-card-sub { max-width: 60ch; text-wrap: pretty; font-size: 14px; line-height: 1.45; color: var(--text-secondary); }
-  .home-card-name { margin-top: auto; padding: 12px 0 0; border-top: 1px solid var(--gridline); }
   .home-close { margin: 72px 0 8px; padding-top: 18px; border-top: 2px solid var(--text-primary); }
   .home-close-line { margin: 0 0 12px; font-size: clamp(40px, 6vw, 88px); line-height: 0.88; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }
   .home-close-sub { margin: 0 0 24px; max-width: 52ch; font-size: 16px; line-height: 1.5; color: var(--text-secondary); }
   @media (max-width: 1099px) {
-    .home-hero { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+    .home-hero { min-height: 0; }
+    .home-slide { grid-template-columns: minmax(0, 1fr); }
   }
   @media (min-width: 1100px) {
-    .hp-w5 { grid-column: span 5; } .hp-w6 { grid-column: span 6; } .hp-w7 { grid-column: span 7; }
     .home-brief { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
   @media (max-width: 640px) {
-    .home-hero { gap: 28px; padding-top: 100px; padding-right: 44px; }
+    .home-hero { padding-top: 100px; padding-right: 44px; }
+    .home-slide { gap: 28px; }
+    /* no room for seven names: the rules alone, each still named for a screen reader */
+    .home-turn-list button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .home-pitch { width: 252px; height: 180px; }
     .home-actions > * { flex: 1 1 100%; }
     .home-brief { grid-template-columns: minmax(0, 1fr); }
-    .home-show { row-gap: 36px; }
   }
   @media (max-width: 480px) { .home-hero { margin: -10px -12px 0; padding-left: 12px; } }
   @media (prefers-reduced-motion: no-preference) {
@@ -1226,7 +1241,14 @@
     .panel[data-tab="home"][data-active="true"] .home-board { animation-delay: .3s; }
     .home-flag { animation: home-wave 2.6s ease-in-out infinite alternate; }
     .home-dot { animation: home-pulse 2s ease-out infinite; }
+    /* the turn's clock (homeTurn in app.js brings up the next slide when it ends): stopped by the
+       Pause button, under a mouse resting on the slide, and while a key has the focus inside */
+    .home-turn-list button[aria-current]::after { animation: home-fill 10s linear both; }
+    .home-hero:is([data-held], :has(:focus-visible)) .home-turn-list button::after { animation-play-state: paused; }
+    @media (hover: hover) { .home-slides:hover ~ .home-turn button::after { animation-play-state: paused; } }
   }
+  @media (prefers-reduced-motion: reduce) { .home-hold { display: none; } }      /* nothing turns by itself, so nothing to pause */
+  @keyframes home-fill { from { transform: scaleX(0); } }
   @keyframes home-rise { from { opacity: 0; transform: translateY(18px); } }
   @keyframes home-wave { from { transform: skewY(-5deg) scaleX(1); } to { transform: skewY(5deg) scaleX(0.93); } }
   @keyframes home-pulse { from { box-shadow: 0 0 0 0 rgba(95,224,138,0.6); } to { box-shadow: 0 0 0 9px rgba(95,224,138,0); } }
@@ -1880,7 +1902,6 @@
     .tab-key summary { padding: 11px 0; }
     .site-links a { display: inline-block; padding: 12px 4px; }
     .home-board-more { padding: 14px 0; }
-    .home-card-name { padding: 14px 0 12px; }
     .home-steps a { padding: 8px 0; }
     .mt-name .team-link { display: inline-block; padding: 7px 0; }
     /* a row of a table that opens a page is a fingertip tall, and the small badge and flag in a
