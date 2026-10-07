@@ -5709,7 +5709,7 @@ function renderFplNext(listOnly = false) {
   if (d === undefined) { el.innerHTML = ownerGate("Predictions"); return; }
   if (d === null) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">Loading…</div>`; return; }
   if (!d || !d.players.length) { el.innerHTML = `<div class="stats-label">Predictions</div><div class="stats-note">No upcoming Premier League gameweeks yet.</div>`; return; }
-  const fp = state.fplView ||= { pos: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0, price: [null, null], mark: "" };
+  const fp = state.fplView ||= { pos: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0, price: [null, null], marked: { mine: false, target: false } };
   const marks = state.owner?.marks || new Map(), [priceLo, priceHi] = fp.price;
   const gws = d.gameweeks, n = fp.mode === "gw" ? 1 : Math.min(+fp.mode, gws.length);
   fp.gw = Math.max(0, Math.min(fp.gw, gws.length - 1));
@@ -5726,7 +5726,7 @@ function renderFplNext(listOnly = false) {
       price: price(p) ?? -1, value: price(p) ? xp / price(p) : -1 };
   }).filter((r) => (fp.pos === "all" || r.p.pos === fp.pos)
       && (priceLo == null && priceHi == null || r.price > 0 && (priceLo == null || r.price >= priceLo) && (priceHi == null || r.price <= priceHi))
-      && (!fp.mark || marks.get(r.p.player)?.[fp.mark === "mine" ? 0 : 1])
+      && (!fp.marked.mine && !fp.marked.target || fp.marked.mine && marks.get(r.p.player)?.[0] || fp.marked.target && marks.get(r.p.player)?.[1])
       && (!q || r.p.name.toLowerCase().includes(q) || team(r.p.team).toLowerCase().includes(q)))
     .sort((a, b) => b[fp.sort] - a[fp.sort] || b.xp - a.xp);
   const list = fp.all ? rows : rows.slice(0, FPL_SHOWN);
@@ -5795,7 +5795,7 @@ function renderFplNext(listOnly = false) {
   const cols = (fp.mode === "gw" ? 8 : 6 + span.length);
   const count = (j) => [...marks.values()].filter((v) => v[j]).length;
   const markChips = [["mine", "My team", 0], ["target", "Targets", 1]].map(([k, label, j]) =>
-    `<button type="button" class="filter-chip" data-fpl-marked="${k}" aria-pressed="${fp.mark === k}">${label} ${count(j)}</button>`).join("");
+    `<button type="button" class="filter-chip" data-fpl-marked="${k}" aria-pressed="${fp.marked[k]}">${label} ${count(j)}</button>`).join("");
   const stops = fplPriceStops().length - 1;
   const slider = (end, label) => `<input type="range" min="0" max="${stops}" step="1" data-fpl-price data-end="${end}" aria-label="${label}">`;
   const table = `<div class="fpl-scroll" tabindex="0" role="group" aria-label="Table: scrolls sideways"><table class="calib-table fpl-table${fp.mode === "gw" ? "" : " multi"}">
@@ -5834,7 +5834,7 @@ $("#fpl-body").addEventListener("click", (e) => {
   const brk = t("[data-fpl-break]"), marked = t("[data-fpl-marked]");
   if (!pos && !sort && !mode && !step && !brk && !marked && e.target.id !== "fpl-more") return;
   const fp = state.fplView;
-  if (marked) { fp.mark = fp.mark === marked.dataset.fplMarked ? "" : marked.dataset.fplMarked; fp.all = false; }
+  if (marked) { fp.marked[marked.dataset.fplMarked] = !fp.marked[marked.dataset.fplMarked]; fp.all = false; }          // both on: either
   if (brk) fp.open = fp.open === +brk.dataset.fplBreak ? null : +brk.dataset.fplBreak;
   if (pos) { fp.pos = pos.dataset.fplPos; fp.all = false; }
   if (sort) fp.sort = sort.dataset.fplSort;
