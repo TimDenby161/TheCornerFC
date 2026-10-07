@@ -6311,9 +6311,28 @@ function renderTabHead(key) {
   $("#tab-key-list").innerHTML = info.key.map(([t, d]) => `<dt>${escapeHtml(t)}</dt><dd>${escapeHtml(d)}</dd>`).join("");
 }
 
+// ------------------------------------------------------------------ home
+// What the site is, for a visitor who isn't signed in: the address with no #/ part opens on it
+// (homeTab), and the menu's Home opens it for anyone. Drawn from what every visit already has
+// (the names and the club ratings), so it asks the database for nothing of its own.
+const homeTab = () => state.account?.user || storedText("auth") ? "table" : "home";
+const HOME_CARDS = [["clubs", "Clubs"], ["players", "Players"], ["matches", "Matches"], ["leagues", "Leagues"], ["nations", "Nations"], ["stats", "Stats"]];
+function renderHome() {
+  state.drawn.add("home");
+  $("#home-lede").textContent = `Strength ratings for ${state.rankings.length.toLocaleString()} clubs in ${Object.keys(state.data.competitions).length.toLocaleString()} competitions, ranks for players and national teams, and the model's win, draw and loss chances for their matches.`;
+  $("#home-top").innerHTML = [...state.rankings].sort((a, b) => b.current - a.current).slice(0, 5).map((x) =>
+    `<li><a class="team-link" href="${clubHref(x.team)}">${escapeHtml(teamName(x.team))}</a><span class="lg-sub">${escapeHtml(compLabel(x.league))}</span><b>${Math.round(x.current).toLocaleString()}</b></li>`).join("");
+  $("#home-cards").innerHTML = HOME_CARDS.map(([key, name]) =>
+    `<a class="lg-card" href="#/${TAB_ROUTES[key] || key}"><span class="lg-main"><span class="lg-name">${name}</span><span class="lg-sub">${escapeHtml(TAB_INFO[key].intro)}</span></span></a>`).join("");
+}
+$("#home-join").addEventListener("click", () => {
+  openAccount("signup");
+  auth().catch((err) => accountMsg(accountError(err), true));
+});
+
 // ------------------------------------------------------------------ wiring
 // These tabs are each drawn the first time they're opened, once the files they need are in
-const TAB_DRAW = { matches: renderMatches, table: renderTable, stats: renderStats, bets: renderBets, tips: renderTips, fpl: renderFpl };
+const TAB_DRAW = { home: renderHome, matches: renderMatches, table: renderTable, stats: renderStats, bets: renderBets, tips: renderTips, fpl: renderFpl };
 const TAB_NEEDS = { matches: ["matches"], tips: ["bets", "stats", "tipMatches"], bets: ["bets"], stats: ["stats"], fpl: ["fpl"] };
 // True when the tab's files are in. If not, they are fetched behind the "Loading…" note and
 // then() runs once they arrive, unless another view has been opened in the meantime.
@@ -6345,6 +6364,7 @@ function showTab(tab) {
   if (tab === "leagues") renderLeagues();
   if (tab === "nations") { loadNations(); if (playersPending()) needFacets().then(renderNations); renderNations(); }
   if (tab === "lineups") { loadLineupRecord(); renderLineupRecord(); }
+  if (tab === "home") $("#home-join").hidden = !!state.account.user;
   syncMenu();
   syncTabUrl(tab);
 }
@@ -6356,7 +6376,7 @@ function syncMenu() {
     if (on) title = b.textContent;
   });
   $("#app-title").textContent = title;
-  setTitle(title);
+  setTitle(state.tab === "home" ? "" : title);          // Home's title is the site's name alone
   renderTabHead(state.tab === "table" ? state.tableView : state.tab);
 }
 // Each tab other than the tables has its own address, so a reload (or a shared link) stays on it
@@ -6426,7 +6446,7 @@ function route() {
     applyTabQuery(tab, tabRoute[2]); showTab(tab); window.scrollTo(0, 0);
   }
   else if (location.hash.startsWith("#/")) showNotFound();
-  else showTab(state.tab || "table");
+  else showTab(homeTab());
 }
 // Shareable choices: a tab's filters ride in its address (#/matches?d=2026-10-11, #/stats?r=90d),
 // as the Rankings' do, so a pasted link opens on what its sender saw. Defaults are left out.
@@ -6933,6 +6953,9 @@ function auth() {
       if (fresh && !state.owner?.busy) setTimeout(ownerReset, 0);
       if (event === "PASSWORD_RECOVERY") openAccount("newpass");
       else renderAccount();
+      // signed in on Home at the bare address: on to Clubs, where a signed-in visit opens
+      $("#home-join").hidden = !!state.account.user;
+      if (state.account.user && was !== state.account.user.id && state.tab === "home" && !location.hash.startsWith("#/")) route();
     });
     return client;
   });
@@ -7102,6 +7125,6 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAccou
 if (!storedText("auth")) storeFlag("fplOwner", false);          // signed out since the owner was last here
 $("#fpl-tab").hidden = $("#myteam-tab").hidden = $("#efl-tab").hidden = !storedFlag("fplOwner");
 $("#app-title").textContent = document.querySelector(`nav.tabs [data-tab="${ROUTE_TABS[location.hash.match(/^#\/([\w-]+)$/)?.[1]] || ""}"]:not([hidden])`)?.textContent
-  ?? (/^#\/players/.test(location.hash) ? "Players" : location.hash.startsWith("#/") && !location.hash.startsWith("#/clubs") ? "" : "Clubs");
+  ?? (/^#\/players/.test(location.hash) ? "Players" : location.hash.startsWith("#/") && !location.hash.startsWith("#/clubs") ? "" : location.hash || homeTab() === "table" ? "Clubs" : "Home");
 storeText("fplKey", "");          // the passphrase older versions of the page kept here
 loadData();

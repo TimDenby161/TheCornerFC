@@ -1042,6 +1042,24 @@
   .lg-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
   .lg-name { font-weight: 700; font-size: 14px; }
   .lg-sub { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Home: what the site is, then a taste of it */
+  .home-hero { padding: 28px 0 4px; }
+  .home-title { margin: 0 0 10px; font-size: 30px; line-height: 1.1; font-weight: 800; text-wrap: balance; }
+  .home-lede { margin: 0 0 18px; max-width: 56ch; font-size: 16px; line-height: 1.5; color: var(--text-secondary); }
+  .home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+  .home-actions .link-btn { font-size: 14px; }
+  .home-go { display: inline-block; text-decoration: none; font-size: 15px; padding: 11px 18px; }
+  .home-head { margin: 28px 0 8px; font-size: 13px; font-weight: 700; color: var(--text-secondary); }
+  .home-top { list-style: none; margin: 0; padding: 0; counter-reset: home; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1); }
+  .home-top li { display: flex; align-items: baseline; gap: 10px; padding: 9px 12px; counter-increment: home; }
+  .home-top li + li { border-top: 1px solid var(--gridline); }
+  .home-top li::before { content: counter(home); width: 1.2em; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .home-top .team-link { font-weight: 700; }
+  .home-top .lg-sub { flex: 1; min-width: 0; }
+  .home-top b { font-variant-numeric: tabular-nums; }
+  .home-cards .lg-card { align-items: flex-start; }
+  .home-cards .lg-sub { white-space: normal; line-height: 1.4; }
+  @media (max-width: 480px) { .home-hero { padding-top: 14px; } .home-title { font-size: 24px; } }
   .country-flag-lg { width: 60px; height: 42px; object-fit: cover; border-radius: 6px; box-shadow: 0 0 0 1px var(--border); }
   @media (max-width: 600px) {
     table.league-table .lt-wide, table.league-table .lt-wdl, table.league-table .lt-gd, #league-tab table.league-table .lt-formcol { display: none; }

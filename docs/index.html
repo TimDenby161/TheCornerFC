@@ -42,6 +42,7 @@
     <button type="button" class="account-btn" id="account-btn" aria-haspopup="dialog">Sign in</button>
   </div>
   <nav class="tabs" id="main-menu" aria-label="Main">
+    <button type="button" data-tab="home">Home</button>
     <button type="button" data-tab="table" data-view="clubs" aria-current="page">Clubs</button>
     <button type="button" data-tab="table" data-view="players">Players</button>
     <button type="button" data-tab="leagues">Leagues</button>
@@ -69,6 +70,20 @@
     <details class="tab-key" id="tab-key"><summary>What the numbers mean</summary><dl id="tab-key-list"></dl></details>
   </div>
   <div class="empty-state" id="boot-status" role="status">Loading…</div>
+  <section class="panel" data-tab="home">
+    <div class="home-hero">
+      <h2 class="home-title">Football ratings and match predictions</h2>
+      <p class="home-lede" id="home-lede">Strength ratings for clubs, players and national teams, and the model's win, draw and loss chances for their matches.</p>
+      <div class="home-actions">
+        <a class="mt-btn home-go" href="#/clubs">See the ratings</a>
+        <button type="button" class="link-btn" id="home-join">Create a free account</button>
+      </div>
+    </div>
+    <h3 class="home-head">Strongest clubs now</h3>
+    <ol class="home-top" id="home-top"></ol>
+    <h3 class="home-head">On the site</h3>
+    <div class="lg-list home-cards" id="home-cards"></div>
+  </section>
   <section class="panel" data-tab="matches" data-active="false">
     <div class="match-bar">
       <div id="match-side">
