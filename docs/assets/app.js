@@ -156,6 +156,7 @@ const playersReady = () => !!playerStore.facets;
 const playersPending = () => !playerStore.facets && !playerStore.failed;
 const intArr = (ids) => `{${ids.join(",")}}`;
 const textArr = (items) => `{${items.map((x) => `"${String(x).replace(/[\\"]/g, "\\$&")}"`).join(",")}}`;
+const byOrd = (a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || a.name.localeCompare(b.name);     // the export's order: by current rank
 function addPlayers(rows) {
   const fields = state.data.player_fields, seasonFields = state.data.player_season_fields;
   for (const r of rows) {
@@ -163,12 +164,13 @@ function addPlayers(rows) {
     const p = Object.fromEntries(fields.map((f, i) => [f, r[i]]));
     p.name = decodeEntities(p.name);        // API-Football sends some names HTML-encoded ("O&apos;Reilly")
     p.season = p.season && Object.fromEntries(seasonFields.map((f, i) => [f, p.season[i]]));
-    // no place in the export's order: the database blanked his ranks for this visitor (the
-    // paywall, db/migrations/20261006_paid_players.sql). Such players follow the ranked ones
-    if (p.ord == null) { p.locked = true; state.paywall = true; }
+    // no season ranks: the database blanked his ranks for this visitor (the paywall,
+    // db/migrations/20261006_paid_players.sql). He keeps his place in the export's order (ord),
+    // so a list is in the order a subscriber sees with his rank hidden
+    if (p.seasons == null) { p.locked = true; state.paywall = true; }
     playerStore.byId.set(p.id, p);
   }
-  state.players.list = [...playerStore.byId.values()].sort((a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || a.name.localeCompare(b.name));
+  state.players.list = [...playerStore.byId.values()].sort(byOrd);
   state.playersById = null;
   return rows.map((r) => playerStore.byId.get(r[0]));
 }
@@ -1037,6 +1039,11 @@ const MARGIN_LABELS = {
   absences: ["Known absences", "Players listed injured, suspended or doubtful, weighted by their recent minutes"],
   lineups: ["Predicted line-ups", "Predicted XI ratings by line (defence, midfield, attack)"],
 };
+// National team matches: the national ranking's own strengths and home advantage (national_predictions.py)
+const INTL_MARGIN_LABELS = {
+  strength: ["Strength gap", "Home minus away Current Strength (the national team ranking), 100 points = 1 goal"],
+  home_advantage: ["Home advantage", "The same for every national team: 0.5 goals. None at a neutral ground"],
+};
 // One key reason as a phrase and its size; + favours the home side (or, for tendencies, more goals)
 function reasonHtml(m, [key, v]) {
   const fav = teamName(v >= 0 ? m.home : m.away), other = teamName(v >= 0 ? m.away : m.home);
@@ -1085,7 +1092,7 @@ function whyDetailHtml(m, x) {
       + detailRow("Baseline Strength", pairText(...x.baseline), "Long-term level (LT ALGO)")
       + detailRow("Used for this match", pairText(...x.match), "A blend of Current and Baseline Strength; matches further away lean more on Baseline"), fb);
     const margin = Object.entries(x.margin).map(([k, v]) => {
-      const [label, tip] = MARGIN_LABELS[k] || [k, ""];
+      const [label, tip] = (m.intl && INTL_MARGIN_LABELS[k]) || MARGIN_LABELS[k] || [k, ""];
       return detailRow(label, signedGoals(v), tip);
     }).join("");
     section("Expected margin <span class=\"why-unit\">goals, + favours home</span>", margin
@@ -1093,7 +1100,8 @@ function whyDetailHtml(m, x) {
   }
 
   const goals = [
-    x ? detailRow("Competition average", `${x.league_goals.toFixed(1)} a game`, "Average goals per game in this competition over the last 12 months") : "",
+    x && m.intl ? detailRow("Two level sides", `${x.league_goals.toFixed(1)} a game`, "The goals a match between two evenly ranked national teams is expected to have; the expected margin moves it from there") : "",
+    x && !m.intl ? detailRow("Competition average", `${x.league_goals.toFixed(1)} a game`, "Average goals per game in this competition over the last 12 months") : "",
     x?.tendencies != null ? detailRow("Attack/defence tendencies", `${signedGoals(x.tendencies)} total`, "How much both clubs' attacking and defensive styles move the expected total, against level sides") : "",
     m.home_xg != null ? detailRow("Projected total", (m.home_xg + m.away_xg).toFixed(1)) : "",
     m.p_over25 != null ? detailRow("Over 2.5 · both score", `${Math.round(m.p_over25 * 100)}% · ${Math.round(m.p_btts * 100)}%`) : "",
@@ -1124,7 +1132,8 @@ function whyDetailHtml(m, x) {
   if (x) {
     const v = x.model_info;
     const model = v?.name ? `${escapeHtml(v.name)}${v.code ? ` · ${escapeHtml(v.code)}` : ""}` : null;
-    section("Data", detailRow("Model inputs", `${escapeHtml(whenText(x.captured_at))}`, `Inputs ${SOURCE_TEXT[x.source] || x.source}`)
+    section("Data", (x.neutral ? detailRow("Venue", "Neutral ground", "No home advantage counted") : "")
+      + detailRow("Model inputs", `${escapeHtml(whenText(x.captured_at))}`, `Inputs ${SOURCE_TEXT[x.source] || x.source}`)
       + (x.source !== "prospective" ? detailRow("Captured", escapeHtml(SOURCE_TEXT[x.source] || x.source)) : "")
       + detailRow("Injury list seen", x.injuries_at ? escapeHtml(whenText(x.injuries_at)) : null)
       + detailRow("Odds seen", x.odds_at ? escapeHtml(whenText(x.odds_at)) : null)
@@ -1208,14 +1217,14 @@ function matchCard(m, { lineups = true } = {}) {
   // reasons; the line-ups and everything else behind "Line-ups" and "Model detail"
   const upcoming = !finished && !LIVE.has(m.status);
   // behind the paywall (state.paywall: the database left the paid fields out for this visitor)
-  const locked = !!state.paywall && upcoming && !m.intl && !CALLED_OFF.has(m.status);
+  const locked = !!state.paywall && upcoming && !CALLED_OFF.has(m.status);
   const toggles = (canLineup && !locked ? `<button type="button" class="lineup-toggle" aria-expanded="false">${finished ? "Line-ups" : "Predicted line-ups"}</button>` : "")
     + (m.p_home != null && !locked ? `<button type="button" class="why-toggle" aria-expanded="false">${finished ? "Pre-match model detail" : "Model detail"}</button>` : "");
   return `
     <div class="match-card${cls}" data-fixture="${m.id}">
       ${matchHead(m, `${badge}${statusTag(m)}`)}
       ${probBars(m, false)}
-      ${locked ? `<div class="market-line paid-lock">${m.p_home == null ? "The model's chances for matches more than 7 days ahead" : "Projected score, key reasons, predicted line-ups and model detail"} are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button></div>` : ""}
+      ${locked ? `<div class="market-line paid-lock">${m.p_home == null ? "The model's chances for matches more than 7 days ahead" : `Projected score, key reasons${m.intl ? "" : ", predicted line-ups"} and model detail`} are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button></div>` : ""}
       ${upcoming && m.p_home != null ? `<div class="why" data-why="${m.id}">${reasonsHtml(m)}</div>` : ""}
       ${upcoming && !m.intl && !locked ? `<div class="market-line squad-line" data-fixture="${m.id}" hidden></div>` : ""}
       ${toggles ? `<div class="card-toggles">${toggles}</div>` : ""}
@@ -3050,9 +3059,9 @@ function clubMiniTable(id) {
 // Beside the table: the club's five best players by Ability, with this season's goals and assists
 // (all his clubs, as on the Players view)
 function clubBestPlayers(id) {
-  if (state.paywall) return "";              // a best-by-rank list of the few whose ranks aren't hidden would mislead
-  const list = (state.players?.list || []).filter((p) => p.team === id && p.rank != null)
-    .sort((a, b) => b.rank - a.rank).slice(0, 5);
+  // the export's order is by current rank, and a player whose rank is hidden (the paywall) keeps his place in it
+  const list = (state.players?.list || []).filter((p) => p.team === id && (p.rank != null || p.locked))
+    .sort(byOrd).slice(0, 5);
   if (!list.length) return "";
   return `<div class="club-mini-table">
     <div class="table-scroll"><table class="league-table">
@@ -3284,7 +3293,7 @@ function predictedXi(teamId, data = state.club?.data, match = null) {
     });
   return xi.length ? xi : null;
 }
-const PAID_RANKS = `Player ranks outside the top 50 overall and the top 10 of the five big leagues are for subscribers: his rank, season by season, in each position and projected. <button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
+const PAID_RANKS = `Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected. <button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
 const PAID_XI = `Predicted line-ups are for subscribers. <button type="button" class="link-btn" data-subscribe>What subscribers get</button>`;
 function clubXiTab() {
   if (state.paywall) return `<div class="empty-state">${PAID_XI}</div>`;
@@ -4471,7 +4480,7 @@ async function openNationPage(nat, want = null) {
     await needNation(nat);
     if (location.hash !== at) return;                    // moved on while loading
   }
-  const list = (state.players?.list || []).filter((p) => p.nationality === nat).sort((a, b) => b.rank - a.rank);
+  const list = (state.players?.list || []).filter((p) => p.nationality === nat).sort(byOrd);
   state.nation = { name: nat, list, team: undefined, allPlayers: false };
   renderNationPage();
   fillNationRating(nat);
@@ -4563,28 +4572,27 @@ function nationOverviewTab() {
     for (const pid of picked.keys()) {
       const p = list.find((q) => q.id === pid);
       const role = [...(started.get(pid) || [])].sort((a, b) => b[1] - a[1])[0]?.[0];
-      picked.set(pid, p ? { id: pid, name: p.name, rank: p.rank, position: p.position, team: p.team }
+      picked.set(pid, p ? { id: pid, name: p.name, rank: p.rank, ord: p.ord, position: p.position, team: p.team }
         : { id: pid, name: state.nation.team.players[pid] || "Unknown", rank: null, position: role });
     }
   }
   const coach = shape?.spell.coach;
-  // behind the paywall most ranks are hidden, so nothing here is ordered or picked by rank: the
-  // pitch has the coach's picks by position and the list is by name, both without ranks
+  // behind the paywall everything is in the order a subscriber sees (the export's order, which
+  // is by current rank), with "–" for a rank that is hidden
   const paid = !!state.paywall;
-  const byName = (a, b) => a.name.localeCompare(b.name);
   const pitchRow = (p, unpicked) => {
     const tip = `${p.name}${p.team ? ` · ${teamName(p.team)}` : ""}${unpicked ? ` · not picked by ${coach || "the current coach"}` : ""}`;
-    const inner = `<span class="dp-name">${escapeHtml(shortName(p.name))}</span><span class="dp-rank${p.rank == null || paid ? "" : ` t${rankTier(p.rank)}`}">${paid ? "" : p.rank == null ? "–" : Math.round(p.rank)}</span>`;
+    const inner = `<span class="dp-name">${escapeHtml(shortName(p.name))}</span><span class="dp-rank${p.rank == null ? "" : ` t${rankTier(p.rank)}`}">${p.rank == null ? "–" : Math.round(p.rank)}</span>`;
     const cls = `dp-row nat-row${unpicked ? " nat-unpicked" : ""}`;
     return playerById(p.id) ? `<a class="${cls}" href="#/player/${p.id}" title="${escapeHtml(tip)}">${inner}</a>`
       : `<span class="${cls}" title="${escapeHtml(tip)}">${inner}</span>`;
   };
   const spots = layout.map(([label, max, row, col]) => {
-    const top = paid ? [] : list.filter((p) => slotOf(p.position) === label).slice(0, max);
+    const top = list.filter((p) => slotOf(p.position) === label).slice(0, max);
     const topIds = new Set(top.map((p) => p.id));
     const extra = [...picked.values()].filter((p) => p.position && slotOf(p.position) === label && !topIds.has(p.id));
     const ps = [...top.map((p) => [p, shape != null && !picked.has(p.id)]), ...extra.map((p) => [p, false])]
-      .sort((a, b) => paid ? byName(a[0], b[0]) : (b[0].rank ?? -1) - (a[0].rank ?? -1));
+      .sort((a, b) => byOrd(a[0], b[0]));
     const cell = `data-srow="${row}" data-scol="${col}"`;
     if (!ps.length) return `<div class="dp-spot empty" ${cell}><span class="dp-pos">${label}</span></div>`;
     return `<div class="dp-spot" ${cell}><span class="dp-pos">${label}</span>${ps.map(([p, unpicked]) => pitchRow(p, unpicked)).join("")}</div>`;
@@ -4592,19 +4600,15 @@ function nationOverviewTab() {
   const LIMIT = 100;
   const row = (p, i) => `<div class="team-row"><span class="team-row-date">${i + 1}. ${escapeHtml(p.position || "")}</span>
     <span class="team-row-opp">${playerLink(p.id, p.name)} <span class="club-sub u-inline">${playerClub(p)}${p.age != null ? ` · ${p.age}` : ""}</span></span>
-    ${paid ? "" : `<span class="team-row-res">${rankChipSmall(p.rank)}</span>`}</div>`;
-  const ordered = paid ? [...list].sort(byName) : list;
-  const shown = allPlayers ? ordered : ordered.slice(0, LIMIT);
-  const pitch = paid
-    ? (shape ? `<div class="club-section"><div class="modal-section">Everyone ${escapeHtml(coach || "the current coach")} has picked, in their usual ${escapeHtml(shape.formation)}</div>
-        <div class="pp-section"><div class="pitch dp-pitch">${PITCH_LINES}${spots}</div></div></div>` : "")
-      + `<div class="pl-callout">${PAID_RANKS}</div>`
-    : `<div class="club-section"><div class="modal-section">${shape ? `Best by current rank in their usual ${escapeHtml(shape.formation)}` : "Top 3 in each position by current rank"}</div>
+    <span class="team-row-res">${rankChipSmall(p.rank)}</span></div>`;
+  const shown = allPlayers ? list : list.slice(0, LIMIT);
+  const pitch = `<div class="club-section"><div class="modal-section">${shape ? `Best by current rank in their usual ${escapeHtml(shape.formation)}` : "Top 3 in each position by current rank"}</div>
       <div class="pp-section"><div class="pitch dp-pitch">${PITCH_LINES}${spots}</div>
-        ${shape ? `<div class="page-note u-center">Plus everyone ${escapeHtml(coach || "the current coach")} has picked. <span class="nat-unpicked-key">Red</span>: not picked by him.</div>` : ""}</div></div>`;
+        ${shape ? `<div class="page-note u-center">Plus everyone ${escapeHtml(coach || "the current coach")} has picked. <span class="nat-unpicked-key">Red</span>: not picked by him.</div>` : ""}</div></div>
+    ${paid ? `<div class="pl-callout">${PAID_RANKS}</div>` : ""}`;
   return `
     ${pitch}
-    <div class="club-section"><div class="modal-section">All players${paid ? " · by name" : ""}</div><div>${shown.map(row).join("")}</div>
+    <div class="club-section"><div class="modal-section">All players</div><div>${shown.map(row).join("")}</div>
       ${shown.length < list.length ? `<button type="button" class="show-all" data-nat-more>Show all ${list.length.toLocaleString()}</button>` : ""}</div>`;
 }
 
@@ -4725,7 +4729,7 @@ function nationXiTab() {
   const name = (pid) => names[pid] || playerById(pid)?.name || "Unknown";
   const order = (r) => ROLE_ORDER.indexOf(r) + 1 || 99;
   const picks = pred.picks.slice().sort((a, b) => order(a.role) - order(b.role));
-  const xi = picks.map((c) => ({ b: { label: c.role }, p: { id: c.pid, name: name(c.pid) }, rank: state.paywall ? null : playerById(c.pid)?.rank ?? null }));
+  const xi = picks.map((c) => ({ b: { label: c.role }, p: { id: c.pid, name: name(c.pid) }, rank: playerById(c.pid)?.rank ?? null }));
   const who = (pid) => `${personChip(name(pid))}${
     playerById(pid) ? playerLink(pid, shortName(name(pid))) : `<span title="${escapeHtml(name(pid))}">${escapeHtml(shortName(name(pid)))}</span>`}`;
   const side = `
@@ -6077,11 +6081,14 @@ function renderEfl() {
   if (state.efl === null) { body.innerHTML = note("Loading…"); return; }
   if (!state.efl || !state.efl.players.length) { body.innerHTML = note("No upcoming EFL gameweeks yet."); return; }
   const d = eflData();
-  const v = state.eflView ||= { pos: "all", league: "all", q: "", sort: "xp", all: false, mode: "gw", gw: 0, open: null, clubsAll: false };
   const gws = d.gameweeks;
+  // The page opens on the next gameweek to start: one already under way (a match has kicked off, at the
+  // export or since) is a step back on the pager
+  const next = Math.max(0, gws.findIndex((g) => !g.started && Date.parse(g.first_kickoff) > Date.now()));
+  const v = state.eflView ||= { pos: "all", league: "all", q: "", sort: "xp", all: false, mode: "gw", gw: next, open: null, clubsAll: false };
   v.gw = Math.max(0, Math.min(v.gw, gws.length - 1));
-  const n = v.mode === "gw" ? 1 : Math.min(+v.mode, gws.length);
-  const span = v.mode === "gw" ? [gws[v.gw].id] : gws.slice(0, n).map((g) => g.id);
+  const n = v.mode === "gw" ? 1 : Math.min(+v.mode, gws.length - next);
+  const span = v.mode === "gw" ? [gws[v.gw].id] : gws.slice(next, next + n).map((g) => g.id);
   const team = (id) => d.teams[id]?.[0] || teamName(id), code = (id) => d.teams[id]?.[1] || team(id).slice(0, 3).toUpperCase();
   const day = (iso) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
   const range = (g) => `${day(g.start + "T12:00:00")} – ${day(g.end + "T12:00:00")}`;
@@ -6094,7 +6101,7 @@ function renderEfl() {
   const tag = (p) => p.availability ? ` <span class="bet-tag warn" title="On the injury list">${p.availability === "Missing Fixture" ? "Out" : "Doubtful"}</span>` : "";
 
   // ---- suggested team for the gameweek shown (the first one in the multi-gameweek views)
-  const g0 = v.mode === "gw" ? gws[v.gw] : gws[0];
+  const g0 = v.mode === "gw" ? gws[v.gw] : gws[next];
   const best = eflBestTeam(d.rows.filter((p) => inLeague(p.league)), d.clubRows.filter((c) => inLeague(c.league)), g0.id);
   let suggest = "";
   if (best) {
@@ -6419,6 +6426,8 @@ document.querySelectorAll("#theme-pick button").forEach((b) => b.addEventListene
   storeText("theme", b.dataset.theme);
   setTheme(b.dataset.theme);
 }));
+// A name from the address; null where its % escapes aren't valid, which decodeURIComponent throws on
+const decodedPart = (part) => { try { return decodeURIComponent(part); } catch { return null; } };
 function route() {
   const club = location.hash.match(/^#\/club\/(\d+)(?:\/(\w+))?$/);
   const player = location.hash.match(/^#\/player\/(\d+)(?:\/(\w+))?$/);
@@ -6437,8 +6446,9 @@ function route() {
   if (!league) state.league = null;
   if (club) openClubPage(Number(club[1]), club[2]);
   else if (player) openPlayerPage(Number(player[1]), player[2]);
-  else if (nation) openNationPage(decodeURIComponent(nation[1]), nation[2]);
-  else if (country) openCountryPage(decodeURIComponent(country[1]));
+  else if ((nation || country) && decodedPart((nation || country)[1]) === null) showNotFound();
+  else if (nation) openNationPage(decodedPart(nation[1]), nation[2]);
+  else if (country) openCountryPage(decodedPart(country[1]));
   else if (league) openLeaguePage(Number(league[1]), league[2]);
   else if (tableView) openTableView(tableView[1], tableView[2]);
   else if (tab) {
@@ -6905,7 +6915,7 @@ state.account = { user: null, view: "signin", text: "" };
 // it changes the page starts again, to fetch the data they are now due, or no longer due.
 state.sub = null;
 const SUBSCRIBER_GETS = `<p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings, league tables and the betting comparison pages.</p>
-  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall and the top 10 of each of the five big leagues are free).</p>`;
+  <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free).</p>`;
 function paidFlag(on) {
   try {
     const was = localStorage.getItem(PAID_KEY) === "1";
@@ -6931,6 +6941,40 @@ const subscriptionLine = (sub) => !sub?.paywall ? ""
   : sub.subscriber ? `<p class="account-text">Subscription: <b>${sub.status ? escapeHtml(sub.status === "past_due" ? "payment due" : sub.status) : "active"}</b>${sub.plan ? ` (${escapeHtml(sub.plan)})` : ""}${
       sub.renews_at ? ` · ${sub.ends ? "ends" : "renews"} ${escapeHtml(fmtLongDate(sub.renews_at.slice(0, 10)))}` : ""}</p>`
   : `<p class="account-text">No subscription on this account. <button type="button" class="link-btn" data-account="subscribe">What subscribers get</button></p>`;
+// The bot check on the sign-in, sign-up and reset forms (Cloudflare Turnstile), off while
+// TURNSTILE_KEY is empty: nothing of Cloudflare's is loaded and the forms are as before. Turning it
+// on takes more than the key (the page's policy, the privacy page, Supabase): README, Accounts.
+const TURNSTILE_KEY = "";
+const TURNSTILE_LIB = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+const BOT_CHECK_VIEWS = new Set(["signin", "signup", "reset"]);
+const botChecked = (view) => !!TURNSTILE_KEY && BOT_CHECK_VIEWS.has(view);
+let turnstileLib;                             // a promise for Cloudflare's script, once asked for
+let botCheck = null;                          // the widget in the open form: { id, token }; a token passes once
+function mountBotCheck() {
+  if (botCheck?.id != null) window.turnstile?.remove(botCheck.id);
+  botCheck = null;
+  const box = $("#account-botcheck");
+  if (!box) return;
+  const mine = botCheck = { token: "" };
+  const lost = () => { mine.token = ""; };
+  turnstileLib ||= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = TURNSTILE_LIB;
+    s.onload = resolve;
+    s.onerror = () => { turnstileLib = undefined; s.remove(); reject(new Error("bot-check")); };
+    document.head.append(s);
+  });
+  turnstileLib.then(() => {
+    if (botCheck !== mine || !box.isConnected) return;       // the form has been drawn again since
+    mine.id = window.turnstile.render(box, { sitekey: TURNSTILE_KEY, callback: (token) => { mine.token = token; },
+      "expired-callback": lost, "error-callback": lost });
+  }).catch((err) => { if (botCheck === mine) accountMsg(accountError(err), true); });
+}
+function resetBotCheck() {
+  if (!botCheck) return;
+  botCheck.token = "";
+  if (botCheck.id != null) window.turnstile?.reset(botCheck.id);
+}
 let authClient;                               // a promise for the Supabase client, once asked for
 
 function auth() {
@@ -6972,11 +7016,13 @@ function dropAuthParams() {
 function accountError(err) {
   if (err?.message === "auth-lib" || err?.name === "AuthRetryableFetchError") return "Couldn't reach the sign-in service just now. Check your connection and try again.";
   if (err?.status === 429) return "Too many tries. Wait a minute, then try again.";
+  if (err?.message === "bot-check") return "Couldn't load the check that you're not a bot. Check your connection, or try without a content blocker.";
   return {
     invalid_credentials: "That email and password don't match an account.",
     email_not_confirmed: "Confirm your email first: open the link we sent you.",
     user_already_exists: "There's already an account for that email. Sign in instead.",
     weak_password: "That password is too easy to guess. Choose a longer one.",
+    captcha_failed: "The check that you're not a bot didn't pass. Try again.",
     same_password: "That's already your password. Choose a different one.",
     otp_expired: "That link has expired or has already been used. Ask for a new one.",
     flow_state_not_found: "That link has expired or has already been used. Ask for a new one.",
@@ -7014,7 +7060,7 @@ function renderAccount() {
     `<label>${label}<input type="${type}" name="${name}" class="table-search" autocomplete="${autocomplete}" required ${extra}></label>`;
   const google = `<button type="button" class="google-btn" data-account="google">${GOOGLE_MARK}<span>Continue with Google</span></button><div class="account-or">or</div>`;
   const link = (to, label) => `<button type="button" class="link-btn" data-account="${to}">${label}</button>`;
-  const form = (fields, submit) => `<form class="account-form" data-view="${view}">${fields}<button type="submit" class="mt-btn">${submit}</button></form>`;
+  const form = (fields, submit) => `<form class="account-form" data-view="${view}">${fields}${botChecked(view) ? `<div id="account-botcheck"></div>` : ""}<button type="submit" class="mt-btn">${submit}</button></form>`;
   $("#account-title").textContent = ACCOUNT_TITLES[view];
   $("#account-body").innerHTML = ({
     signin: () => google + form(field("email", "Email", "email", "username") + field("password", "Password", "password", "current-password"), "Sign in")
@@ -7035,6 +7081,7 @@ function renderAccount() {
       <button type="button" class="mt-btn account-out account-danger" data-account="erase">Delete my account</button>
       <div class="account-links">${link("account", "Keep my account")}</div>`,
   })[view]() + `<div class="stats-note" id="account-msg" role="status"></div>`;
+  mountBotCheck();
 }
 document.addEventListener("click", (e) => { if (e.target.closest("[data-subscribe]")) openAccount("subscribe"); });
 $("#account-btn").addEventListener("click", () => {
@@ -7075,13 +7122,15 @@ $("#account-modal").addEventListener("submit", async (e) => {
   e.preventDefault();
   const view = e.target.dataset.view, btn = e.target.querySelector("[type=submit]");
   const email = e.target.elements.email?.value.trim(), password = e.target.elements.password?.value;
+  const captchaToken = botChecked(view) ? botCheck?.token : undefined;
+  if (botChecked(view) && !captchaToken) return accountMsg("Wait for the check above the button to finish, then try again.", true);
   btn.disabled = true;
   accountMsg("");
   try {
     const client = await auth();
-    const res = view === "signin" ? await client.auth.signInWithPassword({ email, password })
-      : view === "signup" ? await client.auth.signUp({ email, password, options: { emailRedirectTo: authReturnUrl() } })
-      : view === "reset" ? await client.auth.resetPasswordForEmail(email, { redirectTo: authReturnUrl() })
+    const res = view === "signin" ? await client.auth.signInWithPassword({ email, password, options: { captchaToken } })
+      : view === "signup" ? await client.auth.signUp({ email, password, options: { emailRedirectTo: authReturnUrl(), captchaToken } })
+      : view === "reset" ? await client.auth.resetPasswordForEmail(email, { redirectTo: authReturnUrl(), captchaToken })
       : await client.auth.updateUser({ password });
     if (res.error) throw res.error;
     // The same answer whether or not the email has an account, so the box can't be used to find out
@@ -7091,6 +7140,7 @@ $("#account-modal").addEventListener("submit", async (e) => {
     else { state.account.view = "signin"; closeAccount(); }
   } catch (err) {
     btn.disabled = false;
+    resetBotCheck();
     accountMsg(accountError(err), true);
   }
 });

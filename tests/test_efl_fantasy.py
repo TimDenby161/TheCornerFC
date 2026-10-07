@@ -73,6 +73,12 @@ class EflInputTests(unittest.TestCase):
         self.assertEqual(ef.gameweek_start(datetime(2026, 10, 7, 21, 0, tzinfo=timezone.utc)), thu)   # Wednesday night
         self.assertEqual(ef.gameweek_start(datetime(2026, 10, 7, 23, 30, tzinfo=timezone.utc)), date(2026, 10, 8))  # after midnight BST
 
+    def test_gameweeks_are_numbered_from_the_seasons_first_week(self):
+        week0 = date(2026, 8, 6)
+        self.assertEqual(ef.gameweek_id(datetime(2026, 8, 8, 14, 0, tzinfo=timezone.utc), week0), 1)
+        self.assertEqual(ef.gameweek_id(datetime(2026, 10, 7, 18, 45, tzinfo=timezone.utc), week0), 9)
+        self.assertEqual(ef.gameweek_id(datetime(2026, 10, 10, 14, 0, tzinfo=timezone.utc), week0), 10)
+
     def test_position_overrides(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'p.json'

@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LIB = 'assets/lib/supabase-js-2.117.2.js'
 # sha256 of dist/umd/supabase.js in the npm package @supabase/supabase-js 2.117.2 (README: Accounts)
 LIB_SHA256 = '59d39487c3589843b410322d8a3d562ce022aba1e5ccb16898ef3fb2a0da2ecd'
+TURNSTILE = 'https://challenges.cloudflare.com'
 
 
 class AccountTests(unittest.TestCase):
@@ -22,8 +23,30 @@ class AccountTests(unittest.TestCase):
         page = (ROOT / 'docs/index.html').read_text()
         app = (ROOT / 'docs/assets/app.js').read_text()
         self.assertIn(f'const AUTH_LIB = "{LIB}";', app)
-        self.assertIn("script-src 'self';", page)
+        self.assertIn("script-src 'self'" + (f' {TURNSTILE};' if self.bot_check_key() else ';'), page)
         self.assertEqual(re.findall(r'<script[^>]*src="(?:https?:)?//', page), [])
+
+    @staticmethod
+    def bot_check_key():
+        return re.search(r'^const TURNSTILE_KEY = "([^"]*)";$', (ROOT / 'docs/assets/app.js').read_text(), re.M).group(1)
+
+    def test_bot_check_is_all_on_or_all_off(self):
+        # README, Accounts: the key, the page's policy and the privacy page change together
+        page = (ROOT / 'docs/index.html').read_text()
+        privacy = (ROOT / 'docs/privacy.html').read_text()
+        if self.bot_check_key():
+            self.assertIn(f"frame-src {TURNSTILE};", page)
+            self.assertIn('Turnstile', privacy)
+        else:
+            self.assertNotIn('cloudflare', page.lower())
+            self.assertNotIn('Turnstile', privacy)
+
+    def test_bot_check_covers_the_three_forms_that_take_an_email(self):
+        app = (ROOT / 'docs/assets/app.js').read_text()
+        self.assertIn(f'const TURNSTILE_LIB = "{TURNSTILE}/turnstile/v0/api.js?render=explicit";', app)
+        self.assertIn('const BOT_CHECK_VIEWS = new Set(["signin", "signup", "reset"]);', app)
+        for call in ('signInWithPassword', 'signUp', 'resetPasswordForEmail'):
+            self.assertRegex(app, call + r'\([^\n]*captchaToken')
 
     def test_site_helper_does_not_share_the_library_name(self):
         # the library defines a global called supabase, which would replace a function of that name

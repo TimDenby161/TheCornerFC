@@ -202,7 +202,7 @@ class FixturePageTests(unittest.TestCase):
         with patch.object(export.config, "require_db_write", side_effect=export.config.SafetyError("read-only")):
             self.assertFalse(store_matches(conn, [self.match(11)], {}))
         source = Path(export.__file__).read_text()
-        self.assertIn("store_matches(conn, matches, match_explanations(conn, now))", source)
+        self.assertIn("store_matches(conn, matches, {**match_explanations(conn, now), **national_why})", source)
         for gone in ('"matches.json"', '"explanations.json"', "fixtures/"):        # the matches are rows, not files
             self.assertNotIn(gone, source)
 

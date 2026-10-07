@@ -35,6 +35,7 @@ log = logging.getLogger(__name__)
 EFL = (40, 41, 42)                  # Championship, League One, League Two
 LEAGUE_NAMES = {40: 'Championship', 41: 'League One', 42: 'League Two'}
 GAMEWEEKS = 6                       # gameweeks ahead on the page
+CALLED_OFF = ('PST', 'CANC')        # a match that never kicked off doesn't start its gameweek
 UK = ZoneInfo('Europe/London')
 THURSDAY = 3
 POSITIONS_PATH = Path(__file__).with_name('efl_positions.json')
@@ -173,6 +174,11 @@ def gameweek_start(kickoff):
 
 # ---- Export ----
 
+def gameweek_id(kickoff, week0):
+    """kickoff's gameweek number, counting from the season's first week (week0, a Thursday)."""
+    return (gameweek_start(kickoff) - week0).days // 7 + 1
+
+
 def _r(x, n=2):
     x = round(x, n)
     return x if x else 0
@@ -196,8 +202,12 @@ def payload(conn, now=None, doc=None, gameweeks=GAMEWEEKS):
     first = conn.execute("""select min(kickoff) from fixtures where league_id = any(%s) and season = %s""",
                          [list(EFL), season]).fetchone()[0]
     week0 = gameweek_start(first)
-    gw_of = {f[0]: (gameweek_start(f[5]) - week0).days // 7 + 1 for f in upcoming}
+    gw_of = {f[0]: gameweek_id(f[5], week0) for f in upcoming}
     keep = sorted(set(gw_of.values()))[:gameweeks]
+    # a gameweek with a match already kicked off is under way: the page opens on the one after it
+    started = {gameweek_id(k, week0) for (k,) in conn.execute(
+        """select kickoff from fixtures where league_id = any(%s) and season = %s and kickoff > %s and kickoff <= %s
+             and status_short <> all(%s)""", [list(EFL), season, now - timedelta(days=7), now, list(CALLED_OFF)])}
     upcoming = [f for f in upcoming if gw_of[f[0]] in keep]
     fixtures = {f[0]: f for f in upcoming}
     horizon = max(f[5] for f in upcoming) - now + timedelta(days=1)
@@ -245,7 +255,7 @@ def payload(conn, now=None, doc=None, gameweeks=GAMEWEEKS):
     return {'generated_at': now.isoformat(), 'model': 'EFL fantasy v1',
             'gameweeks': [{'id': g, 'start': (week0 + timedelta(weeks=g - 1)).isoformat(),
                            'end': (week0 + timedelta(weeks=g - 1, days=6)).isoformat(),
-                           'first_kickoff': first_kick[g].isoformat()} for g in keep],
+                           'first_kickoff': first_kick[g].isoformat(), 'started': g in started} for g in keep],
             'leagues': {str(k): v for k, v in LEAGUE_NAMES.items()},
             'teams': {str(t): v for t, v in team_info.items()},
             'fields': ['player', 'name', 'team', 'position', 'corrected', 'availability'],

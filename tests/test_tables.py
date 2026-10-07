@@ -202,17 +202,32 @@ class PaidPlayersTests(unittest.TestCase):
                 "England", ["CM"], {"CM": 95 - i * 0.5}, [90.0], [900, 3, 2]] for i in range(n)]
         return export.site_player_rows(raw)
 
-    def test_the_free_slice_is_the_top_50_and_each_big_leagues_top_10(self):
+    def test_the_free_slice_is_the_top_50_and_each_leagues_top_10(self):
         rows = self.rows()
         free = [p["player_id"] for p in rows if p["free"]]
         self.assertEqual(free, list(range(1, 51)))            # two leagues' top 10s fall inside the overall 50 here
         from thecornerfc import export
-        with unittest.mock.patch.object(export, "FREE_WORLD", 4), unittest.mock.patch.object(export, "FREE_LEAGUE", 3):
+        with unittest.mock.patch.object(export, "FREE_WORLD", 4), unittest.mock.patch.object(export, "FREE_LEAGUE", 3), \
+                unittest.mock.patch.object(export, "FREE_POSITION", 0):
             free = {p["player_id"] for p in self.rows() if p["free"]}
-        self.assertEqual(free, {1, 2, 3, 4, 5})               # the top 4, and the third of league 39 (5); league 40 isn't a big league
-        self.assertEqual(export.FREE_LEAGUES, (39, 140, 135, 78, 61))
-        sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_paid_players_slice.sql").read_text()
-        self.assertIn("ARRAY[39, 140, 135, 78, 61]", sql)
+        self.assertEqual(free, {1, 2, 3, 4, 5, 6})            # the top 4, and the third of each league (5 and 6)
+        self.assertFalse(hasattr(export, "FREE_LEAGUES"))     # every league's top 10, not the five big leagues' (owner, 2026-10-07)
+
+    def test_the_free_slice_has_each_positions_top_10(self):
+        from thecornerfc import export, positions
+        # 30 left-backs and 30 right-backs outside every other slice; number 61 also plays right-back, where he is the best
+        raw = [[i + 1, f"Player {i:03d}", "CM", 95 - i * 0.5, 900, 100, 40, [95 - i * 0.5, None], 24, [],
+                "England", ["CM"], {"CM": 95 - i * 0.5}, [90.0], [900, 3, 2]] for i in range(60)]
+        raw += [[61 + i, f"Back {i:03d}", "LB" if i < 30 else "RB", 40 - i * 0.1, 900, 100, 40, [40 - i * 0.1, None], 24, [],
+                 "England", ["RB"] if i == 0 else [], {"FB": 60 - i * 0.1}, [40.0], [900, 0, 0]] for i in range(60)]
+        with unittest.mock.patch.object(export, "FREE_WORLD", 0):
+            free = {p["player_id"] for p in export.site_player_rows(raw) if p["free"]}
+        self.assertEqual(free, set(range(1, 11)) | set(range(61, 71)) | set(range(91, 100)))   # CM; LB; RB: 61 and its next nine
+        sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261007_paid_players_order.sql").read_text()
+        for role, group in positions.GROUPS.items():
+            self.assertIn(f"('{role}', '{group}')", sql)
+        self.assertIn("t.place <= 10", sql)
+        self.assertEqual(export.FREE_POSITION, 10)
 
     def test_the_blanked_row_keeps_who_he_is_and_loses_every_rank(self):
         from thecornerfc import export
@@ -227,10 +242,31 @@ class PaidPlayersTests(unittest.TestCase):
         from thecornerfc import export
         sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_paid_players.sql").read_text()
         at = export.SITE_PLAYER_FIELDS.index
-        self.assertIn(f"ARRAY[{','.join(str(i) for i in sorted(at(f) for f in export.PLAYER_PAID_FIELDS))}]", sql)
+        # it blanked his place in the export's order too, which 20261007_paid_players_order.sql puts back
+        self.assertIn(f"ARRAY[{','.join(str(i) for i in sorted(at(f) for f in (*export.PLAYER_PAID_FIELDS, 'ord')))}]", sql)
         self.assertIn(f"(p.data->>{at('world')})::integer <= {export.FREE_WORLD}", sql)
         self.assertIn(f"(p.data->>{at('lg')})::integer <= {export.FREE_LEAGUE}", sql)
         self.assertIn("WHERE (whole OR p.free OR p.data_free IS NOT NULL)", sql)      # never the whole row for want of a blanked one
+
+    def test_the_order_migration_keeps_his_place_and_hides_his_ranks(self):
+        from thecornerfc import export
+        root = Path(__file__).resolve().parents[1]
+        sql = (root / "db/migrations/20261007_paid_players_order.sql").read_text()
+        at = export.SITE_PLAYER_FIELDS.index
+        self.assertNotIn("ord", export.PLAYER_PAID_FIELDS)
+        self.assertEqual(self.rows()[70]["data_free"][at("ord")], 70)
+        self.assertIn(f"WHEN e.i - 1 = {at('ord')} THEN pg_catalog.to_json(p.ord)", sql)
+        self.assertIn(f"(p.data->>{at('lg')})::integer <= {export.FREE_LEAGUE}", sql)
+        self.assertIn("CASE WHEN whole OR p.free THEN p.data ELSE p.data_free END AS data", sql)
+        self.assertIn("WHERE (whole OR p.free OR p.data_free IS NOT NULL)", sql)
+        self.assertIn("OR ((whole OR p.free) AND p.ability IS NOT NULL", sql)          # an Ability filter still leaves him out
+        self.assertNotIn("1000000", sql)                                               # no place after the ranked players
+        self.assertNotIn("THEN NULL", sql.split("FROM site.players p\n            WHERE")[0].split("WITH fit AS")[1])   # his sort value is his own
+        # the function is the applied one but for that
+        old = (root / "db/migrations/20261006_paid_players.sql").read_text()
+        body = lambda text: text[text.index("CREATE OR REPLACE FUNCTION public.site_players("):].split("END; $$;")[0]
+        self.assertEqual(body(sql).count("\n"), body(old).count("\n") - 1)
+        self.assertIn(sql[sql.index("CREATE OR REPLACE FUNCTION public.site_players("):].split("END; $$;")[0] + "END; $$;", (root / "db/schema.sql").read_text())
 
     def test_the_cut_down_page_has_no_rank_per_match_or_movement(self):
         from thecornerfc import export

@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .health import monitored
-from . import config, availability, predictions
+from . import config, availability, national_predictions, predictions
 from . import tables as league_tables
 from .cache import WEEK, cached_rows, finished_fixtures, rank_history
 from .betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_cautious
@@ -426,16 +426,21 @@ def _write_site_data(conn, out_dir=OUT_DIR):
             0,
         ])
 
-    # National team matches (national_fixtures), shown on the Matches tab only: no predictions,
-    # line-ups or ranks, and flagged intl = 1 so the site links them to the nation pages
+    # National team matches (national_fixtures), on the Matches tab only and flagged intl = 1 so
+    # the site links them to the nation pages. Their projections are national_predictions.py's:
+    # the same fields as a club match's, without the parts national teams have no data for
+    # (bookmakers' odds, absences, line-up ratings)
     since, until = now - timedelta(days=PAST_DAYS), now + timedelta(days=FUTURE_DAYS)
+    national_why = {}
     for row in national_matches(conn, since, until):
-        fid, kickoff, lid, tournament, rnd, home, away, h_name, a_name, status, hg, ag = row
+        fid, lid, tournament, home, away, h_name, a_name = row[0], row[2], row[3], *row[5:9]
         competitions.setdefault(lid, {"name": tournament or config.NATIONAL_TEAM_LEAGUES.get(lid, f"Competition {lid}"),
                                       "country": "World", "type": "International"})
         teams_extra[home], teams_extra[away] = html.unescape(h_name), html.unescape(a_name)
-        matches.append([fid, kickoff.isoformat(), lid, rnd, home, away, status, hg, ag, None, None,
-                        *[None] * 25, 1])
+        match, why = national_match(row)
+        matches.append(match)
+        if why:
+            national_why[str(fid)] = why
     matches.sort(key=lambda m: (m[1], m[0]))
     nation_pages = {t: nat for t, nat in national_nationalities(conn, list(teams_extra)).items()
                     if nat != teams_extra[t]}
@@ -498,7 +503,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     log.info("Exported %d matches and %d rankings to %s", len(matches), len(rankings), out_dir)
     export_stats(conn, out_dir)
     export_bets(conn, out_dir)
-    store_matches(conn, matches, match_explanations(conn, now))
+    store_matches(conn, matches, {**match_explanations(conn, now), **national_why})
     export_methodology(conn, out_dir, now)
     player_team, listed = export_players(conn, out_dir, rankings)
     export_injuries(conn, out_dir, listed["free"])
@@ -873,19 +878,41 @@ def _table_exists(conn, name):
 
 def national_matches(conn, since, until):
     """Senior national team matches (national_fixtures) kicking off between since and until, for
-    the Matches tab. Friendlies also has youth sides ("England U19") and clubs touring against
-    national teams (teams.national false); both are left out. Empty until that table exists."""
+    the Matches tab, each with its projection (national_fixture_predictions; nulls where it has
+    none, or before that table exists) and the projection's rating. Friendlies also has youth
+    sides ("England U19") and clubs touring against national teams (teams.national false); both
+    are left out. Empty until national_fixtures exists."""
     if not _table_exists(conn, "national_fixtures"):
         return []
+    projected = _table_exists(conn, national_predictions.TABLE)
+    columns = ("p_home", "p_draw", "p_away", "home_xg", "away_xg", "likely_score", "home_rank", "away_rank",
+               "neutral", "exp_diff", "p_over25", "p_btts", "updated_at", "rating", "rating_winner",
+               "rating_margin", "rating_clean_sheets", "rating_shape", "rating_goals")
     return conn.execute(
-        r"""select fixture_id, kickoff, league_id, tournament, round, home_team_id, away_team_id,
-                   home_name, away_name, status_short, home_goals, away_goals
+        rf"""select nf.fixture_id, nf.kickoff, nf.league_id, nf.tournament, nf.round, nf.home_team_id,
+                   nf.away_team_id, nf.home_name, nf.away_name, nf.status_short, nf.home_goals, nf.away_goals,
+                   {", ".join(f"p.{c}" if projected else f"null as {c}" for c in columns)}
             from national_fixtures nf
-            where kickoff between %s and %s
-              and home_name !~ ' U\d{2}$' and away_name !~ ' U\d{2}$'
+            {f"left join {national_predictions.TABLE} p using (fixture_id)" if projected else ""}
+            where nf.kickoff between %s and %s
+              and nf.home_name !~ ' U\d{{2}}$' and nf.away_name !~ ' U\d{{2}}$'
               and not exists (select 1 from teams t where t.team_id in (nf.home_team_id, nf.away_team_id)
                                                      and t.national is false)
-            order by kickoff, fixture_id""", [since, until]).fetchall()
+            order by nf.kickoff, nf.fixture_id""", [since, until]).fetchall()
+
+
+def national_match(row):
+    """(a national_matches row as the site draws it, in SITE_MATCH_FIELDS order; its model detail,
+    or None where it has no projection)."""
+    (fid, kickoff, lid, _, rnd, home, away, _, _, status, hg, ag,
+     p_h, p_d, p_a, hxg, axg, likely, hr, ar, neutral, exp_diff, p_over, p_btts, projected_at, *ratings) = row
+    match = [fid, kickoff.isoformat(), lid, rnd, home, away, status, hg, ag, None, None,
+             _r(p_h, 3), _r(p_d, 3), _r(p_a, 3), _r(hxg), _r(axg), likely, _r(hr, 0), _r(ar, 0),
+             "live" if p_h is not None else None, *ratings,
+             None, None, None, None, _r(p_over, 3), _r(p_btts, 3),
+             None, None, None, None, 1]
+    why = national_predictions.explanation(hr, ar, neutral, exp_diff, projected_at) if p_h is not None else None
+    return match, why
 
 
 def national_nationalities(conn, team_ids):
@@ -1108,21 +1135,6 @@ BET_BANK_GBP = 1000
 BET_STAKE_GBP = 10
 
 
-def _summary(bets):
-    settled = [b for b in bets if b["result"] in ("win", "loss")]
-    clvs = [b["clv"] for b in settled if b["clv"] is not None]
-    staked = len(settled)
-    profit = sum(b["profit"] for b in settled)
-    return {
-        "bets": len(bets), "settled": staked, "pending": sum(1 for b in bets if b["result"] is None),
-        "wins": sum(1 for b in settled if b["result"] == "win"),
-        "profit": round(profit, 2), "roi": round(profit / staked, 4) if staked else None,
-        "avg_odds": round(sum(b["odds"] for b in settled) / staked, 3) if staked else None,
-        "avg_clv": round(sum(clvs) / len(clvs), 4) if clvs else None,
-        "beat_close": round(sum(1 for c in clvs if c > 0) / len(clvs), 4) if clvs else None,
-    }
-
-
 INJURY_LOOKBACK_DAYS = 21
 # reasons that only cover the match they were listed for: left out of a past match's list
 ONE_MATCH_REASONS = {"Red Card", "Yellow Cards", "Suspended", "Coach's decision", "Rest", "International duty",
@@ -1249,24 +1261,13 @@ def export_bets(conn, out_dir=OUT_DIR):
         "closing_odds": float(r[12]) if r[12] is not None else None, "clv": _r(r[13], 4),
         "result": r[14], "profit": float(r[15]) if r[15] is not None else None,
         "home": r[18], "away": r[19], "home_id": r[23], "away_id": r[24], "score": f"{r[20]}-{r[21]}" if r[20] is not None else None,
-        "tags": r[22] or [], "cautious": is_cautious(r[5], r[22]),
+        "cautious": is_cautious(r[5], r[22]),       # the tags themselves stay in the database
     } for r in rows]
-    by = lambda key: {k: _summary([b for b in bets if key(b) == k]) for k in sorted({key(b) for b in bets})}
-    summary = {
-        "all": _summary(bets),
-        "strategy": by(lambda b: b["strategy"]),
-        "market": by(lambda b: b["market"]),
-        "strategy_market": by(lambda b: f"{b['strategy']}|{b['market']}"),
-        "league": by(lambda b: str(b["league"])),
-        "cautious": _summary([b for b in bets if b["cautious"]]),
-        "tag": {t: _summary([b for b in bets if t in b["tags"]]) for t in sorted({t for b in bets for t in b["tags"]})},
-    }
-    last = max([r[16] for r in rows] + [r[17] for r in rows if r[17]], default=None)
-    # No generation timestamp, so the file only changes (and gets committed) when bets do
+    # Only what the Bets tab reads: it adds up its own totals from the bets (app.js, summarise).
+    # No generation timestamp, so the file only changes when bets do
     _write_json_file(out_dir / "bets.json", {
-        "last_change": last.isoformat() if last else None,
         "rules": {"min_edge": MIN_EDGE, "max_odds": MAX_ODDS, "stake": 1, "stake_gbp": BET_STAKE_GBP, "bank": BET_BANK_GBP, "cautious_rule": CAUTIOUS_RULE},
-        "summary": summary, "bets": bets,
+        "bets": bets,
     })
     log.info("Exported %d paper bets", len(bets))
 
@@ -1399,15 +1400,19 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
 PLAYER_FIELDS = ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
                  "nationality", "positions_12m", "position_ranks", "future", "season"]
 SITE_PLAYER_FIELDS = PLAYER_FIELDS + ["world", "lg", "lg_of", "lg_rank", "lg_n", "ord"]
-# The paid tier (db/migrations/20261006_paid_players.sql): the top FREE_WORLD players by Ability
-# and the top FREE_LEAGUE of each of FREE_LEAGUES are free; for everyone else a visitor without
-# a subscription gets the row with these fields null (who he is, his club, age, minutes, goals
-# and assists stay), once the paywall is on. The owner's line: 2026-10-04 said the top 10 of
-# every league; on 2026-10-06, seeing lower-league players ranked above internationals with
-# theirs hidden, they kept it to the five big leagues (20261006_paid_players_slice.sql).
-FREE_WORLD, FREE_LEAGUE = 50, 10
-FREE_LEAGUES = (39, 140, 135, 78, 61)       # Premier League, La Liga, Serie A, Bundesliga, Ligue 1
-PLAYER_PAID_FIELDS = ("rank", "seasons", "estimated", "position_ranks", "future", "world", "lg", "lg_rank", "ord")
+# The paid tier (db/migrations/20261006_paid_players.sql, 20261007_paid_players_order.sql): the
+# top FREE_WORLD players by Ability, the top FREE_LEAGUE of each league and the top FREE_POSITION
+# of each position on the Players tab's pitch are free (a position's: of the players listed under
+# it, the best by their rank as that position, the order the tab puts them in when it is picked).
+# For everyone else a visitor without a subscription gets the row with PLAYER_PAID_FIELDS null
+# (who he is, his club, age, minutes, goals and assists stay), once the paywall is on. He keeps
+# his place in the export's order (ord): the owner's line of 2026-10-07 is that every list is in
+# the order a subscriber sees, with the ranks hidden. The owner's line on the slice: every
+# league's top 10 (2026-10-04), the five big leagues' only (2026-10-06, when the hidden players
+# were put after the ranked ones and a nation's page misled), every league's again and each
+# position's (2026-10-07, with the order kept).
+FREE_WORLD, FREE_LEAGUE, FREE_POSITION = 50, 10, 10
+PLAYER_PAID_FIELDS = ("rank", "seasons", "estimated", "position_ranks", "future", "world", "lg", "lg_rank")
 
 
 def blanked_player(data):
@@ -1447,6 +1452,7 @@ def site_player_rows(rows, rankings=()):
     fifth), for his club's world rank. Places are counted as the site counted them from the
     whole list: by Ability (this season's rank) among every listed player and within his
     league; a tie shares the higher place."""
+    from .positions import GROUPS
     at = {name: i for i, name in enumerate(PLAYER_FIELDS)}
     ability = lambda r: r[at["seasons"]][0] if r[at["seasons"]] else None
     world = _places([ability(r) for r in rows if ability(r) is not None])
@@ -1458,6 +1464,15 @@ def site_player_rows(rows, rankings=()):
             club_league[r[at["league"]]].append(r[at["rank"]])
     league_place = {lg: _places(v) for lg, v in by_league.items()}
     club_place = {lg: _places(v) for lg, v in club_league.items()}
+    # each position's players (his main one, and those of positions_12m) by their rank as it
+    plays_of = lambda r: [x for x in dict.fromkeys([r[at["position"]], *r[at["positions_12m"]]]) if x]
+    as_position = lambda r, role: (r[at["position_ranks"]] or {}).get(GROUPS.get(role))
+    by_position = defaultdict(list)
+    for r in rows:
+        for role in plays_of(r):
+            if as_position(r, role) is not None:
+                by_position[role].append(as_position(r, role))
+    position_place = {role: _places(v) for role, v in by_position.items()}
     strengths = [r[4] for r in rankings if r[4] is not None]
     club_places = _places(strengths)
     club_world = {r[0]: club_places[r[4]] for r in rankings if r[4] is not None}
@@ -1470,13 +1485,16 @@ def site_player_rows(rows, rankings=()):
         season = r[at["season"]]
         goals, assists = (season[PLAYER_SEASON_FIELDS.index("goals")], season[PLAYER_SEASON_FIELDS.index("assists")]) if season else (None, None)
         name = _decode(r[at["name"]])
-        plays = [x for x in dict.fromkeys([r[at["position"]], *r[at["positions_12m"]]]) if x]
+        plays = plays_of(r)
+        top_of_position = any(as_position(r, role) is not None and position_place[role][as_position(r, role)] <= FREE_POSITION
+                              for role in plays)
         data = [*r, world[a] if placed else None,
                 league_place[league][a] if in_league else None, len(by_league[league]) if in_league else None,
                 club_place[league][r[at["rank"]]] if with_club else None, len(club_league[league]) if with_club else None, i]
         out.append({
             "free": bool((placed and world[a] <= FREE_WORLD)
-                         or (in_league and league in FREE_LEAGUES and league_place[league][a] <= FREE_LEAGUE)),
+                         or (in_league and league_place[league][a] <= FREE_LEAGUE)
+                         or top_of_position),
             "data_free": blanked_player(data),
             "player_id": r[at["id"]], "ord": i, "name_lc": name.lower(), "name_fold": _fold(name),
             "team_id": team, "league_id": league, "age": r[at["age"]], "nationality": r[at["nationality"]],

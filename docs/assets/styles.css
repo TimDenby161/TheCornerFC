@@ -596,6 +596,7 @@
   .account-form label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
   .account-form .table-search { display: block; margin-top: 4px; }
   .account-form .mt-btn, .account-out { width: 100%; }
+  #account-botcheck { margin-top: 12px; min-height: 65px; }
   .account-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: 12px; font-size: 13px; }
   .account-text { font-size: 14px; line-height: 1.45; margin: 0 0 12px; overflow-wrap: anywhere; }
   .mt-btn.account-danger { background: #b3261e; }

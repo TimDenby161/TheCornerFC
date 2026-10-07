@@ -152,6 +152,8 @@ def _execute(args):
             return 0
         if args.command == "predict":
             predictions.update_predictions(conn)
+            from . import national_predictions
+            national_predictions.update_safely(conn)
             return 0
         if args.command == "export":
             export.export_site_data(conn)

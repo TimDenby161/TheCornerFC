@@ -4,12 +4,15 @@ For matches kicking off in the next WINDOW_HOURS: refresh odds (so the last pric
 kickoff is kept as the closing price) and injury lists, re-project, place 'late' paper bets,
 refresh results of matches that kicked off recently, and settle finished bets. Official XIs
 published shortly before kickoff are recorded as evidence only; projections do not use them.
+National team matches (national_fixtures) get their results refreshed the same way; their
+projections are the nightly run's (national_predictions.py: nothing they use changes on the day).
 """
 import logging
 from datetime import datetime, timedelta, timezone
 
 from . import betting, config, fantasy_snapshots, predictions
-from .ingest import _store_fixtures, sync_injuries_fixtures, sync_odds_fixtures
+from .db import upsert
+from .ingest import _national_row, _store_fixtures, sync_injuries_fixtures, sync_odds_fixtures
 from .lineup_snapshots import capture_official
 
 log = logging.getLogger(__name__)
@@ -31,6 +34,7 @@ def run_matchday(api, conn):
     for i in range(0, len(recent), 20):
         _store_fixtures(conn, api.get("fixtures", ids="-".join(map(str, recent[i:i + 20]))))
         conn.commit()
+    refresh_national_results(api, conn, now)
 
     # Leagues where bookmaker odds are actually available (seen in the last 30 days)
     odds_leagues = [r[0] for r in conn.execute(
@@ -75,3 +79,22 @@ def capture_prekickoff_lineups(api, conn, now):
         conn.commit()
     if due:
         log.info("Pre-kickoff line-ups checked for %d fixtures", len(due))
+
+
+def refresh_national_results(api, conn, now):
+    """Scores and statuses of national team matches that kicked off in the last few hours, as
+    run_matchday does for club matches (20 per call). Nothing before the national_fixtures
+    migration. Returns the number of matches asked for."""
+    if not conn.execute("select to_regclass('public.national_fixtures')").fetchone()[0]:
+        return 0
+    recent = [r[0] for r in conn.execute(
+        """select fixture_id from national_fixtures
+           where kickoff between %s and %s and status_short not in ('FT', 'AET', 'PEN', 'CANC')""",
+        [now - timedelta(hours=5), now])]
+    for i in range(0, len(recent), 20):
+        items = api.get("fixtures", ids="-".join(map(str, recent[i:i + 20])))
+        upsert(conn, "national_fixtures", [_national_row(f) for f in items], ["fixture_id"])
+        conn.commit()
+    if recent:
+        log.info("Match day: %d recent national team results", len(recent))
+    return len(recent)
