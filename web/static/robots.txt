@@ -1,3 +1,4 @@
-# allow crawling everything by default
+# The new front end while it is being built: a preview, not the site. Search engines stay out
+# until the domain moves here; then this file allows them in.
 User-agent: *
-Disallow:
+Disallow: /
