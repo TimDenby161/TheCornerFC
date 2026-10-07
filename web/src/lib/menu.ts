@@ -1,0 +1,27 @@
+// The menu, in the old site's groups. A section with a `path` is built here; one without still
+// lives on the old site and its link goes there until it is rebuilt. `tab` is the name the
+// stylesheet knows the section by (body[data-tab]).
+export const OLD_SITE = 'https://thecornerfc.com/';
+export type Section = { tab: string; label: string; path?: string; old?: string };
+export const MENU: { label: string; sections: Section[] }[] = [
+	{ label: 'Ratings', sections: [
+		{ tab: 'table', label: 'Clubs', path: '/clubs' },
+		{ tab: 'table', label: 'Players', old: '#/players' },
+		{ tab: 'leagues', label: 'Leagues', old: '#/leagues' },
+		{ tab: 'nations', label: 'Nations', old: '#/nations' }
+	] },
+	{ label: 'Predictions', sections: [
+		{ tab: 'matches', label: 'Matches', old: '#/matches' },
+		{ tab: 'stats', label: 'Stats', old: '#/stats' },
+		{ tab: 'lineups', label: 'Line-up record', old: '#/lineups' }
+	] },
+	{ label: 'Against the market', sections: [
+		{ tab: 'tips', label: 'Model vs Market', old: '#/model-vs-market' },
+		{ tab: 'bets', label: 'Paper Simulation', old: '#/simulation' }
+	] }
+];
+export const sectionHref = (s: Section) => s.path ?? OLD_SITE + (s.old ?? '');
+export function tabFor(pathname: string): string {
+	for (const g of MENU) for (const s of g.sections) if (s.path && (pathname === s.path || pathname.startsWith(s.path + '/'))) return s.tab;
+	return 'home';
+}
