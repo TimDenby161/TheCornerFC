@@ -19,3 +19,6 @@ audit/
 # the experiment's output on the agreed settings (16 MB); verify.py reads it when present
 experiments/player_no_rating/reference.pickle
 experiments/player_no_rating/replay.json
+
+# Claude Code worktrees: local working copies, never part of the site
+.claude/worktrees/

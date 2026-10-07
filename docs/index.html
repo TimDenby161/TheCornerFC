@@ -23,11 +23,12 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#2a78d6">
+<meta name="theme-color" content="#0e3b29">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Corner FC">
 <script src="assets/theme.js"></script>
+<link rel="preload" href="assets/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/styles.css">
 
 </head>
@@ -73,16 +74,16 @@
   <div class="empty-state" id="boot-status" role="status">Loading…</div>
   <section class="panel" data-tab="home">
     <div class="home-hero">
-      <!-- the corner of a pitch at night: the touchlines, the corner arc and the flag (the site's mark) -->
+      <!-- the corner of a pitch: the touchline and goal line (drawn on past the frame, to the hero's edges), the corner arc and the flag (the site's mark) -->
       <svg class="home-pitch" viewBox="0 0 420 300" aria-hidden="true" focusable="false">
         <g fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M0 110H372V300"/>
+          <path d="M-4000 110H372V4000"/>
           <path d="M328 110a44 44 0 0 0 44 44"/>
         </g>
         <path d="M372 110V22" fill="none" stroke="#c9c8c2" stroke-width="3" stroke-linecap="round"/>
         <g class="home-flag">
           <path d="M371 24H326V56z" fill="#ffffff"/>
-          <path d="M371 24V56H326z" fill="#2a78d6"/>
+          <path d="M371 24V56H326z" fill="#0b110e"/>
         </g>
       </svg>
       <div class="home-copy">
