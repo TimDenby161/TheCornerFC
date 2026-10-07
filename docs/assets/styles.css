@@ -1132,7 +1132,6 @@
   .home-turn-list button[aria-current]::after { transform: none; }
   .home-turn button:hover { color: var(--text-primary); }
   .home-turn button:focus-visible { outline: 2px solid var(--text-primary); outline-offset: -2px; }
-  .home-hold { flex: none; padding: 12px 0 0 12px; }      /* its word level with the names */
   .home-title { margin: 0 0 22px; font-size: clamp(56px, 9.6vw, 152px); line-height: 0.86; font-weight: 900; font-stretch: 62%; letter-spacing: -0.005em;
     text-transform: uppercase; font-variant-numeric: tabular-nums; }
   /* the second line in outline, as if marked on the grass */
@@ -1188,15 +1187,16 @@
   .home-brief-item .home-steps li + li { margin-top: 10px; }
   .home-steps a { display: block; font-size: 15px; font-weight: 700; color: var(--text-primary); text-decoration: none; }
   .home-steps span { display: block; }
-  .home-call-teams { display: block; margin: 0 0 4px; font-size: 28px; line-height: 1.05; font-weight: 800; text-transform: uppercase; text-wrap: balance; }
+  .home-call + .home-call { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--gridline); }
+  .home-call-teams { display: block; margin: 0 0 3px; font-size: 22px; line-height: 1.05; font-weight: 800; text-transform: uppercase; text-wrap: balance; }
   .home-call-teams i { font-style: normal; font-weight: 600; color: var(--text-muted); text-transform: none; }
-  .home-call-when { display: block; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
-  .home-call-bar { display: flex; gap: 2px; height: 12px; overflow: hidden; }
+  .home-call-when { display: block; margin-bottom: 10px; font-size: 13px; color: var(--text-secondary); }
+  .home-call-bar { display: flex; gap: 2px; height: 10px; overflow: hidden; }
   .home-call-bar span { display: block; height: 100%; min-width: 4px; }
-  .home-call-key { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--text-secondary); }
+  .home-call-key { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
   .home-call-key span { display: block; min-width: 0; }
   .home-call-key span:nth-child(2) { text-align: center; } .home-call-key span:nth-child(3) { text-align: right; }
-  .home-call-key b { display: block; font-size: clamp(28px, 3vw, 38px); line-height: 1; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .home-call-key b { display: block; font-size: 22px; line-height: 1; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
   .home-sample { margin: 12px 0 0; }
   .home-sample:empty { display: none; }
   .home-board .home-top .rel-chip { min-width: 40px; text-align: center; font-size: 14px; }
@@ -1213,6 +1213,7 @@
   .home-nums div + div { padding-left: 12px; border-left: 1px solid var(--gridline); }
   .home-nums dt { font-size: clamp(34px, 4vw, 56px); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
   .home-nums dd { margin: 6px 0 0; font-size: 13px; line-height: 1.35; color: var(--text-secondary); }
+  .home-nums-note { margin: 14px 0 0; font-size: 12px; line-height: 1.35; color: var(--text-muted); }
   .home-close { margin: 72px 0 8px; padding-top: 18px; border-top: 2px solid var(--text-primary); }
   .home-close-line { margin: 0 0 12px; font-size: clamp(40px, 6vw, 88px); line-height: 0.88; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }
   .home-close-sub { margin: 0 0 24px; max-width: 52ch; font-size: 16px; line-height: 1.5; color: var(--text-secondary); }
@@ -1242,12 +1243,11 @@
     .home-flag { animation: home-wave 2.6s ease-in-out infinite alternate; }
     .home-dot { animation: home-pulse 2s ease-out infinite; }
     /* the turn's clock (homeTurn in app.js brings up the next slide when it ends): stopped by the
-       Pause button, under a mouse resting on the slide, and while a key has the focus inside */
+       under a mouse resting on the slide, and while a key has the focus inside */
     .home-turn-list button[aria-current]::after { animation: home-fill 10s linear both; }
-    .home-hero:is([data-held], :has(:focus-visible)) .home-turn-list button::after { animation-play-state: paused; }
+    .home-hero:has(:focus-visible) .home-turn-list button::after { animation-play-state: paused; }
     @media (hover: hover) { .home-slides:hover ~ .home-turn button::after { animation-play-state: paused; } }
   }
-  @media (prefers-reduced-motion: reduce) { .home-hold { display: none; } }      /* nothing turns by itself, so nothing to pause */
   @keyframes home-fill { from { transform: scaleX(0); } }
   @keyframes home-rise { from { opacity: 0; transform: translateY(18px); } }
   @keyframes home-wave { from { transform: skewY(-5deg) scaleX(1); } to { transform: skewY(5deg) scaleX(0.93); } }

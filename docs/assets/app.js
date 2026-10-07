@@ -6455,11 +6455,11 @@ const HOME_SLIDES = [
   ["players", "Players", "Players.", "0 to 100.", "See the players", "Highest-ranked players", "Position · rank"],
   ["matches", "Matches", "Matches.", "Forecast.", "See the matches", "The model's chances", ""],
   ["lineups", "Line-ups", "The eleven.", "Called.", "See the line-up record", "Predicted against the team sheet", ""],
-  ["stats", "Stats", "Every call.", "Marked.", "See the record", "The last 30 days", ""],
+  ["stats", "Stats", "", "Matches.", "See the record", "The last 12 months", ""],
   ["leagues", "Leagues", "Leagues.", "Compared.", "See the leagues", "Strongest leagues now", "Average rating"],
   ["nations", "Nations", "Nations.", "Since 1872.", "See the nations", "Strongest national teams", "Rating"]];
 const HOME_INTRO = { lineups: "Each club's predicted starting eleven for its next match, marked against the real team sheet afterwards.",
-  stats: "Every match prediction is marked against the real result, so you can see how often the model is right." };
+  stats: "The last year's match predictions, each one marked against the real result, so you can see how often the model is right." };
 function renderHome() {
   state.drawn.add("home");
   const clubs = state.rankings.length;
@@ -6471,7 +6471,7 @@ function renderHome() {
   $("#home-board-more").textContent = `All ${clubs.toLocaleString()} clubs`;
   $("#home-slides").insertAdjacentHTML("beforeend", HOME_SLIDES.map(([key, name, first, second, go, head, note]) =>
     `<div class="home-slide" role="group" aria-roledescription="slide" aria-label="${name}" data-name="${name}" hidden>
-      <div class="home-copy"><h2 class="home-title">${first} <em>${second}</em></h2><p class="home-lede">${escapeHtml(HOME_INTRO[key] || TAB_INFO[key].intro)}</p>
+      <div class="home-copy"><h2 class="home-title"><span id="home-t-${key}">${first}</span> <em>${second}</em></h2><p class="home-lede">${escapeHtml(HOME_INTRO[key] || TAB_INFO[key].intro)}</p>
         <div class="home-actions"><a class="mt-btn home-go" id="home-l-${key}" href="#/${TAB_ROUTES[key] || key}">${go}</a></div></div>
       <div class="home-board"><p class="home-board-head"><span class="home-dot" aria-hidden="true"></span>${escapeHtml(head)}<span class="home-board-key">${note}</span></p>
         <div class="home-sample" id="home-s-${key}"></div></div></div>`).join(""));
@@ -6481,7 +6481,8 @@ function renderHome() {
   quiet(homeStats());
   quiet(homeNations());
   quiet(homeXi());
-  if (top[0]) quiet(ensureTeam(top[0].team)).then(() => homeCall(top[0].team));
+  const callers = top.slice(0, HOME_CALL_CLUBS).map((x) => x.team);
+  Promise.all(callers.map((t) => quiet(ensureTeam(t)))).then(() => homeCall(callers));
 }
 // A slide's sample is in: the slide joins the turn
 function homeSample(key, html) {
@@ -6518,10 +6519,6 @@ $("#home-turn-list").addEventListener("animationend", (e) => {
   if (e.animationName !== "home-fill") return;
   const slides = homeSlides();
   homeSlideTo(slides[(slides.indexOf(state.homeSlide) + 1) % slides.length]);
-});
-$("#home-hold").addEventListener("click", (e) => {
-  const held = $("#home-hero").toggleAttribute("data-held");
-  e.target.textContent = held ? "Play" : "Pause";
 });
 // A swipe (or any scroll of the slides) that comes to rest on another slide makes that one the one that's up
 $("#home-slides").addEventListener("scroll", () => {
@@ -6568,16 +6565,24 @@ async function homeXi() {
   homeSample("lineups", `<p class="home-xi-head${xi.some((c) => c.rank != null) ? "" : " home-xi-bare"}"><span>${escapeHtml(what)}</span><span class="xi-score xi-score-${hits >= 9 ? "good" : hits >= 7 ? "ok" : "poor"}" title="Starters the model predicted">${hits}/${xi.length} predicted</span></p>${xiPitch(xi, null, { note: "" })}
     <div class="xi-legend"><span><i class="xi-key xi-hit"></i>Predicted to start</span><span><i class="xi-key xi-miss"></i>Not predicted</span></div>`);
 }
-// The last 30 days of the Stats tab in three numbers
+// The last year of the Stats tab, by its strongest true figures (owner, 2026-10-07): how many
+// matches were marked, in the headline, and under it how often a result the model gave 70% or more
+// came in (from the calibration's top bands), the right-result rate against always picking the
+// home team, and the exact scores. With the Stats tab's own note of how many were recorded before kickoff.
+const HOME_SURE = 0.7;
 async function homeStats() {
   await loadStats();
-  const s = state.stats?.ranges?.["30d"]?.all;
-  if (!s) return;
+  const s = state.stats?.ranges?.["365d"]?.all;
+  if (!s?.n) return;
+  const sure = (s.calibration || []).filter(([count, said]) => count && said >= HOME_SURE);
+  const calls = sure.reduce((t, b) => t + b[0], 0), came = sure.reduce((t, b) => t + b[0] * b[2], 0);
+  $("#home-t-stats").textContent = s.n.toLocaleString();          // the headline: "18,679 matches."
   homeSample("stats", `<dl class="home-nums">${[
-    [pct(s.correct, 0), "right result, last 30 days"],
-    [pct(s.home_rate, 0), "by picking the home team every time"],
-    [s.n.toLocaleString(), "matches marked"],
-  ].map(([n, what]) => `<div><dt>${n}</dt><dd>${what}</dd></div>`).join("")}</dl>`);
+    calls ? [pct(came / calls, 0), `of the results the model gave ${pct(HOME_SURE, 0)} or more came in`] : null,
+    [pct(s.correct, 0), `right result, against ${pct(s.home_rate, 0)} by picking the home team every time`],
+    s.exact ? [`1 in ${Math.round(1 / s.exact)}`, "exact scores right"] : null,
+  ].filter(Boolean).map(([n, what]) => `<div><dt>${n}</dt><dd>${what}</dd></div>`).join("")}</dl>
+    ${s.live < s.n ? `<p class="home-nums-note">${s.live.toLocaleString()} recorded before kickoff, the rest reconstructed from pre-match data.</p>` : ""}`);
 }
 function homeLeagues() {
   const rows = leagueAverages().sort((a, b) => b.lt - a.lt).slice(0, 5);
@@ -6603,18 +6608,24 @@ function countUp(el, n) {
   };
   requestAnimationFrame(step);
 }
-// One match's chances as a taste of the Matches tab: the top club's next match that has the
-// model's chances. Left out when there isn't one.
-function homeCall(team) {
-  const m = state.data.matches.find((x) => (x.home === team || x.away === team) && x.status === "NS" && x.p_home != null && new Date(x.kickoff) > Date.now());
-  if (!m) return;
-  const [h, d, a] = shownProbs(m, "p");
-  $("#home-l-matches").href = `#/matches?d=${localDateStr(new Date(m.kickoff))}`;
-  homeSample("matches", `<span class="home-call-teams">${escapeHtml(teamName(m.home))} <i>v</i> ${escapeHtml(teamName(m.away))}</span>
+// A few matches' chances as a taste of the Matches tab: the next match of each of the strongest
+// clubs that has the model's chances, soonest first (two of them meeting is one match). Left out
+// when there are none.
+const HOME_CALL_CLUBS = 4, HOME_CALLS = 3;
+function homeCall(teams) {
+  const next = (team) => state.data.matches.filter((x) => (x.home === team || x.away === team) && x.status === "NS" && x.p_home != null && new Date(x.kickoff) > Date.now())
+    .sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff))[0];
+  const ms = [...new Set(teams.map(next).filter(Boolean))].slice(0, HOME_CALLS).sort((a, b) => new Date(a.kickoff) - new Date(b.kickoff));
+  if (!ms.length) return;
+  $("#home-l-matches").href = `#/matches?d=${localDateStr(new Date(ms[0].kickoff))}`;
+  homeSample("matches", ms.map((m) => {
+    const [h, d, a] = shownProbs(m, "p");
+    return `<div class="home-call"><span class="home-call-teams">${escapeHtml(teamName(m.home))} <i>v</i> ${escapeHtml(teamName(m.away))}</span>
     <span class="home-call-when">${escapeHtml(compLabel(m.league))} · ${fmtDay(m.kickoff)}, ${fmtTime(m.kickoff)}</span>
     <span class="home-call-bar" role="img" aria-label="${escapeHtml(`${teamName(m.home)} ${h}%, draw ${d}%, ${teamName(m.away)} ${a}%`)}">
       <span class="prob-home" data-sw="${h}%"></span><span class="prob-draw" data-sw="${d}%"></span><span class="prob-away" data-sw="${a}%"></span></span>
-    <span class="home-call-key" aria-hidden="true"><span><b>${h}%</b>${escapeHtml(teamName(m.home))}</span><span><b>${d}%</b>Draw</span><span><b>${a}%</b>${escapeHtml(teamName(m.away))}</span></span>`);
+    <span class="home-call-key" aria-hidden="true"><span><b>${h}%</b>${escapeHtml(teamName(m.home))}</span><span><b>${d}%</b>Draw</span><span><b>${a}%</b>${escapeHtml(teamName(m.away))}</span></span></div>`;
+  }).join(""));
 }
 $("#home-join").addEventListener("click", () => {
   openAccount("signup");
