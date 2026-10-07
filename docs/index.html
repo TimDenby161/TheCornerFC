@@ -38,21 +38,26 @@
 <header>
   <div class="app-bar">
     <button type="button" class="menu-btn" id="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="main-menu">&#9776;</button>
-    <p class="brand"><span class="brand-mark" aria-hidden="true"></span><span>The Corner FC</span></p>
+    <a class="brand" id="brand" href="./"><span class="brand-mark" aria-hidden="true"></span><span>The Corner FC</span></a>
     <h1 class="app-title" id="app-title">Clubs</h1>
     <button type="button" class="account-btn" id="account-btn" aria-haspopup="dialog">Sign in</button>
   </div>
   <nav class="tabs" id="main-menu" aria-label="Main">
     <button type="button" data-tab="home">Home</button>
+    <!-- the menu in groups, each under its name: a short list to read, not one long one -->
+    <p class="nav-label">Ratings</p>
     <button type="button" data-tab="table" data-view="clubs" aria-current="page">Clubs</button>
     <button type="button" data-tab="table" data-view="players">Players</button>
     <button type="button" data-tab="leagues">Leagues</button>
     <button type="button" data-tab="nations">Nations</button>
+    <p class="nav-label">Predictions</p>
     <button type="button" data-tab="matches">Matches</button>
     <button type="button" data-tab="stats">Stats</button>
     <button type="button" data-tab="lineups">Line-up record</button>
+    <p class="nav-label">Against the market</p>
     <button type="button" data-tab="tips">Model vs Market</button>
     <button type="button" data-tab="bets">Paper Simulation</button>
+    <p class="nav-label nav-owner">Fantasy</p>
     <button type="button" data-tab="fpl" id="fpl-tab" hidden>FPL</button>
     <button type="button" data-tab="myteam" id="myteam-tab" hidden>My FPL team</button>
     <button type="button" data-tab="efl" id="efl-tab" hidden>EFL Fantasy</button>
@@ -244,16 +249,19 @@
     <div id="bet-side">
       <div class="side-stick"><div class="filters-wrap side-filters" id="bet-filters"></div></div>
     </div>
-    <div class="filter-row range-row" id="bet-strategy">
+    <div class="filter-row range-row" id="bet-strategy" role="group" aria-label="When the bet was taken">
+      <span class="filter-label" aria-hidden="true">Taken</span>
       <button type="button" class="filter-chip" data-strategy="all" aria-pressed="true">All</button>
       <button type="button" class="filter-chip" data-strategy="early" aria-pressed="false">Night before</button>
       <button type="button" class="filter-chip" data-strategy="late" aria-pressed="false">Pre-kickoff</button>
     </div>
-    <div class="filter-row u-mb8" id="bet-view">
+    <div class="filter-row u-mb8" id="bet-view" role="group" aria-label="Which bets">
+      <span class="filter-label" aria-hidden="true">Bets</span>
       <button type="button" class="filter-chip" data-view="all" aria-pressed="true">All bets</button>
       <button type="button" class="filter-chip" data-view="cautious" aria-pressed="false">Cautious</button>
     </div>
-    <div class="filter-row u-mb10" id="bet-market">
+    <div class="filter-row u-mb10" id="bet-market" role="group" aria-label="Market">
+      <span class="filter-label" aria-hidden="true">Market</span>
       <button type="button" class="filter-chip" data-market="all" aria-pressed="true">All markets</button>
       <button type="button" class="filter-chip" data-market="1X2" aria-pressed="false">Result</button>
       <button type="button" class="filter-chip" data-market="OU15" aria-pressed="false">O/U 1.5</button>

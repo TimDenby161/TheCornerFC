@@ -6638,6 +6638,12 @@ document.querySelectorAll("nav.tabs button[data-tab]").forEach((btn) => btn.addE
   else if (btn.dataset.tab === "table") syncTableUrl();
   setMenu(false);
 }));
+// The site's name is the way home, as on any site (a new tab or window is left to the browser)
+$("#brand")?.addEventListener("click", (e) => {      // ?.: a copy of the page kept from before it was a link
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  $('nav.tabs button[data-tab="home"]').click();
+});
 // Phones: the menu slides in from the left behind the menu button
 function setMenu(open) {
   const was = document.body.classList.contains("menu-open");
