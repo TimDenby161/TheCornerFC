@@ -6424,8 +6424,8 @@ function renderHome() {
     ["1872", "where the national team ratings begin"],
     [fmtShortDate(state.data.generated_at), "ratings last updated"],
   ].map(([n, what]) => `<div><dt>${escapeHtml(n)}</dt><dd>${escapeHtml(what)}</dd></div>`).join("");
-  $("#home-show").innerHTML = HOME_PANELS.map(([key, name, line, wide], i) =>
-    `<section class="home-panel hp-w${wide}"><span class="home-card-no">${pad(i + 1)}</span><h4 class="home-card-line">${line}</h4><p class="home-card-sub">${escapeHtml(HOME_INTRO[key] || TAB_INFO[key].intro)}</p>
+  $("#home-show").innerHTML = HOME_PANELS.map(([key, name, line, wide]) =>
+    `<section class="home-panel hp-w${wide}"><h4 class="home-card-line">${line}</h4><p class="home-card-sub">${escapeHtml(HOME_INTRO[key] || TAB_INFO[key].intro)}</p>
       <div class="home-sample" id="home-s-${key}"></div><a class="home-card-name" id="home-l-${key}" href="#/${TAB_ROUTES[key] || key}">${name}</a></section>`).join("");
   homeLeagues();
   quiet(homePlayers());
@@ -6577,6 +6577,7 @@ function syncMenu() {
     if (on) title = b.textContent;
   });
   $("#app-title").textContent = title;
+  $("#tab-title").textContent = title;          // the same name, shown above the tab's intro on a wide screen
   setTitle(state.tab === "home" ? "" : title);          // Home's title is the site's name alone
   renderTabHead(state.tab === "table" ? state.tableView : state.tab);
 }

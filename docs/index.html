@@ -66,6 +66,7 @@
 
 <main id="main" tabindex="-1">
   <div class="tab-head" id="tab-head" hidden>
+    <p class="tab-title" id="tab-title" aria-hidden="true"></p>
     <p class="tab-intro" id="tab-intro"></p>
     <details class="tab-key" id="tab-key"><summary>What the numbers mean</summary><dl id="tab-key-list"></dl></details>
   </div>
@@ -85,7 +86,6 @@
         </g>
       </svg>
       <div class="home-copy">
-        <p class="home-kicker"><span class="brand-mark" aria-hidden="true"></span>The Corner FC</p>
         <h2 class="home-title"><span id="home-count">2,000+</span> clubs. <em>One&nbsp;scale.</em></h2>
         <p class="home-lede" id="home-lede">Strength ratings for clubs, players and national teams, and the model's win, draw and loss chances for their matches.</p>
         <div class="home-actions">
@@ -98,6 +98,38 @@
         <ol class="home-top" id="home-top"></ol>
         <a class="home-board-more" href="#/clubs" id="home-board-more">The full table</a>
       </div>
+    </div>
+    <!-- the four things a first visit asks, each a label, a one-line answer and the detail under it -->
+    <div class="home-brief">
+      <section class="home-brief-item">
+        <h3 class="home-brief-q">What it is</h3>
+        <p class="home-brief-a">Football ratings on one scale</p>
+        <p>Every club gets one strength number, updated after each match it plays. Around it: players ranked 0 to 100, national team ratings, and win, draw and loss chances for the matches coming up.</p>
+      </section>
+      <section class="home-brief-item">
+        <h3 class="home-brief-q">Who it's for</h3>
+        <p class="home-brief-a">Fans who want more than the league table</p>
+        <ul>
+          <li>You follow a club and want to know where it really stands.</li>
+          <li>You argue about which league or player is better, and want a number.</li>
+          <li>You like a prediction that shows its reasons.</li>
+        </ul>
+        <p class="home-brief-note">The numbers are estimates, <a href="terms.html#advice">not betting or fantasy advice</a>.</p>
+      </section>
+      <section class="home-brief-item">
+        <h3 class="home-brief-q">Why it matters</h3>
+        <p class="home-brief-a">A league table only compares clubs that play each other</p>
+        <p>One scale sets a lower-division side against a Champions League club: 100 points is about a goal a game. And every match prediction is marked against the real result, so you can see how often the model is right.</p>
+      </section>
+      <section class="home-brief-item home-brief-next">
+        <h3 class="home-brief-q">What to do next</h3>
+        <p class="home-brief-a">Start with your own club</p>
+        <ol class="home-steps">
+          <li><a href="#/clubs">Find your club</a><span>Search for it in the table and open its page.</span></li>
+          <li><a href="#/matches">See its next match</a><span>The model's chances, before kick-off.</span></li>
+          <li><a href="#/stats">Check the record</a><span>How the predictions have done against results.</span></li>
+        </ol>
+      </section>
     </div>
     <dl class="home-facts" id="home-facts"></dl>
     <h3 class="home-head">What's inside</h3>
