@@ -7166,6 +7166,7 @@ async function refreshSubscription(client, user) {
   }
   if (state.account.user?.id !== user?.id) return;                     // someone else signed in meanwhile
   state.sub = sub;
+  drawAdSpaces();
   const changed = paidFlag(!!(sub?.paywall && sub.subscriber));
   // start again only where it matters: a subscriber who was sent the cut-down data, or data
   // fetched as a subscriber by someone who no longer is one
@@ -7415,10 +7416,14 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAccou
 // no room until this is true, so the pages are laid out for adverts without showing an empty box.
 // ?ads=preview in the address draws the spaces as marked boxes. Nothing here loads an advert: the
 // network's script, the consent banner and the Content-Security-Policy change come with the network
-// (audit/findings.md, launch gate line 6). Whether a subscriber sees adverts is not decided.
+// (audit/findings.md, launch gate line 6). A subscriber sees no adverts (owner, 2026-10-07), so the
+// spaces close once the database says the visitor is one.
 const ADS = { on: false, preview: new URLSearchParams(location.search).get("ads") === "preview" };
-document.body.classList.toggle("ads-on", ADS.on || ADS.preview);
-document.body.classList.toggle("ads-preview", ADS.preview);
+function drawAdSpaces() {
+  document.body.classList.toggle("ads-on", ADS.preview || (ADS.on && !state.sub?.subscriber));
+  document.body.classList.toggle("ads-preview", ADS.preview);
+}
+drawAdSpaces();
 
 // Until the data is in, the header names the tab the address asks for
 if (!storedText("auth")) storeFlag("fplOwner", false);          // signed out since the owner was last here
