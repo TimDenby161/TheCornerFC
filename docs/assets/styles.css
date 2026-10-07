@@ -255,6 +255,16 @@
   .link-btn { appearance: none; border: 0; background: none; padding: 0; font: inherit; color: var(--blue-text); text-decoration: underline; cursor: pointer; }
   :is(th.sortable, .comp-group-header, .tip-day, .fpl-scroll):focus-visible { outline: 2px solid var(--series-blue); outline-offset: -2px; }
   .empty-state { text-align: center; color: var(--text-muted); font-size: 14px; padding: 40px 16px; }
+  /* an address with no page: said as plainly as a page's own title, with one way on */
+  .not-found { padding: clamp(40px, 12vh, 120px) 16px; }
+  .not-found h2 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 44px); line-height: 1; font-weight: 900; font-stretch: 62%; text-transform: uppercase; color: var(--text-primary); }
+  .not-found p { margin: 0 0 20px; font-size: 15px; color: var(--text-secondary); }
+  .not-found .mt-btn { display: inline-block; text-decoration: none; }
+  /* a wide table's row under the pointer: the name and its numbers can be a window's width apart.
+     A wash over the cell's own colour, so pinned columns keep theirs */
+  @media (hover: hover) {
+    :is(table.leaderboard, table.league-table) tbody tr:hover td { background-image: linear-gradient(color-mix(in srgb, var(--text-primary) 6%, transparent), color-mix(in srgb, var(--text-primary) 6%, transparent)); }
+  }
   .note { color: var(--text-muted); font-size: 12px; padding: 0 0 12px; text-align: center; }
 
   .filters-wrap { margin-bottom: 10px; }
@@ -373,8 +383,10 @@
   .prob-home { background: var(--series-blue); }
   .prob-draw { background: var(--text-muted); }
   .prob-away { background: var(--series-orange); }
-  .prob-labels { position: relative; height: 14px; margin-top: 4px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .prob-labels span { position: absolute; top: 0; height: 100%; display: flex; align-items: center; justify-content: center; white-space: nowrap; background: none; }
+  /* each label sits under its share of the bar; a share too thin for its label takes the room it
+     needs and the others give way, so two labels never print over each other */
+  .prob-labels { display: flex; gap: 2px; height: 14px; margin-top: 4px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .prob-labels span { flex: 0 1 auto; box-sizing: border-box; min-width: max-content; padding: 0 2px; height: 100%; display: flex; align-items: center; justify-content: center; white-space: nowrap; background: none; }
   .prob-labels .prob-home { color: var(--blue-text); }
   .prob-labels .prob-draw { color: var(--text-muted); }
   .prob-labels .prob-away { color: var(--orange-text); }
@@ -419,18 +431,18 @@
   .club-card-extra { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
     display: flex; justify-content: space-between; gap: 8px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
   .club-card-extra b { color: var(--text-secondary); }
-  .match-card.club-res-w { background: color-mix(in srgb, var(--status-good) 12%, var(--surface-1)); border-left: 4px solid var(--status-good); }
-  .match-card.club-res-d { background: color-mix(in srgb, #dfff00 18%, var(--surface-1)); border-left: 4px solid #c4df00; }
-  .match-card.club-res-l { background: color-mix(in srgb, var(--status-critical) 12%, var(--surface-1)); border-left: 4px solid var(--status-critical); }
+  .match-card.club-res-w { background: color-mix(in srgb, var(--status-good) 6%, var(--surface-1)); border-left: 4px solid var(--status-good); }
+  .match-card.club-res-d { background: color-mix(in srgb, #c4df00 7%, var(--surface-1)); border-left: 4px solid #c4df00; }
+  .match-card.club-res-l { background: color-mix(in srgb, var(--status-critical) 6%, var(--surface-1)); border-left: 4px solid var(--status-critical); }
   .vs-market { display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; font-size: 13px; margin-top: 8px; font-variant-numeric: tabular-nums; }
   .vs-market .hd { color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; text-align: right; }
   .vs-market .num { text-align: right; font-weight: 700; }
   .vs-market .better { color: var(--good-text); }
-  .match-card.acc-5 { background: color-mix(in srgb, var(--status-good) 15%, var(--surface-1)); border-left: 5px solid #d7a915; }
-  .match-card.acc-4 { background: color-mix(in srgb, var(--status-good) 12%, var(--surface-1)); border-left: 4px solid var(--status-good); }
-  .match-card.acc-3 { background: color-mix(in srgb, #dfff00 20%, var(--surface-1)); border-left: 4px solid #c4df00; }
-  .match-card.acc-2 { background: color-mix(in srgb, var(--series-orange) 12%, var(--surface-1)); border-left: 4px solid var(--series-orange); }
-  .match-card.acc-1 { background: color-mix(in srgb, var(--status-critical) 14%, var(--surface-1)); border-left: 5px solid var(--status-critical); }
+  .match-card.acc-5 { background: color-mix(in srgb, var(--status-good) 8%, var(--surface-1)); border-left: 5px solid #d7a915; }
+  .match-card.acc-4 { background: color-mix(in srgb, var(--status-good) 5%, var(--surface-1)); border-left: 4px solid var(--status-good); }
+  .match-card.acc-3 { background: color-mix(in srgb, #c4df00 7%, var(--surface-1)); border-left: 4px solid #c4df00; }
+  .match-card.acc-2 { background: color-mix(in srgb, var(--series-orange) 6%, var(--surface-1)); border-left: 4px solid var(--series-orange); }
+  .match-card.acc-1 { background: color-mix(in srgb, var(--status-critical) 7%, var(--surface-1)); border-left: 5px solid var(--status-critical); }
   .rating-badge { min-width: 30px; padding: 2px 6px; font-size: 10px; line-height: 1.2;
     font-weight: 800; text-align: center; border: 1px solid var(--border); }
   .badge-5 { background: #f6c945; border-color: #b98500; color: #161100; }
@@ -654,6 +666,7 @@
   .gap-off { color: var(--critical-text); }
   /* Line-up record: the Stats tab's cards, tables and bars */
   #lineup-body .stats-card + .stats-card { margin-top: 12px; }
+  #lineup-body .stats-grid .stats-card { margin-top: 0; }
   #lineup-body .dist-label { width: 96px; font-weight: 600; }
   #lineup-body .dist-pct { width: 88px; }
   #lineup-body .calib-table tr[data-league] { cursor: pointer; }
@@ -826,9 +839,9 @@
   .tip-pick + .tip-pick { border-top: 1px solid var(--gridline); padding-top: 5px; margin-top: 5px; }
   .tip-pick { align-items: center; }
   .past-note { margin: -4px 2px 10px; }
-  .tips-overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 10px;
+  .tips-overview { display: flex; flex-wrap: wrap; margin-bottom: 10px;   /* a tile left alone on the last row fills it */
     border-top: 2px solid var(--text-primary); border-bottom: 1px solid var(--border); overflow: hidden; }
-  .kpi { padding: 12px 14px; border-left: 1px solid var(--border); margin-left: -1px; border-top: 1px solid var(--border); margin-top: -1px; }
+  .kpi { flex: 1 1 180px; min-width: 0; padding: 12px 14px; border-left: 1px solid var(--border); margin-left: -1px; border-top: 1px solid var(--border); margin-top: -1px; }
   .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
   .kpi-value { margin-top: 6px; font-size: 30px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
   .kpi-value small { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-left: 3px; letter-spacing: 0; }
@@ -1004,6 +1017,8 @@
   .table-scroll + .modal-section { margin-top: 14px; }
   .lt-form.club-form { display: flex; flex-wrap: wrap; gap: 4px; height: 24px; overflow: hidden; margin: 0 0 10px; }   /* one line: the oldest wrap out of sight */
   .lt-form.club-form i { width: 24px; height: 24px; line-height: 24px; font-size: 12px; cursor: help; }
+  /* what the strip is and which end is the latest match */
+  .club-form-key { align-self: center; margin-right: 4px; font-size: 10px; line-height: 24px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
   /* always side by side: a half too narrow for everything drops the form column and the players'
      positions, and on phones the club names (the badges stand in) and players' first names */
   .club-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px 12px; margin: 0 0 14px; }
@@ -1825,3 +1840,20 @@
     .kf-tiles { grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); }
     .kf-value { font-size: 19px; }
   }
+
+  /* Advert spaces. Two, each a standard advert size so nothing moves when one loads: a banner above a
+     page's content and a box at the foot of the menu rail. Out of the layout until app.js puts
+     ads-on on the body (ADS), and only on the free public pages: never Home, the two betting tabs,
+     the owner's fantasy tabs or the text pages. ?ads=preview draws them as marked boxes */
+  .ad-slot { display: none; }
+  body.ads-on:is([data-tab="table"], [data-tab="leagues"], [data-tab="nations"], [data-tab="matches"], [data-tab="stats"], [data-tab="lineups"], [data-tab="club"]) .ad-slot {
+    display: flex; align-items: center; justify-content: center; box-sizing: content-box; overflow: hidden; }
+  body.booting .ad-slot { display: none; }
+  .ad-top { width: 320px; max-width: 100%; height: 50px; margin: 0 auto 12px; }
+  .ad-rail { width: 180px; max-width: 100%; height: 150px; margin: 20px auto 0; }
+  @media (max-width: 759px), (max-height: 739px) { body.ads-on .ad-slot.ad-rail { display: none; } }   /* the phone's menu is a drawer; a short window has no room under the menu */
+  @media (min-width: 760px) { .ad-top { width: 468px; height: 60px; margin-bottom: 16px; } }
+  @media (min-width: 1260px) { .ad-top { width: 728px; height: 90px; } }
+  @media (min-width: 760px) and (min-height: 1140px) { .ad-rail { width: 160px; height: 600px; } }
+  .ads-preview .ad-slot { outline: 1px dashed var(--text-muted); outline-offset: -1px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+  .ads-preview .ad-slot::before { content: "Advert space"; }

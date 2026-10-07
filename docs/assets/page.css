@@ -55,6 +55,8 @@ a { color: var(--link); }
 h1 { font-size: clamp(40px, 7vw, 72px); line-height: 0.9; font-weight: 900; font-stretch: 62%; text-transform: uppercase; margin: 12px 0 10px; }
 h2 { font-size: 26px; line-height: 1.1; font-weight: 800; font-stretch: 76%; margin: 40px 0 6px; padding-top: 14px; border-top: 2px solid var(--text-primary); }
 p, li { color: var(--text-secondary); }
+/* the page is as wide as the window; a line of text stops where it is still easy to read */
+p, li, dt, dd { max-width: 80ch; }
 ul { padding-left: 20px; }
 code { font-size: 13px; overflow-wrap: anywhere; }
 .back { font-size: 14px; font-weight: 800; font-stretch: 76%; letter-spacing: 0.06em; text-transform: uppercase; }

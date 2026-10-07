@@ -2966,7 +2966,7 @@ function showPage(name = "") {            // club, player and nationality pages 
 function showNotFound() {
   showPage("Page not found");
   state.club = null;
-  $("#club-body").innerHTML = `<div class="empty-state" role="status">There's no page at this address. <a class="team-link" href="#/clubs">Go to Clubs</a></div>`;
+  $("#club-body").innerHTML = `<div class="empty-state not-found" role="status"><h2>Page not found</h2><p>There's no page at this address.</p><a class="mt-btn" href="#/clubs">Go to Clubs</a></div>`;
 }
 const knownTeam = (id) => state.data.teams[id] != null || state.rankByTeam.has(id);
 
@@ -3027,7 +3027,7 @@ function domesticRow(id, lid) {
 function clubFormStrip() {
   const rows = (state.club?.data?.rows || []).slice(-40).reverse();
   if (!rows.length) return "";
-  return `<div class="club-form lt-form">${rows.map((m) => {
+  return `<div class="club-form lt-form"><span class="club-form-key">Form · latest first</span>${rows.map((m) => {
     const c = m.gf > m.ga ? "W" : m.gf === m.ga ? "D" : "L";
     return `<i class="res-${c.toLowerCase()}" title="${escapeHtml(`${fmtShortDate(m.date)} · ${m.gf}–${m.ga} ${m.home ? "v" : "@"} ${clubOpp(m.opponent)} · ${compLabel(m.league)}`)}">${c}</i>`;
   }).join("")}</div>`;
@@ -4901,7 +4901,7 @@ function renderLeaguePage() {
         <div class="pl-hero-club">${flagImg(countryDisplay(comp.country))}<span>${countryLink(comp.country)}</span></div>
       </div>
       ${avg != null ? `<div class="pl-hero-rank rel-${ratingTierOf(avg)}" title="Average Baseline Strength (long-term Elo) of the clubs playing in this league">
-        <span class="val">${Math.round(avg)}</span></div>` : ""}
+        <span class="val">${Math.round(avg)}</span><span class="lbl">Avg baseline</span></div>` : ""}
     </div>
     ${data ? `<div class="page-tabs" role="tablist">${state.league.tabs.map(([k, label]) =>
       `<button type="button" role="tab" data-ltab="${k}" aria-selected="${k === state.league.tab}">${label}</button>`).join("")}</div>
@@ -5286,7 +5286,7 @@ function openCountryPage(country) {
           clubs.length && count(clubs.length, "club")].filter(Boolean).join(" · ")}</span></div>
       </div>
       ${avg != null ? `<div class="pl-hero-rank rel-${ratingTierOf(avg)}" title="Average Baseline Strength (long-term Elo) of the 15 best clubs in its leagues">
-        <span class="val">${Math.round(avg)}</span></div>` : ""}
+        <span class="val">${Math.round(avg)}</span><span class="lbl">Top 15 clubs</span></div>` : ""}
     </div>
     ${leagues.length ? `<div class="modal-section u-mt0">Leagues</div><div class="lg-list">${leagues.map(card).join("")}</div>
       ${leagues.length > 1 ? `<div class="page-note">Strongest first, by the average Baseline Strength of their clubs.</div>` : ""}` : ""}
@@ -7365,6 +7365,15 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAccou
     auth().catch(() => { /* stays signed out on this visit */ });
   }
 })();
+
+// Adverts: off. The two spaces kept for them (#ad-top, #ad-rail; sizes and pages in styles.css) take
+// no room until this is true, so the pages are laid out for adverts without showing an empty box.
+// ?ads=preview in the address draws the spaces as marked boxes. Nothing here loads an advert: the
+// network's script, the consent banner and the Content-Security-Policy change come with the network
+// (audit/findings.md, launch gate line 6). Whether a subscriber sees adverts is not decided.
+const ADS = { on: false, preview: new URLSearchParams(location.search).get("ads") === "preview" };
+document.body.classList.toggle("ads-on", ADS.on || ADS.preview);
+document.body.classList.toggle("ads-preview", ADS.preview);
 
 // Until the data is in, the header names the tab the address asks for
 if (!storedText("auth")) storeFlag("fplOwner", false);          // signed out since the owner was last here
