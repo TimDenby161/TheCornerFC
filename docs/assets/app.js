@@ -6455,19 +6455,13 @@ const HOME_PANELS = [
 const HOME_INTRO = { lineups: "Each club's predicted starting eleven for its next match, marked against the real team sheet afterwards." };
 function renderHome() {
   state.drawn.add("home");
-  const clubs = state.rankings.length, comps = Object.keys(state.data.competitions).length;
+  const clubs = state.rankings.length;
   const top = [...state.rankings].sort((a, b) => b.current - a.current).slice(0, 5);
   countUp($("#home-count"), clubs);
   $("#home-lede").textContent = "One strength rating for every club, from the Premier League to the lower divisions, with ranks for players and national teams and the model's chances for the matches they play.";
   $("#home-top").innerHTML = top.map((x) =>
     `<li>${clubCrest(x.team, "club-logo", `data-club="${x.team}"`)}<span class="lg-main"><a class="team-link" href="${clubHref(x.team)}">${escapeHtml(teamName(x.team))}</a><span class="lg-sub">${escapeHtml(compLabel(x.league))}</span></span><b>${Math.round(x.current).toLocaleString()}</b><span class="home-form">${signedHtml(x.form)}</span></li>`).join("");
   $("#home-board-more").textContent = `All ${clubs.toLocaleString()} clubs`;
-  $("#home-facts").innerHTML = [
-    [comps.toLocaleString(), "competitions followed"],
-    ["100", "rating points is about a goal a game"],
-    ["1872", "where the national team ratings begin"],
-    [fmtShortDate(state.data.generated_at), "ratings last updated"],
-  ].map(([n, what]) => `<div><dt>${escapeHtml(n)}</dt><dd>${escapeHtml(what)}</dd></div>`).join("");
   $("#home-show").innerHTML = HOME_PANELS.map(([key, name, line, wide]) =>
     `<section class="home-panel hp-w${wide}"><h4 class="home-card-line">${line}</h4><p class="home-card-sub">${escapeHtml(HOME_INTRO[key] || TAB_INFO[key].intro)}</p>
       <div class="home-sample" id="home-s-${key}"></div><a class="home-card-name" id="home-l-${key}" href="#/${TAB_ROUTES[key] || key}">${name}</a></section>`).join("");

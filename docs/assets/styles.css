@@ -108,7 +108,6 @@
     .why-toggle, .lineup-toggle, .modal-header, .coach-name, .mt-title b) { font-stretch: 76%; }
   /* ... and the figures a page leads with */
   :where(.stats-value, .kpi-value, .team-stat-value, .kf-value, .final-box, .pl-hero-rank .val, .pos-chip-rank, .pp-rank, .fm-name,
-    .home-facts dt, .home-nums dt, .home-call-key b, .home-top li::before, .tip-pick .odds, .mt-stats b) { font-stretch: 68%; }
   body {
     height: 100%;
     overflow: hidden;
@@ -1157,12 +1156,6 @@
   .home-brief-item .home-steps li + li { margin-top: 10px; }
   .home-steps a { display: block; font-size: 15px; font-weight: 700; color: var(--text-primary); text-decoration: none; }
   .home-steps span { display: block; }
-  .home-facts { display: grid; grid-template-columns: repeat(4, 1fr); margin: 44px 0 0; border: 0 solid var(--text-primary); border-width: 2px 0 1px; }
-  .home-facts div { padding: 14px 20px; min-width: 0; }
-  .home-facts div:first-child { padding-left: 0; }
-  .home-facts div + div { border-left: 1px solid var(--gridline); }
-  .home-facts dt { font-size: clamp(30px, 3.6vw, 48px); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .home-facts dd { margin: 6px 0 0; font-size: 13px; line-height: 1.35; color: var(--text-secondary); }
   .home-call-tag { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
   .home-call-teams { display: block; margin: 0 0 4px; font-size: 28px; line-height: 1.05; font-weight: 800; text-transform: uppercase; text-wrap: balance; }
   .home-call-teams i { font-style: normal; font-weight: 600; color: var(--text-muted); text-transform: none; }
@@ -1213,9 +1206,6 @@
     .home-pitch { width: 252px; height: 180px; }
     .home-actions > * { flex: 1 1 100%; }
     .home-brief { grid-template-columns: minmax(0, 1fr); }
-    .home-facts { grid-template-columns: repeat(2, 1fr); }
-    .home-facts div:nth-child(3) { border-left: 0; padding-left: 0; }
-    .home-facts div:nth-child(n+3) { border-top: 1px solid var(--gridline); }
     .home-show { row-gap: 36px; }
   }
   @media (max-width: 480px) { .home-hero { margin: -10px -12px 0; padding-left: 12px; } }
