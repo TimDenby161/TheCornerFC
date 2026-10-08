@@ -119,6 +119,22 @@ for (let i = 0; i < 20 && !/^\/country\//.test(await run('location.pathname')); 
 await sleep(600);
 check('its country\'s page: leagues, cups and clubs', (await run('location.pathname')) === '/country/England' && (await run(`document.querySelectorAll('.lg-card').length`)) >= 10 && (await run(`document.querySelectorAll('#country-clubs tbody tr').length`)) === 50);
 
+// Nations: the ranking, a nation's page and its tabs
+await open('/nations');
+check('the national team ranking', (await run(`document.querySelectorAll('#nations-body tbody tr').length`)) > 150);
+await run(`[...document.querySelectorAll('#nations-body .filter-chip')].find((a) => a.textContent === 'CONMEBOL')?.click()`); await sleep(1500);
+check('one confederation', (await run('location.search')) === '?c=CONMEBOL' && (await run(`document.querySelectorAll('#nations-body tbody tr').length`)) === 10, `${await run(`document.querySelectorAll('#nations-body tbody tr').length`)} nations`);
+await open('/nation/England');
+check('a nation\'s best players on a pitch, and every ranked player under it', (await run(`document.querySelectorAll('.dp-pitch .dp-row').length`)) > 20 && (await run(`document.querySelectorAll('#nat-tab .team-row').length`)) === 100, `${await run(`document.querySelectorAll('.dp-pitch .dp-row').length`)} on the pitch`);
+await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Predicted XI')?.click()`); await sleep(1800);
+check('its predicted XI', (await run('location.pathname')) === '/nation/England/xi' && (await run(`document.querySelectorAll('#nat-tab .xi-spot').length`)) === 11);
+await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Formations')?.click()`); await sleep(1800);
+await run(`document.querySelector('#nat-tab details.nat-match summary')?.click()`); await sleep(300);
+check('formations, and a match opens to its starting XI', (await run(`document.querySelectorAll('#nat-tab .fm-card').length`)) >= 1 && (await run(`document.querySelectorAll('#nat-tab details[open] .nat-xi > span').length`)) === 11);
+await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Players')?.click()`); await sleep(1800);
+await run(`[...document.querySelectorAll('#nat-tab th.sortable a')].find((a) => a.textContent === 'G')?.click()`); await sleep(1500);
+check('its players under the coach, sorted by goals', (await run('location.search')) === '?sort=goals' && Number(await run(`document.querySelector('#nat-tab tbody tr td:nth-child(6)')?.textContent`)) >= 3, `top scorer ${await run(`document.querySelector('#nat-tab tbody tr td:nth-child(6)')?.textContent`)}`);
+
 // the account box: opens from the menu, shows the forms and the bot check, and answers in place
 await open('/clubs?c=39');
 await run(`document.querySelector('a.account-btn')?.click()`); await sleep(2500);
