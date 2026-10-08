@@ -66,6 +66,15 @@ check('search narrows as typed', (await rows()) === 1 && (await first()) === 'E.
 await open('/players?c=39');
 await run(`document.querySelector('.years-btn')?.click()`); await sleep(1500);
 check('+ opens the other seasons', (await run(`document.querySelectorAll('table.players.years thead th').length`)) > 12, `${await run(`document.querySelectorAll('table.players thead th').length`)} columns`);
+// a player's row opens his page; its tabs and the Stats switches are links
+await open('/players?c=39');
+await run(`document.querySelector('table.players tbody tr td:nth-child(3)')?.click()`); await sleep(1500);
+check('a Players row opens the player page', /^\/player\/\d+$/.test(await run('location.pathname')), await run('location.pathname'));
+await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Stats')?.click()`); await sleep(1200);
+await run(`[...document.querySelectorAll('.seg a')].find((a) => a.textContent === 'Per 90')?.click()`); await sleep(1200);
+check('Stats tab, per 90', /\/stats$/.test(await run('location.pathname')) && (await run('location.search')) === '?per90=1' && /per 90 minutes/.test(await run(`document.querySelector('#pl-tab .page-note')?.textContent`)), await run('location.href'));
+await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Career')?.click()`); await sleep(1200);
+check('Career chart drawn to its box', (await run(`document.querySelector('#pl-chart svg')?.getAttribute('viewBox')`)) !== '0 0 640 180' && (await run(`document.querySelectorAll('#pl-chart .season-dot').length`)) >= 2, await run(`document.querySelector('#pl-chart svg')?.getAttribute('viewBox')`));
 // a club row on Clubs opens its page
 await open('/clubs?c=39');
 await run(`document.querySelector('table.clubs tbody tr td:nth-child(4)')?.click()`); await sleep(1500);

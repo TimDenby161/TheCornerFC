@@ -94,7 +94,7 @@
 	// a row opens the player's page, wherever on it the click lands
 	function rowClick(e: MouseEvent, id: number) {
 		if ((e.target as HTMLElement).closest('a')) return;
-		location.href = pageHref('player', id);
+		goto(pageHref('player', id));
 	}
 	const wide = $derived(!!data.search || data.filter === 'all' || !/^\d+$/.test(data.filter));
 	const title = $derived(data.filter === 'all' ? 'Players' : `${data.menu.name} players`);

@@ -25,3 +25,10 @@ table.leaderboard th.sortable .now-head a { display: inline; }
 table.leaderboard th.sortable a.years-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; }
 /* the club box: a league's clubs sit indented under it */
 .who-opt.in-league { margin-left: 14px; padding-left: 4px; width: calc(100% - 14px); border-left: 1px solid var(--gridline); }
+/* a two-way switch whose sides are links (each with its own address) takes the buttons' look */
+.seg a.seg-link { text-decoration: none; font: inherit; font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+.seg a.seg-link + a.seg-link { border-left: 1px solid var(--border); }
+.seg a.seg-link[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+@media (max-width: 759px) { .seg a.seg-link { min-height: 40px; display: inline-flex; align-items: center; } }
+/* ... and a chip that is a link */
+a.filter-chip { text-decoration: none; }

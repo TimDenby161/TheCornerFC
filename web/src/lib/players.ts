@@ -12,6 +12,7 @@ export type Player = {
 	future: (number | null)[] | null; season: { minutes: number; goals: number; assists: number } | null;
 	world: number | null; lg: number | null; lg_of: number | null; ord: number | null;
 	position_ranks: Record<string, number> | null;
+	lg_rank: number | null; lg_n: number | null;
 	// the database blanked his ranks for this visitor
 	locked: boolean;
 };
