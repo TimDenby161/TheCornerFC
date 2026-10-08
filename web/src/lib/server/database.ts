@@ -91,3 +91,8 @@ export function keptAsk<T>(fetch: Fetch, fn: string, params: Record<string, unkn
 // A row that may not be there (a club with no file of its own): null in place of "not found"
 export const keptDocOrNull = <T>(fetch: Fetch, key: string, forMs?: number): Promise<T | null> =>
 	keptDoc<T>(fetch, key, forMs).catch((err) => { if (err instanceof DatabaseError && err.missing) return null; throw err; });
+
+// A question whose answer depends on who asks (the paid rows): with a signed-in visitor's token,
+// asked afresh for them; without one, the kept answer every signed-out visitor shares.
+export const askAs = <T>(fetch: Fetch, token: string | undefined, fn: string, params: Record<string, unknown>): Promise<T> =>
+	token ? siteAsk<T>(fetch, fn, params, token) : keptAsk<T>(fetch, fn, params);

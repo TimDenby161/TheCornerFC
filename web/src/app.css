@@ -32,3 +32,10 @@ table.leaderboard th.sortable a.years-btn { display: inline-flex; align-items: c
 @media (max-width: 759px) { .seg a.seg-link { min-height: 40px; display: inline-flex; align-items: center; } }
 /* ... and a chip that is a link */
 a.filter-chip { text-decoration: none; }
+/* the account button at the foot of the menu is a link (to the account page, where the script
+   isn't running) with the menu buttons' look */
+nav.tabs a.account-btn { text-decoration: none; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+@media (max-width: 759px) { nav.tabs a.account-btn { min-height: 44px; } }
+/* the account box as a page of its own */
+.modal-card.account-page { margin: 24px auto; }
+.account-form + form, #account-body > form { margin: 0; }

@@ -3,7 +3,7 @@ import { clubMatches, type ClubDoc } from '#lib/club.ts';
 import { matchRows, type MatchesAnswer } from '#lib/matches.ts';
 import { clubs, type RankingsDoc } from '#lib/rankings.ts';
 import { teamName, type Site } from '#lib/site.ts';
-import { keptAsk, keptDoc, keptDocOrNull } from './database.ts';
+import { askAs, keptDoc, keptDocOrNull } from './database.ts';
 
 // What every part of a club's page starts from: the names, every club's ratings, and this club's
 // own file. A club neither the names nor the ratings know, with no file, has no page.
@@ -24,9 +24,9 @@ export async function clubBase(fetch: typeof globalThis.fetch, param: string) {
 	return { id, site, all, rank, doc, rows, opponent, name: teamName(site, id) };
 }
 
-// The club's matches from the matches table, oldest first, as a visitor who isn't signed in sees
-// them; `paywall`: the database left the paid fields of matches to come out.
-export async function clubFixtures(fetch: typeof globalThis.fetch, site: Site, id: number) {
-	const answer = await keptAsk<MatchesAnswer>(fetch, 'site_matches', { p_team: id });
+// The club's matches from the matches table, oldest first, as this visitor may see them (`token`:
+// theirs, if signed in); `paywall`: the database left the paid fields of matches to come out.
+export async function clubFixtures(fetch: typeof globalThis.fetch, site: Site, id: number, token?: string) {
+	const answer = await askAs<MatchesAnswer>(fetch, token, 'site_matches', { p_team: id });
 	return { matches: matchRows(site.match_fields, answer), paywall: !!answer.paywall };
 }

@@ -6,9 +6,9 @@ import { leagueShort } from '#lib/site.ts';
 
 const RECENT_DAYS = 45; // latest appearance older than this: not shown as recent form
 
-export async function load({ fetch, params, setHeaders }) {
-	const { id, site, p, doc, apps, now, year, club } = await playerBase(fetch, params.id);
-	setHeaders({ 'cache-control': 'public, max-age=60' });
+export async function load({ fetch, params, setHeaders, locals }) {
+	const { id, site, p, doc, apps, now, year, club } = await playerBase(fetch, params.id, locals.token);
+	if (!locals.token) setHeaders({ 'cache-control': 'public, max-age=60' });
 	const league = p.team && p.league ? leagueShort(site, p.league) : '';
 	const last = apps[0];
 	const days = last ? Math.floor((Date.now() - new Date(last.date).getTime()) / 864e5) : null;

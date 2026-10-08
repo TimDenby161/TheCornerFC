@@ -6,7 +6,7 @@ import { listParams, playerRows, sortKey, type Facets, type Player, type PlayerC
 import { clubs, type RankingsDoc } from '#lib/rankings.ts';
 import { leagueShort, teamName, type Site } from '#lib/site.ts';
 import { loadCups } from './cups.ts';
-import { keptAsk, keptDoc } from './database.ts';
+import { askAs, keptAsk, keptDoc } from './database.ts';
 
 export const PAGE_ROWS = 100;
 const POS_LABEL: Record<string, string> = { G: 'GK', D: 'DEF', M: 'MID', F: 'FWD' };
@@ -36,10 +36,10 @@ export async function playersBase(fetch: typeof globalThis.fetch, q: URLSearchPa
 	return { site, all, cups, facets, countries, years, choices, groups };
 }
 
-// A page of the list from `offset`, as a visitor who isn't signed in sees it
-export async function playersPage(fetch: typeof globalThis.fetch, base: Awaited<ReturnType<typeof playersBase>>, offset: number) {
+// A page of the list from `offset`, as this visitor may see it (`token`: theirs, if signed in)
+export async function playersPage(fetch: typeof globalThis.fetch, base: Awaited<ReturnType<typeof playersBase>>, offset: number, token?: string) {
 	const { site, all, countries, cups, facets, choices } = base;
-	const answer = await keptAsk<PlayersAnswer>(fetch, 'site_players', { ...listParams(site, all, countries, cups, facets, choices), p_limit: PAGE_ROWS, p_offset: offset });
+	const answer = await askAs<PlayersAnswer>(fetch, token, 'site_players', { ...listParams(site, all, countries, cups, facets, choices), p_limit: PAGE_ROWS, p_offset: offset });
 	return { total: answer.total, paywall: !!answer.paywall, rows: playerRows(site, answer.rows).map((p) => rowView(site, p, base.groups)) };
 }
 

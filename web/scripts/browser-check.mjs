@@ -13,7 +13,7 @@ for (let i = 0; i < 40 && !target; i++) { await sleep(250); try { target = (awai
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));
 let id = 0; const waiting = new Map(); const errors = [];
-ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && waiting.has(m.id)) { waiting.get(m.id)(m); waiting.delete(m.id); } if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') errors.push(m.params.entry.text + ' ' + (m.params.entry.url || '')); };
+ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.id && waiting.has(m.id)) { waiting.get(m.id)(m); waiting.delete(m.id); } if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error' && !/account\?\/signin/.test(m.params.entry.url || '')) errors.push(m.params.entry.text + ' ' + (m.params.entry.url || '')); };
 const send = (method, params = {}) => new Promise((r) => { const n = ++id; waiting.set(n, r); ws.send(JSON.stringify({ id: n, method, params })); });
 const run = async (expression) => { const m = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (m.result.exceptionDetails) throw new Error(m.result.exceptionDetails.exception?.description || 'eval failed'); return m.result.result.value; };
 await send('Runtime.enable'); await send('Log.enable'); await send('Page.enable');
@@ -75,6 +75,19 @@ await run(`[...document.querySelectorAll('.seg a')].find((a) => a.textContent ==
 check('Stats tab, per 90', /\/stats$/.test(await run('location.pathname')) && (await run('location.search')) === '?per90=1' && /per 90 minutes/.test(await run(`document.querySelector('#pl-tab .page-note')?.textContent`)), await run('location.href'));
 await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Career')?.click()`); await sleep(1200);
 check('Career chart drawn to its box', (await run(`document.querySelector('#pl-chart svg')?.getAttribute('viewBox')`)) !== '0 0 640 180' && (await run(`document.querySelectorAll('#pl-chart .season-dot').length`)) >= 2, await run(`document.querySelector('#pl-chart svg')?.getAttribute('viewBox')`));
+// the account box: opens from the menu, shows the forms and the bot check, and answers in place
+await open('/clubs?c=39');
+await run(`document.querySelector('a.account-btn')?.click()`); await sleep(2500);
+check('Sign in opens the account box', (await run(`document.querySelector('#account-title')?.textContent`)) === 'Sign in' && (await run(`!!document.querySelector('#account-modal form[action="/account?/signin"]')`)));
+check('the bot check is drawn in the form', await run(`!!document.querySelector('#account-botcheck iframe, #account-botcheck input[name="cf-turnstile-response"]')`));
+await run(`[...document.querySelectorAll('#account-body .link-btn')].find((b) => b.textContent === 'Create an account')?.click()`); await sleep(600);
+check('Create an account view', (await run(`document.querySelector('#account-title')?.textContent`)) === 'Create an account' && (await run(`document.querySelector('#account-body input[name=password]')?.minLength`)) === 8);
+await run(`document.querySelector('#account-modal .modal-close')?.click()`); await sleep(300);
+check('the box closes and stays on the page', !(await run(`!!document.querySelector('#account-modal')`)) && (await run('location.pathname')) === '/clubs');
+// with no bot-check answer the server refuses, and says so in the box (asked as the form would)
+check('a sign-in without the check is refused in words', await run(`fetch('/account?/signin', { method: 'POST', headers: { 'x-sveltekit-action': 'true', 'content-type': 'application/x-www-form-urlencoded' }, body: 'email=nobody%40example.com&password=wrong-password' }).then((r) => r.text()).then((t) => /Wait for the check/.test(t))`));
+check('signed out: no session cookie is set', !(await run('document.cookie')).includes('auth-token'));
+
 // a club row on Clubs opens its page
 await open('/clubs?c=39');
 await run(`document.querySelector('table.clubs tbody tr td:nth-child(4)')?.click()`); await sleep(1500);

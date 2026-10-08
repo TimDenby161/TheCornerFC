@@ -28,5 +28,9 @@
 	"imports": {
 		"#lib": "./src/lib/index.js",
 		"#lib/*": "./src/lib/*"
+	},
+	"dependencies": {
+		"@supabase/ssr": "^0.12.7",
+		"@supabase/supabase-js": "^2.117.3"
 	}
 }

@@ -2,18 +2,18 @@ import { error } from '@sveltejs/kit';
 import { appearances, seasonLines, sumSeason, type PlayerDoc } from '#lib/player.ts';
 import { playerRows, type PlayersAnswer } from '#lib/players.ts';
 import { teamName, type Site } from '#lib/site.ts';
-import { keptAsk, keptDoc } from './database.ts';
+import { askAs, keptDoc } from './database.ts';
 
 // What every part of a player's page starts from: his row in the Players list and his own file,
-// both as a visitor who isn't signed in gets them. A player who isn't in the current ranks has
-// no page.
-export async function playerBase(fetch: typeof globalThis.fetch, param: string) {
+// both as this visitor may see them (`token`: theirs, if signed in). A player who isn't in the
+// current ranks has no page.
+export async function playerBase(fetch: typeof globalThis.fetch, param: string, token?: string) {
 	if (!/^\d{1,9}$/.test(param)) error(404, 'Not found');
 	const id = Number(param);
 	const site = await keptDoc<Site>(fetch, 'site');
 	const [answer, doc] = await Promise.all([
-		keptAsk<PlayersAnswer>(fetch, 'site_players', { p_ids: [id], p_limit: 1 }),
-		keptAsk<PlayerDoc | null>(fetch, 'site_player_page', { p_id: id }).catch(() => null)
+		askAs<PlayersAnswer>(fetch, token, 'site_players', { p_ids: [id], p_limit: 1 }),
+		askAs<PlayerDoc | null>(fetch, token, 'site_player_page', { p_id: id }).catch(() => null)
 	]);
 	const p = playerRows(site, answer.rows)[0];
 	if (!p) error(404, 'Not found');

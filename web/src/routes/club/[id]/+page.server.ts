@@ -9,10 +9,10 @@ import { compLabel, leagueShort, teamName } from '#lib/site.ts';
 type Injuries = { teams: Record<string, { kickoff: string; upcoming: boolean; players: [number, string, string, string | null, number, number | null][] }> };
 const BAN_REASONS = new Set(['Red Card', 'Yellow Cards', 'Suspended']);
 
-export async function load({ fetch, params }) {
+export async function load({ fetch, params, locals }) {
 	const { id, site, rows, opponent, doc } = await clubBase(fetch, params.id);
 	const [{ matches }, injuries] = await Promise.all([
-		clubFixtures(fetch, site, id),
+		clubFixtures(fetch, site, id, locals.token),
 		keptDoc<Injuries>(fetch, 'injuries', 300_000).catch(() => null)
 	]);
 	const next = upcoming(matches);

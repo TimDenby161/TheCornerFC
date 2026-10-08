@@ -8,12 +8,12 @@ import { compLabel, leagueShort, teamName } from '#lib/site.ts';
 type LeagueFile = { table_fields: string[]; table: (string | number | null)[][]; teams: Record<string, string> };
 type TableRow = { group: string | null; rank: number; team: number; played: number | null; gd: number | null; points: number | null; form: string | null; description: string | null };
 
-export async function load({ fetch, params, setHeaders }) {
+export async function load({ fetch, params, setHeaders, locals }) {
 	const { id, site, all, rank: r, doc, rows, opponent, name } = await clubBase(fetch, params.id);
 	const comp = r ? site.competitions[r.league] : null;
 	// its league's file, for the table position
 	const lg = r?.in_league ? await keptDocOrNull<LeagueFile>(fetch, `leagues/${r.league}`, 300_000).catch(() => null) : null;
-	setHeaders({ 'cache-control': 'public, max-age=60' });
+	if (!locals.token) setHeaders({ 'cache-control': 'public, max-age=60' });
 
 	const place = (key: 'current' | 'lt', v: number) => all.filter((x) => x[key] > v).length + 1;
 

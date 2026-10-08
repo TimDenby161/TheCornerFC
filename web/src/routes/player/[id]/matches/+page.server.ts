@@ -3,8 +3,8 @@ import { result, shortDate } from '#lib/club.ts';
 import { POS_WORD } from '#lib/player.ts';
 
 // His last league appearances, newest first
-export async function load({ fetch, params }) {
-	const { apps, club } = await playerBase(fetch, params.id);
+export async function load({ fetch, params, locals }) {
+	const { apps, club } = await playerBase(fetch, params.id, locals.token);
 	return {
 		matches: apps.map((m) => ({
 			key: m.fixture, date: shortDate(m.date), opp: m.opponent, oppName: club(m.opponent), home: !!m.home,

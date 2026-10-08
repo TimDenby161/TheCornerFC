@@ -5,9 +5,9 @@ import { compLabel, teamName } from '#lib/site.ts';
 
 const LIMIT = 40;
 
-export async function load({ fetch, params, url }) {
+export async function load({ fetch, params, url, locals }) {
 	const { id, site, all, rows, opponent, doc, name } = await clubBase(fetch, params.id);
-	const { matches } = await clubFixtures(fetch, site, id);
+	const { matches } = await clubFixtures(fetch, site, id, locals.token);
 	const next = upcoming(matches);
 	const current = (team: number) => all.find((c) => c.team === team)?.current ?? null;
 

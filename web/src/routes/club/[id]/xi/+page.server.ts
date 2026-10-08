@@ -1,7 +1,7 @@
 import { clubBase, clubFixtures } from '#lib/server/club.ts';
 
-export async function load({ fetch, params }) {
+export async function load({ fetch, params, locals }) {
 	const { id, site } = await clubBase(fetch, params.id);
-	const { paywall } = await clubFixtures(fetch, site, id);
+	const { paywall } = await clubFixtures(fetch, site, id, locals.token);
 	return { paywall };
 }

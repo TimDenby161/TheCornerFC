@@ -5,8 +5,8 @@ import { compLabel } from '#lib/site.ts';
 
 // One season (all his clubs added up), as totals or per 90 minutes: appearances, minutes, goals,
 // assists and cards only (the feed's other counts aren't published)
-export async function load({ fetch, params, url }) {
-	const { site, lines, club } = await playerBase(fetch, params.id);
+export async function load({ fetch, params, url, locals }) {
+	const { site, lines, club } = await playerBase(fetch, params.id, locals.token);
 	if (!lines.length) return { any: false as const };
 	const years = [...new Set(lines.map((r) => r.season))].sort((a, b) => b - a);
 	const asked = Number(url.searchParams.get('s'));

@@ -5,7 +5,7 @@ import { CLUB_SHORT } from '#lib/names.ts';
 import { clubPlaces, clubs, SORTS, tiers, type RankingsDoc, type Sort } from '#lib/rankings.ts';
 import { leagueShort, teamName, type Site } from '#lib/site.ts';
 
-export async function load({ fetch, url, setHeaders }) {
+export async function load({ fetch, url, setHeaders, locals }) {
 	const [site, doc, cups] = await Promise.all([keptDoc<Site>(fetch, 'site'), keptDoc<RankingsDoc>(fetch, 'rankings'), loadCups(fetch)]);
 	const all = clubs(doc);
 	const countries = tableCountries(site, all);
@@ -22,7 +22,7 @@ export async function load({ fetch, url, setHeaders }) {
 	const places = clubPlaces(all);
 	const baseTier = tiers(all, 'lt'), currentTier = tiers(all, 'current');
 	// the same answer for every visitor: a shared cache may keep it for a minute
-	setHeaders({ 'cache-control': 'public, max-age=60' });
+	if (!locals.token) setHeaders({ 'cache-control': 'public, max-age=60' });
 
 	return {
 		sort, filter, search, wide, menu,

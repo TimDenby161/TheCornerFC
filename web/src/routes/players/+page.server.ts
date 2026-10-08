@@ -7,15 +7,15 @@ import { teamName } from '#lib/site.ts';
 import { keptAsk } from '#lib/server/database.ts';
 import { playersBase, playersPage } from '#lib/server/players.ts';
 
-export async function load({ fetch, url, setHeaders }) {
+export async function load({ fetch, url, setHeaders, locals }) {
 	const base = await playersBase(fetch, url.searchParams);
 	const { site, all, facets, countries, cups, choices, years, groups } = base;
 	const [page, counted] = await Promise.all([
-		playersPage(fetch, base, 0),
+		playersPage(fetch, base, 0, locals.token),
 		keptAsk<PlayersAnswer>(fetch, 'site_players', countParams(site, choices))
 	]);
 	// the same answer for every visitor who isn't signed in: a shared cache may keep it for a minute
-	setHeaders({ 'cache-control': 'public, max-age=60' });
+	if (!locals.token) setHeaders({ 'cache-control': 'public, max-age=60' });
 
 	// each slider: its stops and where its two handles stand
 	const slider = (k: RangeKey) => {

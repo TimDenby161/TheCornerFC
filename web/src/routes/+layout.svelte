@@ -3,9 +3,17 @@
 	import '#lib/crest-hues.css';
 	import '../app.css';
 	import { page } from '$app/state';
+	import AccountBox from '#lib/components/AccountBox.svelte';
 	import { MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
 
-	let { children } = $props();
+	let { data, children } = $props();
+
+	// The account box, opened by the button at the foot of the menu: Sign in, or the signed-in
+	// visitor's profile under their initial. Closing it puts the focus back on that button.
+	let accountOpen = $state(false);
+	let accountTitle = $state('Sign in');
+	let accountBtn = $state<HTMLElement>();
+	const closeAccount = () => { if (accountOpen) { accountOpen = false; accountBtn?.focus(); } };
 	let menuOpen = $state(false);
 	let theme = $state('');
 
@@ -35,7 +43,7 @@
 	}
 </script>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape') menuOpen = false; }} />
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { menuOpen = false; closeAccount(); } }} />
 
 <a class="skip-link" href="#main">Skip to content</a>
 
@@ -57,6 +65,10 @@
 			<div class="ad-slot ad-rail" id="ad-rail" aria-hidden="true"></div>
 		</div>
 		<div class="menu-foot">
+			<!-- (a link, so it works before the page's script runs: then it opens the account page) -->
+			<a class="account-btn" class:is-profile={!!data.user} href="/account" aria-haspopup="dialog" bind:this={accountBtn}
+				onclick={(e) => { if (page.url.pathname === '/account' || e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); menuOpen = false; accountOpen = true; }}>
+				<span class="account-mark" aria-hidden="true">{(data.user?.email || '').trim().charAt(0).toUpperCase()}</span><span id="account-label">{data.user ? 'Profile' : 'Sign in'}</span></a>
 			<div class="theme-pick seg" role="group" aria-label="Theme">
 				{#each [['', 'Device'], ['light', 'Light'], ['dark', 'Dark']] as [value, label] (value)}
 					<button type="button" aria-pressed={theme === value} onclick={() => setTheme(value)}>{label}</button>
@@ -67,6 +79,19 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<div class="menu-backdrop" hidden={!menuOpen} onclick={() => (menuOpen = false)}></div>
 </header>
+
+{#if accountOpen}
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+	<div class="modal-overlay" id="account-modal" onclick={(e) => { if (e.target === e.currentTarget) closeAccount(); }}>
+		<div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="account-title">
+			<div class="modal-header">
+				<div id="account-title">{accountTitle}</div>
+				<button type="button" class="modal-close" aria-label="Close" onclick={closeAccount}>&times;</button>
+			</div>
+			<div id="account-body"><AccountBox user={data.user} sub={data.sub} onview={(t) => (accountTitle = t)} onclose={closeAccount} /></div>
+		</div>
+	</div>
+{/if}
 
 <main id="main" tabindex="-1" inert={menuOpen}>
 	{#if head}

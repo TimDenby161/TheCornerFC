@@ -4,8 +4,8 @@ import { GROUP_SINGLE } from '#lib/playerFilters.ts';
 import { positionShares, seasonGroup, spells, type ChartPoint, type Spell } from '#lib/player.ts';
 
 // Rank by season with his clubs, and the clubs his current rank is built on
-export async function load({ fetch, params }) {
-	const { site, p, doc, club } = await playerBase(fetch, params.id);
+export async function load({ fetch, params, locals }) {
+	const { site, p, doc, club } = await playerBase(fetch, params.id, locals.token);
 	const seasons = site.player_seasons;
 	const spellView = (sp: Spell[]) => sp.map((x) => ({ team: x.team, name: club(x.team), clubRank: x.club_rank, minutes: x.minutes || 0, goals: x.goals ?? 0, assists: x.assists ?? 0 }));
 	const rows = seasons.flatMap((y, k) => {

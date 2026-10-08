@@ -7,11 +7,11 @@ import { compLabel, teamName } from '#lib/site.ts';
 
 const BAN_REASONS = new Set(['Red Card', 'Yellow Cards', 'Suspended']);
 
-export async function load({ fetch, params }) {
-	const { site, p, doc } = await playerBase(fetch, params.id);
+export async function load({ fetch, params, locals }) {
+	const { site, p, doc } = await playerBase(fetch, params.id, locals.token);
 	// his club's next match: when, who, the model's view, and whether he is listed unavailable for
 	// it (the injury itself isn't published: only "Doubtful", "Suspended" or "Out")
-	const m = p.team ? upcoming((await clubFixtures(fetch, site, p.team)).matches)[0] : null;
+	const m = p.team ? upcoming((await clubFixtures(fetch, site, p.team, locals.token)).matches)[0] : null;
 	const inj = doc?.injury;
 	let next = null;
 	if (m && p.team) {
