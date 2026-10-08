@@ -104,3 +104,13 @@ export function fitTable(wrap: HTMLElement, capped: boolean) {
 		destroy() { seen.disconnect(); window.removeEventListener('resize', resized); }
 	};
 }
+
+// A fantasy table over several gameweeks: # and Player stay put when it scrolls sideways, and
+// Player's left edge is #'s width (--fz2 in the stylesheet), measured once the table is drawn.
+export function frozenColumns(table: HTMLTableElement) {
+	const set = () => { const first = table.tHead?.rows[0]?.cells[0]; if (first) table.style.setProperty('--fz2', `${first.getBoundingClientRect().width}px`); };
+	set();
+	const watch = new ResizeObserver(set);
+	watch.observe(table);
+	return { destroy: () => watch.disconnect() };
+}

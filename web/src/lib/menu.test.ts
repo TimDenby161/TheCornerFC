@@ -15,8 +15,13 @@ describe('old shared links', () => {
 		expect(oldAddress('#/club/42/overview')).toBe('/club/42');
 		expect(oldAddress('#/player/1100/overview')).toBe('/player/1100');
 	});
+	it('carry the owner\'s fantasy pages over too', () => {
+		expect(oldAddress('#/fpl')).toBe('/fpl');
+		expect(oldAddress('#/my-fpl-team')).toBe('/my-fpl-team');
+		expect(oldAddress('#/efl-fantasy')).toBe('/efl-fantasy');
+	});
 	it('leave alone anything that isn\'t one of the old site\'s pages', () => {
-		for (const h of ['', '#main', '#/fpl', '#/nonsense', '#/club', '#advice', '#//evil.example', '#/clubs#x']) expect(oldAddress(h)).toBeNull();
+		for (const h of ['', '#main', '#/nonsense', '#/club', '#advice', '#//evil.example', '#/clubs#x']) expect(oldAddress(h)).toBeNull();
 	});
 });
 

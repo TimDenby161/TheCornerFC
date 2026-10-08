@@ -6,7 +6,8 @@
 	import { accountBox, openAccount } from '#lib/account.svelte.ts';
 	import AccountBox from '#lib/components/AccountBox.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
-	import { MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
+	import { MENU, OWNER_MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
+	import { owner } from '#lib/owner.svelte.ts';
 
 	let { data, children } = $props();
 
@@ -22,7 +23,9 @@
 	// the page's name, a line on what it shows and what its figures mean, where the page gives one
 	type TabHead = { title: string; intro: string; more: string; key: [string, string][] };
 	const head = $derived(page.data.tabHead as TabHead | undefined);
-	const current = $derived(MENU.flatMap((g) => g.sections).find((s) => s.path && page.url.pathname.startsWith(s.path)));
+	// the Fantasy group: for the owner, known from an earlier visit or as soon as the database says so
+	const menu = $derived((data.owner && owner.status !== 'no') || owner.status === 'ok' ? [...MENU, OWNER_MENU] : MENU);
+	const current = $derived([...MENU, OWNER_MENU].flatMap((g) => g.sections).find((s) => s.path && page.url.pathname.startsWith(s.path)));
 
 	// The server writes <body data-tab>; after a move between pages in the browser it follows here.
 	$effect(() => { document.body.dataset.tab = tab; });
@@ -56,7 +59,7 @@
 	</div>
 	<nav class="tabs" id="main-menu" aria-label="Main">
 		<div class="menu-links">
-			{#each MENU as group (group.label)}
+			{#each menu as group (group.label)}
 				<p class="nav-label">{group.label}</p>
 				{#each group.sections as s (s.label)}
 					<a class="menu-link" href={sectionHref(s)} aria-current={s === current ? 'page' : undefined} onclick={() => (menuOpen = false)}>{s.label}</a>

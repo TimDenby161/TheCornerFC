@@ -20,9 +20,16 @@ export const MENU: { label: string; sections: Section[] }[] = [
 		{ tab: 'bets', label: 'Paper Simulation', path: '/simulation' }
 	] }
 ];
+// The fantasy pages are the site owner's: in the menu for the owner only (the pages themselves
+// show anyone else a line saying so).
+export const OWNER_MENU = { label: 'Fantasy', sections: [
+	{ tab: 'fpl', label: 'FPL', path: '/fpl' },
+	{ tab: 'myteam', label: 'My FPL team', path: '/my-fpl-team' },
+	{ tab: 'efl', label: 'EFL Fantasy', path: '/efl-fantasy' }
+] as Section[] };
 export const sectionHref = (s: Section) => s.path ?? OLD_SITE + (s.old ?? '');
 export function tabFor(pathname: string): string {
-	for (const g of MENU) for (const s of g.sections) if (s.path && (pathname === s.path || pathname.startsWith(s.path + '/'))) return s.tab;
+	for (const g of [...MENU, OWNER_MENU]) for (const s of g.sections) if (s.path && (pathname === s.path || pathname.startsWith(s.path + '/'))) return s.tab;
 	// a club's, player's, competition's or country's page (the stylesheet knows every such page as "club")
 	if (/^\/(club|player|league|country|nation)\//.test(pathname)) return 'club';
 	return 'home';
@@ -39,7 +46,7 @@ export const methodologyHref = (section: string) => `/methodology#${section}`;
 // part after the # isn't one. The pages kept their names and their choices' names; the one
 // difference is that a club's, player's or nation's first tab could be named in the address
 // there ("/overview") and has none here.
-const OLD_PAGES = /^#\/(clubs|players|leagues|nations|matches|stats|lineups|model-vs-market|simulation|(?:club|player|league|country|nation)\/[^?#]+)(\?[^#]*)?$/;
+const OLD_PAGES = /^#\/(clubs|players|leagues|nations|matches|stats|lineups|model-vs-market|simulation|fpl|my-fpl-team|efl-fantasy|(?:club|player|league|country|nation)\/[^?#]+)(\?[^#]*)?$/;
 export function oldAddress(hash: string): string | null {
 	const m = OLD_PAGES.exec(hash);
 	if (!m) return null;
