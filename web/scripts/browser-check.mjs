@@ -1,12 +1,13 @@
 // A run-through of the pages in a real browser: headless Chrome, driven over its DevTools protocol
 // (no test framework to install). It clicks, types and drags as a visitor would and checks what
 // the page then shows and what its address says.
+//   CHROME_MAP='thecornerfc.com 104.21.21.76': send a host to an address, to reach it before its DNS has settled
 //   node scripts/browser-check.mjs [address]     default http://localhost:4517 (npm run preview -- --port 4517)
 // It reads the live database through the app, so the names it expects are today's.
 import { spawn } from 'node:child_process';
 const port = 9333, base = (process.argv[2] || 'http://localhost:4517').replace(/\/$/, '');
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', `--remote-debugging-port=${port}`, '--window-size=1440,900', '--user-data-dir=/tmp/claude-cdp-' + Date.now(), 'about:blank'], { stdio: 'ignore' });
+const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', `--remote-debugging-port=${port}`, '--window-size=1440,900', ...(process.env.CHROME_MAP ? [`--host-resolver-rules=MAP ${process.env.CHROME_MAP}`] : []), '--user-data-dir=/tmp/claude-cdp-' + Date.now(), 'about:blank'], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let target;
 for (let i = 0; i < 40 && !target; i++) { await sleep(250); try { target = (await (await fetch(`http://localhost:${port}/json`)).json()).find((t) => t.type === 'page'); } catch {} }
