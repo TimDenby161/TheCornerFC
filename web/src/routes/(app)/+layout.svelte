@@ -6,6 +6,7 @@
 	import { accountBox, openAccount } from '#lib/account.svelte.ts';
 	import AccountBox from '#lib/components/AccountBox.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
+	import { ADS } from '#lib/config.ts';
 	import { MENU, OWNER_MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
 	import { owner } from '#lib/owner.svelte.ts';
 
@@ -30,6 +31,12 @@
 	// The server writes <body data-tab>; after a move between pages in the browser it follows here.
 	$effect(() => { document.body.dataset.tab = tab; });
 	$effect(() => { document.body.classList.toggle('menu-open', menuOpen); });
+	// the advert spaces open only when adverts are on and the visitor isn't a subscriber
+	$effect(() => {
+		const preview = page.url.searchParams.get('ads') === 'preview';
+		document.body.classList.toggle('ads-on', preview || (ADS.on && !data.sub?.subscriber));
+		document.body.classList.toggle('ads-preview', preview);
+	});
 	$effect(() => {
 		try {
 			const kept = localStorage.getItem('fc.theme');

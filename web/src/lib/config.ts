@@ -4,3 +4,10 @@ export const SUPABASE = {
 	url: 'https://bookkurhdabdeccckjbn.supabase.co',
 	key: 'sb_publishable_JZ_oJVHIO75SFbFc95LQew_3wmKuvM7'
 };
+
+// Adverts: off. The two spaces kept for them (#ad-top, #ad-rail; sizes and pages in the
+// stylesheet: never Home, the two betting pages, the fantasy pages or the text pages) take no room
+// until this is true. ?ads=preview in the address draws the spaces as marked boxes. Nothing loads
+// an advert yet: the network's script, the consent banner and the security policy's change
+// (vite.config.ts) come with the network. A subscriber sees no adverts.
+export const ADS = { on: false };

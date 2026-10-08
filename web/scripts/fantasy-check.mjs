@@ -47,7 +47,7 @@ const posted = [];
 ws.onmessage = (e) => {
 	const m = JSON.parse(e.data);
 	if (m.id && waiting.has(m.id)) { waiting.get(m.id)(m); waiting.delete(m.id); }
-	if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
+	if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') errors.push('log: ' + m.params.entry.text + ' ' + (m.params.entry.url || '')); if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
 	if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push('console: ' + m.params.args.map((a) => a.value ?? a.description).join(' '));
 	if (m.method === 'Fetch.requestPaused') {
 		const u = new URL(m.params.request.url);
@@ -57,7 +57,7 @@ ws.onmessage = (e) => {
 	}
 };
 const run = async (expression) => { const m = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (m.result.exceptionDetails) throw new Error(m.result.exceptionDetails.exception?.description); return m.result.result.value; };
-await send('Runtime.enable'); await send('Page.enable'); await send('Network.enable');
+await send('Runtime.enable'); await send('Log.enable'); await send('Page.enable'); await send('Network.enable');
 await send('Fetch.enable', { patterns: [{ urlPattern: '*/fantasy/*' }] });
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const exp = Math.floor(Date.now() / 1000) + 3600;

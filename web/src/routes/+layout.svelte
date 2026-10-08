@@ -23,3 +23,12 @@
 </script>
 
 {@render children()}
+
+<style>
+	/* the app's own wrapper takes no part in the layout (a rule here, not a style attribute: the
+	   security policy allows no inline styles) */
+	:global(#app) { display: contents; }
+	/* (and should a new version of the framework word that hidden line's style differently, so the
+	   policy stops it, it stays out of sight) */
+	:global(#svelte-announcer) { position: absolute; left: 0; top: 0; clip-path: inset(50%); overflow: hidden; white-space: nowrap; width: 1px; height: 1px; }
+</style>
