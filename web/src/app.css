@@ -162,6 +162,15 @@ a.crest { text-decoration: none; }
 	.home-join { display: flex; margin-top: 20px; }
 	.home-slide .home-actions .home-ghost { display: none; }
 }
+/* ... and on a phone it is always in sight: where the slides run below the screen's foot (a phone
+   with the browser's own bars showing) it holds to the foot of the screen, over the slide, until
+   the page is scrolled down to its own place under them. The grass colour round it keeps what
+   passes behind from showing at its edges. (overflow: clip still cuts the markings off at the
+   hero's edge, but doesn't make the hero the box the button holds to, as hidden did) */
+@media (max-width: 640px) {
+	.home-hero { overflow: clip; }
+	.home-join { position: sticky; bottom: 12px; z-index: 2; box-shadow: 0 0 0 12px var(--pitch), 0 -14px 14px 10px var(--pitch), 0 40px 0 12px var(--pitch); }
+}
 /* Home on a tablet: the seven slides' names fit over their rules */
 @media (min-width: 641px) and (max-width: 939px) { .home-turn button { font-size: 11px; letter-spacing: 0.02em; } }
 /* Home on a phone: no bare grass over the slide. The touchline runs just under the bar, the slides'
