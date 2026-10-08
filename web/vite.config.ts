@@ -30,8 +30,9 @@ export default defineConfig({
 					'manifest-src': ['self'],
 					'object-src': ['none'],
 					'base-uri': ['self'],
-					// (a form may go on to Stripe's checkout and its page for managing a subscription)
-					'form-action': ['self', 'https://checkout.stripe.com', 'https://billing.stripe.com'],
+					// (a form may go on to Google's sign-in by way of the sign-in service, and to Stripe's checkout
+					// and its page for managing a subscription)
+					'form-action': ['self', 'https://bookkurhdabdeccckjbn.supabase.co', 'https://accounts.google.com', 'https://checkout.stripe.com', 'https://billing.stripe.com'],
 					'frame-ancestors': ['none']
 				}
 			}

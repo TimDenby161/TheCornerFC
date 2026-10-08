@@ -9,7 +9,7 @@ const LINK_TYPES = new Set(['signup', 'email', 'recovery', 'magiclink', 'invite'
 export const handle: Handle = async ({ event, resolve }) => {
 	// www is the same site: one address for it. And the old site's files by their old names
 	// (/terms.html) go to the page here; the part after a # is kept by the browser.
-	if (event.url.hostname === `www.${SITE_HOST}`) redirect(301, `https://${SITE_HOST}${event.url.pathname}${event.url.search}`);
+	if (event.url.hostname === `www.${SITE_HOST}`) redirect(301, `https://${SITE_HOST}${event.url.pathname}${event.url.search}`, { external: [`https://${SITE_HOST}`] });
 	const moved = oldFile(event.url.pathname);
 	if (moved) redirect(301, moved + event.url.search);
 

@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import * as env from '$app/env/private';
+import { SUPABASE } from '#lib/config.ts';
 import { accountError, safePath } from '#lib/server/auth.ts';
 import { keptSubscription, payments, stripe } from '#lib/server/payments.ts';
 
@@ -64,7 +65,7 @@ export const actions = {
 		const back = safePath(text(form, 'back'));
 		const { data, error } = await locals.supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${url.origin}${back}`, skipBrowserRedirect: true } });
 		if (error || !data.url) return fail(400, { message: accountError(error) });
-		redirect(303, data.url);
+		redirect(303, data.url, { external: [new URL(SUPABASE.url).origin, 'https://accounts.google.com'] });
 	},
 	// this browser only
 	signout: async ({ locals }) => {
@@ -112,7 +113,7 @@ export const actions = {
 		} catch {
 			return fail(502, { message: "The checkout couldn't be opened just now. Try again in a moment." });
 		}
-		redirect(303, to);
+		redirect(303, to, { external: ['https://checkout.stripe.com'] });
 	},
 	// On to Stripe's own page for a subscriber: change the card, see invoices, cancel
 	manage: async ({ locals, fetch, url }) => {
@@ -127,6 +128,6 @@ export const actions = {
 		} catch {
 			return fail(502, { message: "That page couldn't be opened just now. Try again in a moment." });
 		}
-		redirect(303, to);
+		redirect(303, to, { external: ['https://billing.stripe.com'] });
 	}
 };
