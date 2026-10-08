@@ -153,6 +153,18 @@ for (let i = 0; i < 30 && (await run('location.search')) !== '?src=history'; i++
 await sleep(1200);
 check('the reconstructed history, with more to list', (await run('location.search')) === '?src=history' && /Reconstructed, not a live record/.test(await run(`document.querySelector('#lineup-body')?.textContent`)) && (await run(`!!document.querySelector('#lineup-body .lr-more')`)), `${await run(`document.querySelector('#lineup-body .stats-value')?.textContent`)} line-ups`);
 
+// The two betting pages
+await open('/model-vs-market');
+check('Model vs Market: the three tiles, the 18+ note and the open selections', (await run(`document.querySelectorAll('#tips-top .kpi').length`)) === 3 && (await run(`!!document.querySelector('#tips-top .age-18')`)) && (await run(`document.querySelectorAll('#tips-body .tip-pick').length`)) > 0, `${await run(`document.querySelectorAll('#tips-body .tip-pick').length`)} selections`);
+await run(`document.querySelector('#tips-body .tip-day')?.click()`); await sleep(300);
+check('a day of selections folds away', await run(`document.querySelector('#tips-body .tip-day-body')?.classList.contains('collapsed')`));
+await open('/simulation');
+const settledAll = await run(`document.querySelectorAll('#bets-body .bet-row').length`);
+await run(`[...document.querySelectorAll('#bet-market a')].find((a) => a.textContent === 'Result')?.click()`); await until(`location.search === '?m=1X2'`); await sleep(500);
+check('Paper Simulation: a market narrows the record', settledAll > 50 && (await run(`document.querySelectorAll('#bets-body .bet-row').length`)) < settledAll && (await run(`!!document.querySelector('#bets-body .age-18')`)), `${settledAll} -> ${await run(`document.querySelectorAll('#bets-body .bet-row').length`)} settled`);
+await run(`document.querySelector('#bets-body .calib-table tbody .team-link')?.click()`); await until(`/c=\\d+/.test(location.search)`); await sleep(500);
+check('tapping a league narrows to it, the market kept', /m=1X2/.test(await run('location.search')) && (await run(`document.querySelectorAll('#bets-body .calib-table')[0]?.querySelectorAll('tbody tr').length`)) === 1, await run('location.search'));
+
 // the account box: opens from the menu, shows the forms and the bot check, and answers in place
 await open('/clubs?c=39');
 await run(`document.querySelector('a.account-btn')?.click()`); await sleep(2500);

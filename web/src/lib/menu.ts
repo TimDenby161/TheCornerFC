@@ -16,8 +16,8 @@ export const MENU: { label: string; sections: Section[] }[] = [
 		{ tab: 'lineups', label: 'Line-up record', path: '/lineups' }
 	] },
 	{ label: 'Against the market', sections: [
-		{ tab: 'tips', label: 'Model vs Market', old: '#/model-vs-market' },
-		{ tab: 'bets', label: 'Paper Simulation', old: '#/simulation' }
+		{ tab: 'tips', label: 'Model vs Market', path: '/model-vs-market' },
+		{ tab: 'bets', label: 'Paper Simulation', path: '/simulation' }
 	] }
 ];
 export const sectionHref = (s: Section) => s.path ?? OLD_SITE + (s.old ?? '');
