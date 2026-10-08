@@ -53,3 +53,10 @@ export function oldAddress(hash: string): string | null {
 	const path = m[1].replace(/^((?:club|player|nation)\/[^/]+)\/overview$/, '$1');
 	return `/${path}${m[2] ?? ''}`;
 }
+
+// The old site's files by their own names (thecornerfc.com/terms.html, /index.html): where each is
+// here, or null for any other path.
+export function oldFile(pathname: string): string | null {
+	const m = /^\/(index|methodology|terms|privacy)\.html$/.exec(pathname);
+	return m ? (m[1] === 'index' ? '/' : `/${m[1]}`) : null;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { oldAddress, pageHref, tabFor } from './menu';
+import { oldAddress, oldFile, pageHref, tabFor } from './menu';
 
 describe('old shared links', () => {
 	it('go to the same page here, with their choices', () => {
@@ -37,5 +37,16 @@ describe('menu', () => {
 	it('links every kind of page on this site', () => {
 		expect(pageHref('club', 42)).toBe('/club/42');
 		expect(pageHref('nation', "Côte d'Ivoire")).toBe("/nation/C%C3%B4te%20d'Ivoire");
+	});
+});
+
+describe("the old site's files", () => {
+	it('go to the same page here', () => {
+		expect(oldFile('/index.html')).toBe('/');
+		expect(oldFile('/terms.html')).toBe('/terms');
+		expect(oldFile('/methodology.html')).toBe('/methodology');
+		expect(oldFile('/privacy.html')).toBe('/privacy');
+		expect(oldFile('/terms')).toBeNull();
+		expect(oldFile('/other.html')).toBeNull();
 	});
 });

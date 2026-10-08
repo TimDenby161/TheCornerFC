@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Scripts: only assets/theme.js, which applies the Light / Dark choice made in the site menu. No inline script or style. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Privacy, corrections and security · The Corner FC</title>
+<meta name="description" content="What The Corner FC does with your visit, how to report a data error, and how to report a security issue.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script src="assets/theme.js"></script>
+<link rel="stylesheet" href="assets/page.css">
+</head>
+<body>
+<main>
+<p class="back"><a href="./">The Corner FC</a></p>
+<h1>Privacy, corrections and security</h1>
+<p class="updated">Last updated 8 October 2026</p>
+
+<h2 id="privacy">Privacy</h2>
+<p>The Corner FC has no advertising or analytics. You can use all of it without an account, and it
+stores nothing about you unless you choose to create one. It sets two cookies at most: one that
+remembers your time zone, and one that keeps you signed in if you sign in. Both are described
+below.</p>
+<ul>
+  <li><strong>Hosting.</strong> The site is served by Cloudflare. Like any web host, Cloudflare
+    receives your IP address and browser details when you load a page, and keeps short-lived
+    records of requests to keep the service running and secure. See the
+    <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare Privacy Policy</a>.</li>
+  <li><strong>Images from other sites.</strong> Country flags load from <code>flagcdn.com</code>. Your
+    browser contacts that server, so it receives your IP address, browser details and the site's
+    address (<code>thecornerfc.com</code>, not the page you're on). Its own privacy policy applies to
+    those requests. The site doesn't show club badges, competition logos or player and manager photos:
+    initials stand in for them, so no images load from API-Football.</li>
+  <li><strong>Settings kept in your browser.</strong> A Light or Dark theme, if you pick one in the
+    menu, is saved in your browser's local storage (<code>fc.theme</code>) so it's still there next
+    time; it never leaves your device. Your browser's time zone (for example
+    <code>Europe/London</code>) is kept in a cookie (<code>tz</code>, for a year) and sent with each
+    page you load, so that match days and kick-off times are written in your own time; it is used
+    for nothing else and isn't stored on the server. Clear either by clearing this site's data in
+    your browser; without the cookie, times are shown in UK time until the page has loaded.</li>
+  <li><strong>FPL predictions and My FPL team.</strong> These are for the site owner only, and
+    are shown once the owner has signed in. Visitors who don't sign in connect to nothing for
+    them. In the owner's browser only, a cookie (<code>owner</code>) remembers to list those pages
+    in the menu.</li>
+  <li><strong>Accounts (optional).</strong> If you create an account or sign in, the site's
+    Supabase database (<code>supabase.co</code>) stores your email address, the time you signed up
+    and last signed in, and either a scrambled (hashed) copy of your password or, if you use
+    "Continue with Google", the name, email address and profile picture address that Google
+    passes on. Signing in with a password goes through the site's own server to Supabase; "Continue
+    with Google" takes your browser to Google and Supabase, which then receive your IP address and
+    browser details.
+    The forms for signing in with a password, signing up and resetting a password run a check that
+    you aren't a bot, Cloudflare Turnstile (<code>challenges.cloudflare.com</code>), which loads
+    only when you open one of them. Cloudflare receives your IP address and browser details to
+    make that check, and uses them to tell people from bots and to improve the check, not to
+    identify you or show you adverts; the site relies on its legitimate interest in keeping
+    automated sign-ups out (UK GDPR Article 6(1)(f)). See Cloudflare's
+    <a href="https://www.cloudflare.com/turnstile-privacy-policy/">Turnstile Privacy Addendum</a>.
+    Google doesn't share your password with the site, and its own privacy policy
+    covers its sign-in pages. This is used only to sign you in and to send the emails that
+    confirm your address or reset your password, which go out through Resend
+    (<code>resend.com</code>). It isn't shared with anyone else or used for marketing. While
+    you're signed in, the sign-in session is kept in a cookie
+    (<code>sb-…-auth-token</code>) that is sent only to this site, only over a secure connection,
+    and can't be read by the page's scripts; it is set only when you sign in, is needed to keep you
+    signed in, and signing out removes it. Resend handles those emails in the United
+    States, under an agreement that includes the UK's approved contract terms for sending personal
+    data abroad. The site holds this information because you asked for an account (the legal basis
+    is the contract with you, UK GDPR Article 6(1)(b)). An account is kept until you delete it; if
+    you don't confirm your email address within 7 days, the sign-up is deleted. To delete your
+    account and everything above, open Account and choose Delete account. For a copy of what's
+    held about you, or any other question about your account, email
+    <a href="mailto:timdenby161@gmail.com">timdenby161@gmail.com</a>. See the
+    <a href="https://supabase.com/privacy">Supabase Privacy Policy</a> and the
+    <a href="https://resend.com/legal/privacy-policy">Resend Privacy Policy</a>.</li>
+  <li><strong>EFL Fantasy.</strong> This tab is shown to the site's owner only, after signing in.
+    It doesn't connect to the Fantasy EFL game or any other site, and it stores nothing in your
+    browser.</li>
+</ul>
+<h2 id="people">People the site covers</h2>
+<p>The site publishes information about professional footballers and managers. If you are one of
+them, this section is your notice: writing to each of several thousand people isn't practical, so
+it is given here instead.</p>
+<ul>
+  <li><strong>What.</strong> Your name, club, position, age, nationality and match statistics, and
+    the ratings, predictions and expected fantasy points the site works out from them. Where a club
+    lists you as out, doubtful or suspended for a match, the site shows that too. It doesn't show
+    the injury or illness itself, your date of birth, or a photo.</li>
+  <li><strong>Where it comes from.</strong> API-Football, a commercial football data service.
+    Fantasy Premier League's public data is also collected, and is shown only to the site owner.</li>
+  <li><strong>Why, and the legal basis.</strong> To publish football statistics, ratings and
+    predictions. The basis is legitimate interests (UK GDPR Article 6(1)(f)): reporting and
+    analysing professional sport that is played in public. Whether you are available for a match
+    is health information, used because you or your club made it public (Article 9(2)(e)).
+    Ratings and predictions are a model's estimates of sporting performance, not facts about
+    you, and nothing is decided about you from them.</li>
+  <li><strong>How long.</strong> Your profile and statistics stay while you play in a league the
+    site covers, and for the past seasons its pages show. Availability for a match drops off the
+    site within three weeks of that match. The reason behind it is never published; it is held
+    privately for the models for the current season and the one before, then deleted. Injury notes
+    from Fantasy Premier League are held privately and reviewed for deletion each summer. Older
+    copies of the site's data files stay in the public change history of the site's code until that
+    history is rewritten, which can be done for your files if you ask.</li>
+  <li><strong>Your rights.</strong> You can ask for a copy of what's held about you, for it to be
+    corrected, restricted or removed, and you can object to it being used. Requests are free and
+    are answered within a month. If you are removed, the site stops collecting your information as
+    well as deleting what it holds. Requests about players under 18, from them or a parent or
+    guardian, are acted on without question.</li>
+</ul>
+<p>The site is run by Tim Denby, who decides how this information is used (the data controller):
+<a href="mailto:timdenby161@gmail.com">timdenby161@gmail.com</a>. If you're unhappy with how your
+information has been handled, email that address first. You'll get an acknowledgement within 30
+days. You can also complain to the
+<a href="https://ico.org.uk/make-a-complaint/">Information Commissioner's Office</a>.</p>
+
+<h2 id="corrections">Corrections</h2>
+<p>If you spot a wrong result, player, club, injury or other data error, please
+<a href="https://github.com/TimDenby161/TheCornerFC/issues/new">open an issue on GitHub</a> with the
+page address and what's wrong. Issues are public, so don't include anything private. If the
+information is about you, or you'd rather not ask in public (a correction, a removal, or anything
+about your health), email
+<a href="mailto:timdenby161@gmail.com">timdenby161@gmail.com</a> instead. Ratings,
+projections and probabilities are model output. They're estimates, not facts, and aren't
+betting advice. <a href="methodology.html">How the models work</a> explains them and how accurate
+they've been, and the <a href="terms.html">terms of use</a> cover what the site is and isn't.</p>
+
+<h2 id="security">Security</h2>
+<p>Please report security problems privately through
+<a href="https://github.com/TimDenby161/TheCornerFC/security/advisories/new">GitHub's private
+vulnerability reporting</a>, not in a public issue. The policy is in
+<a href="https://github.com/TimDenby161/TheCornerFC/blob/main/SECURITY.md">SECURITY.md</a>, and
+<a href=".well-known/security.txt">security.txt</a> has the same contact.</p>
+</main>
+</body>
+</html>

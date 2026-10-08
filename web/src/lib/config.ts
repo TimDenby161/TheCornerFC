@@ -15,3 +15,6 @@ export const ADS = { on: false };
 // What a subscription costs (owner, 2026-10-07). The charge itself is the price set in Stripe:
 // these are the words on the buttons, and the two must be changed together.
 export const PRICES = { monthly: '£4.99 a month', yearly: '£49 a year' };
+
+// The site's own address. The app also answers at its workers.dev preview address; www goes to this.
+export const SITE_HOST = 'thecornerfc.com';
