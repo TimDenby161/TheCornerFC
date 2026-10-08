@@ -1,6 +1,6 @@
 import { clubBase, clubSquad } from '#lib/server/club.ts';
-import { shortName } from '#lib/club.ts';
-import { predictedXi, squadStrength, xiSpots } from '#lib/depth.ts';
+import { predictedXi, squadStrength } from '#lib/depth.ts';
+import { spots } from '#lib/lineups.ts';
 import { LIVE } from '#lib/matches.ts';
 import { compLabel, teamName } from '#lib/site.ts';
 
@@ -16,10 +16,7 @@ export async function load({ fetch, params, locals }) {
 	const home = m ? m.home === id : false, opp = m ? (home ? m.away : m.home) : 0;
 	return {
 		paywall: false as const, kit,
-		spots: !xi ? null : xiSpots(xi).map(({ c, x, y }) => ({
-			id: c.p.id, name: shortName(c.p.name), label: c.box.label, x: Math.round(x), y, rank: c.rank, chance: Math.round(c.chance), mins: c.mins,
-			tip: `${c.p.name} · ${c.box.label} · rank ${c.rank != null ? c.rank.toFixed(1) : '–'} · ${Math.round(c.chance)}% to start · ${c.mins}′ expected`
-		})),
+		spots: !xi ? null : spots(xi.map((c) => ({ id: c.p.id, name: c.p.name, label: c.box.label, rank: c.rank, chance: c.chance, mins: c.mins }))),
 		average: ranks.length ? Math.round(ranks.reduce((t, r) => t + r, 0) / ranks.length) : null,
 		squad: squadStrength(depth),
 		next: !m ? null : {

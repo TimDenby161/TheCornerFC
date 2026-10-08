@@ -25,7 +25,7 @@
 		{#if data.fixtures.length}
 			<div class="card-list">
 				{#each data.fixtures as f (f.card.id)}
-					<MatchCard m={f.card} when="day">
+					<MatchCard m={f.card} when="day" lineups={false}>
 						{#snippet extra()}<div class="club-card-extra"><span>{f.comp}</span>{#if f.win != null}<span><b>{f.win}%</b> win</span>{/if}</div>{/snippet}
 					</MatchCard>
 				{/each}

@@ -86,6 +86,11 @@ await run(`document.querySelector('.secondary-filters a[aria-label="Next day"]')
 check('the next day has its own address', (await run('location.search')) === '?d=2026-09-20', await run('location.search'));
 await open('/matches?c=39&d=2026-09-19');
 check('one competition goes a round at a time', /^Round 5/.test(await run(`document.querySelector('.secondary-filters select')?.selectedOptions[0]?.textContent`)) && (await run(`document.querySelectorAll('#matches-list .match-card').length`)) === 10, await run(`document.querySelector('.secondary-filters select')?.selectedOptions[0]?.textContent`));
+// a finished match's card opens its line-ups (on a click anywhere on it) and its model detail
+await run(`document.querySelector('#matches-list .match-card .match-score')?.click()`); await sleep(2500);
+check('a card opens its line-ups: two elevens on pitches', (await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel .pp-pitch').length`)) === 2 && (await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel .xi-spot').length`)) === 22, `${await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel .xi-spot').length`)} players`);
+await run(`document.querySelectorAll('#matches-list .match-card')[1]?.querySelector('.why-toggle')?.click()`); await sleep(1800);
+check('opening another card\'s model detail closes the first card', (await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel').length`)) === 0 && (await run(`document.querySelectorAll('#matches-list .why-detail .why-sec').length`)) >= 2, `${await run(`document.querySelectorAll('#matches-list .why-detail .why-sec').length`)} sections`);
 await run(`document.querySelector('.secondary-filters a.today-btn')?.click()`); await sleep(1800);
 check('Next goes to the round to come, where the paid parts are locked', (await run('location.search')) === '?c=39' && (await run(`document.querySelectorAll('#matches-list .paid-lock').length`)) > 0);
 await run(`document.querySelector('#matches-list .paid-lock .link-btn')?.click()`); await sleep(500);

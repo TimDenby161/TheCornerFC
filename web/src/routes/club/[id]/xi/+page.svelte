@@ -1,12 +1,10 @@
 <script lang="ts">
 	import NextMatchCard from '#lib/components/NextMatchCard.svelte';
-	import Pitch from '#lib/components/Pitch.svelte';
+	import XiPitch from '#lib/components/XiPitch.svelte';
 	import SubscriberLink from '#lib/components/SubscriberLink.svelte';
 	import { rankTier } from '#lib/club.ts';
 
 	let { data } = $props();
-	// start chance colour: 80%+ green, 60-80 yellow, 40-60 orange, under 40 red
-	const startTier = (c: number) => (c >= 80 ? 4 : c >= 60 ? 3 : c >= 40 ? 2 : 1);
 </script>
 
 <svelte:head>
@@ -25,13 +23,7 @@
 {:else}
 	{#snippet pitch()}
 		<div class="club-section pp-section">
-			<Pitch kind="pp-pitch" kit={data.kit}>
-				{#each data.spots! as s (s.id)}
-					<a class="pp-spot xi-spot sq-{startTier(s.chance)} sx-{s.x} sy-{s.y}" href="/player/{s.id}" title={s.tip}>
-						<span class="pp-rank rk-{rankTier(s.rank ?? 0)}">{s.rank == null ? '–' : Math.round(s.rank)}</span><span class="pp-name">{s.name}</span>
-						<span class="pp-meta"><span class="sc-{startTier(s.chance)}">{s.chance}%</span> · {s.mins}′</span></a>
-				{/each}
-			</Pitch>
+			<XiPitch spots={data.spots!} kit={data.kit} />
 			{#if data.average != null}<div class="page-note u-center">Average rank {data.average}</div>{/if}
 		</div>
 	{/snippet}

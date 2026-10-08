@@ -34,6 +34,12 @@ export function cardView(site: Site, ranks: Map<number, Club>, m: Match, paywall
 		tag: LIVE.has(m.status) ? 'Live' : m.status === 'PST' ? 'Postponed' : m.status === 'CANC' ? 'Cancelled' : m.status === 'ABD' ? 'Abandoned' : FINISHED.has(m.status) ? m.status : '',
 		live: LIVE.has(m.status),
 		lock: !locked ? null : probs ? 'depth' as const : 'chances' as const,
+		// what opens from the card: the line-ups (not while it is being played, nor for a national
+		// match once played, which has a predicted XI only) and the model's detail
+		canLineups: !locked && !LIVE.has(m.status) && !NO_GAME.has(m.status) && (!intl || (!finished && !!probs)),
+		canDetail: !locked && !!probs,
+		// both clubs' expected squads, asked for when the card comes into view
+		canSquads: upcoming && !intl && !locked && !NO_GAME.has(m.status),
 		reasons: upcoming && probs ? (m.reasons || []).flatMap(([k, v]) => reasonText(k, v, home.name, away.name) ?? []) : [],
 		// how the prediction did, once it's over
 		rating: finished && m.rating ? {

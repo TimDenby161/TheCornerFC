@@ -6,10 +6,13 @@
 
 	// A match card's top: when (meta), both clubs with chip and rating, and the score, or the
 	// projected goals and likely score before it is played.
+	// a club's expected squad for the match: worked out from expected minutes, not a model input
+	type Squad = { attack: number; defence: number; strength: number; recent: number | null; trend: string };
 	type Side = { id: number; name: string; rank: number | null; href?: string; nation?: boolean };
-	let { home, away, status, hg = null, ag = null, penH = null, penA = null, homeXg = null, awayXg = null, likely = null, source = null, meta, right }:
+	let { home, away, status, hg = null, ag = null, penH = null, penA = null, homeXg = null, awayXg = null, likely = null, source = null, squads = null, meta, right }:
 		{ home: Side; away: Side; status: string; hg?: number | null; ag?: number | null; penH?: number | null; penA?: number | null;
-			homeXg?: number | null; awayXg?: number | null; likely?: string | null; source?: string | null; meta: Snippet; right?: Snippet } = $props();
+			homeXg?: number | null; awayXg?: number | null; likely?: string | null; source?: string | null;
+			squads?: { home: Squad; away: Squad } | null; meta: Snippet; right?: Snippet } = $props();
 	const finished = $derived(FINISHED.has(status) && hg != null);
 	const played = $derived(finished || (LIVE.has(status) && hg != null));
 	const rankTitle = $derived(finished ? 'Strength going into this match (Elo)' : 'Current Strength (Elo)');
@@ -17,6 +20,9 @@
 
 {#snippet rank(v: number | null)}{#if v != null && Number.isFinite(v)}<span class="club-score" title={rankTitle}>{Math.round(v).toLocaleString('en-GB')}</span>{/if}{/snippet}
 <!-- national teams: the name opens the nation's page (no club page to open) -->
+{#snippet badge(icon: string, value: number, label: string, cls = '')}<span class="squad-badge {cls}" title="{label}: {value}"><span class="ico">{icon}</span>{value}</span>{/snippet}
+{#snippet names(q: Squad | undefined)}{#if q}<span class="team-squad-badges">{@render badge('🛡️', q.defence, 'Defence (estimated on this page from expected minutes; not a model input)')}{@render badge('⚔️', q.attack, 'Attack (estimated on this page from expected minutes; not a model input)')}</span>{/if}{/snippet}
+{#snippet overall(q: Squad | undefined)}{#if q}<span>{@render badge('⚽', q.strength, `Overall squad rating (estimated on this page from expected minutes; not a model input)${q.recent == null ? '' : `; recent starting XIs ${q.recent}`}`, q.trend)}</span>{/if}{/snippet}
 {#snippet side(s: Side)}{#if s.nation}<Crest id={s.id} name={s.name} /><a class="team-link" href={s.href}>{s.name}</a>{:else}<Crest id={s.id} name={s.name} href={pageHref('club', s.id)} /><a class="team-link" href={pageHref('club', s.id)}>{s.name}</a>{/if}{/snippet}
 
 <div class="match-card-top">
@@ -25,8 +31,8 @@
 </div>
 <div class="match-teams">
 	<div class="match-team">
-		<div class="mt-name">{@render side(home)}</div>
-		<div class="score-badges">{@render rank(home.rank)}</div>
+		<div class="mt-name">{@render side(home)}{@render names(squads?.home)}</div>
+		<div class="score-badges">{@render rank(home.rank)}{@render overall(squads?.home)}</div>
 	</div>
 	<div class="match-score">
 		{#if played}
@@ -41,7 +47,7 @@
 		{/if}
 	</div>
 	<div class="match-team away">
-		<div class="mt-name">{@render side(away)}</div>
-		<div class="score-badges">{@render rank(away.rank)}</div>
+		<div class="mt-name">{@render side(away)}{@render names(squads?.away)}</div>
+		<div class="score-badges">{@render overall(squads?.away)}{@render rank(away.rank)}</div>
 	</div>
 </div>

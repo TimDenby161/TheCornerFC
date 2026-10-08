@@ -49,7 +49,8 @@ export async function clubPlayers(fetch: typeof globalThis.fetch, site: Site, id
 }
 
 // The squad by position for the club's next match (depth.ts), with what it was worked out from
-export async function clubSquad(fetch: typeof globalThis.fetch, base: Awaited<ReturnType<typeof clubBase>>, token?: string) {
+// (`forLeague`: work it out for a match in that competition, not the club's own next one)
+export async function clubSquad(fetch: typeof globalThis.fetch, base: Awaited<ReturnType<typeof clubBase>>, token?: string, forLeague?: number) {
 	const { id, site, doc, rows } = base;
 	const [{ list, paywall: locked }, inj, fixtures] = await Promise.all([clubPlayers(fetch, site, id, token), clubInjuries(fetch, id), clubFixtures(fetch, site, id, token)]);
 	const next = upcoming(fixtures.matches)[0] ?? null;
@@ -61,7 +62,7 @@ export async function clubSquad(fetch: typeof globalThis.fetch, base: Awaited<Re
 		squad: list, out: new Set((inj?.players || []).map(([pid]) => pid)),
 		starts: more?.starts, positions: more?.positions,
 		seasonFormations: rows.filter((m) => seasonOf(m) === season).map((m) => m.formation),
-		nextGroup: next ? groupOf(next.league) : null, groupOf
+		nextGroup: forLeague != null ? groupOf(forLeague) : next ? groupOf(next.league) : null, groupOf
 	});
 	return { depth, list, inj, next, matches: fixtures.matches, paywall: locked || fixtures.paywall, kit: /^[0-9a-f]{6}$/i.test(doc?.colors?.[0] ?? '') ? [doc!.colors![0], /^[0-9a-f]{6}$/i.test(doc!.colors![1] ?? '') ? doc!.colors![1] : 'ffffff'] : null };
 }
