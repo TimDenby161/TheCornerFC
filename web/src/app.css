@@ -1,0 +1,183 @@
+/* What the new app adds to the old site's stylesheet (docs/assets/styles.css). The menu's entries
+   are links here, where the old site's were buttons, so they take the same look. */
+nav.tabs a.menu-link {
+	display: block; text-decoration: none; cursor: pointer; text-align: left;
+	color: var(--text-secondary); font-family: inherit; font-stretch: 76%; font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+	padding: 9px 12px; transition: background-color .15s, color .15s;
+}
+nav.tabs a.menu-link:hover { background: var(--chip-bg); color: var(--text-primary); }
+nav.tabs a.menu-link:focus-visible { outline: 2px solid var(--text-primary); outline-offset: -2px; }
+nav.tabs a.menu-link[aria-current="page"] { background: var(--text-primary); color: var(--surface-1); }
+@media (pointer: coarse) { nav.tabs a.menu-link { min-height: 44px; display: flex; align-items: center; } }
+/* a column heading that sorts is a link too */
+table.leaderboard th.sortable a, table.league-table th.sortable a { color: inherit; text-decoration: none; display: block; }
+/* a form that only carries a choice to the address: its buttons lay out as if it weren't there */
+form.contents { display: contents; }
+/* a page's tabs are links here (each tab has its own address), where the old site's were buttons */
+.page-tabs a { text-decoration: none; font: inherit; font-stretch: 76%; font-size: 15px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+	color: var(--text-secondary); padding: 9px 12px 8px; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; cursor: pointer; }
+.page-tabs a:hover { color: var(--text-primary); }
+.page-tabs a[aria-current="page"] { color: var(--text-primary); border-bottom-color: var(--text-primary); }
+.page-tabs a:focus-visible { outline: 2px solid var(--series-blue); outline-offset: -2px; }
+@media (max-width: 759px) { .page-tabs a { padding: 8px 10px 7px; } }
+/* (taller for a finger, as the old site's: only where the pointer is one) */
+@media (pointer: coarse) { .page-tabs a { min-height: 44px; display: inline-flex; align-items: center; } }
+/* Players: the Ability heading holds its sort link and the + that opens the other seasons */
+table.leaderboard th.sortable .now-head a { display: inline; }
+table.leaderboard th.sortable a.years-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; }
+/* the club box: a league's clubs sit indented under it */
+.who-opt.in-league { margin-left: 14px; padding-left: 4px; width: calc(100% - 14px); border-left: 1px solid var(--gridline); }
+/* a two-way switch whose sides are links (each with its own address) takes the buttons' look */
+.seg a.seg-link { text-decoration: none; font: inherit; font-size: 12px; font-weight: 600; color: var(--text-secondary); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+.seg a.seg-link + a.seg-link { border-left: 1px solid var(--border); }
+.seg a.seg-link[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); }
+@media (pointer: coarse) { .seg a.seg-link { min-height: 40px; display: inline-flex; align-items: center; } }
+/* ... and a chip that is a link */
+a.filter-chip { text-decoration: none; }
+/* the account button at the foot of the menu is a link (to the account page, where the script
+   isn't running) with the menu buttons' look */
+nav.tabs a.account-btn { text-decoration: none; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+@media (pointer: coarse) { nav.tabs a.account-btn { min-height: 44px; } }
+/* the account box as a page of its own */
+.modal-card.account-page { margin: 24px auto; }
+.account-form + form, #account-body > form { margin: 0; }
+/* Matches: the day and round steps are links (each day has its own address) with the buttons' look */
+a.nav-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+/* a match's prediction rating opens its parts: a button with the badge's look */
+button.rating-badge { appearance: none; border: 0; font-family: inherit; cursor: pointer; }
+/* a text link that opens the account box, with the old site's link-button look */
+a.link-btn { cursor: pointer; }
+/* the old site drew a link that opens more of a list as a button: the same look for a link */
+a.show-all { display: block; text-align: center; text-decoration: none; }
+/* a club's or competition's chip that opens its page: no underline under its initials */
+a.crest { text-decoration: none; }
+
+/* the two plans' buttons in the account box, one under the other */
+.account-plans { display: grid; gap: 8px; }
+
+/* Phones and tablets. Everything from here on sits inside a width or container query below the
+   wide-screen layout, so a desktop window draws as it did. */
+/* the menu button: a 46px tap area round the three bars; the bar itself stays as low as it was */
+@media (max-width: 759px) {
+	.menu-btn { position: relative; }
+	.menu-btn::after { content: ""; position: absolute; inset: -9px -8px; }
+}
+/* Below the side menu the page runs edge to edge: no strip kept down the right for a scrollbar
+   (it cut Home's hero short of the screen's edge wherever the browser draws one that takes room,
+   as a desktop browser's phone view does). The page still scrolls by touch, wheel and keys */
+@media (max-width: 759px) {
+	main { scrollbar-gutter: auto; scrollbar-width: none; }
+	main::-webkit-scrollbar { display: none; }
+}
+/* a finger's room round a match's rating, which opens its parts */
+@media (pointer: coarse) {
+	button.rating-badge { position: relative; }
+	button.rating-badge::after { content: ""; position: absolute; inset: -12px -6px; }
+}
+/* A page's tabs, where they run wider than the screen: the cut edge fades, so it's seen that the
+   row goes on (the fade follows the scroll where the browser can tie one to it; elsewhere, none) */
+@property --tabs-left { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --tabs-right { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes tabs-edges { from { --tabs-left: 0px; --tabs-right: 28px; } 12% { --tabs-left: 28px; } 88% { --tabs-right: 28px; } to { --tabs-left: 28px; --tabs-right: 0px; } }
+@media (max-width: 759px) {
+	@supports (animation-timeline: scroll()) {
+		.page-tabs { mask-image: linear-gradient(90deg, transparent, #000 var(--tabs-left), #000 calc(100% - var(--tabs-right)), transparent);
+			animation: tabs-edges linear both; animation-timeline: scroll(self inline); }
+	}
+}
+/* The rankings on a phone (Clubs, Leagues, Nations, a league's and a country's clubs): the name has
+   its column to itself, with the flag and league on a line under it, so a name is rarely cut short
+   and every row is as tall as the next */
+@media (max-width: 480px) {
+	table.leaderboard.clubs .club-cell { display: block; }
+	table.leaderboard.clubs .club-cell > .team-link { display: block; min-height: 0; padding: 0; line-height: 1.35; white-space: nowrap; }
+	table.leaderboard.clubs .club-cell > .club-meta { display: flex; align-items: center; margin: 1px 0 0; line-height: 1.3; }
+	table.leaderboard.clubs .club-cell.flag-only .cm-league { display: inline; }
+	table.leaderboard.clubs .club-cell .cm-league { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+	table.leaderboard.clubs td > .team-link { min-height: 0; padding: 0; }
+	/* "Current" fits its heading */
+	table.leaderboard.clubs th:nth-child(n+4), table.leaderboard.clubs td:nth-child(n+4) { width: 46px; }
+	table.leaderboard.clubs th { font-stretch: 88%; }
+}
+/* The smallest phones: the name stays (the old sheet dropped it for the badge alone); on the lists
+   with four columns of figures the first of them, which the club's page has, makes way */
+@container (max-width: 349px) {
+	table.leaderboard.clubs :is(th, td).col-spare { display: none; }
+	table.leaderboard.clubs th:nth-child(n+4), table.leaderboard.clubs td:nth-child(n+4) { width: 42px; }
+	table.leaderboard.clubs th { font-stretch: 76%; }
+	/* Players: the figures' columns a little closer, for the name's room */
+	table.leaderboard.players:not(.years) :is(th, td):nth-child(3) { width: 30px; }
+	table.leaderboard.players:not(.years) :is(th, td).col-age { width: 28px; }
+	table.leaderboard.players:not(.years) :is(th, td).col-ga { width: 46px; }
+}
+@container (max-width: 309px) {
+	table.leaderboard.clubs :is(th, td):nth-child(3) { display: table-cell; }
+	table.leaderboard.clubs .th-club { display: none; }
+	table.leaderboard.clubs :is(th, td):nth-child(2) { width: 24px; padding-left: 0; }
+}
+/* Players on a phone: his club and league on a line under his name, as on a wide screen (the row
+   is no taller for it), and his name as the wide table has it where there's the room */
+@container (max-width: 499px) {
+	table.leaderboard.players:not(.years) .pl-club { display: block; }
+	table.leaderboard.players:not(.years) .pl-name .player-link { min-height: 0; padding: 0; line-height: 1.35; }
+	table.leaderboard.players:not(.years) .pl-cell { gap: 8px; }
+}
+@container (min-width: 360px) and (max-width: 499px) {
+	table.leaderboard.players:not(.years) .pn-full { display: inline; }
+	table.leaderboard.players:not(.years) .pn-short { display: none; }
+}
+/* Stats on the smallest phones: the six-column tables fit the screen */
+@media (max-width: 359px) {
+	.calib-table { font-size: 11px; }
+	.calib-table th, .calib-table td { padding-left: 2px; padding-right: 2px; }
+	.calib-table th { letter-spacing: 0; }
+}
+/* A club's overview beside the menu on a tablet: the squad pitch under the next match, not in
+   the sliver left beside it (its names were cut to a letter) */
+@media (min-width: 760px) and (max-width: 939px) {
+	.ov-top { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+	.ov-top .next-top { flex-direction: row; justify-content: space-between; }
+	.ov-top .next-meta { flex-direction: row; flex-wrap: wrap; gap: 1px 10px; }
+}
+/* Home on a phone: every slide is as tall as the tallest, so what stands under them (the way to an
+   account) never moves as they turn or are swiped, and the tall ones are cut nearer the others' height:
+   two matches, and a wider, lower pitch without its key (286px is as low as it goes with no player's
+   box, and the tick or cross on its corner, over another's: under 274px they meet) */
+@media (max-width: 640px) {
+	.home-slides { align-items: stretch; }
+	.home-slide[inert] { max-height: none; }
+	.home-sample > .home-call:nth-child(n + 3), .home-sample .xi-legend { display: none; }
+	.home-sample .pitch.pp-pitch { max-width: 320px; aspect-ratio: auto; height: 286px; }
+	.home-nums { gap: 14px 10px; }
+	.home-nums div:not(:nth-child(3n + 1)) { padding-left: 10px; }
+	.home-nums dd { font-size: 12px; }
+	.home-nums-note { margin-top: 10px; }
+}
+/* Home below the wide layout: "Create a free account" stands under the slides, whichever is up,
+   in place of the one on the first slide: white, as the slide's own button, without its arrow
+   (it opens the account box, it doesn't go to a page) */
+.home-join { display: none; }
+.home-join::after { content: none; }
+@media (max-width: 1099px) {
+	.home-join { display: flex; margin-top: 20px; }
+	.home-slide .home-actions .home-ghost { display: none; }
+}
+/* ... and on a phone it is always in sight: where the slides run below the screen's foot (a phone
+   with the browser's own bars showing) it holds to the foot of the screen, over the slide, until
+   the page is scrolled down to its own place under them. The grass colour round it keeps what
+   passes behind from showing at its edges. (overflow: clip still cuts the markings off at the
+   hero's edge, but doesn't make the hero the box the button holds to, as hidden did) */
+@media (max-width: 640px) {
+	.home-hero { overflow: clip; }
+	.home-join { position: sticky; bottom: 12px; z-index: 2; box-shadow: 0 0 0 12px var(--pitch), 0 -14px 14px 10px var(--pitch), 0 40px 0 12px var(--pitch); }
+}
+/* Home on a tablet: the seven slides' names fit over their rules */
+@media (min-width: 641px) and (max-width: 939px) { .home-turn button { font-size: 11px; letter-spacing: 0.02em; } }
+/* Home on a phone: no bare grass over the slide. The touchline runs just under the bar, the slides'
+   rules stand in the strip above it beside the flag, and the headline starts right under the line */
+@media (max-width: 640px) {
+	.home-hero { padding-top: 0; }
+	.home-pitch { top: -9px; right: -11px; width: 210px; height: 150px; }      /* the touchline 46px down, the flag's top just inside */
+	.home-turn { height: 46px; margin: 0 0 18px; padding-right: 22px; align-items: center; }
+	.home-turn-list button::before, .home-turn-list button::after { bottom: 20px; }
+}

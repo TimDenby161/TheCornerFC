@@ -186,11 +186,11 @@ create table if not exists players (
     lastname     text,
     birth_date   date,
     nationality  text,
-    height_cm    int,
-    weight_kg    int,
-    photo        text,
     updated_at   timestamptz not null default now()
 );
+-- Height, weight and the photo link were stored and never read (audit D8): gone 2026-10-08
+-- (db/migrations/20261008_drop_unused_person_fields.sql, not yet applied)
+alter table players drop column if exists height_cm, drop column if exists weight_kg, drop column if exists photo;
 
 -- One row per player per team per league season (a mid-season transfer gives two rows)
 create table if not exists player_seasons (
@@ -330,10 +330,10 @@ create table if not exists team_coaches (
     team_id     int primary key,
     coach_id    int,
     name        text,
-    photo       text,
     since       date,
     fetched_at  timestamptz not null default now()
 );
+alter table team_coaches drop column if exists photo;   -- never read (audit D8), as above
 -- Player rank (0-100) going into each match, from matches before it (player_ratings.py).
 -- Its own table, rebuilt with truncate + copy, so fixture_players isn't rewritten nightly.
 -- No key or index: it's only ever rebuilt in full, and an index would double its size.
@@ -3434,76 +3434,6 @@ END; $$;
 --   select has_table_privilege('anon', 'fpl_player_marks', 'select'), has_table_privilege('authenticated', 'fpl_player_marks', 'select');   -- f, f
 --   select has_function_privilege('anon', 'mark_fpl_player(integer, integer, boolean, boolean)', 'execute');                                -- f
 --   select * from fpl_player_marks;                                                                                                          -- a row for each box ticked on the FPL tab
-
--- Repeatable. Not yet applied (db/migrations/20261007_site_sample_xi.sql).
--- The landing page's example line-up (owner, 2026-10-07: one predicted line-up shown to everyone
--- on Home, as an example of the paid feature). site_sample_xi() takes no argument, so it can't
--- be asked for a club of the caller's choosing: it answers with the predicted XI of the
--- strongest club (team_rankings.current_rank, among the top 20) that has one for a match still
--- to kick off, the earliest such match. Every other predicted line-up stays for the entitled
--- (site_lineups, site_next_xi: 20261006_paid_lineups.sql), which this leaves as they are.
---   {"team", "fixture", "home", "away", "kickoff", "players": [[player, name, role, rank], ...]}
---   or null when none of those clubs has a predicted XI for a match to come.
--- The same answer for everyone, so it may be kept for five minutes.
--- Needs 20261005_site_next_xi_fast.sql (the index on predicted_lineups.team_id).
-BEGIN;
-
-CREATE OR REPLACE FUNCTION public.site_sample_xi() RETURNS public."application/json"
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
-DECLARE
-    the_team integer;
-    the_fixture integer;
-BEGIN
-    PERFORM pg_catalog.set_config('response.headers', '[{"Cache-Control": "public, max-age=300"}]', true);
-    -- the twenty strongest clubs, each one's earliest match to come that has a predicted XI (by
-    -- the index on predicted_lineups.team_id; OFFSET 0 keeps the two steps apart), then the strongest
-    SELECT t.team_id, nx.fixture_id INTO the_team, the_fixture
-    FROM (SELECT r.team_id, r.current_rank FROM public.team_rankings r
-          WHERE r.current_rank IS NOT NULL ORDER BY r.current_rank DESC, r.team_id LIMIT 20) t
-    CROSS JOIN LATERAL (
-        SELECT f.fixture_id
-        FROM (SELECT DISTINCT pl.fixture_id FROM public.predicted_lineups pl WHERE pl.team_id = t.team_id OFFSET 0) mine
-        JOIN public.fixtures f ON f.fixture_id = mine.fixture_id
-        WHERE f.kickoff > pg_catalog.now()
-        ORDER BY f.kickoff, f.fixture_id LIMIT 1) nx
-    ORDER BY t.current_rank DESC, t.team_id LIMIT 1;
-    IF the_fixture IS NULL THEN
-        RETURN 'null'::json;
-    END IF;
-    RETURN coalesce((
-        SELECT pg_catalog.json_build_object(
-            'team', the_team, 'fixture', the_fixture,
-            'home', (SELECT f.home_team_id FROM public.fixtures f WHERE f.fixture_id = the_fixture),
-            'away', (SELECT f.away_team_id FROM public.fixtures f WHERE f.fixture_id = the_fixture),
-            'kickoff', (SELECT f.kickoff FROM public.fixtures f WHERE f.fixture_id = the_fixture),
-            -- team-sheet order: keeper, defence right to left, midfield, attack
-            'players', pg_catalog.json_agg(
-                pg_catalog.json_build_array(pl.player_id, p.name, pl.position, pl.player_rank::float8)
-                ORDER BY coalesce(pg_catalog.array_position(
-                             ARRAY['GK','RB','RWB','CB','LB','LWB','DM','CM','RM','LM','AM','RW','LW','ST'], pl.position), 99),
-                         coalesce(pl.player_rank, 0) DESC, pl.player_id))
-        FROM public.predicted_lineups pl JOIN public.players p USING (player_id)
-        WHERE pl.fixture_id = the_fixture AND pl.team_id = the_team
-        HAVING count(*) > 0), 'null'::json);
-END; $$;
-
-REVOKE ALL ON FUNCTION public.site_sample_xi() FROM PUBLIC;
-DO $$ DECLARE r text; BEGIN
-    FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
-        IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
-            EXECUTE format('GRANT EXECUTE ON FUNCTION public.site_sample_xi() TO %I', r);
-        END IF;
-    END LOOP;
-END; $$;
-
-COMMIT;
-
-NOTIFY pgrst, 'reload schema';
-
--- Check afterwards:
---   select left(public.site_sample_xi()::text, 120);                    -- {"team" : ..., "fixture" : ..., ... "players" : [[...
---   select json_array_length(public.site_sample_xi()::json->'players'); -- 11
---   select public.site_next_xi((public.site_sample_xi()::json->>'team')::int)::json->>'locked';   -- still true for anyone not entitled
 
 -- National team 90-minute scores (db/migrations/20261007_national_ft_scores.sql)
 -- Additive and repeatable. The 90-minute score of national team matches (owner, 2026-10-07: paper bets on

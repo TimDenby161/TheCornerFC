@@ -1209,6 +1209,12 @@
   .home-sample .pp-section { margin: 0; }
   .home-xi-bare + .pp-section .pp-rank { display: none; }      /* a line-up from the record whose players have no rank */
   .home-sample .pitch.pp-pitch { max-width: 260px; outline: 1px solid var(--gridline); }      /* small enough that its slide is no taller than the rest; lined off from the grass around it */
+  /* its boxes are cut to fit that pitch: four across stand 62px apart, so a box and its tick or cross take 60 at most */
+  .home-sample a.xi-spot { min-width: 44px; padding: 2px 2px 3px; }
+  .home-sample .xi-spot .pp-name { max-width: 48px; font-stretch: 76%; }
+  .home-sample .xi-spot .pp-rank { padding: 0 4px; font-size: 15px; }
+  .home-sample .xi-spot.xi-mark::after { top: -6px; right: -5px; width: 13px; height: 13px; font-size: 8px; }
+  .home-xi-bare + .pp-section .xi-spot.xi-mark::after { top: auto; bottom: -6px; }      /* with no rank over it the name is the top line, and the tick would sit on its last letter */
   .home-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 12px; margin: 0; }
   .home-nums div:not(:nth-child(3n + 1)) { padding-left: 12px; border-left: 1px solid var(--gridline); }
   .home-nums dt { font-size: clamp(34px, 4vw, 56px); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -1219,19 +1225,32 @@
   .home-close-line { margin: 0 0 12px; font-size: clamp(40px, 6vw, 88px); line-height: 0.88; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }
   .home-close-sub { margin: 0 0 24px; max-width: 52ch; font-size: 16px; line-height: 1.5; color: var(--text-secondary); }
   @media (max-width: 1099px) {
-    .home-hero { min-height: 0; }
-    .home-slide { grid-template-columns: minmax(0, 1fr); }
+    .home-hero { min-height: 0; --home-pulse: 4px; }
+    /* one column: each slide is as tall as itself, not as the tallest. One that isn't up is cut short in the
+       row (what it holds still shows as a swipe brings it in), so the row is as tall as the one that is */
+    .home-slides { align-items: start; }
+    .home-slide { grid-template-columns: minmax(0, 1fr); align-content: start; }
+    .home-slide[inert] { max-height: 240px; }
+    /* the turn's names go over the slide, under the touchline, where they're seen as it turns */
+    .home-turn { order: -1; margin: 0 0 20px; }
+    /* the clock stops while they're scrolled off the screen: the page isn't changed under a reader */
+    .home-hero.home-turn-away .home-turn-list button[aria-current]::after { animation-play-state: paused; }
     .home-top li:nth-child(n + 6) { display: none; }      /* the lists' sixth and seventh rows are for a wide screen */
   }
   @media (min-width: 1100px) {
     .home-brief { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   }
   @media (max-width: 640px) {
-    .home-hero { padding-top: 100px; padding-right: 44px; }
-    .home-slide { gap: 28px; }
-    /* no room for seven names: the rules alone, each still named for a screen reader */
+    /* a phone: the goal line stands nearer the screen's edge, for the lists' width */
+    .home-hero { padding-top: 70px; padding-right: 28px; }
+    .home-pitch { right: -13px; width: 252px; height: 180px; }
+    .home-slide { gap: 24px; }
+    .home-title { margin-bottom: 16px; }
+    .home-lede { margin-bottom: 22px; }
+    /* no room for seven names: the rules alone, at the foot of their buttons, each still named for a screen reader */
+    .home-turn { margin-bottom: 12px; }
+    .home-turn-list button::before, .home-turn-list button::after { top: auto; bottom: 0; }
     .home-turn-list button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-    .home-pitch { width: 252px; height: 180px; }
     .home-actions > * { flex: 1 1 100%; }
     .home-brief { grid-template-columns: minmax(0, 1fr); }
   }
@@ -1253,7 +1272,7 @@
   @keyframes home-fill { from { transform: scaleX(0); } }
   @keyframes home-rise { from { opacity: 0; transform: translateY(18px); } }
   @keyframes home-wave { from { transform: skewY(-5deg) scaleX(1); } to { transform: skewY(5deg) scaleX(0.93); } }
-  @keyframes home-pulse { from { box-shadow: 0 0 0 0 rgba(95,224,138,0.6); } to { box-shadow: 0 0 0 9px rgba(95,224,138,0); } }
+  @keyframes home-pulse { from { box-shadow: 0 0 0 0 rgba(95,224,138,0.6); } to { box-shadow: 0 0 0 var(--home-pulse, 9px) rgba(95,224,138,0); } }
   .country-flag-lg { width: 60px; height: 42px; object-fit: cover; box-shadow: 0 0 0 1px var(--border); }
   @media (max-width: 600px) {
     table.league-table .lt-wide, table.league-table .lt-wdl, table.league-table .lt-gd, #league-tab table.league-table .lt-formcol { display: none; }
