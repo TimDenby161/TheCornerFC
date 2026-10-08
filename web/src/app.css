@@ -47,3 +47,5 @@ button.rating-badge { appearance: none; border: 0; font-family: inherit; cursor:
 a.link-btn { cursor: pointer; }
 /* the old site drew a link that opens more of a list as a button: the same look for a link */
 a.show-all { display: block; text-align: center; text-decoration: none; }
+/* a club's or competition's chip that opens its page: no underline under its initials */
+a.crest { text-decoration: none; }

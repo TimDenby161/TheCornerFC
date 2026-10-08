@@ -32,7 +32,7 @@
 					<div class="pl-hero-club pl-hero-nat">
 						{#if data.coach}<PersonChip name={data.coach} size="player-photo coach-photo" /><span class="pl-meta">{data.coach}</span>{/if}
 						{#if data.coach && data.rating}<span class="dim-sep">·</span>{/if}
-						{#if data.rating}<a class="team-link" href="/clubs?sort=current" title="Place among every ranked club by Current Strength, as the Club Rankings are ordered. Opens the Rankings">#{data.rating.place.toLocaleString('en-GB')}</a>{/if}
+						{#if data.rating}<a class="team-link" href="/clubs" title="Place among every ranked club by Current Strength, as the Club Rankings are ordered. Opens the Rankings">#{data.rating.place.toLocaleString('en-GB')}</a>{/if}
 					</div>
 				{/if}
 			</div>

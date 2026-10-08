@@ -13,7 +13,8 @@ export async function load({ fetch, url, setHeaders, locals }) {
 
 	const q = url.searchParams;
 	const asked = q.get('sort') as Sort;
-	const sort: Sort = SORTS.includes(asked) ? asked : 'lt';
+	// (the table opens sorted by Current Strength, as on the old site)
+	const sort: Sort = SORTS.includes(asked) ? asked : 'current';
 	const filter = knownFilter(q.get('c'), site, countries) ? q.get('c')! : 'all';
 	const excluded = new Set((q.get('ex') || '').split('|').filter(isExcludeKey));
 	const search = (q.get('q') || '').slice(0, 80);

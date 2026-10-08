@@ -4,7 +4,6 @@
 	import { page } from '$app/state';
 	import BotCheck from './BotCheck.svelte';
 	import { longDate } from '#lib/club.ts';
-	import { OLD_SITE } from '#lib/menu.ts';
 	import type { Subscription } from '../../routes/+layout.server.ts';
 
 	// The account box: sign in with Google or an email and password, create an account, reset a
@@ -80,7 +79,7 @@
 		{@render field('email', 'Email', 'email', 'email')}{@render field('password', 'Password (8 characters or more)', 'password', 'new-password', 8)}
 		{@render failedCheck()}<button type="submit" class="mt-btn" disabled={busy}>Create account</button>
 	</form>
-	<div class="stats-note">By creating an account you agree to the <a href="{OLD_SITE}terms.html">terms of use</a> and the <a href="{OLD_SITE}privacy.html">privacy notice</a>.</div>
+	<div class="stats-note">By creating an account you agree to the <a href="/terms" data-sveltekit-reload>terms of use</a> and the <a href="/privacy" data-sveltekit-reload>privacy notice</a>.</div>
 	<div class="account-links">{@render link('signin', 'Already have an account? Sign in')}</div>
 {:else if view === 'reset'}
 	<p class="account-text">Enter your email and we'll send you a link to choose a new password.</p>

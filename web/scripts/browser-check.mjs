@@ -79,6 +79,24 @@ await run(`[...document.querySelectorAll('.seg a')].find((a) => a.textContent ==
 check('Stats tab, per 90', /\/stats$/.test(await run('location.pathname')) && (await run('location.search')) === '?per90=1' && /per 90 minutes/.test(await run(`document.querySelector('#pl-tab .page-note')?.textContent`)), await run('location.href'));
 await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Career')?.click()`); await sleep(1200);
 check('Career chart drawn to its box', (await run(`document.querySelector('#pl-chart svg')?.getAttribute('viewBox')`)) !== '0 0 640 180' && (await run(`document.querySelectorAll('#pl-chart .season-dot').length`)) >= 2, await run(`document.querySelector('#pl-chart svg')?.getAttribute('viewBox')`));
+// Home, the text pages, and links shared from the old site
+await open('/');
+await until(`document.querySelectorAll('.home-turn-list button').length >= 6`);
+check('Home: a slide for each part of the site, the strongest clubs on the first', (await run(`document.querySelectorAll('.home-slide').length`)) >= 6 && (await run(`document.querySelectorAll('.home-slide .home-top')[0]?.children.length`)) === 7, `${await run(`document.querySelectorAll('.home-slide').length`)} slides`);
+await run(`[...document.querySelectorAll('.home-turn-list button')].find((b) => b.textContent === 'Stats')?.click()`); await sleep(900);
+check('picking a slide brings it up, and only it can be reached', (await run(`document.querySelector('.home-turn-list button[aria-current]')?.textContent`)) === 'Stats' && (await run(`[...document.querySelectorAll('.home-slide')].filter((s) => !s.inert).length`)) === 1);
+await run(`document.querySelector('.home-close .home-ghost')?.click()`); await until(`location.pathname === '/methodology' && !!document.querySelector('.stat-v')`);
+check('How the models work: the text page with its live figures, and no menu', (await run('location.pathname')) === '/methodology' && (await run(`document.querySelectorAll('.stat-v').length`)) >= 4 && !(await run(`!!document.querySelector('nav.tabs')`)), `${await run(`document.querySelectorAll('.stat-v').length`)} figures`);
+await run(`document.querySelector('.back a')?.click()`); await until(`location.pathname === '/' && !!document.querySelector('nav.tabs')`);
+check('its way back loads the site afresh, in the site\'s own look', (await run('location.pathname')) === '/' && (await run(`getComputedStyle(document.querySelector('nav.tabs')).display`)) === 'flex');
+await open('/terms');
+check('terms: the old site\'s text, its links pointing here', (await run(`document.querySelector('h1')?.textContent`)) === 'Terms of use' && (await run(`!!document.querySelector('a[href="/privacy#corrections"]')`)));
+await open('/#/club/42/matches');
+await until(`location.pathname === '/club/42/matches'`);
+check('a link shared from the old site opens the same page here', (await run('location.pathname')) === '/club/42/matches' && (await run('location.hash')) === '', await run('location.href'));
+await open('/clubs');
+check('Clubs opens sorted by Current, as on the old site', (await run(`document.querySelector('table.clubs th.active')?.textContent.trim()`)) === 'Current' && (await run('location.search')) === '', await run(`document.querySelector('table.clubs tbody .team-link')?.textContent`));
+
 // Matches: a day at a time, a round at a time for one competition
 await open('/matches?d=2026-09-19');
 const dayCards = await run(`document.querySelectorAll('#matches-list .match-card').length`);

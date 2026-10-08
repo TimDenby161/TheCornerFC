@@ -13,8 +13,9 @@ export default defineConfig({
 			adapter: adapter()
 		})
 	],
-	// The look is still the old site's stylesheet (docs/assets/styles.css), read from where it is
-	// until the domain moves to this app, so the two can't drift apart.
-	server: { fs: { allow: ['../docs/assets'] } },
+	// The look is still the old site's stylesheets (docs/assets), and the text pages its own files
+	// (docs/*.html), read from where they are until the domain moves to this app, so the two can't
+	// drift apart.
+	server: { fs: { allow: ['../docs'] } },
 	test: { include: ['src/**/*.test.ts'] }
 });

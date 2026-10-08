@@ -26,7 +26,7 @@
 		...(data.filter !== 'all' ? { c: data.filter } : {}),
 		...(data.excluded.length ? { ex: data.excluded.join('|') } : {}),
 		...(data.search ? { q: data.search } : {}),
-		...(data.sort !== 'lt' ? { sort: data.sort } : {})
+		...(data.sort !== 'current' ? { sort: data.sort } : {})
 	} as Record<string, string>);
 	const without = (...keys: string[]) => Object.fromEntries(Object.entries(choices).filter(([k]) => !keys.includes(k)));
 	const address = (q: Record<string, string>) => { const s = new URLSearchParams(q).toString(); return s ? `?${s}` : page.url.pathname; };
@@ -84,7 +84,7 @@
 							<th class="num col-dom" data-tip="In league: place by Baseline Strength among the clubs in its league this season. TheCornerFC's ranking, not the league table (that's on the competition's page).">In lg</th>
 							{#each COLUMNS as col (col.key)}
 								<th class="num sortable {col.cls}" class:active={data.sort === col.key} aria-sort={data.sort === col.key ? 'descending' : undefined} data-tip="{col.tip} Click to sort.">
-									<a href={address({ ...without('sort'), ...(col.key === 'lt' ? {} : { sort: col.key }) })} data-sveltekit-reset="false">{#if col.key === 'lt'}<span class="th-full">Baseline</span><span class="th-short">Base</span>{:else}{LABELS[col.key]}{/if}</a>
+									<a href={address({ ...without('sort'), ...(col.key === 'current' ? {} : { sort: col.key }) })} data-sveltekit-reset="false">{#if col.key === 'lt'}<span class="th-full">Baseline</span><span class="th-short">Base</span>{:else}{LABELS[col.key]}{/if}</a>
 								</th>
 							{/each}
 						</tr>

@@ -33,4 +33,16 @@ export function tabFor(pathname: string): string {
 const BUILT = new Set<string>(['club', 'player', 'league', 'country', 'nation']);
 export const pageHref = (kind: 'club' | 'league' | 'country' | 'player' | 'nation', id: string | number) =>
 	BUILT.has(kind) ? `/${kind}/${encodeURIComponent(id)}` : `${OLD_SITE}#/${kind}/${encodeURIComponent(id)}`;
-export const methodologyHref = (section: string) => `${OLD_SITE}methodology.html#${section}`;
+export const methodologyHref = (section: string) => `/methodology#${section}`;
+
+// The address on this site for one of the old site's (its part after the #), or null where the
+// part after the # isn't one. The pages kept their names and their choices' names; the one
+// difference is that a club's, player's or nation's first tab could be named in the address
+// there ("/overview") and has none here.
+const OLD_PAGES = /^#\/(clubs|players|leagues|nations|matches|stats|lineups|model-vs-market|simulation|(?:club|player|league|country|nation)\/[^?#]+)(\?[^#]*)?$/;
+export function oldAddress(hash: string): string | null {
+	const m = OLD_PAGES.exec(hash);
+	if (!m) return null;
+	const path = m[1].replace(/^((?:club|player|nation)\/[^/]+)\/overview$/, '$1');
+	return `/${path}${m[2] ?? ''}`;
+}
