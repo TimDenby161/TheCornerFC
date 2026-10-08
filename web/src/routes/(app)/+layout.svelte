@@ -2,6 +2,7 @@
 	import '../../../../docs/assets/styles.css';
 	import '#lib/crest-hues.css';
 	import '../../app.css';
+	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { accountBox, openAccount } from '#lib/account.svelte.ts';
 	import AccountBox from '#lib/components/AccountBox.svelte';
@@ -9,6 +10,7 @@
 	import { ADS } from '#lib/config.ts';
 	import { MENU, OWNER_MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
 	import { owner } from '#lib/owner.svelte.ts';
+	import { browserZone, keepUkTime, keepZone } from '#lib/timeChoice.ts';
 
 	let { data, children } = $props();
 
@@ -52,6 +54,13 @@
 			else localStorage.removeItem('fc.theme');
 		} catch { /* storage blocked: the choice lasts for this visit */ }
 	}
+	// Days and kick-off times in the visitor's own time (their zone kept in a cookie) or in UK time
+	// (no zone kept): the pages are asked for again, written the chosen way.
+	function setTimes(uk: boolean) {
+		if (uk === data.ukTime) return;
+		if (uk) keepUkTime(); else keepZone(browserZone());
+		invalidateAll();
+	}
 </script>
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') { menuOpen = false; closeAccount(); } }} />
@@ -84,6 +93,11 @@
 			<div class="theme-pick seg" role="group" aria-label="Theme">
 				{#each [['', 'Device'], ['light', 'Light'], ['dark', 'Dark']] as [value, label] (value)}
 					<button type="button" aria-pressed={theme === value} onclick={() => setTheme(value)}>{label}</button>
+				{/each}
+			</div>
+			<div class="theme-pick time-pick seg" role="group" aria-label="Kick-off times">
+				{#each [[false, 'My time'], [true, 'UK time']] as const as [uk, label] (label)}
+					<button type="button" aria-pressed={data.ukTime === uk} onclick={() => setTimes(uk)}>{label}</button>
 				{/each}
 			</div>
 		</div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, compCountries, dayName, dayStart, daysWith, defaultDay, filterComps, goalsText, isDay, knownMatchFilter, localDay, matchRounds, pickRound, reasonText, roundDates, shownProbs, signedGoals, singleComp, validZone, type MatchDays } from './matchday';
+import { addDays, compCountries, dayName, dayStart, daysWith, defaultDay, filterComps, goalsText, isDay, knownMatchFilter, localDay, matchRounds, pickRound, reasonText, roundDates, shownProbs, signedGoals, singleComp, TZ_OFF, validZone, zoneChoice, type MatchDays } from './matchday';
 import type { Match } from './matches';
 import type { Site } from './site';
 
@@ -8,6 +8,11 @@ describe('days in a time zone', () => {
 		expect(validZone('Europe/London')).toBe(true);
 		expect(validZone('America/New_York')).toBe(true);
 		for (const tz of ['Mars/Olympus', '', null, undefined, 'x'.repeat(80)]) expect(validZone(tz)).toBe(false);
+	});
+	it('reads the time zone cookie: a zone, UK time chosen, or nothing yet', () => {
+		expect(zoneChoice('America/New_York')).toEqual({ tz: 'America/New_York', ukTime: false });
+		expect(zoneChoice(TZ_OFF)).toEqual({ tz: 'Europe/London', ukTime: true });
+		for (const c of [undefined, '', 'Mars/Olympus']) expect(zoneChoice(c)).toEqual({ tz: 'Europe/London', ukTime: false });
 	});
 	it('puts a late kick-off on the right day for the visitor', () => {
 		expect(localDay('2026-10-10T23:30:00+00:00', 'Europe/London')).toBe('2026-10-11'); // summer time

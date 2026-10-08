@@ -11,6 +11,12 @@ export const validZone = (tz: string | undefined | null): tz is string => {
 	if (!tz || tz.length > 64) return false;
 	try { new Intl.DateTimeFormat('en-GB', { timeZone: tz }); return true; } catch { return false; }
 };
+// What the time zone cookie says of a visitor. It holds their browser's zone, so the server can
+// write days and kick-off times in their own time; or TZ_OFF, where they have chosen UK time in
+// the menu, and then their zone is never kept. No cookie yet: UK time until the page sets it.
+export const TZ_OFF = 'off', UK_ZONE = 'Europe/London';
+export const zoneChoice = (cookie: string | undefined | null): { tz: string; ukTime: boolean } =>
+	cookie === TZ_OFF ? { tz: UK_ZONE, ukTime: true } : { tz: validZone(cookie) ? cookie : UK_ZONE, ukTime: false };
 const dayFormat = new Map<string, Intl.DateTimeFormat>();
 // the calendar day ("2026-10-10") an instant falls on there
 export function localDay(at: string | number | Date, tz: string): string {

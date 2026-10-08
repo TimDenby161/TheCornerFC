@@ -260,6 +260,23 @@ check('the squad pitch is drawn, in the club\'s colours', (await run(`document.q
 check('Best players box beside the table', (await run(`document.querySelectorAll('.club-top .club-mini-table').length`)) === 2);
 check('kick-off shown in local time after loading', await run(`!!document.querySelector('time[datetime]')`));
 
+// the menu's My time / UK time: a visitor in New York sees their own times, UK time on choosing it
+// (the cookie then holds the choice alone, not their zone), and their own again on choosing back
+await send('Emulation.setTimezoneOverride', { timezoneId: 'America/New_York' });
+await open('/matches');
+const times = `[...document.querySelectorAll('time[datetime]')].map((t) => t.textContent).join('|')`;
+const picked = (label) => `[...document.querySelectorAll('.time-pick button')].find((b) => b.textContent === '${label}')?.getAttribute('aria-pressed') === 'true'`;
+await until(`document.cookie.includes('tz=America%2FNew_York') && ${picked('My time')}`);
+const mine = await run(times);
+await run(`[...document.querySelectorAll('.time-pick button')].find((b) => b.textContent === 'UK time')?.click()`);
+check('UK time: the cookie keeps the choice, not the zone', await until(`document.cookie.includes('tz=off') && !document.cookie.includes('New_York') && ${picked('UK time')}`), await run('document.cookie'));
+check('... and the times are written in UK time', await until(`${times} !== ${JSON.stringify(mine)}`) && mine.length > 0);
+await open('/matches');
+check('... and it holds on the next page', (await run(times)) !== mine && (await run('document.cookie')).includes('tz=off'));
+await run(`[...document.querySelectorAll('.time-pick button')].find((b) => b.textContent === 'My time')?.click()`);
+check('My time: the visitor\'s own times again', await until(`document.cookie.includes('tz=America%2FNew_York') && ${times} === ${JSON.stringify(mine)}`));
+await send('Emulation.setTimezoneOverride', { timezoneId: '' });
+
 } catch (err) { out.push('STOPPED: ' + err.message.split('\n')[0]); out.push('at ' + await run('location.href') + ' · body: ' + (await run('document.body.innerText.slice(0, 300)'))); }
 console.log(out.join('\n'));
 console.log(errors.length ? 'PAGE ERRORS:\n' + [...new Set(errors)].join('\n') : 'no page errors');
