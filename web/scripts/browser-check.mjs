@@ -99,6 +99,16 @@ const crowded = await run(`(() => { const pitch = document.querySelector('.home-
 check('Home: no player on the Line-ups pitch overlaps another', crowded === '', crowded);
 await run(`[...document.querySelectorAll('.home-turn-list button')].find((b) => b.textContent === 'Stats')?.click()`); await sleep(900);
 check('picking a slide brings it up, and only it can be reached', (await run(`document.querySelector('.home-turn-list button[aria-current]')?.textContent`)) === 'Stats' && (await run(`[...document.querySelectorAll('.home-slide')].filter((s) => !s.inert).length`)) === 1);
+// at a phone's or a tablet's width each slide is as tall as itself: no empty grass over or under the one that's up, and its rules stand over it
+await send('Emulation.setDeviceMetricsOverride', { width: 402, height: 874, deviceScaleFactor: 2, mobile: true });
+const fits = `(() => { const box = document.querySelector('.home-slides'), up = [...box.children].find((s) => !s.inert); return Math.abs(box.getBoundingClientRect().bottom - 4 - up.getBoundingClientRect().bottom) < 2 && document.querySelector('.home-turn').getBoundingClientRect().bottom <= up.getBoundingClientRect().top; })()`;
+const fitStats = await until(fits, 3000);
+await run(`[...document.querySelectorAll('.home-turn-list button')].find((b) => b.textContent === 'Players')?.click()`);
+await until(`document.querySelector('.home-turn-list button[aria-current]')?.textContent === 'Players'`);
+check('Home on a phone: the hero is as tall as the slide that\'s up, under its rules', fitStats && (await until(fits, 3000)));
+await send('Emulation.setDeviceMetricsOverride', { width: 820, height: 1180, deviceScaleFactor: 2, mobile: true });
+check('Home on a tablet: the same', await until(fits, 3000));
+await send('Emulation.clearDeviceMetricsOverride');
 await run(`document.querySelector('.home-close .home-ghost')?.click()`); await until(`location.pathname === '/methodology' && !!document.querySelector('.stat-v')`);
 check('How the models work: the text page with its live figures, and no menu', (await run('location.pathname')) === '/methodology' && (await run(`document.querySelectorAll('.stat-v').length`)) >= 4 && !(await run(`!!document.querySelector('nav.tabs')`)), `${await run(`document.querySelectorAll('.stat-v').length`)} figures`);
 await run(`document.querySelector('.back a')?.click()`); await until(`location.pathname === '/' && !!document.querySelector('nav.tabs')`);

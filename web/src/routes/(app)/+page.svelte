@@ -44,6 +44,15 @@
 			if (near !== up) upKey = slides[near].key;
 		}, 120);
 	}
+	// on a phone or a tablet the clock stops while the slides' rules are scrolled off the screen (the stylesheet's home-turn-away)
+	let turn = $state<HTMLElement>();
+	let away = $state(false);
+	$effect(() => {
+		if (!turn) return;
+		const seen = new IntersectionObserver(([e]) => { away = !e.isIntersecting; });
+		seen.observe(turn);
+		return () => seen.disconnect();
+	});
 	// the headline's number, counted up to once; set outright where motion is turned down
 	let count = $state(0);
 	$effect(() => {
@@ -79,7 +88,7 @@
 {/snippet}
 
 <section class="panel" data-tab="home" data-active="true">
-	<div class="home-hero" role="region" aria-roledescription="carousel" aria-label="What's on the site">
+	<div class="home-hero" class:home-turn-away={away} role="region" aria-roledescription="carousel" aria-label="What's on the site">
 		<!-- the corner of a pitch: the touchline and goal line, the corner arc and the flag (the site's mark) -->
 		<svg class="home-pitch" viewBox="0 0 420 300" aria-hidden="true" focusable="false">
 			<g fill="none" stroke="currentColor" stroke-width="2"><path d="M-4000 110H372V4000" /><path d="M328 110a44 44 0 0 0 44 44" /></g>
@@ -158,7 +167,7 @@
 		</div>
 		<!-- which slide is up, and the way to another: the rule over the one that's up fills as its ten seconds pass -->
 		{#if slides.length > 1}
-			<div class="home-turn">
+			<div class="home-turn" bind:this={turn}>
 				{#key up}
 					<div class="home-turn-list" onanimationend={filled}>
 						{#each slides as s, i (s.key)}<button type="button" aria-current={i === up ? 'true' : undefined} onclick={() => slideTo(i)}><span>{s.name}</span></button>{/each}
