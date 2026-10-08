@@ -5,6 +5,7 @@
 	import { page } from '$app/state';
 	import { accountBox, openAccount } from '#lib/account.svelte.ts';
 	import AccountBox from '#lib/components/AccountBox.svelte';
+	import LocalTime from '#lib/components/LocalTime.svelte';
 	import { MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
 
 	let { data, children } = $props();
@@ -107,4 +108,11 @@
 	{/if}
 	<div class="ad-slot ad-top" id="ad-top" aria-hidden="true"></div>
 	{@render children()}
+	{#if data.fresh.items.length || data.fresh.model}
+		<footer class="freshness" id="freshness">
+			{#each data.fresh.items as [label, iso, tip] (label)}<span title={tip}>{label} <LocalTime {iso} show="short" /> <LocalTime {iso} show="time" /></span>{/each}
+			{#if data.fresh.model}<span title="Latest registered match model version">Model {data.fresh.model.name}{data.fresh.model.code ? ` · ${data.fresh.model.code}` : ''}</span>{/if}
+		</footer>
+	{/if}
+	<footer class="site-links"><a href="/methodology" data-sveltekit-reload>How the models work</a> · <a href="/privacy" data-sveltekit-reload>Privacy, corrections &amp; security</a> · <a href="/terms" data-sveltekit-reload>Terms of use</a></footer>
 </main>
