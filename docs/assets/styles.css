@@ -1209,6 +1209,12 @@
   .home-sample .pp-section { margin: 0; }
   .home-xi-bare + .pp-section .pp-rank { display: none; }      /* a line-up from the record whose players have no rank */
   .home-sample .pitch.pp-pitch { max-width: 260px; outline: 1px solid var(--gridline); }      /* small enough that its slide is no taller than the rest; lined off from the grass around it */
+  /* its boxes are cut to fit that pitch: four across stand 62px apart, so a box and its tick or cross take 60 at most */
+  .home-sample a.xi-spot { min-width: 44px; padding: 2px 2px 3px; }
+  .home-sample .xi-spot .pp-name { max-width: 48px; font-stretch: 76%; }
+  .home-sample .xi-spot .pp-rank { padding: 0 4px; font-size: 15px; }
+  .home-sample .xi-spot.xi-mark::after { top: -6px; right: -5px; width: 13px; height: 13px; font-size: 8px; }
+  .home-xi-bare + .pp-section .xi-spot.xi-mark::after { top: auto; bottom: -6px; }      /* with no rank over it the name is the top line, and the tick would sit on its last letter */
   .home-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 12px; margin: 0; }
   .home-nums div:not(:nth-child(3n + 1)) { padding-left: 12px; border-left: 1px solid var(--gridline); }
   .home-nums dt { font-size: clamp(34px, 4vw, 56px); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }

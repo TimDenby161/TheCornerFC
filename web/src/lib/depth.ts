@@ -358,7 +358,9 @@ export function squadStrength(d: Depth | null): { strength: number; attack: numb
 
 // Where the XI stands on its pitch: keeper at the top, attacking down, left-sided positions on
 // the right. Players on the same line that would sit too close are spread evenly around their
-// middle, 24% apart (less if that won't fit). x and y are % of the pitch.
+// middle, 24% apart (less if that won't fit). A wide player whose line is only just off a central
+// one's (a full-back beside two centre-backs, a wide midfielder beside two central ones) is then
+// moved out towards the touchline until he is 24% from him too. x and y are % of the pitch.
 export function xiSpots<T extends { box: { label: string } }>(xi: T[]): { c: T; x: number; y: number }[] {
 	const spot: Record<string, [number, number]> = Object.fromEntries(PITCH_SPOTS.map(([r, x, y]) => [r, [x, y]]));
 	Object.assign(spot, { LM: [18, 34], RM: [82, 34] });
@@ -369,7 +371,7 @@ export function xiSpots<T extends { box: { label: string } }>(xi: T[]): { c: T; 
 		if (!lines.has(y)) lines.set(y, []);
 		lines.get(y)!.push({ c, x });
 	}
-	return [...lines].flatMap(([y, ps]) => {
+	const placed = [...lines].flatMap(([y, ps]) => {
 		ps.sort((a, b) => a.x - b.x);
 		const xs = ps.map((q) => q.x);
 		const clash = xs.some((v, i) => i && v - xs[i - 1] < 22);
@@ -377,4 +379,11 @@ export function xiSpots<T extends { box: { label: string } }>(xi: T[]): { c: T; 
 		const from = Math.min(Math.max(xs.reduce((a, v) => a + v, 0) / xs.length - width / 2, 14), 86 - width);
 		return ps.map((q, i) => ({ c: q.c, x: clash ? from + i * gap : q.x, y }));
 	});
+	// lines under 10% apart are closer than a player's box is tall
+	for (const p of placed) for (const q of placed) {
+		if (p.y === q.y || Math.abs(p.y - q.y) >= 10 || Math.abs(p.x - q.x) >= 22) continue;
+		if (Math.abs(p.x - 50) <= Math.abs(q.x - 50)) continue; // the wider of the two is the one that moves
+		p.x = p.x > 50 ? Math.min(86, q.x + 24) : Math.max(14, q.x - 24);
+	}
+	return placed;
 }

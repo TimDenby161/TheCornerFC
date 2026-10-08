@@ -56,6 +56,30 @@ describe('the predicted XI', () => {
 		expect(gk.y).toBeLessThan(cbs[0].y);
 		expect(Math.abs(cbs[0].x - cbs[1].x)).toBeGreaterThanOrEqual(22);
 	});
+	it('keeps every pair of players on the same or neighbouring lines 22% apart, in every usual formation', () => {
+		const shapes = ['4-4-2', '4-3-3', '4-2-3-1', '4-1-4-1', '4-4-1-1', '4-3-2-1', '4-1-2-1-2', '4-2-2-2', '4-3-1-2', '4-5-1', '3-4-3', '3-5-2', '3-4-2-1', '3-4-1-2', '3-1-4-2', '5-3-2', '5-4-1'];
+		for (const shape of shapes) {
+			const lines = shape.split('-').map(Number), last = lines.length - 1, roles = ['GK'];
+			// each line's roles as positions.py names them
+			const wide = (n: number, col: number, l: string, m: string, r: string) => (col === 1 ? l : col === n ? r : m);
+			lines.forEach((n, idx) => {
+				for (let col = 1; col <= n; col++) {
+					if (idx === 0) roles.push(n === 4 ? wide(n, col, 'LB', 'CB', 'RB') : n === 5 ? wide(n, col, 'LWB', 'CB', 'RWB') : 'CB');
+					else if (idx === last) roles.push(n >= 3 ? wide(n, col, 'LW', 'ST', 'RW') : 'ST');
+					else if (last === 2 || idx === 1) roles.push(last !== 2 && n <= 2 ? 'DM' : n === 4 ? (lines[0] === 3 ? wide(n, col, 'LWB', 'CM', 'RWB') : wide(n, col, 'LM', 'CM', 'RM')) : n === 5 ? wide(n, col, 'LWB', 'CM', 'RWB') : 'CM');
+					else roles.push(n <= 2 ? (idx === last - 1 ? 'AM' : 'CM') : n === 4 ? wide(n, col, 'LM', 'CM', 'RM') : wide(n, col, 'LW', 'AM', 'RW'));
+				}
+			});
+			const spots = xiSpots(roles.map((label) => ({ box: { label } })));
+			expect(spots, shape).toHaveLength(11);
+			for (const a of spots) for (const b of spots) {
+				if (a === b || Math.abs(a.y - b.y) >= 10) continue;
+				expect(Math.abs(a.x - b.x), `${shape}: ${a.c.box.label} and ${b.c.box.label}`).toBeGreaterThanOrEqual(22);
+				expect(a.x, `${shape}: ${a.c.box.label}`).toBeGreaterThanOrEqual(14);
+				expect(a.x, `${shape}: ${a.c.box.label}`).toBeLessThanOrEqual(86);
+			}
+		}
+	});
 	it('rates the expected squad between its best and worst player', () => {
 		const s = squadStrength(depth())!;
 		expect(s.strength).toBeGreaterThan(60);

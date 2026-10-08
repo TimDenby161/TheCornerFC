@@ -89,6 +89,14 @@ check('Career chart drawn to its box', (await run(`document.querySelector('#pl-c
 await open('/');
 await until(`document.querySelectorAll('.home-turn-list button').length >= 6`);
 check('Home: a slide for each part of the site, the strongest clubs on the first', (await run(`document.querySelectorAll('.home-slide').length`)) >= 6 && (await run(`document.querySelectorAll('.home-slide .home-top')[0]?.children.length`)) === 7, `${await run(`document.querySelectorAll('.home-slide').length`)} slides`);
+// the players on the Line-ups slide's pitch: no box (with its tick or cross, up to 6px outside a corner) over another, none off the pitch
+await until(`document.querySelectorAll('.home-sample .pp-spot').length >= 11`);
+const crowded = await run(`(() => { const pitch = document.querySelector('.home-sample .pitch'); if (!pitch) return 'no pitch'; const f = pitch.getBoundingClientRect();
+	const b = [...pitch.querySelectorAll('.pp-spot')].map((s) => { const r = s.getBoundingClientRect(); return { n: s.querySelector('.pp-name').textContent, l: r.left, r: r.right + 6, t: r.top - 6, b: r.bottom + 6 }; });
+	const bad = b.filter((x) => x.l < f.left || x.r > f.right + 6).map((x) => x.n + ' off the pitch');
+	for (let i = 0; i < b.length; i++) for (let j = i + 1; j < b.length; j++) if (Math.min(b[i].r, b[j].r) - Math.max(b[i].l, b[j].l) > 0.5 && Math.min(b[i].b, b[j].b) - Math.max(b[i].t, b[j].t) > 0.5) bad.push(b[i].n + ' over ' + b[j].n);
+	return bad.join(', '); })()`);
+check('Home: no player on the Line-ups pitch overlaps another', crowded === '', crowded);
 await run(`[...document.querySelectorAll('.home-turn-list button')].find((b) => b.textContent === 'Stats')?.click()`); await sleep(900);
 check('picking a slide brings it up, and only it can be reached', (await run(`document.querySelector('.home-turn-list button[aria-current]')?.textContent`)) === 'Stats' && (await run(`[...document.querySelectorAll('.home-slide')].filter((s) => !s.inert).length`)) === 1);
 await run(`document.querySelector('.home-close .home-ghost')?.click()`); await until(`location.pathname === '/methodology' && !!document.querySelector('.stat-v')`);
