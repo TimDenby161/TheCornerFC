@@ -121,6 +121,24 @@ check('a link shared from the old site opens the same page here', (await run('lo
 await open('/clubs');
 check('Clubs opens sorted by Current, as on the old site', (await run(`document.querySelector('table.clubs th.active')?.textContent.trim()`)) === 'Current' && (await run('location.search')) === '', await run(`document.querySelector('table.clubs tbody .team-link')?.textContent`));
 
+// on the smallest phone the rankings keep their names, each with its column to itself, and nothing runs off the side
+await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 640, deviceScaleFactor: 2, mobile: true });
+for (const [path, what] of [['/clubs', 'Clubs'], ['/leagues', 'Leagues'], ['/nations', 'Nations']]) {
+	await open(path);
+	await until(`document.querySelectorAll('table.clubs tbody tr').length > 5`);
+	const named = await run(`(() => { const a = document.querySelector('table.clubs tbody .club-cell .team-link'), m = document.querySelector('main'); return { w: Math.round(a?.getBoundingClientRect().width || 0), over: m.scrollWidth - m.clientWidth }; })()`);
+	check(`${what} at 320px: the names show and the page keeps to the screen`, named.w >= 40 && named.over <= 0, JSON.stringify(named));
+}
+// a page's tabs run wider than a phone: the one that's open is brought into view
+await send('Emulation.setDeviceMetricsOverride', { width: 402, height: 874, deviceScaleFactor: 2, mobile: true });
+await open('/club/42/history');
+const tabSeen = `(() => { const n = document.querySelector('.page-tabs'), a = n?.querySelector('[aria-current="page"]'); if (!a) return false; const b = n.getBoundingClientRect(), r = a.getBoundingClientRect(); return r.left >= b.left - 1 && r.right <= b.right + 1; })()`;
+check('a phone: the open tab is in view on arrival', await until(tabSeen, 3000), await run(`document.querySelector('.page-tabs [aria-current="page"]')?.textContent`));
+await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Overview')?.click()`);
+await until(`location.pathname === '/club/42'`);
+check('... and after a move to another tab', await until(tabSeen, 3000));
+await send('Emulation.clearDeviceMetricsOverride');
+
 // Matches: a day at a time, a round at a time for one competition
 await open('/matches?d=2026-09-19');
 const dayCards = await run(`document.querySelectorAll('#matches-list .match-card').length`);

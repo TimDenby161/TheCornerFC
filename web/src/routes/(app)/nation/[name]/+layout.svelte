@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import '#lib/placed.css';
+	import { currentInView } from '#lib/actions.ts';
 	import PersonChip from '#lib/components/PersonChip.svelte';
 
 	let { data, children } = $props();
@@ -22,7 +23,7 @@
 					<span class="val">{data.rating.current}</span><span class="lbl"></span></div>
 			{/if}
 		</div>
-		<nav class="page-tabs" aria-label="{data.name}'s pages">
+		<nav class="page-tabs" aria-label="{data.name}'s pages" use:currentInView={page.url.pathname}>
 			{#each TABS as [key, label] (key)}
 				<a href={key ? `${base}/${key}` : base} aria-current={tab === key ? 'page' : undefined} data-sveltekit-reset="false">{label}</a>
 			{/each}

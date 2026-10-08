@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import '#lib/placed.css';
+	import { currentInView } from '#lib/actions.ts';
 	import Crest from '#lib/components/Crest.svelte';
 	import Flag from '#lib/components/Flag.svelte';
 	import PersonChip from '#lib/components/PersonChip.svelte';
@@ -106,7 +107,7 @@
 			</div></div>
 		{/if}
 
-		<nav class="page-tabs" aria-label="{data.name}'s pages">
+		<nav class="page-tabs" aria-label="{data.name}'s pages" use:currentInView={page.url.pathname}>
 			{#each TABS as [key, label] (key)}
 				<a href={key ? `${base}/${key}` : base} aria-current={tab === key ? 'page' : undefined} data-sveltekit-reset="false">{label}</a>
 			{/each}

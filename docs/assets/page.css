@@ -86,3 +86,5 @@ td { color: var(--text-secondary); }
 dl { margin: 8px 0; }
 dt { font-weight: 600; margin-top: 12px; }
 dd { margin: 2px 0 0; color: var(--text-secondary); }
+/* the smallest phones: the tables keep to the page */
+@media (max-width: 359px) { table { font-size: 12px; } th, td { padding: 5px 3px; } th { font-size: 10px; letter-spacing: 0; } }

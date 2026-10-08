@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import '#lib/placed.css';
+	import { currentInView } from '#lib/actions.ts';
 	import Crest from '#lib/components/Crest.svelte';
 	import { pageHref } from '#lib/menu.ts';
 
@@ -23,7 +24,7 @@
 			{/if}
 		</div>
 		{#if data.hasData}
-			<nav class="page-tabs" aria-label="{data.name}'s pages">
+			<nav class="page-tabs" aria-label="{data.name}'s pages" use:currentInView={page.url.pathname}>
 				{#each data.tabs as [key, label] (key)}
 					<a href="{base}/{key}" aria-current={tab === key ? 'page' : undefined} data-sveltekit-reset="false">{label}</a>
 				{/each}

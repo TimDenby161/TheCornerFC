@@ -16,8 +16,8 @@
 	<thead><tr>
 		<SortTh key="rank" {sort} {def} title="Baseline Strength rank">#</SortTh><th></th>
 		<SortTh key="club" {sort} {def} title="Club name">Club</SortTh>
-		{#if table}<SortTh key="pos" {sort} {def} title="Actual position in the competition's table" cls="num">Table</SortTh>
-		{:else}<SortTh key="played" {sort} {def} title="Matches rated" cls="num">Pl</SortTh>{/if}
+		{#if table}<SortTh key="pos" {sort} {def} title="Actual position in the competition's table" cls="num col-spare">Table</SortTh>
+		{:else}<SortTh key="played" {sort} {def} title="Matches rated" cls="num col-spare">Pl</SortTh>{/if}
 		<SortTh key="lt" {sort} {def} title="Baseline Strength: long-term Elo" cls="num"><span class="th-full">Baseline</span><span class="th-short">Base</span></SortTh>
 		<SortTh key="trend" {sort} {def} title="Current minus Baseline" cls="num col-gap">Gap</SortTh>
 		<SortTh key="current" {sort} {def} title="Current Strength: Elo now" cls="num">Current</SortTh>
@@ -29,7 +29,7 @@
 				<td>{r.i}</td>
 				<td><Crest id={r.team} name={r.name} href="/club/{r.team}" /></td>
 				<td><a class="team-link" href="/club/{r.team}">{r.name}</a>{#if r.meta}{' '}<span class="club-meta"><a class="nat-link" href={pageHref('league', r.meta.league)}>{r.meta.name}</a></span>{/if}</td>
-				<td class="num u-muted">{table ? (r.pos ?? '') : r.played}</td>
+				<td class="num col-spare u-muted">{table ? (r.pos ?? '') : r.played}</td>
 				<td class="num"><span class="rel-chip rel-{r.ltTier}">{Math.round(r.lt)}</span></td>
 				<td class="num col-gap"><Move value={r.trend} /></td>
 				<td class="num"><span class="rel-chip rel-{r.currentTier}">{Math.round(r.current)}</span></td>

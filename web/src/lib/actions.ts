@@ -1,5 +1,19 @@
 // Things a table does once it is on the page, which need measuring or the pointer.
 
+// A page's tabs (a club's, a player's, a league's, a nation's): on a phone the row can run wider
+// than the screen, so the tab that's open is brought into view, on arrival and on each move
+// between tabs. `_path`: the address, so the action runs again when it changes.
+export function currentInView(nav: HTMLElement, _path: string) {
+	const show = () => {
+		const a = nav.querySelector<HTMLElement>('[aria-current="page"]');
+		if (!a) return;
+		const box = nav.getBoundingClientRect(), r = a.getBoundingClientRect();
+		if (r.left < box.left || r.right > box.right) nav.scrollLeft += r.left - box.left - (box.width - r.width) / 2;
+	};
+	show();
+	return { update() { requestAnimationFrame(show); } };
+}
+
 // Column explanations: hover a heading (or reach it with the keyboard) that carries data-tip.
 // `cellTip`: for a table whose cells have tips too (td.tip-cell): what one says, and, where that
 // has to be fetched first, a promise that ends when it can be asked again.

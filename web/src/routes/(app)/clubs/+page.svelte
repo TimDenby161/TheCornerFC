@@ -80,7 +80,7 @@
 							<th data-tip="Position in this list, in the current sort order.">#</th>
 							<th data-tip="Club badge. Click a club to open its page."><span class="th-club">Club</span></th>
 							<th data-tip="Club name, with its country and league. Click a club to open its page.">Club</th>
-							<th class="num" data-tip="World rank: place among every ranked club by Baseline Strength, whatever this list is filtered or sorted by.">World</th>
+							<th class="num col-spare" data-tip="World rank: place among every ranked club by Baseline Strength, whatever this list is filtered or sorted by.">World</th>
 							<th class="num col-dom" data-tip="In league: place by Baseline Strength among the clubs in its league this season. TheCornerFC's ranking, not the league table (that's on the competition's page).">In lg</th>
 							{#each COLUMNS as col (col.key)}
 								<th class="num sortable {col.cls}" class:active={data.sort === col.key} aria-sort={data.sort === col.key ? 'descending' : undefined} data-tip="{col.tip} Click to sort.">
@@ -102,7 +102,7 @@
 										{/if}
 									</div>
 								</td>
-								<td class="num">{r.place.world.toLocaleString('en-GB')}</td>
+								<td class="num col-spare">{r.place.world.toLocaleString('en-GB')}</td>
 								<td class="num col-dom u-muted" title={r.place.dom ? `${ordinal(r.place.dom)} of ${r.place.domOf} in the ${r.leagueName} by Baseline Strength` : undefined}>{r.place.dom ?? ''}</td>
 								<td class="num"><span class="rel-chip rel-{r.ltTier}">{r.lt}</span></td>
 								<td class="num col-gap"><Move value={r.trend} /></td>

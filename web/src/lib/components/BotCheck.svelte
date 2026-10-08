@@ -18,10 +18,11 @@
 <script lang="ts">
 	// The widget writes its answer into the form it sits in (a field named cf-turnstile-response).
 	// An answer passes once: the form draws a fresh check after a failed try.
+	// (its usual box is 300px wide: on the smallest phones it draws its narrow one, which fits the form)
 	let { failed }: { failed: (message: string) => void } = $props();
 	function mount(box: HTMLElement) {
 		let id: string | undefined, gone = false;
-		load().then((turnstile) => { if (!gone) id = turnstile.render(box, { sitekey: SITE_KEY }); })
+		load().then((turnstile) => { if (!gone) id = turnstile.render(box, { sitekey: SITE_KEY, size: matchMedia('(max-width: 359px)').matches ? 'compact' : 'normal' }); })
 			.catch(() => failed("Couldn't load the check that you're not a bot. Check your connection, or try without a content blocker."));
 		return { destroy() { gone = true; if (id != null) (window as unknown as { turnstile: Turnstile }).turnstile?.remove(id); } };
 	}

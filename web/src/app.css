@@ -54,3 +54,88 @@ a.crest { text-decoration: none; }
 
 /* the two plans' buttons in the account box, one under the other */
 .account-plans { display: grid; gap: 8px; }
+
+/* Phones and tablets. Everything from here on sits inside a width or container query below the
+   wide-screen layout, so a desktop window draws as it did. */
+/* the menu button: a 46px tap area round the three bars; the bar itself stays as low as it was */
+@media (max-width: 759px) {
+	.menu-btn { position: relative; }
+	.menu-btn::after { content: ""; position: absolute; inset: -9px -8px; }
+}
+/* a finger's room round a match's rating, which opens its parts */
+@media (pointer: coarse) {
+	button.rating-badge { position: relative; }
+	button.rating-badge::after { content: ""; position: absolute; inset: -12px -6px; }
+}
+/* A page's tabs, where they run wider than the screen: the cut edge fades, so it's seen that the
+   row goes on (the fade follows the scroll where the browser can tie one to it; elsewhere, none) */
+@property --tabs-left { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --tabs-right { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes tabs-edges { from { --tabs-left: 0px; --tabs-right: 28px; } 12% { --tabs-left: 28px; } 88% { --tabs-right: 28px; } to { --tabs-left: 28px; --tabs-right: 0px; } }
+@media (max-width: 759px) {
+	@supports (animation-timeline: scroll()) {
+		.page-tabs { mask-image: linear-gradient(90deg, transparent, #000 var(--tabs-left), #000 calc(100% - var(--tabs-right)), transparent);
+			animation: tabs-edges linear both; animation-timeline: scroll(self inline); }
+	}
+}
+/* The rankings on a phone (Clubs, Leagues, Nations, a league's and a country's clubs): the name has
+   its column to itself, with the flag and league on a line under it, so a name is rarely cut short
+   and every row is as tall as the next */
+@media (max-width: 480px) {
+	table.leaderboard.clubs .club-cell { display: block; }
+	table.leaderboard.clubs .club-cell > .team-link { display: block; min-height: 0; padding: 0; line-height: 1.35; white-space: nowrap; }
+	table.leaderboard.clubs .club-cell > .club-meta { display: flex; align-items: center; margin: 1px 0 0; line-height: 1.3; }
+	table.leaderboard.clubs .club-cell.flag-only .cm-league { display: inline; }
+	table.leaderboard.clubs .club-cell .cm-league { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+	table.leaderboard.clubs td > .team-link { min-height: 0; padding: 0; }
+	/* "Current" fits its heading */
+	table.leaderboard.clubs th:nth-child(n+4), table.leaderboard.clubs td:nth-child(n+4) { width: 46px; }
+	table.leaderboard.clubs th { font-stretch: 88%; }
+}
+/* The smallest phones: the name stays (the old sheet dropped it for the badge alone); on the lists
+   with four columns of figures the first of them, which the club's page has, makes way */
+@container (max-width: 349px) {
+	table.leaderboard.clubs :is(th, td).col-spare { display: none; }
+	table.leaderboard.clubs th:nth-child(n+4), table.leaderboard.clubs td:nth-child(n+4) { width: 42px; }
+	table.leaderboard.clubs th { font-stretch: 76%; }
+	/* Players: the figures' columns a little closer, for the name's room */
+	table.leaderboard.players:not(.years) :is(th, td):nth-child(3) { width: 30px; }
+	table.leaderboard.players:not(.years) :is(th, td).col-age { width: 28px; }
+	table.leaderboard.players:not(.years) :is(th, td).col-ga { width: 46px; }
+}
+@container (max-width: 309px) {
+	table.leaderboard.clubs :is(th, td):nth-child(3) { display: table-cell; }
+	table.leaderboard.clubs .th-club { display: none; }
+	table.leaderboard.clubs :is(th, td):nth-child(2) { width: 24px; padding-left: 0; }
+}
+/* Players on a phone: his club and league on a line under his name, as on a wide screen (the row
+   is no taller for it), and his name as the wide table has it where there's the room */
+@container (max-width: 499px) {
+	table.leaderboard.players:not(.years) .pl-club { display: block; }
+	table.leaderboard.players:not(.years) .pl-name .player-link { min-height: 0; padding: 0; line-height: 1.35; }
+	table.leaderboard.players:not(.years) .pl-cell { gap: 8px; }
+}
+@container (min-width: 360px) and (max-width: 499px) {
+	table.leaderboard.players:not(.years) .pn-full { display: inline; }
+	table.leaderboard.players:not(.years) .pn-short { display: none; }
+}
+/* Stats on the smallest phones: the six-column tables fit the screen */
+@media (max-width: 359px) {
+	.calib-table { font-size: 11px; }
+	.calib-table th, .calib-table td { padding-left: 2px; padding-right: 2px; }
+	.calib-table th { letter-spacing: 0; }
+}
+/* A club's overview beside the menu on a tablet: the squad pitch under the next match, not in
+   the sliver left beside it (its names were cut to a letter) */
+@media (min-width: 760px) and (max-width: 939px) {
+	.ov-top { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+	.ov-top .next-top { flex-direction: row; justify-content: space-between; }
+	.ov-top .next-meta { flex-direction: row; flex-wrap: wrap; gap: 1px 10px; }
+}
+/* Home on a tablet: the seven slides' names fit over their rules */
+@media (min-width: 641px) and (max-width: 939px) { .home-turn button { font-size: 11px; letter-spacing: 0.02em; } }
+/* Home on a phone: the corner's markings a little smaller, and less bare grass over the slide */
+@media (max-width: 640px) {
+	.home-hero { padding-top: 56px; }
+	.home-pitch { right: -11px; width: 210px; height: 150px; }
+}
