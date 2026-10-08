@@ -62,6 +62,13 @@ a.crest { text-decoration: none; }
 	.menu-btn { position: relative; }
 	.menu-btn::after { content: ""; position: absolute; inset: -9px -8px; }
 }
+/* Below the side menu the page runs edge to edge: no strip kept down the right for a scrollbar
+   (it cut Home's hero short of the screen's edge wherever the browser draws one that takes room,
+   as a desktop browser's phone view does). The page still scrolls by touch, wheel and keys */
+@media (max-width: 759px) {
+	main { scrollbar-gutter: auto; scrollbar-width: none; }
+	main::-webkit-scrollbar { display: none; }
+}
 /* a finger's room round a match's rating, which opens its parts */
 @media (pointer: coarse) {
 	button.rating-badge { position: relative; }
