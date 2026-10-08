@@ -97,6 +97,28 @@ await run(`document.querySelector('#matches-list .paid-lock .link-btn')?.click()
 check('"What subscribers get" opens the account box there', (await run(`document.querySelector('#account-title')?.textContent`)) === 'Subscribe');
 await run(`document.querySelector('#account-modal .modal-close')?.click()`); await sleep(300);
 
+// Leagues: the list, a league's page and its tabs, a country's page
+await open('/leagues');
+check('the leagues list, strongest first', (await run(`document.querySelectorAll('table.clubs tbody tr').length`)) > 30 && (await run(`document.querySelector('table.clubs tbody .team-link')?.textContent`)) === 'Premier League', await run(`document.querySelector('table.clubs tbody .team-link')?.textContent`));
+await run(`document.querySelector('table.clubs tbody .team-link')?.click()`);
+for (let i = 0; i < 20 && !/^\/league\/\d+\/table$/.test(await run('location.pathname')); i++) await sleep(300);
+await sleep(600);
+check('a league opens on its standings', (await run('location.pathname')) === '/league/39/table' && (await run(`document.querySelectorAll('table.league-table tbody tr').length`)) === 20);
+await run(`[...document.querySelectorAll('table.league-table th.sortable a')].find((a) => a.textContent.trim() === 'GD')?.click()`); await sleep(1200);
+const gdFirst = await run(`document.querySelector('table.league-table tbody .lt-gd')?.textContent`);
+await run(`[...document.querySelectorAll('table.league-table th.sortable a')].find((a) => a.textContent.trim().startsWith('GD'))?.click()`); await sleep(1200);
+check('a column sorts, and the other way on a second press', (await run('location.search')) === '?sort=gd&rev=1' && gdFirst !== (await run(`document.querySelector('table.league-table tbody .lt-gd')?.textContent`)), `${gdFirst} then ${await run(`document.querySelector('table.league-table tbody .lt-gd')?.textContent`)}`);
+await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Projected table')?.click()`); await sleep(1500);
+check('the projected table\'s headline for a visitor who isn\'t a subscriber', (await run(`document.querySelectorAll('#league-tab table.league-table tbody tr').length`)) === 20 && /for subscribers/.test(await run(`document.querySelector('#league-tab .page-note')?.textContent`)));
+await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Matches')?.click()`); await sleep(1500);
+const roundNow = await run(`document.querySelector('#round-select')?.value`);
+await run(`document.querySelector('.round-nav a[aria-label="Previous round"]')?.click()`); await sleep(1500);
+check('a league\'s matches step a round at a time', (await run(`document.querySelectorAll('.lf-row').length`)) === 10 && (await run(`document.querySelector('#round-select')?.value`)) !== roundNow && (await run('location.search')).startsWith('?round='), `${roundNow} -> ${await run(`document.querySelector('#round-select')?.value`)}`);
+await run(`document.querySelector('.pl-hero .nat-link')?.click()`);
+for (let i = 0; i < 20 && !/^\/country\//.test(await run('location.pathname')); i++) await sleep(300);
+await sleep(600);
+check('its country\'s page: leagues, cups and clubs', (await run('location.pathname')) === '/country/England' && (await run(`document.querySelectorAll('.lg-card').length`)) >= 10 && (await run(`document.querySelectorAll('#country-clubs tbody tr').length`)) === 50);
+
 // the account box: opens from the menu, shows the forms and the bot check, and answers in place
 await open('/clubs?c=39');
 await run(`document.querySelector('a.account-btn')?.click()`); await sleep(2500);

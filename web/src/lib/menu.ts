@@ -7,7 +7,7 @@ export const MENU: { label: string; sections: Section[] }[] = [
 	{ label: 'Ratings', sections: [
 		{ tab: 'table', label: 'Clubs', path: '/clubs' },
 		{ tab: 'table', label: 'Players', path: '/players' },
-		{ tab: 'leagues', label: 'Leagues', old: '#/leagues' },
+		{ tab: 'leagues', label: 'Leagues', path: '/leagues' },
 		{ tab: 'nations', label: 'Nations', old: '#/nations' }
 	] },
 	{ label: 'Predictions', sections: [
@@ -23,14 +23,14 @@ export const MENU: { label: string; sections: Section[] }[] = [
 export const sectionHref = (s: Section) => s.path ?? OLD_SITE + (s.old ?? '');
 export function tabFor(pathname: string): string {
 	for (const g of MENU) for (const s of g.sections) if (s.path && (pathname === s.path || pathname.startsWith(s.path + '/'))) return s.tab;
-	// a club's or a player's page (the stylesheet knows every such page as "club")
-	if (pathname.startsWith('/club/') || pathname.startsWith('/player/')) return 'club';
+	// a club's, player's, competition's or country's page (the stylesheet knows every such page as "club")
+	if (/^\/(club|player|league|country)\//.test(pathname)) return 'club';
 	return 'home';
 }
 
 // A link to a club's, competition's or country's page. Until that kind of page is rebuilt here,
 // the link goes to the old site's.
-const BUILT = new Set<string>(['club', 'player']);
+const BUILT = new Set<string>(['club', 'player', 'league', 'country']);
 export const pageHref = (kind: 'club' | 'league' | 'country' | 'player' | 'nation', id: string | number) =>
 	BUILT.has(kind) ? `/${kind}/${encodeURIComponent(id)}` : `${OLD_SITE}#/${kind}/${encodeURIComponent(id)}`;
 export const methodologyHref = (section: string) => `${OLD_SITE}methodology.html#${section}`;
