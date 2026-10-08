@@ -1,5 +1,6 @@
 import { playerBase } from '#lib/server/player.ts';
 import { clubFixtures } from '#lib/server/club.ts';
+import { askAs } from '#lib/server/database.ts';
 import { GROUP_OF } from '#lib/playerFilters.ts';
 import { LIVE, upcoming } from '#lib/matches.ts';
 import { positionChips } from '#lib/player.ts';
@@ -12,6 +13,11 @@ export async function load({ fetch, params, locals }) {
 	// his club's next match: when, who, the model's view, and whether he is listed unavailable for
 	// it (the injury itself isn't published: only "Doubtful", "Suspended" or "Out")
 	const m = p.team ? upcoming((await clubFixtures(fetch, site, p.team, locals.token)).matches)[0] : null;
+	// his club's predicted XI for that match (for subscribers: `locked` for anyone else)
+	type NextXi = { fixture: number; players: [number, string, string | null, number | null][] | null; locked?: boolean } | null;
+	const xi = m && p.team ? await askAs<NextXi>(fetch, locals.token, 'site_next_xi', { p_team: p.team }).catch(() => null) : null;
+	const xiHere = !!xi && !xi.locked && !!xi.players && xi.fixture === m?.id;
+	const inXi = xiHere ? xi!.players!.find(([pid]) => pid === p.id) : null;
 	const inj = doc?.injury;
 	let next = null;
 	if (m && p.team) {
@@ -22,7 +28,8 @@ export async function load({ fetch, params, locals }) {
 			proj: m.home_xg != null && m.away_xg != null ? `${(home ? m.home_xg : m.away_xg).toFixed(1)}–${(home ? m.away_xg : m.home_xg).toFixed(1)}` : '',
 			status: inj && inj[0] === m.id
 				? { cls: inj[1] === 'Questionable' ? 'warn' : 'bad', text: inj[1] === 'Questionable' ? 'Doubtful' : inj[1] === 'Suspended' || (inj[2] && BAN_REASONS.has(inj[2])) ? 'Suspended' : 'Out' }
-				: null
+				: inXi ? { cls: 'good', text: `In the predicted XI${inXi[2] ? ` as ${inXi[2]}` : ''}` }
+				: xiHere ? { cls: 'muted', text: 'Not in the predicted XI' } : null
 		};
 	}
 	return {

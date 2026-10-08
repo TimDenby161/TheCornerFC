@@ -1,6 +1,6 @@
-import { clubBase } from '#lib/server/club.ts';
+import { clubBase, clubPlayers } from '#lib/server/club.ts';
 import { keptDocOrNull } from '#lib/server/database.ts';
-import { leagueZones, result, shortDate } from '#lib/club.ts';
+import { leagueZones, result, shortDate, shortName } from '#lib/club.ts';
 import { countryDisplay } from '#lib/clubTable.ts';
 import { tiers } from '#lib/rankings.ts';
 import { compLabel, leagueShort, teamName } from '#lib/site.ts';
@@ -12,6 +12,11 @@ export async function load({ fetch, params, setHeaders, locals }) {
 	const { id, site, all, rank: r, doc, rows, opponent, name } = await clubBase(fetch, params.id);
 	const comp = r ? site.competitions[r.league] : null;
 	// its league's file, for the table position
+	// the club's five best players by Ability: the export's order is by current rank, and a player
+	// whose rank is hidden (the paywall) keeps his place in it
+	const best = (await clubPlayers(fetch, site, id, locals.token).catch(() => ({ list: [] }))).list
+		.filter((p) => p.rank != null || p.locked).sort((a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || a.name.localeCompare(b.name)).slice(0, 5)
+		.map((p) => ({ id: p.id, name: p.name, short: shortName(p.name), position: p.position, rank: p.rank, goals: p.season?.goals ?? null, assists: p.season?.assists ?? null }));
 	const lg = r?.in_league ? await keptDocOrNull<LeagueFile>(fetch, `leagues/${r.league}`, 300_000).catch(() => null) : null;
 	if (!locals.token) setHeaders({ 'cache-control': 'public, max-age=60' });
 
@@ -63,6 +68,6 @@ export async function load({ fetch, params, setHeaders, locals }) {
 			c: result(m),
 			title: `${shortDate(m.date)} · ${m.gf}–${m.ga} ${m.home ? 'v' : '@'} ${opponent(m.opponent)} · ${compLabel(site, m.league)}`
 		})),
-		table, style
+		table, style, best
 	};
 }

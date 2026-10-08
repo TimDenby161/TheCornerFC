@@ -13,6 +13,7 @@ export type Player = {
 	world: number | null; lg: number | null; lg_of: number | null; ord: number | null;
 	position_ranks: Record<string, number> | null;
 	lg_rank: number | null; lg_n: number | null;
+	positions_12m: string[] | null;
 	// the database blanked his ranks for this visitor
 	locked: boolean;
 };

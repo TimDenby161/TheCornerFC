@@ -4,7 +4,7 @@
 	import Crest from '#lib/components/Crest.svelte';
 	import Flag from '#lib/components/Flag.svelte';
 	import PersonChip from '#lib/components/PersonChip.svelte';
-	import { pct } from '#lib/club.ts';
+	import { pct, rankTier } from '#lib/club.ts';
 	import { pageHref } from '#lib/menu.ts';
 
 	let { data, children } = $props();
@@ -49,8 +49,9 @@
 			<div class="club-form lt-form"><span class="club-form-key">Form · latest first</span>{#each data.form as f, i (i)}<i class="res-{f.c.toLowerCase()}" title={f.title}>{f.c}</i>{/each}</div>
 		{/if}
 
-		{#if data.table}
+		{#if data.table || data.best.length}
 			<div class="club-top">
+				{#if data.table}
 				<div class="club-mini-table">
 					<div class="table-scroll"><table class="league-table">
 						<thead><tr>
@@ -71,6 +72,27 @@
 						</tbody>
 					</table></div>
 				</div>
+				{/if}
+				{#if data.best.length}
+					<div class="club-mini-table">
+						<div class="table-scroll"><table class="league-table">
+							<thead><tr>
+								<th class="cmt-head" colspan="2"><a class="cmt-link" href="/players?club={data.id}" title="All {data.name} players in the Players ranking">Best players<span class="cmt-full">{' · '}by Ability</span> ›</a></th>
+								<th title="Underlying Ability (0-100): the model's estimate of his level"><span class="cmt-full">Ability</span><span class="cmt-short">Abil.</span></th>
+								<th title="Goals this season, all his clubs">G</th><th title="Assists this season, all his clubs">A</th>
+							</tr></thead>
+							<tbody>
+								{#each data.best as p (p.id)}
+									<tr>
+										<td class="lt-badge"><PersonChip name={p.name} /></td>
+										<td class="lt-club"><a class="player-link" href="/player/{p.id}"><span class="cmt-full">{p.name}</span><span class="cmt-short">{p.short}</span></a>{#if p.position}{' '}<span class="bp-pos">{p.position}</span>{/if}</td>
+										<td>{#if p.rank == null}–{:else}<span class="rel-chip rel-{rankTier(p.rank)}">{Math.round(p.rank)}</span>{/if}</td><td>{p.goals ?? '–'}</td><td>{p.assists ?? '–'}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table></div>
+					</div>
+				{/if}
 			</div>
 		{/if}
 

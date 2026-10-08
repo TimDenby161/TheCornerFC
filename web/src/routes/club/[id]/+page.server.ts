@@ -1,20 +1,15 @@
-import { clubBase, clubFixtures } from '#lib/server/club.ts';
-import { keptDoc } from '#lib/server/database.ts';
-import { clubMove, shortDate } from '#lib/club.ts';
+import { clubBase, clubSquad } from '#lib/server/club.ts';
+import { clubMove, shortDate, shortName } from '#lib/club.ts';
 import { LIVE, upcoming } from '#lib/matches.ts';
 import { compLabel, leagueShort, teamName } from '#lib/site.ts';
 
-// The injury lists: per club, its next match's, else its latest recent one. A row is
-// [player, name, type, ban, matches missed in a row, season rank]; the injury itself isn't published.
-type Injuries = { teams: Record<string, { kickoff: string; upcoming: boolean; players: [number, string, string, string | null, number, number | null][] }> };
 const BAN_REASONS = new Set(['Red Card', 'Yellow Cards', 'Suspended']);
 
 export async function load({ fetch, params, locals }) {
-	const { id, site, rows, opponent, doc } = await clubBase(fetch, params.id);
-	const [{ matches }, injuries] = await Promise.all([
-		clubFixtures(fetch, site, id, locals.token),
-		keptDoc<Injuries>(fetch, 'injuries', 300_000).catch(() => null)
-	]);
+	const base = await clubBase(fetch, params.id);
+	const { id, site, rows, opponent, doc } = base;
+	const { depth, list, inj, kit, matches } = await clubSquad(fetch, base, locals.token);
+	const byId = new Map(list.map((p) => [p.id, p]));
 	const next = upcoming(matches);
 	const side = (m: (typeof next)[number]) => {
 		const home = m.home === id, opp = home ? m.away : m.home;
@@ -24,7 +19,7 @@ export async function load({ fetch, params, locals }) {
 	};
 
 	const m = next[0];
-	const inj = injuries?.teams?.[String(id)] ?? null;
+	const nextLabel = m ? leagueShort(site, m.league) : '';
 	const past = inj && !inj.upcoming ? rows.find((r) => r.date === inj.kickoff.slice(0, 10)) : null;
 
 	return {
@@ -37,10 +32,28 @@ export async function load({ fetch, params, locals }) {
 			upcoming: inj.upcoming, kickoff: inj.kickoff,
 			latest: past ? `${past.home ? 'v' : '@'} ${opponent(past.opponent)}` : null,
 			// best first by rank
-			players: inj.players.slice().sort((a, b) => (b[5] ?? -1) - (a[5] ?? -1)).map(([pid, name, type, ban, missed, rank]) => ({
+			players: inj.players.map((row) => [row, byId.get(row[0])?.rank ?? row[5] ?? null] as const).sort((a, b) => (b[1] ?? -1) - (a[1] ?? -1)).map(([[pid, name, type, ban, missed], rank]) => ({
 				id: pid, name, missed, rank,
 				note: type === 'Questionable' ? 'doubt' as const : type === 'Suspended' || (ban && BAN_REASONS.has(ban)) ? 'susp' as const : null,
 				ban: ban && BAN_REASONS.has(ban) && ban !== 'Suspended' ? ban : null
+			}))
+		},
+		// the squad by position: each box's players, best first, with the chance each starts there
+		// in the next match and the minutes he is expected to play
+		pitch: !depth ? null : {
+			kit,
+			boxes: depth.shown.map((b) => ({
+				label: b.label, n: b.n, row: b.row === '3 / span 2' ? '3s2' : String(b.row), col: b.col, total: depth.boxMins.get(b.label) || 0,
+				rows: b.ps.map(({ p, rank }) => {
+					const got = Math.round(depth.startChance.get(`${b.label}:${p.id}`) || 0), xmin = depth.xMins.get(`${b.label}:${p.id}`) || 0;
+					const bench = depth.benchRate(p);
+					return {
+						id: p.id, name: shortName(p.name), pct: got || null, rank: Math.round(rank ?? 0), xmin,
+						tip: `${p.name}: ${got}% chance of starting at ${b.label} in the next match${nextLabel ? ` (${nextLabel})` : ''} (started ${depth.startPct(p, b.roles) || 0}% of this season's matches there${b.proj?.changed ? '; allowing for the injured or departed' : ''})`
+							+ ((depth.picks.get(b.label) || []).includes(p.id) ? ' · in the best XI by rating' : '')
+							+ ` · xMins ${xmin}: lasts ${Math.round(depth.lasts(p))}′ when he starts${bench ? `, ${Math.round(bench)}′ a match off the bench` : ''}`
+					};
+				})
 			}))
 		},
 		// the fixtures after it

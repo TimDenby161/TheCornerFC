@@ -1,6 +1,5 @@
 <script lang="ts">
-	import Crest from '#lib/components/Crest.svelte';
-	import LocalTime from '#lib/components/LocalTime.svelte';
+	import NextMatchCard from '#lib/components/NextMatchCard.svelte';
 	import { rankTier } from '#lib/club.ts';
 
 	let { data } = $props();
@@ -12,17 +11,7 @@
 	<meta name="description" content="{data.name}{data.team ? ` (${data.team.name})` : ''}: Ability rank, this season's minutes, goals and assists, recent appearances and positions." />
 </svelte:head>
 
-{#if data.next}
-	{@const n = data.next}
-	<div class="next-card">
-		<div class="next-top"><span class="next-label">{n.live ? 'Live now' : 'Next match'}</span>
-			<span><LocalTime iso={n.kickoff} show="day" /> · <LocalTime iso={n.kickoff} show="time" /></span></div>
-		<div class="next-opp"><Crest id={n.opp} name={n.oppName} href="/club/{n.opp}" />
-			<span class="next-opp-name">{n.home ? 'v' : '@'} <a class="team-link" href="/club/{n.opp}">{n.oppName}</a></span></div>
-		<div class="next-meta"><span>{n.comp}</span>{#if n.win != null}<span>{n.win}% win</span>{/if}{#if n.proj}<span>projected {n.proj}</span>{/if}</div>
-		{#if n.status}<div class="next-status {n.status.cls}">{n.status.text}</div>{/if}
-	</div>
-{/if}
+{#if data.next}<NextMatchCard n={data.next} />{/if}
 
 {#if data.chips.length}
 	<div class="club-section pos-section">

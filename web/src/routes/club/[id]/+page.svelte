@@ -1,8 +1,10 @@
 <script lang="ts">
 	import Crest from '#lib/components/Crest.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
+	import NextMatchCard from '#lib/components/NextMatchCard.svelte';
+	import Pitch from '#lib/components/Pitch.svelte';
 	import { rankTier, shortDate, shortName } from '#lib/club.ts';
-	import { OLD_SITE, pageHref } from '#lib/menu.ts';
+	import { pageHref } from '#lib/menu.ts';
 
 	let { data } = $props();
 	const move = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`;
@@ -13,18 +15,8 @@
 	<meta name="description" content="{data.name}: strength rating, form, league position, next fixtures with the model's chances, and recent results." />
 </svelte:head>
 
-{#if data.next}
-	{@const n = data.next}
-	<div class="next-card">
-		<div class="next-top"><span class="next-label">{n.live ? 'Live now' : 'Next match'}</span>
-			<span><LocalTime iso={n.kickoff} show="day" /> · <LocalTime iso={n.kickoff} show="time" /></span></div>
-		<div class="next-opp"><Crest id={n.opp} name={n.oppName} href="/club/{n.opp}" />
-			<span class="next-opp-name">{n.home ? 'v' : '@'} <a class="team-link" href="/club/{n.opp}">{n.oppName}</a></span></div>
-		<div class="next-meta"><span>{n.comp}</span>{#if n.win != null}<span>{n.win}% win</span>{/if}{#if n.gf != null && n.ga != null}<span>projected {n.gf.toFixed(1)}–{n.ga.toFixed(1)}</span>{/if}
-			{#if n.xi != null}<span>XI rating {Math.round(n.xi)}</span>{/if}</div>
-		{#if n.missing}<div class="next-status warn">{n.missing} missing</div>{/if}
-	</div>
-{/if}
+{#snippet side()}
+{#if data.next}<NextMatchCard n={data.next} />{/if}
 
 <div class="next-card inj-card">
 	<div class="next-top"><span class="next-label">Injured &amp; Suspended</span>
@@ -41,6 +33,34 @@
 		<div class="next-meta"><span>{data.injuries ? 'No one listed' : 'No injury list for this club'}</span></div>
 	{/if}
 </div>
+
+{/snippet}
+
+{#snippet pitch()}
+	{#if data.pitch}
+		<div class="club-section pp-section">
+			<Pitch kind="dp-pitch" kit={data.pitch.kit}>
+				{#each data.pitch.boxes as b (b.label)}
+					{#if b.rows.length}
+						<div class="dp-spot gr-{b.row} gc-{b.col}">
+							<span class="dp-pos" title={b.n ? `${b.n} usually start${b.n === 1 ? 's' : ''} here this season` : undefined}>{b.label}{#if b.n}<span class="dp-usual">{' – '}{b.n}</span>{/if}<span class="dp-total" title="Expected minutes in this position, all its players">{b.total}′</span></span>
+							{#each b.rows as r (r.id)}
+								<a class="dp-row" href="/player/{r.id}" title={r.tip}>
+									<span class="dp-name">{r.name}</span><span class="dp-pct">{r.pct != null ? `${r.pct}%` : ''}</span>
+									<span class="dp-rank t{rankTier(r.rank)}">{r.rank}</span><span class="dp-xmin" class:zero={!r.xmin}>{r.xmin}′</span></a>
+							{/each}
+						</div>
+					{:else}
+						<div class="dp-spot empty gr-{b.row} gc-{b.col}"><span class="dp-pos">{b.label}{#if b.n}<span class="dp-usual">{' – '}{b.n}</span>{/if}</span></div>
+					{/if}
+				{/each}
+			</Pitch>
+		</div>
+	{/if}
+{/snippet}
+
+<!-- next match and availability beside the squad, then the fixtures after it and recent results -->
+{#if data.pitch}<div class="ov-top"><div class="ov-side">{@render side()}</div>{@render pitch()}</div>{:else}{@render side()}{/if}
 
 {#if data.fixtures.length || data.results.length}
 	<div class="ov-row">
@@ -79,4 +99,4 @@
 		{/if}
 	</div>
 {/if}
-<div class="page-note">Longer-term rating history is on the History tab. The squad by position is on <a href="{OLD_SITE}#/club/{data.id}">this club's page on the current site</a> until it is rebuilt here.</div>
+<div class="page-note">Longer-term rating history is on the History tab.</div>

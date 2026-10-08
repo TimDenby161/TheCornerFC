@@ -90,8 +90,12 @@ check('signed out: no session cookie is set', !(await run('document.cookie')).in
 
 // a club row on Clubs opens its page
 await open('/clubs?c=39');
-await run(`document.querySelector('table.clubs tbody tr td:nth-child(4)')?.click()`); await sleep(1500);
+await run(`document.querySelector('table.clubs tbody tr td:nth-child(4)')?.click()`);
+for (let i = 0; i < 20 && !/^\/club\//.test(await run('location.pathname')); i++) await sleep(300); // (a club's page asks for its squad too)
+await sleep(600);
 check('a Clubs row opens the club page', /^\/club\/\d+$/.test(await run('location.pathname')), await run('location.pathname'));
+check('the squad pitch is drawn, in the club\'s colours', (await run(`document.querySelectorAll('.dp-pitch .dp-row').length`)) > 11 && (await run(`getComputedStyle(document.querySelector('.dp-pitch')).getPropertyValue('--kit')`)).startsWith('#'), `${await run(`document.querySelectorAll('.dp-pitch .dp-row').length`)} players`);
+check('Best players box beside the table', (await run(`document.querySelectorAll('.club-top .club-mini-table').length`)) === 2);
 check('kick-off shown in local time after loading', await run(`!!document.querySelector('time[datetime]')`));
 
 } catch (err) { out.push('STOPPED: ' + err.message.split('\n')[0]); out.push('at ' + await run('location.href') + ' · body: ' + (await run('document.body.innerText.slice(0, 300)'))); }
