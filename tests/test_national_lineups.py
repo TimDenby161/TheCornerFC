@@ -64,6 +64,7 @@ class NationalLineupsTests(unittest.TestCase):
         api.get.assert_called_once_with("coachs", team=10)
         row = stored["team_coaches"][0]
         self.assertEqual((row["team_id"], row["coach_id"], row["name"], row["since"]), (10, 5, "T. Tuchel", "2025-01-01"))
+        self.assertNotIn("photo", row)      # the feed's photo link is never stored
 
     def test_club_rows_have_no_name_columns(self):
         formations, lineups = [], []

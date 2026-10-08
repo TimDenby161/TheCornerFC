@@ -186,11 +186,11 @@ create table if not exists players (
     lastname     text,
     birth_date   date,
     nationality  text,
-    height_cm    int,
-    weight_kg    int,
-    photo        text,
     updated_at   timestamptz not null default now()
 );
+-- Height, weight and the photo link were stored and never read (audit D8): gone 2026-10-08
+-- (db/migrations/20261008_drop_unused_person_fields.sql, not yet applied)
+alter table players drop column if exists height_cm, drop column if exists weight_kg, drop column if exists photo;
 
 -- One row per player per team per league season (a mid-season transfer gives two rows)
 create table if not exists player_seasons (
@@ -330,10 +330,10 @@ create table if not exists team_coaches (
     team_id     int primary key,
     coach_id    int,
     name        text,
-    photo       text,
     since       date,
     fetched_at  timestamptz not null default now()
 );
+alter table team_coaches drop column if exists photo;   -- never read (audit D8), as above
 -- Player rank (0-100) going into each match, from matches before it (player_ratings.py).
 -- Its own table, rebuilt with truncate + copy, so fixture_players isn't rewritten nightly.
 -- No key or index: it's only ever rebuilt in full, and an index would double its size.

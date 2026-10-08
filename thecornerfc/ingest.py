@@ -755,7 +755,7 @@ def _sync_team_coaches(api, conn, teams, lineup_rows, label):
         if mine and before is not None:
             took_over = (before + timedelta(days=1)).date().isoformat()
             start = max(start, took_over) if start else took_over
-        rows.append({"team_id": team, "coach_id": c.get("id"), "name": c.get("name"), "photo": c.get("photo"),
+        rows.append({"team_id": team, "coach_id": c.get("id"), "name": c.get("name"),
                      "since": start or None, "fetched_at": now})
     upsert(conn, "team_coaches", rows, ["team_id"], touch_updated_at=False)
     conn.commit()
@@ -883,9 +883,6 @@ def _player_row(p):
         "lastname": p.get("lastname"),
         "birth_date": birth.get("date"),
         "nationality": p.get("nationality"),
-        "height_cm": _int((p.get("height") or "").replace("cm", "").strip() or None),
-        "weight_kg": _int((p.get("weight") or "").replace("kg", "").strip() or None),
-        "photo": p.get("photo"),
     }
 
 
