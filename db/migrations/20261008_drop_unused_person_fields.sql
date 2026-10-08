@@ -1,4 +1,4 @@
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-09.
 -- Personal data the site stored and never read (owner, 2026-10-08; audit D8): every player's
 -- height, weight and photo link, and every coach's photo link. No model uses height or weight,
 -- and the site draws initials, not photos. The sync stopped saving them in the same change.

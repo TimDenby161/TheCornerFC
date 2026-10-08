@@ -189,7 +189,7 @@ create table if not exists players (
     updated_at   timestamptz not null default now()
 );
 -- Height, weight and the photo link were stored and never read (audit D8): gone 2026-10-08
--- (db/migrations/20261008_drop_unused_person_fields.sql, not yet applied)
+-- (db/migrations/20261008_drop_unused_person_fields.sql, applied 2026-10-09)
 alter table players drop column if exists height_cm, drop column if exists weight_kg, drop column if exists photo;
 
 -- One row per player per team per league season (a mid-season transfer gives two rows)
