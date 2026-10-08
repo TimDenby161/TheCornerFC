@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { tableCountries, type Cups } from './clubTable';
-import { countParams, decodeEntities, listParams, playerCounts, playerRows, searchParams, sortKey, type Facets } from './players';
+import { NO_FILTERS, countParams, decodeEntities, listParams, playerCounts, playerRows, searchParams, sortKey, type Facets, type PlayerChoices } from './players';
 import { clubs } from './rankings';
 import type { Site } from './site';
 
@@ -23,9 +23,9 @@ const fields = ['team', 'league', 'current', 'st', 'lt', 'played', 'form', 'in_l
 const all = clubs({ generated_at: '', fields, rankings: [[157, 78, 1100, 1, 1100, 1, 1, 1, 1, 1, 1, 1], [42, 39, 1090, 1, 1090, 1, 1, 1, 1, 1, 1, 1], [33, 39, 1040, 1, 1040, 1, 1, 1, 1, 1, 1, 1], [2932, 307, 950, 1, 950, 1, 1, 1, 1, 1, 1, 1]] });
 const countries = tableCountries(site, all);
 const cups: Cups = new Map([[2, new Set([157, 42])]]);
-const facets: Facets = { players: 4, clubs: [[157, 78], [42, 39], [33, 39], [2932, 307]] };
-const ask = (o: Partial<Parameters<typeof listParams>[5]> = {}) =>
-	listParams(site, all, countries, cups, facets, { filter: 'all', excluded: new Set(), search: '', sort: 's2026', ...o });
+const facets: Facets = { players: 4, age: [16, 40], ability: [40, 97], minutes: 1800, positions: {}, nats: [], clubs: [[157, 78], [42, 39], [33, 39], [2932, 307]] };
+const choose = (o: Partial<PlayerChoices> = {}): PlayerChoices => ({ filter: 'all', excluded: new Set(), search: '', sort: 's2026', ...NO_FILTERS, ...o });
+const ask = (o: Partial<PlayerChoices> = {}) => listParams(site, all, countries, cups, facets, choose(o));
 
 describe('playerRows', () => {
 	it('names the fields, decodes a name and marks a player whose ranks were blanked', () => {
@@ -51,6 +51,14 @@ describe('sortKey', () => {
 		expect(key('s2024')).toBe('s2024');
 		expect(key('f2028')).toBe('f2028');
 	});
+	it('puts the position rank in Ability\'s place while positions are picked', () => {
+		const withPos = (asked: string | null, open = true) => sortKey(asked, site.player_seasons, site.player_future_seasons, open, ['ST']);
+		expect(withPos(null)).toBe('pos');
+		expect(withPos('s2026')).toBe('pos');
+		expect(withPos('s2024')).toBe('s2024');
+		expect(withPos('age', false)).toBe('age');
+		expect(key('pos')).toBe('s2026');
+	});
 	it('can\'t sort on a season column that is closed', () => {
 		expect(key('s2024', false)).toBe('s2026');
 		expect(key('age', false)).toBe('age');
@@ -75,6 +83,19 @@ describe('listParams', () => {
 		expect(ask({ sort: 'f2028' }).p_sort).toBe('f1');
 		expect(ask({ sort: 'age' }).p_sort).toBe('age');
 	});
+	it('sends the side filters: ranges, positions, clubs and nationalities', () => {
+		expect(ask({ ranges: { ...NO_FILTERS.ranges, age: [null, 21], crank: [null, 50] } })).toMatchObject({ p_age: [null, 21], p_crank: [null, 50] });
+		expect(ask({ positions: ['LB', 'RB'], nats: ['Spain'] })).toMatchObject({ p_positions: ['LB', 'RB'], p_nats: ['Spain'] });
+	});
+	it('shows a picked club\'s players whatever league is selected', () => {
+		const p = ask({ clubs: [42], filter: '78', excluded: new Set(['England']) });
+		expect(p.p_teams).toEqual([42]);
+		expect(p.p_leagues).toBeUndefined();
+		expect(p.p_not_leagues).toBeUndefined();
+	});
+	it('sorts by his rank in the picked positions\' groups', () => {
+		expect(ask({ positions: ['LB', 'ST'], sort: 'pos' })).toMatchObject({ p_sort: 'pos', p_groups: ['FB', 'ST'] });
+	});
 	it('searches every player, whatever the menu and the exclusions say', () => {
 		const p = ask({ search: ' Man Utd ', filter: '78', excluded: new Set(['England']) });
 		expect(p.p_leagues).toBeUndefined();
@@ -94,8 +115,9 @@ describe('searchParams', () => {
 
 describe('counts', () => {
 	it('asks for counts with the exclusions applied', () => {
-		expect(countParams(site, new Set())).toEqual({ p_count: true });
-		expect(countParams(site, new Set(['Germany']))).toEqual({ p_not_leagues: [78], p_count: true });
+		expect(countParams(site, choose())).toEqual({ p_count: true });
+		expect(countParams(site, choose({ excluded: new Set(['Germany']) }))).toEqual({ p_not_leagues: [78], p_count: true });
+		expect(countParams(site, choose({ positions: ['ST'], nats: ['Spain'] }))).toEqual({ p_positions: ['ST'], p_nats: ['Spain'], p_count: true });
 	});
 	it('adds them up for a league, a country, a cup and all', () => {
 		const countOf = playerCounts([[39, 42, 25], [39, 33, 24], [78, 157, 26], [307, 2932, 20]], countries, cups);

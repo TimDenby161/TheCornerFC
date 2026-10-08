@@ -1,7 +1,8 @@
 import { shortName } from '#lib/club.ts';
 import { countryDisplay, isExcludeKey, knownFilter, tableCountries } from '#lib/clubTable.ts';
 import { FLAG_CODES } from '#lib/names.ts';
-import { listParams, playerRows, sortKey, type Facets, type Player, type PlayersAnswer } from '#lib/players.ts';
+import { isPosition, parseRange, posRank, selectedGroups } from '#lib/playerFilters.ts';
+import { listParams, playerRows, sortKey, type Facets, type Player, type PlayerChoices, type PlayersAnswer } from '#lib/players.ts';
 import { clubs, type RankingsDoc } from '#lib/rankings.ts';
 import { leagueShort, teamName, type Site } from '#lib/site.ts';
 import { loadCups } from './cups.ts';
@@ -20,25 +21,31 @@ export async function playersBase(fetch: typeof globalThis.fetch, q: URLSearchPa
 	const all = clubs(doc);
 	const countries = tableCountries(site, all);
 	const years = q.get('y') === '1';
-	const choices = {
+	const positions = (q.get('pos') || '').split(',').filter(isPosition);
+	const groups = selectedGroups(positions);
+	const choices: PlayerChoices = {
 		filter: knownFilter(q.get('c'), site, countries) ? q.get('c')! : 'all',
 		excluded: new Set((q.get('ex') || '').split('|').filter(isExcludeKey)),
 		search: (q.get('q') || '').slice(0, 80),
-		sort: sortKey(q.get('sort'), site.player_seasons, site.player_future_seasons, years)
+		sort: sortKey(q.get('sort'), site.player_seasons, site.player_future_seasons, years, groups),
+		ranges: { age: parseRange(q.get('age')), ab: parseRange(q.get('ab')), crank: parseRange(q.get('crank')), mins: parseRange(q.get('mins')) },
+		positions,
+		clubs: [...new Set((q.get('club') || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 50),
+		nats: [...new Set((q.get('nat') || '').split('|').filter((n) => n && n.length <= 60))].slice(0, 50)
 	};
-	return { site, all, cups, facets, countries, years, choices };
+	return { site, all, cups, facets, countries, years, choices, groups };
 }
 
 // A page of the list from `offset`, as a visitor who isn't signed in sees it
 export async function playersPage(fetch: typeof globalThis.fetch, base: Awaited<ReturnType<typeof playersBase>>, offset: number) {
 	const { site, all, countries, cups, facets, choices } = base;
 	const answer = await keptAsk<PlayersAnswer>(fetch, 'site_players', { ...listParams(site, all, countries, cups, facets, choices), p_limit: PAGE_ROWS, p_offset: offset });
-	return { total: answer.total, paywall: !!answer.paywall, rows: playerRows(site, answer.rows).map((p) => rowView(site, p)) };
+	return { total: answer.total, paywall: !!answer.paywall, rows: playerRows(site, answer.rows).map((p) => rowView(site, p, base.groups)) };
 }
 
 // A player's row as the page draws it, names and all
 export type PlayerRow = ReturnType<typeof rowView>;
-function rowView(site: Site, p: Player) {
+function rowView(site: Site, p: Player, groups: string[]) {
 	return {
 		id: p.id, name: p.name, short: shortName(p.name),
 		team: p.team, teamName: p.team ? teamName(site, p.team) : null,
@@ -47,6 +54,8 @@ function rowView(site: Site, p: Player) {
 		pos: (p.position && POS_LABEL[p.position]) || p.position || '',
 		age: p.age, world: p.world, lg: p.lg, lgOf: p.lg_of,
 		ga: p.season ? [p.season.goals, p.season.assists] : null,
-		seasons: p.seasons, estimated: p.estimated || [], future: p.future
+		seasons: p.seasons, estimated: p.estimated || [], future: p.future,
+		// his rank in the positions picked: his best of them, null if he has started in none
+		posRank: groups.length ? posRank(p.position_ranks, groups) : null
 	};
 }

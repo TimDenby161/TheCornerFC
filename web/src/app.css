@@ -23,3 +23,5 @@ form.contents { display: contents; }
 /* Players: the Ability heading holds its sort link and the + that opens the other seasons */
 table.leaderboard th.sortable .now-head a { display: inline; }
 table.leaderboard th.sortable a.years-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; }
+/* the club box: a league's clubs sit indented under it */
+.who-opt.in-league { margin-left: 14px; padding-left: 4px; width: calc(100% - 14px); border-left: 1px solid var(--gridline); }
