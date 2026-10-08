@@ -109,6 +109,15 @@ check('Home on a phone: the hero is as tall as the slide that\'s up, under its r
 // ... and the way to an account stands under the slides whichever is up (here Players), not only on the first
 const joinUnder = await run(`(() => { const j = document.querySelector('.home-join'), box = document.querySelector('.home-slides'); if (!j) return 'no button'; const r = j.getBoundingClientRect(); return { shown: getComputedStyle(j).display !== 'none' && r.height > 40, under: r.top >= box.getBoundingClientRect().bottom - 5, onSlide: [...document.querySelectorAll('.home-slide .home-actions .home-ghost')].filter((a) => getComputedStyle(a).display !== 'none').length }; })()`);
 check('Home on a phone: "Create a free account" under the slides, on every one', joinUnder.shown && joinUnder.under && joinUnder.onSlide === 0, JSON.stringify(joinUnder));
+// ... and it doesn't move as the slides turn: on a phone each is as tall as the tallest
+const joinTop = `Math.round(document.querySelector('.home-join').getBoundingClientRect().top - document.querySelector('.home-hero').getBoundingClientRect().top)`;
+const joinAt = [await run(joinTop)];
+for (const name of ['Matches', 'Clubs']) {
+	await run(`[...document.querySelectorAll('.home-turn-list button')].find((b) => b.textContent === '${name}')?.click()`);
+	await until(`document.querySelector('.home-turn-list button[aria-current]')?.textContent === '${name}'`);
+	await sleep(700); joinAt.push(await run(joinTop));
+}
+check('Home on a phone: the button stays where it is from slide to slide', joinAt.every((y) => Math.abs(y - joinAt[0]) <= 1), joinAt.join(', '));
 await send('Emulation.setDeviceMetricsOverride', { width: 820, height: 1180, deviceScaleFactor: 2, mobile: true });
 check('Home on a tablet: the same', await until(fits, 3000));
 await send('Emulation.clearDeviceMetricsOverride');

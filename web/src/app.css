@@ -139,6 +139,20 @@ a.crest { text-decoration: none; }
 	.ov-top .next-top { flex-direction: row; justify-content: space-between; }
 	.ov-top .next-meta { flex-direction: row; flex-wrap: wrap; gap: 1px 10px; }
 }
+/* Home on a phone: every slide is as tall as the tallest, so what stands under them (the way to an
+   account) never moves as they turn or are swiped, and the tall ones are cut nearer the others' height:
+   two matches, and a wider, lower pitch without its key (286px is as low as it goes with no player's
+   box, and the tick or cross on its corner, over another's: under 274px they meet) */
+@media (max-width: 640px) {
+	.home-slides { align-items: stretch; }
+	.home-slide[inert] { max-height: none; }
+	.home-sample > .home-call:nth-child(n + 3), .home-sample .xi-legend { display: none; }
+	.home-sample .pitch.pp-pitch { max-width: 320px; aspect-ratio: auto; height: 286px; }
+	.home-nums { gap: 14px 10px; }
+	.home-nums div:not(:nth-child(3n + 1)) { padding-left: 10px; }
+	.home-nums dd { font-size: 12px; }
+	.home-nums-note { margin-top: 10px; }
+}
 /* Home below the wide layout: "Create a free account" stands under the slides, whichever is up,
    in place of the one on the first slide: white, as the slide's own button, without its arrow
    (it opens the account box, it doesn't go to a page) */
