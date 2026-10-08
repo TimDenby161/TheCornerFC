@@ -28,9 +28,9 @@
 <svelte:document onclick={(e) => { if (open && !wrap.contains(e.target as Node)) open = false; }} />
 
 {#snippet chipButton(chip: Chip)}
-	<button type="submit" {name} value={chip.value} class="filter-chip" class:cchip={chip.group} class:has-active={chip.hasActive} class:none={!chip.count}
+	<button type="submit" {name} value={chip.value} class="filter-chip" class:cchip={chip.group} class:has-active={chip.hasActive} class:none={chip.count === 0}
 		title={chip.title} aria-pressed={chip.pressed} onclick={() => picked(chip)}>
-		{#if chip.group}<span class="caret" aria-hidden="true">▾</span>{/if}<span class="flabel">{chip.label}</span><span class="cnt">{chip.count}</span>
+		{#if chip.group}<span class="caret" aria-hidden="true">▾</span>{/if}<span class="flabel">{chip.label}</span>{#if chip.count != null}<span class="cnt">{chip.count}</span>{/if}
 	</button>
 {/snippet}
 
@@ -52,7 +52,7 @@
 	<form class="contents" method="get" {action} data-sveltekit-reset="false">
 		{#each Object.entries(keep) as [k, v] (k)}<input type="hidden" name={k} value={v} />{/each}
 		<button type="button" class="menu-trigger" aria-expanded={open} onclick={() => (open = !open)}>
-			<span class="mt-name">{menu.name}</span><span class="cnt">{menu.count}</span><span class="caret" aria-hidden="true">▾</span>
+			<span class="mt-name">{menu.name}</span>{#if menu.count != null}<span class="cnt">{menu.count}</span>{/if}<span class="caret" aria-hidden="true">▾</span>
 		</button>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class="cgroups" onmouseleave={leave}>

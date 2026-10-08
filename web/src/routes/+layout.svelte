@@ -2,7 +2,9 @@
 	import '../../../docs/assets/styles.css';
 	import '#lib/crest-hues.css';
 	import '../app.css';
+	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
+	import { accountBox, openAccount } from '#lib/account.svelte.ts';
 	import AccountBox from '#lib/components/AccountBox.svelte';
 	import { MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
 
@@ -10,10 +12,9 @@
 
 	// The account box, opened by the button at the foot of the menu: Sign in, or the signed-in
 	// visitor's profile under their initial. Closing it puts the focus back on that button.
-	let accountOpen = $state(false);
 	let accountTitle = $state('Sign in');
 	let accountBtn = $state<HTMLElement>();
-	const closeAccount = () => { if (accountOpen) { accountOpen = false; accountBtn?.focus(); } };
+	const closeAccount = () => { if (accountBox.open) { accountBox.open = false; accountBtn?.focus(); } };
 	let menuOpen = $state(false);
 	let theme = $state('');
 
@@ -26,6 +27,14 @@
 	// The server writes <body data-tab>; after a move between pages in the browser it follows here.
 	$effect(() => { document.body.dataset.tab = tab; });
 	$effect(() => { document.body.classList.toggle('menu-open', menuOpen); });
+	// The server wrote this page's days and kick-off times in the time zone it had for this visitor.
+	// Tell it the browser's own, and where that is a different one, ask for the page again.
+	$effect(() => {
+		const mine = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		if (!mine || mine === data.tz) return;
+		document.cookie = `tz=${encodeURIComponent(mine)}; path=/; max-age=31536000; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}`;
+		invalidateAll();
+	});
 	$effect(() => {
 		try {
 			const kept = localStorage.getItem('fc.theme');
@@ -67,7 +76,7 @@
 		<div class="menu-foot">
 			<!-- (a link, so it works before the page's script runs: then it opens the account page) -->
 			<a class="account-btn" class:is-profile={!!data.user} href="/account" aria-haspopup="dialog" bind:this={accountBtn}
-				onclick={(e) => { if (page.url.pathname === '/account' || e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); menuOpen = false; accountOpen = true; }}>
+				onclick={(e) => { if (page.url.pathname === '/account' || e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); menuOpen = false; openAccount(); }}>
 				<span class="account-mark" aria-hidden="true">{(data.user?.email || '').trim().charAt(0).toUpperCase()}</span><span id="account-label">{data.user ? 'Profile' : 'Sign in'}</span></a>
 			<div class="theme-pick seg" role="group" aria-label="Theme">
 				{#each [['', 'Device'], ['light', 'Light'], ['dark', 'Dark']] as [value, label] (value)}
@@ -80,7 +89,7 @@
 	<div class="menu-backdrop" hidden={!menuOpen} onclick={() => (menuOpen = false)}></div>
 </header>
 
-{#if accountOpen}
+{#if accountBox.open}
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 	<div class="modal-overlay" id="account-modal" onclick={(e) => { if (e.target === e.currentTarget) closeAccount(); }}>
 		<div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="account-title">
@@ -88,7 +97,7 @@
 				<div id="account-title">{accountTitle}</div>
 				<button type="button" class="modal-close" aria-label="Close" onclick={closeAccount}>&times;</button>
 			</div>
-			<div id="account-body"><AccountBox user={data.user} sub={data.sub} onview={(t) => (accountTitle = t)} onclose={closeAccount} /></div>
+			<div id="account-body"><AccountBox user={data.user} sub={data.sub} start={accountBox.view} onview={(t) => (accountTitle = t)} onclose={closeAccount} /></div>
 		</div>
 	</div>
 {/if}

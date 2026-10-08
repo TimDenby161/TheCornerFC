@@ -3,6 +3,7 @@
 	import '#lib/placed.css';
 	import Crest from '#lib/components/Crest.svelte';
 	import PersonChip from '#lib/components/PersonChip.svelte';
+	import SubscriberLink from '#lib/components/SubscriberLink.svelte';
 	import { rankTier } from '#lib/club.ts';
 	import { pageHref } from '#lib/menu.ts';
 
@@ -46,7 +47,7 @@
 				{/if}
 			</div>
 		</div>
-		{#if data.locked}<div class="pl-callout">Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected.</div>{/if}
+		{#if data.locked}<div class="pl-callout">Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected. <SubscriberLink /></div>{/if}
 
 		<div class="key-figures pl-figures"><div class="kf-group"><div class="kf-tiles kf-main">
 			{#if data.leagueRank && data.league}

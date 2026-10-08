@@ -8,6 +8,7 @@
 	import ExcludeChips from '#lib/components/ExcludeChips.svelte';
 	import FilterMenu from '#lib/components/FilterMenu.svelte';
 	import PersonChip from '#lib/components/PersonChip.svelte';
+	import SubscriberLink from '#lib/components/SubscriberLink.svelte';
 	import WhoPicker from '#lib/components/WhoPicker.svelte';
 	import '#lib/placed.css';
 	import { handlesRange, rangeText, type RangeKey } from '#lib/playerFilters.ts';
@@ -219,7 +220,7 @@
 				</table>
 				{#if rows.length < data.total}{#key listed}<div use:loadMore></div>{/key}{/if}
 			</div>
-			{#if data.paywall}<div class="page-note">Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected.</div>{/if}
+			{#if data.paywall}<div class="page-note">Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected. <SubscriberLink /></div>{/if}
 		{:else}
 			<div class="empty-state">No players match these filters.</div>
 		{/if}

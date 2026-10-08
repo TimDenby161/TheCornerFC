@@ -118,11 +118,13 @@ export function tableRows(site: Site, all: Club[], countries: Country[], cups: C
 
 // ---- The menu as the page draws it: All, the cups, the big five countries, then the rest by
 // region. A group opens on the choice inside it.
-export type Chip = { value: string; label: string; full: string; title: string; count: number; pressed: boolean; group: boolean; hasActive: boolean };
+// (count null: this menu shows no numbers and greys nothing out)
+export type Chip = { value: string; label: string; full: string; title: string; count: number | null; pressed: boolean; group: boolean; hasActive: boolean };
 export type MenuNode = { sep: true } | { sep?: false; chip: Chip; region?: boolean; open?: boolean; children?: MenuNode[] };
-export type Menu = { nodes: MenuNode[]; name: string; count: number };
+export type Menu = { nodes: MenuNode[]; name: string; count: number | null };
 
-export type MenuTitles = { all: string; country: (c: string) => string; region: (r: string) => string; euro: string; cup: (n: string) => string; domestic: string; domesticCup: (n: string) => string };
+// `domestic`: the menu has a domestic cups group; `intl`: a national team competitions group
+export type MenuTitles = { all: string; country: (c: string) => string; region: (r: string) => string; euro: string; cup: (n: string) => string; domestic?: string; domesticCup?: (n: string) => string; intl?: string };
 export const CLUB_TITLES: MenuTitles = {
 	all: 'All leagues', country: (c) => `All ${c} clubs`, region: (r) => `All clubs in ${r}`,
 	euro: "Clubs in this season's Champions League, Europa League or Conference League",
@@ -143,11 +145,11 @@ export function clubCounts(site: Site, all: Club[], countries: Country[], cups: 
 	};
 }
 
-export function filterMenu(site: Site, countries: Country[], f: string, countOf: (value: string) => number, titles: MenuTitles): Menu {
+export function filterMenu(site: Site, countries: Country[], f: string, countOf: ((value: string) => number) | null, titles: MenuTitles, intl: number[] = []): Menu {
 	const names = new Map<string, string>();
 	const chip = (value: string, label: string, title: string, o: { group?: boolean; hasActive?: boolean; full?: string } = {}): Chip => {
 		names.set(value, o.full ?? label);
-		return { value, label, full: o.full ?? label, title, count: countOf(value), pressed: f === value, group: !!o.group, hasActive: !!o.hasActive };
+		return { value, label, full: o.full ?? label, title, count: countOf ? countOf(value) : null, pressed: f === value, group: !!o.group, hasActive: !!o.hasActive };
 	};
 	const activeCountry = f.startsWith('c:') ? countries.find((c) => c.name === f.slice(2)) : countries.find((c) => c.leagues.includes(Number(f)));
 	const activeRegion = f.startsWith('r:') ? f.slice(2) : activeCountry?.region;
@@ -161,7 +163,7 @@ export function filterMenu(site: Site, countries: Country[], f: string, countOf:
 			children: c.leagues.map((id) => ({ chip: chip(String(id), leagueName(site, id), leagueName(site, id), { full: `${c.name} · ${leagueName(site, id)}` }) }))
 		};
 	};
-	const cupNode = (key: 'e' | 'k', label: string, title: string, ids: number[], each: (name: string) => string): MenuNode => ({
+	const cupNode = (key: 'e' | 'k' | 'i', label: string, title: string, ids: number[], each: (name: string) => string): MenuNode => ({
 		chip: chip(`${key}:all`, label, title, { group: true, hasActive: f.startsWith(`${key}:`) && f !== `${key}:all` }),
 		open: f.startsWith(`${key}:`),
 		children: ids.map((lid) => ({ chip: chip(`${key}:${lid}`, leagueName(site, lid), each(leagueName(site, lid))) }))
@@ -177,11 +179,12 @@ export function filterMenu(site: Site, countries: Country[], f: string, countOf:
 	const nodes: MenuNode[] = [
 		{ chip: chip('all', 'All', titles.all) },
 		cupNode('e', 'European cups', titles.euro, EURO_CUPS, titles.cup),
-		cupNode('k', 'Domestic cups', titles.domestic, DOMESTIC_CUPS, titles.domesticCup),
+		...(titles.intl && intl.length ? [cupNode('i', 'Internationals', titles.intl, intl, titles.cup)] : []),
+		...(titles.domestic ? [cupNode('k', 'Domestic cups', titles.domestic, DOMESTIC_CUPS, titles.domesticCup!)] : []),
 		{ sep: true },
 		...countries.filter((c) => !c.region).map(countryNode),
 		{ sep: true },
 		...regions
 	];
-	return { nodes, name: names.get(f) ?? 'All', count: countOf(f) };
+	return { nodes, name: names.get(f) ?? 'All', count: countOf ? countOf(f) : null };
 }

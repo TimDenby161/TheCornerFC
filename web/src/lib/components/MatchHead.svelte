@@ -6,7 +6,7 @@
 
 	// A match card's top: when (meta), both clubs with chip and rating, and the score, or the
 	// projected goals and likely score before it is played.
-	type Side = { id: number; name: string; rank: number | null };
+	type Side = { id: number; name: string; rank: number | null; href?: string; nation?: boolean };
 	let { home, away, status, hg = null, ag = null, penH = null, penA = null, homeXg = null, awayXg = null, likely = null, source = null, meta, right }:
 		{ home: Side; away: Side; status: string; hg?: number | null; ag?: number | null; penH?: number | null; penA?: number | null;
 			homeXg?: number | null; awayXg?: number | null; likely?: string | null; source?: string | null; meta: Snippet; right?: Snippet } = $props();
@@ -16,7 +16,8 @@
 </script>
 
 {#snippet rank(v: number | null)}{#if v != null && Number.isFinite(v)}<span class="club-score" title={rankTitle}>{Math.round(v).toLocaleString('en-GB')}</span>{/if}{/snippet}
-{#snippet side(s: Side)}<Crest id={s.id} name={s.name} href={pageHref('club', s.id)} /><a class="team-link" href={pageHref('club', s.id)}>{s.name}</a>{/snippet}
+<!-- national teams: the name opens the nation's page (no club page to open) -->
+{#snippet side(s: Side)}{#if s.nation}<Crest id={s.id} name={s.name} /><a class="team-link" href={s.href}>{s.name}</a>{:else}<Crest id={s.id} name={s.name} href={pageHref('club', s.id)} /><a class="team-link" href={pageHref('club', s.id)}>{s.name}</a>{/if}{/snippet}
 
 <div class="match-card-top">
 	<span class="match-meta">{@render meta()}</span>

@@ -7,6 +7,8 @@ export type Site = {
 	competitions: Record<string, Competition>;
 	teams: Record<string, string>;
 	match_fields: string[];
+	// national teams whose page goes by another name than the team's
+	nation_pages?: Record<string, string>;
 	player_fields: string[];
 	player_season_fields: string[];
 	player_seasons: number[];

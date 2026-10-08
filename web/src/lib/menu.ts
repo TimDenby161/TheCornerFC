@@ -11,7 +11,7 @@ export const MENU: { label: string; sections: Section[] }[] = [
 		{ tab: 'nations', label: 'Nations', old: '#/nations' }
 	] },
 	{ label: 'Predictions', sections: [
-		{ tab: 'matches', label: 'Matches', old: '#/matches' },
+		{ tab: 'matches', label: 'Matches', path: '/matches' },
 		{ tab: 'stats', label: 'Stats', old: '#/stats' },
 		{ tab: 'lineups', label: 'Line-up record', old: '#/lineups' }
 	] },

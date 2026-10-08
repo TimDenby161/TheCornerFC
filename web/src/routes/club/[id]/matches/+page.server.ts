@@ -1,15 +1,16 @@
 import { clubBase, clubFixtures } from '#lib/server/club.ts';
 import { clubMove, result, shortDate } from '#lib/club.ts';
-import { roundName, upcoming } from '#lib/matches.ts';
-import { compLabel, teamName } from '#lib/site.ts';
+import { upcoming } from '#lib/matches.ts';
+import { cardView } from '#lib/server/matches.ts';
+import { compLabel } from '#lib/site.ts';
 
 const LIMIT = 40;
 
 export async function load({ fetch, params, url, locals }) {
 	const { id, site, all, rows, opponent, doc, name } = await clubBase(fetch, params.id);
-	const { matches } = await clubFixtures(fetch, site, id, locals.token);
+	const { matches, paywall } = await clubFixtures(fetch, site, id, locals.token);
+	const ranks = new Map(all.map((c) => [c.team, c]));
 	const next = upcoming(matches);
-	const current = (team: number) => all.find((c) => c.team === team)?.current ?? null;
 
 	// fixtures unless results are asked for, or there are only results
 	const view = url.searchParams.get('view') === 'results' || (!next.length && rows.length) ? 'results' : 'fixtures';
@@ -22,10 +23,7 @@ export async function load({ fetch, params, url, locals }) {
 		fixtures: view !== 'fixtures' ? [] : next.map((m) => {
 			const home = m.home === id;
 			return {
-				id: m.id, kickoff: m.kickoff, round: m.round ? roundName(m.round) : null, status: m.status,
-				home: { id: m.home, name: teamName(site, m.home), rank: current(m.home) ?? m.home_rank },
-				away: { id: m.away, name: teamName(site, m.away), rank: current(m.away) ?? m.away_rank },
-				homeXg: m.home_xg, awayXg: m.away_xg, likely: m.likely, comp: compLabel(site, m.league),
+				card: cardView(site, ranks, m, paywall), comp: compLabel(site, m.league),
 				win: m.p_home != null && m.p_away != null ? Math.round(100 * (home ? m.p_home : m.p_away)) : null
 			};
 		}),

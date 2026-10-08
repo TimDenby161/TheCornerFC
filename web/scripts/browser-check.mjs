@@ -75,6 +75,23 @@ await run(`[...document.querySelectorAll('.seg a')].find((a) => a.textContent ==
 check('Stats tab, per 90', /\/stats$/.test(await run('location.pathname')) && (await run('location.search')) === '?per90=1' && /per 90 minutes/.test(await run(`document.querySelector('#pl-tab .page-note')?.textContent`)), await run('location.href'));
 await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Career')?.click()`); await sleep(1200);
 check('Career chart drawn to its box', (await run(`document.querySelector('#pl-chart svg')?.getAttribute('viewBox')`)) !== '0 0 640 180' && (await run(`document.querySelectorAll('#pl-chart .season-dot').length`)) >= 2, await run(`document.querySelector('#pl-chart svg')?.getAttribute('viewBox')`));
+// Matches: a day at a time, a round at a time for one competition
+await open('/matches?d=2026-09-19');
+const dayCards = await run(`document.querySelectorAll('#matches-list .match-card').length`);
+check('a day\'s matches by competition', dayCards > 20 && (await run(`document.querySelectorAll('#matches-list .comp-group').length`)) > 5, `${dayCards} matches`);
+check('finished matches carry a prediction rating', (await run(`document.querySelectorAll('#matches-list .rating-badge').length`)) > 5);
+await run(`document.querySelector('#matches-list .comp-group-header')?.click()`); await sleep(300);
+check('a competition folds away', await run(`document.querySelector('#matches-list .comp-group')?.classList.contains('collapsed')`));
+await run(`document.querySelector('.secondary-filters a[aria-label="Next day"]')?.click()`); await sleep(1800);
+check('the next day has its own address', (await run('location.search')) === '?d=2026-09-20', await run('location.search'));
+await open('/matches?c=39&d=2026-09-19');
+check('one competition goes a round at a time', /^Round 5/.test(await run(`document.querySelector('.secondary-filters select')?.selectedOptions[0]?.textContent`)) && (await run(`document.querySelectorAll('#matches-list .match-card').length`)) === 10, await run(`document.querySelector('.secondary-filters select')?.selectedOptions[0]?.textContent`));
+await run(`document.querySelector('.secondary-filters a.today-btn')?.click()`); await sleep(1800);
+check('Next goes to the round to come, where the paid parts are locked', (await run('location.search')) === '?c=39' && (await run(`document.querySelectorAll('#matches-list .paid-lock').length`)) > 0);
+await run(`document.querySelector('#matches-list .paid-lock .link-btn')?.click()`); await sleep(500);
+check('"What subscribers get" opens the account box there', (await run(`document.querySelector('#account-title')?.textContent`)) === 'Subscribe');
+await run(`document.querySelector('#account-modal .modal-close')?.click()`); await sleep(300);
+
 // the account box: opens from the menu, shows the forms and the bot check, and answers in place
 await open('/clubs?c=39');
 await run(`document.querySelector('a.account-btn')?.click()`); await sleep(2500);

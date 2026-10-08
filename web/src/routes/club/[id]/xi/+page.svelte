@@ -1,6 +1,7 @@
 <script lang="ts">
 	import NextMatchCard from '#lib/components/NextMatchCard.svelte';
 	import Pitch from '#lib/components/Pitch.svelte';
+	import SubscriberLink from '#lib/components/SubscriberLink.svelte';
 	import { rankTier } from '#lib/club.ts';
 
 	let { data } = $props();
@@ -18,7 +19,7 @@
 {/snippet}
 
 {#if data.paywall}
-	<div class="empty-state">Predicted line-ups are for subscribers.</div>
+	<div class="empty-state">Predicted line-ups are for subscribers. <SubscriberLink /></div>
 {:else if !data.spots}
 	<div class="empty-state">No predicted XI for this club (it needs player data from its recent matches).</div>
 {:else}

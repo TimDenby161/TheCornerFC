@@ -39,3 +39,9 @@ nav.tabs a.account-btn { text-decoration: none; font-weight: 700; letter-spacing
 /* the account box as a page of its own */
 .modal-card.account-page { margin: 24px auto; }
 .account-form + form, #account-body > form { margin: 0; }
+/* Matches: the day and round steps are links (each day has its own address) with the buttons' look */
+a.nav-btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+/* a match's prediction rating opens its parts: a button with the badge's look */
+button.rating-badge { appearance: none; border: 0; font-family: inherit; cursor: pointer; }
+/* a text link that opens the account box, with the old site's link-button look */
+a.link-btn { cursor: pointer; }

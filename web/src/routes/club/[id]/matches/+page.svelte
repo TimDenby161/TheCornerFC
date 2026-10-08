@@ -1,5 +1,5 @@
 <script lang="ts">
-	import LocalTime from '#lib/components/LocalTime.svelte';
+	import MatchCard from '#lib/components/MatchCard.svelte';
 	import MatchHead from '#lib/components/MatchHead.svelte';
 
 	let { data } = $props();
@@ -24,13 +24,10 @@
 	{#if data.view === 'fixtures'}
 		{#if data.fixtures.length}
 			<div class="card-list">
-				{#each data.fixtures as m (m.id)}
-					<div class="match-card">
-						<MatchHead home={m.home} away={m.away} status={m.status} homeXg={m.homeXg} awayXg={m.awayXg} likely={m.likely}>
-							{#snippet meta()}<LocalTime iso={m.kickoff} show="day" /> · <LocalTime iso={m.kickoff} show="time" />{m.round ? ` · ${m.round}` : ''}{/snippet}
-						</MatchHead>
-						<div class="club-card-extra"><span>{m.comp}</span>{#if m.win != null}<span><b>{m.win}%</b> win</span>{/if}</div>
-					</div>
+				{#each data.fixtures as f (f.card.id)}
+					<MatchCard m={f.card} when="day">
+						{#snippet extra()}<div class="club-card-extra"><span>{f.comp}</span>{#if f.win != null}<span><b>{f.win}%</b> win</span>{/if}</div>{/snippet}
+					</MatchCard>
 				{/each}
 			</div>
 			<div class="page-note">Projected score and win chance from the model.</div>

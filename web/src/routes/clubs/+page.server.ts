@@ -1,3 +1,4 @@
+import { TAB_INFO } from '#lib/tabInfo.ts';
 import { keptDoc } from '#lib/server/database.ts';
 import { loadCups } from '#lib/server/cups.ts';
 import { CLUB_TITLES, clubCounts, countryDisplay, filterMenu, isExcludeKey, knownFilter, tableCountries, tableRows } from '#lib/clubTable.ts';
@@ -27,19 +28,7 @@ export async function load({ fetch, url, setHeaders, locals }) {
 	return {
 		sort, filter, search, wide, menu,
 		excluded: [...excluded],
-		tabHead: {
-			title: 'Clubs',
-			intro: 'Every club ranked by strength, on a scale where 100 points is worth about a goal a game.',
-			more: 'terms',
-			key: [
-				['Baseline (Base)', "A club's long-term level: its rating averaged over roughly its last 100 matches. Slow to move."],
-				['Current', 'Its rating after its latest match. It rises when the club does better than expected, and falls when it does worse.'],
-				['Gap', 'Current minus Baseline. Green: playing above its usual level. Red: below it.'],
-				['Last 6', 'How far its rating has moved over its last 6 matches.'],
-				['World', 'Its place among every ranked club, by Baseline.'],
-				['In lg', "Its place among the clubs in its own league, by Baseline. This is the site's ranking, not the league table."]
-			]
-		},
+		tabHead: { title: 'Clubs', ...TAB_INFO.clubs },
 		rows: rows.map((r) => {
 			const comp = site.competitions[r.league];
 			return {

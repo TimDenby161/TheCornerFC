@@ -1,3 +1,4 @@
+import { TAB_INFO } from '#lib/tabInfo.ts';
 import { CLUB_TITLES, filterMenu } from '#lib/clubTable.ts';
 import { countryDisplay } from '#lib/clubTable.ts';
 import { FLAG_CODES } from '#lib/names.ts';
@@ -35,17 +36,6 @@ export async function load({ fetch, url, setHeaders, locals }) {
 		excluded: [...choices.excluded],
 		seasons: site.player_seasons, future: site.player_future_seasons,
 		menu: filterMenu(site, countries, choices.filter, playerCounts(counted.counts || [], countries, cups), CLUB_TITLES),
-		tabHead: {
-			title: 'Players',
-			intro: "Players ranked by Ability, the model's 0 to 100 estimate of how good each one is now.",
-			more: 'terms',
-			key: TAB_KEY
-		}
+		tabHead: { title: 'Players', ...TAB_INFO.players }
 	};
 }
-const TAB_KEY: [string, string][] = [
-    ["Ability", "A 0 to 100 estimate of his level, from the clubs he plays for and his own statistics. An average Premier League regular is about 75. The + shows past and projected seasons."],
-    ["Pos", "The role he has started in most over his last 20 appearances."],
-    ["World", "His place by Ability among every listed player."],
-    ["Lg", "His place by Ability among the listed players in his club's league."],
-    ["G/A", "Goals and assists this season, for all his clubs."]];
