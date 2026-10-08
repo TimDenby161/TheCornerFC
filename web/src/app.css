@@ -139,6 +139,13 @@ a.crest { text-decoration: none; }
 	.ov-top .next-top { flex-direction: row; justify-content: space-between; }
 	.ov-top .next-meta { flex-direction: row; flex-wrap: wrap; gap: 1px 10px; }
 }
+/* Home below the wide layout: "Create a free account" stands under the slides, whichever is up,
+   in place of the one on the first slide */
+.home-join { display: none; }
+@media (max-width: 1099px) {
+	.home-join { display: flex; margin-top: 20px; }
+	.home-slide .home-actions .home-ghost { display: none; }
+}
 /* Home on a tablet: the seven slides' names fit over their rules */
 @media (min-width: 641px) and (max-width: 939px) { .home-turn button { font-size: 11px; letter-spacing: 0.02em; } }
 /* Home on a phone: no bare grass over the slide. The touchline runs just under the bar, the slides'
