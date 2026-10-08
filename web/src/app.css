@@ -141,8 +141,11 @@ a.crest { text-decoration: none; }
 }
 /* Home on a tablet: the seven slides' names fit over their rules */
 @media (min-width: 641px) and (max-width: 939px) { .home-turn button { font-size: 11px; letter-spacing: 0.02em; } }
-/* Home on a phone: the corner's markings a little smaller, and less bare grass over the slide */
+/* Home on a phone: no bare grass over the slide. The touchline runs just under the bar, the slides'
+   rules stand in the strip above it beside the flag, and the headline starts right under the line */
 @media (max-width: 640px) {
-	.home-hero { padding-top: 56px; }
-	.home-pitch { right: -11px; width: 210px; height: 150px; }
+	.home-hero { padding-top: 0; }
+	.home-pitch { top: -9px; right: -11px; width: 210px; height: 150px; }      /* the touchline 46px down, the flag's top just inside */
+	.home-turn { height: 46px; margin: 0 0 18px; padding-right: 22px; align-items: center; }
+	.home-turn-list button::before, .home-turn-list button::after { bottom: 20px; }
 }
