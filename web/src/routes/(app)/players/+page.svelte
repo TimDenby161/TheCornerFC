@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { columnTips, fitTable } from '#lib/actions.ts';
+	import { columnTips, fitTable, type CellTip } from '#lib/actions.ts';
+	import { seasonTipText, type SeasonSpell } from '#lib/players.ts';
 	import { rankTier } from '#lib/club.ts';
 	import Crest from '#lib/components/Crest.svelte';
 	import DualRange from '#lib/components/DualRange.svelte';
@@ -64,6 +65,21 @@
 	let more = $state<{ list: string; rows: PlayerRow[] }>({ list: '', rows: [] });
 	const listed = $derived(page.url.search);
 	const rows = $derived(more.list === listed ? [...data.rows, ...more.rows] : data.rows);
+	// The tip over a season's rank: his clubs that season, from his own file, fetched on the first
+	// hover over his row
+	const seasonFiles = new Map<number, { data?: Record<string, SeasonSpell[]>; asked: Promise<unknown> }>();
+	const seasonDetail: CellTip = (cell) => {
+		const id = Number(cell.dataset.player), back = Number(cell.dataset.back);
+		const p = rows.find((r) => r.id === id);
+		if (!p) return { text: '' };
+		let f = seasonFiles.get(id);
+		if (!f) {
+			const file: { data?: Record<string, SeasonSpell[]>; asked: Promise<unknown> } = { asked: Promise.resolve() };
+			file.asked = fetch(`/players/seasons?id=${id}`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((d) => { file.data = d; });
+			seasonFiles.set(id, (f = file));
+		}
+		return { text: seasonTipText(p.age, back, p.estimated.includes(back), f.data?.[data.seasons[back]], !!f.data), then: f.data ? undefined : f.asked };
+	};
 	let busy = false;
 	function loadMore(sentinel: HTMLElement) {
 		const box = sentinel.closest<HTMLElement>('.table-scroll')!;
@@ -163,7 +179,7 @@
 		{#each Object.entries(without('q')) as [k, v] (k)}<input type="hidden" name={k} value={v} />{/each}
 		<input type="search" name="q" id="table-search" class="table-search" placeholder="Search players or clubs" aria-label="Search" value={data.search} oninput={typed} autocomplete="off" />
 	</form>
-	<div id="table-wrap" use:columnTips use:fitTable={wide}>
+	<div id="table-wrap" use:columnTips={seasonDetail} use:fitTable={wide}>
 		{#if rows.length}
 			<div class="table-scroll">
 				<table class="leaderboard players" class:years={data.years}>
@@ -208,7 +224,7 @@
 									{#if k === 0 && data.groups.length}
 										<td class="num col-posrank">{@render chip(p.posRank)}</td>
 									{:else}
-										<td class="num col-season col-s{k}" class:col-now={k === 0}>{@render chip(p.seasons?.[k], p.estimated.includes(k))}</td>
+										<td class="num col-season col-s{k} tip-cell" class:col-now={k === 0} data-player={p.id} data-back={k}>{@render chip(p.seasons?.[k], p.estimated.includes(k))}</td>
 									{/if}
 								{/each}
 								{#each future as y, j (y)}

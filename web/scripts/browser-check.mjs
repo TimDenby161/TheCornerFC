@@ -65,6 +65,11 @@ check('Clear drops both picks', !/club=|nat=/.test(await run('location.search'))
 await open('/players');
 await run(`(() => { const el = document.querySelector('#table-search'); el.focus(); el.value = 'haaland'; el.dispatchEvent(new Event('input', { bubbles: true })); })()`); await until(`document.querySelectorAll('table.players tbody tr').length === 1`);
 check('search narrows as typed', (await rows()) === 1 && (await first()) === 'E. Haaland', `${await rows()} rows`);
+// a season's rank says his clubs that season when the pointer is on it (fetched on the first hover)
+await open('/players?c=39');
+await run(`document.querySelector('table.players tbody tr td.tip-cell').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))`);
+await until(`/ mins – /.test(document.querySelector('.col-tip')?.textContent || '')`);
+check('season tip over a rank', /^Age \d+\n.+ – \d+\n[\d,]+ mins – \d+ G, \d+ A/.test(await run(`document.querySelector('.col-tip')?.textContent`)), JSON.stringify(await run(`document.querySelector('.col-tip')?.textContent`)));
 // the other seasons
 await open('/players?c=39');
 await run(`document.querySelector('.years-btn')?.click()`); await until(`document.querySelectorAll('table.players.years thead th').length > 12`);

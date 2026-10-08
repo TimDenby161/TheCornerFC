@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { tableCountries, type Cups } from './clubTable';
-import { NO_FILTERS, countParams, decodeEntities, listParams, playerCounts, playerRows, searchParams, sortKey, type Facets, type PlayerChoices } from './players';
+import { NO_FILTERS, countParams, decodeEntities, listParams, playerCounts, playerRows, searchParams, seasonTipText, sortKey, type Facets, type PlayerChoices } from './players';
 import { clubs } from './rankings';
 import type { Site } from './site';
 
@@ -126,5 +126,19 @@ describe('counts', () => {
 		expect(countOf('c:Germany')).toBe(26);
 		expect(countOf('r:Asia')).toBe(20);
 		expect(countOf('e:2')).toBe(51);
+	});
+});
+
+describe('the tip over a season\'s rank', () => {
+	it('says his age that season and each club with his rank, minutes, goals and assists', () => {
+		expect(seasonTipText(26, 2, false, [['Dortmund', 91, 2400, 22, 5], ['Man City', 93, 310, 2, 0]], true))
+			.toBe('Age 24\nDortmund – 91\n2,400 mins – 22 G, 5 A\n\nMan City – 93\n310 mins – 2 G, 0 A');
+		expect(seasonTipText(null, 0, false, [], true)).toBe('No minutes');
+		expect(seasonTipText(30, 1, false, undefined, true)).toBe('Age 29\nNo minutes');
+	});
+	it('says so when the season is an estimate, or still being fetched', () => {
+		expect(seasonTipText(22, 1, true, [['Santos', null, 900, 3, 1]], true)).toBe('Age 21\nSantos – –\nNot in a covered league this season\nEstimated from his other seasons and age');
+		expect(seasonTipText(22, 1, true, undefined, true)).toBe('Age 21\nNot in a covered league this season\nEstimated from his other seasons and age');
+		expect(seasonTipText(22, 1, false, undefined, false)).toBe('Loading…');
 	});
 });

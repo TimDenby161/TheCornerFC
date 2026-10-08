@@ -120,3 +120,18 @@ export function playerCounts(counts: [number, number, number][], countries: Coun
 		return (filterLeagues(value, countries) || []).reduce((n, id) => n + (byLeague.get(id) || 0), 0);
 	};
 }
+
+// What the tip over a season's rank says: his age that season, then each club he played for with
+// his rank there, minutes, goals and assists. `spells`: that season's from /players/seasons
+// (undefined while it is being fetched); `back`: how many seasons before the current one.
+export type SeasonSpell = [club: string, rank: number | null, minutes: number, goals: number, assists: number];
+export function seasonTipText(age: number | null, back: number, estimated: boolean, spells: SeasonSpell[] | undefined, loaded: boolean): string {
+	if (!loaded) return 'Loading…';
+	const ageLine = age != null ? `Age ${age - back}\n` : '';
+	if (estimated) {
+		const club = spells?.[0] ? `${spells[0][0]} – ${spells[0][1] ?? '–'}\n` : '';
+		return `${ageLine}${club}Not in a covered league this season\nEstimated from his other seasons and age`;
+	}
+	if (!spells?.length) return `${ageLine}No minutes`;
+	return ageLine + spells.map(([club, rank, minutes, goals, assists]) => `${club} – ${rank ?? '–'}\n${minutes.toLocaleString('en-GB')} mins – ${goals} G, ${assists} A`).join('\n\n');
+}

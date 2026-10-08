@@ -1,24 +1,38 @@
 // Things a table does once it is on the page, which need measuring or the pointer.
 
 // Column explanations: hover a heading (or reach it with the keyboard) that carries data-tip.
-export function columnTips(wrap: HTMLElement) {
+// `cellTip`: for a table whose cells have tips too (td.tip-cell): what one says, and, where that
+// has to be fetched first, a promise that ends when it can be asked again.
+export type CellTip = (cell: HTMLElement) => { text: string; then?: Promise<unknown> };
+export function columnTips(wrap: HTMLElement, cellTip?: CellTip) {
 	const tip = Object.assign(document.createElement('div'), { className: 'col-tip', hidden: true });
 	tip.setAttribute('role', 'tooltip');
 	document.body.appendChild(tip);
 	const canHover = matchMedia('(hover: hover)');
-	const sel = 'th[data-tip]';
-	const show = (e: Event) => {
-		// (not on touch screens: a tap sends mouseover too, and the tip would stay up)
-		if (e.type === 'mouseover' && !canHover.matches) return;
-		const h = (e.target as HTMLElement).closest<HTMLElement>(sel);
-		if (!h?.dataset.tip) return;
-		tip.textContent = h.dataset.tip;
+	const sel = cellTip ? 'th[data-tip], td.tip-cell' : 'th[data-tip]';
+	let on: HTMLElement | null = null;
+	const draw = (h: HTMLElement, text: string) => {
+		tip.textContent = text;
+		if (!text) return;
 		tip.hidden = false;
+		on = h;
 		const b = h.getBoundingClientRect(), w = tip.offsetWidth;
 		tip.style.left = `${Math.max(8, Math.min(b.left + b.width / 2 - w / 2, innerWidth - w - 8))}px`;
 		tip.style.top = `${b.bottom + 6}px`;
 	};
-	const hide = () => { tip.hidden = true; };
+	const show = (e: Event) => {
+		// (not on touch screens: a tap sends mouseover too, and the tip would stay up)
+		if (e.type === 'mouseover' && !canHover.matches) return;
+		const h = (e.target as HTMLElement).closest<HTMLElement>(sel);
+		if (!h) return;
+		if (h.dataset.tip) { draw(h, h.dataset.tip); return; }
+		if (!cellTip || h.tagName !== 'TD') return;
+		const said = cellTip(h);
+		draw(h, said.text);
+		// "Loading…" until it's in, then the text if the tip is still on this cell
+		said.then?.then(() => { if (!tip.hidden && on === h && h.isConnected) draw(h, cellTip(h).text); });
+	};
+	const hide = () => { tip.hidden = true; on = null; };
 	const out = (e: MouseEvent) => {
 		const from = (e.target as HTMLElement).closest(sel);
 		if (from && (e.relatedTarget as HTMLElement | null)?.closest?.(sel) !== from) hide();
