@@ -30,7 +30,8 @@ export default defineConfig({
 					'manifest-src': ['self'],
 					'object-src': ['none'],
 					'base-uri': ['self'],
-					'form-action': ['self'],
+					// (a form may go on to Stripe's checkout and its page for managing a subscription)
+					'form-action': ['self', 'https://checkout.stripe.com', 'https://billing.stripe.com'],
 					'frame-ancestors': ['none']
 				}
 			}

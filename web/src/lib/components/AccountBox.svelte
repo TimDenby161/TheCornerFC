@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import BotCheck from './BotCheck.svelte';
 	import { longDate } from '#lib/club.ts';
+	import { PRICES } from '#lib/config.ts';
 	import type { Subscription } from '../../routes/+layout.server.ts';
 
 	// The account box: sign in with Google or an email and password, create an account, reset a
@@ -11,8 +12,8 @@
 	// Each form posts to the account page's actions, so it works before the page's script runs;
 	// with the script, the answer comes back into the box without leaving the page.
 	type View = 'signin' | 'signup' | 'reset' | 'newpass' | 'note' | 'account' | 'delete' | 'subscribe';
-	let { user, sub, start = null, message = '', onview, onclose }:
-		{ user: { email: string } | null; sub: Subscription | null; start?: string | null; message?: string;
+	let { user, sub, start = null, message = '', messageOk = false, onview, onclose }:
+		{ user: { email: string } | null; sub: Subscription | null; start?: string | null; message?: string; messageOk?: boolean;
 			onview?: (title: string) => void; onclose?: () => void } = $props();
 
 	const TITLES: Record<View, string> = { signin: 'Sign in', signup: 'Create an account', reset: 'Reset your password',
@@ -20,7 +21,9 @@
 	// svelte-ignore state_referenced_locally
 	let asked = $state<View>((start as View) || 'signin');
 	// svelte-ignore state_referenced_locally
-	let msg = $state({ text: message, bad: !!message });
+	let msg = $state({ text: message, bad: !!message && !messageOk });
+	// whether subscriptions can be bought yet
+	const pay = $derived(!!page.data.pay);
 	let note = $state('');
 	let busy = $state(false);
 	let check = $state(0); // a new number draws a fresh bot check
@@ -37,7 +40,7 @@
 		busy = true; msg = { text: '', bad: false };
 		return async ({ result }) => {
 			busy = false;
-			if (result.type === 'redirect') { location.href = result.location; return; } // on to Google
+			if (result.type === 'redirect') { location.href = result.location; return; } // on to Google, or to Stripe
 			if (result.type === 'failure') { check++; msg = { text: String(result.data?.message || 'Something went wrong. Try again in a moment.'), bad: true }; return; }
 			if (result.type !== 'success') { check++; msg = { text: 'Something went wrong. Try again in a moment.', bad: true }; return; }
 			const done = result.data?.done;
@@ -99,13 +102,26 @@
 {:else if view === 'subscribe'}
 	<p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings, league tables and the betting comparison pages.</p>
 	<p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free).</p>
-	<p class="account-text"><b>Subscriptions aren't open yet.</b></p>
+	{#if !pay}
+		<p class="account-text"><b>Subscriptions aren't open yet.</b></p>
+	{:else if sub?.subscriber}
+		<p class="account-text"><b>This account is subscribed.</b></p>
+	{:else if user}
+		<p class="account-text">Cancel whenever you like: the subscription then runs to the end of the time paid for. Payment is taken by Stripe; this site never sees your card. See the <a href="/terms" data-sveltekit-reload>terms</a>.</p>
+		<form method="post" action="/account?/subscribe" use:enhance={sent} class="account-plans">
+			<button type="submit" name="plan" value="monthly" class="mt-btn account-out" disabled={busy}>Subscribe · {PRICES.monthly}</button>
+			<button type="submit" name="plan" value="yearly" class="mt-btn account-out" disabled={busy}>Subscribe · {PRICES.yearly}</button>
+		</form>
+	{:else}
+		<p class="account-text"><b>{PRICES.monthly}, or {PRICES.yearly}.</b> Sign in or create a free account first, then subscribe from here.</p>
+	{/if}
 	<div class="account-links">{@render link(user ? 'account' : 'signin', user ? 'Back to your account' : 'Sign in')}</div>
 {:else if view === 'account' && user}
 	<p class="account-text">Signed in as <b>{user.email}</b></p>
 	{#if sub?.paywall}
 		{#if sub.subscriber}
 			<p class="account-text">Subscription: <b>{sub.status ? (sub.status === 'past_due' ? 'payment due' : sub.status) : 'active'}</b>{sub.plan ? ` (${sub.plan})` : ''}{sub.renews_at ? ` · ${sub.ends ? 'ends' : 'renews'} ${longDate(sub.renews_at.slice(0, 10))}` : ''}</p>
+			{#if pay && sub.status}<form method="post" action="/account?/manage" use:enhance={sent}><button type="submit" class="mt-btn account-out" disabled={busy}>Manage or cancel subscription</button></form>{/if}
 		{:else}
 			<p class="account-text">No subscription on this account. {@render link('subscribe', 'What subscribers get')}</p>
 		{/if}

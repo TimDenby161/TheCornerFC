@@ -62,7 +62,8 @@
 	<div class="app-bar">
 		<button type="button" class="menu-btn" aria-label="Menu" aria-expanded={menuOpen} aria-controls="main-menu" onclick={() => (menuOpen = !menuOpen)}>&#9776;</button>
 		<a class="brand" href="/" aria-current={tab === 'home' ? 'page' : undefined}><span class="brand-mark" aria-hidden="true"></span><span>The Corner FC</span></a>
-		<h1 class="app-title">{current?.label ?? 'Home'}</h1>
+		<!-- the section's name; on a club's, player's, competition's or nation's page, its own -->
+		<h1 class="app-title">{current?.label ?? (tab === 'club' && typeof page.data.name === 'string' ? page.data.name : 'Home')}</h1>
 	</div>
 	<nav class="tabs" id="main-menu" aria-label="Main">
 		<div class="menu-links">

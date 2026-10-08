@@ -11,3 +11,7 @@ export const SUPABASE = {
 // an advert yet: the network's script, the consent banner and the security policy's change
 // (vite.config.ts) come with the network. A subscriber sees no adverts.
 export const ADS = { on: false };
+
+// What a subscription costs (owner, 2026-10-07). The charge itself is the price set in Stripe:
+// these are the words on the buttons, and the two must be changed together.
+export const PRICES = { monthly: '£4.99 a month', yearly: '£49 a year' };

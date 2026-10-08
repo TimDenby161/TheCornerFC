@@ -13,7 +13,7 @@
 	<div class="modal-card account-page">
 		<div class="modal-header"><div id="account-title">{title}</div></div>
 		<div id="account-body">
-			<AccountBox user={data.user} sub={data.sub} start={data.view} message={answer} onview={(t) => (title = t)} />
+			<AccountBox user={data.user} sub={data.sub} start={data.view} message={answer} messageOk={data.messageOk && answer === data.message} onview={(t) => (title = t)} />
 		</div>
 	</div>
 </section>

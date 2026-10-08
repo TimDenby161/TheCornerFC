@@ -1,5 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
+import * as env from '$app/env/private';
 import { accountError, safePath } from '#lib/server/auth.ts';
+import { keptSubscription, payments, stripe } from '#lib/server/payments.ts';
 
 const VIEWS = new Set(['signin', 'signup', 'reset', 'newpass', 'subscribe', 'delete']);
 
@@ -9,7 +11,13 @@ const VIEWS = new Set(['signin', 'signup', 'reset', 'newpass', 'subscribe', 'del
 export function load({ url }) {
 	const view = url.searchParams.get('view');
 	const failed = url.searchParams.get('failed');
-	return { view: view && VIEWS.has(view) ? view : null, message: failed ? accountError({ code: failed }) : '' };
+	// back from Stripe's checkout: its webhook switches the subscription on, usually within seconds
+	const paid = url.searchParams.has('paid');
+	return {
+		view: view && VIEWS.has(view) ? view : null,
+		message: failed ? accountError({ code: failed }) : paid ? 'Thank you. Your subscription is being switched on: it can take a minute to show here.' : '',
+		messageOk: !failed && paid
+	};
 }
 
 const text = (form: FormData, name: string) => String(form.get(name) ?? '');
@@ -65,11 +73,60 @@ export const actions = {
 		return { done: 'signout' as const };
 	},
 	// removes the caller's own row from Supabase Auth and nothing else (delete_my_account)
-	erase: async ({ locals }) => {
+	erase: async ({ locals, fetch }) => {
 		if (!locals.user) return fail(401, { message: 'Sign in first.' });
+		// a subscription still running is cancelled with Stripe first, so nothing more is charged
+		const p = payments(env);
+		if (p) {
+			try {
+				const kept = await keptSubscription(fetch, p, locals.user.id);
+				if (kept?.provider_subscription && kept.status !== 'canceled') await stripe(fetch, p.key, 'DELETE', `subscriptions/${encodeURIComponent(kept.provider_subscription)}`);
+			} catch {
+				return fail(502, { message: "Your subscription couldn't be cancelled just now, so the account has been kept. Try again in a moment." });
+			}
+		}
 		const { error } = await locals.supabase.rpc('delete_my_account');
 		if (error) return fail(400, { message: accountError(error) });
 		await locals.supabase.auth.signOut({ scope: 'local' });
 		return { done: 'erased' as const };
+	},
+	// On to Stripe's checkout for the plan picked. The subscription it starts carries this
+	// account's id, which is how the webhook knows whose it is.
+	subscribe: async ({ request, locals, fetch, url }) => {
+		const p = payments(env);
+		if (!p) return fail(400, { message: "Subscriptions aren't open yet." });
+		if (!locals.user) return fail(401, { message: 'Sign in first.' });
+		const plan = text(await request.formData(), 'plan') === 'yearly' ? 'yearly' : 'monthly';
+		let to: string;
+		try {
+			const kept = await keptSubscription(fetch, p, locals.user.id);
+			if (kept && kept.status !== 'canceled') return fail(400, { message: 'This account already has a subscription.' });
+			const session = await stripe<{ url: string }>(fetch, p.key, 'POST', 'checkout/sessions', {
+				mode: 'subscription', line_items: [{ price: p.prices[plan], quantity: 1 }],
+				client_reference_id: locals.user.id, subscription_data: { metadata: { user_id: locals.user.id } },
+				// a returning subscriber keeps their record with Stripe
+				...(kept?.provider_customer ? { customer: kept.provider_customer } : { customer_email: locals.user.email }),
+				success_url: `${url.origin}/account?paid=1`, cancel_url: `${url.origin}/account?view=subscribe`
+			});
+			to = session.url;
+		} catch {
+			return fail(502, { message: "The checkout couldn't be opened just now. Try again in a moment." });
+		}
+		redirect(303, to);
+	},
+	// On to Stripe's own page for a subscriber: change the card, see invoices, cancel
+	manage: async ({ locals, fetch, url }) => {
+		const p = payments(env);
+		if (!p) return fail(400, { message: "Subscriptions aren't open yet." });
+		if (!locals.user) return fail(401, { message: 'Sign in first.' });
+		let to: string;
+		try {
+			const kept = await keptSubscription(fetch, p, locals.user.id);
+			if (!kept?.provider_customer) return fail(400, { message: 'No subscription on this account.' });
+			to = (await stripe<{ url: string }>(fetch, p.key, 'POST', 'billing_portal/sessions', { customer: kept.provider_customer, return_url: `${url.origin}/account` })).url;
+		} catch {
+			return fail(502, { message: "That page couldn't be opened just now. Try again in a moment." });
+		}
+		redirect(303, to);
 	}
 };
