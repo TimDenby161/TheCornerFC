@@ -19,6 +19,8 @@ audit/
 # the experiment's output on the agreed settings (16 MB); verify.py reads it when present
 experiments/player_no_rating/reference.pickle
 experiments/player_no_rating/replay.json
+# a saved copy of the database rows an experiment read (run.py --refresh rebuilds it): feed data, never committed
+experiments/*/inputs.json.gz
 
 # Claude Code worktrees: local working copies, never part of the site
 .claude/worktrees/
