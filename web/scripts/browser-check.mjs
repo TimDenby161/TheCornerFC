@@ -20,6 +20,9 @@ await send('Runtime.enable'); await send('Log.enable'); await send('Page.enable'
 const open = async (path) => { await send('Page.navigate', { url: base + path }); await sleep(1800); };
 const out = [];
 const check = (name, ok, detail = '') => out.push(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`);
+// wait for something to be so on the page (up to `ms`), in place of a fixed pause: a slow answer from
+// the database then makes a step slower, not wrong
+const until = async (expression, ms = 8000) => { for (let t = 0; t < ms; t += 250) { if (await run(expression)) return true; await sleep(250); } return false; };
 const rows = () => run(`document.querySelectorAll('table.players tbody tr').length`);
 const first = () => run(`document.querySelector('table.players .pn-full')?.textContent`);
 
@@ -60,15 +63,16 @@ check('Clear drops both picks', !/club=|nat=/.test(await run('location.search'))
 
 // search as typed
 await open('/players');
-await run(`(() => { const el = document.querySelector('#table-search'); el.focus(); el.value = 'haaland'; el.dispatchEvent(new Event('input', { bubbles: true })); })()`); await sleep(1500);
+await run(`(() => { const el = document.querySelector('#table-search'); el.focus(); el.value = 'haaland'; el.dispatchEvent(new Event('input', { bubbles: true })); })()`); await until(`document.querySelectorAll('table.players tbody tr').length === 1`);
 check('search narrows as typed', (await rows()) === 1 && (await first()) === 'E. Haaland', `${await rows()} rows`);
 // the other seasons
 await open('/players?c=39');
-await run(`document.querySelector('.years-btn')?.click()`); await sleep(1500);
+await run(`document.querySelector('.years-btn')?.click()`); await until(`document.querySelectorAll('table.players.years thead th').length > 12`);
 check('+ opens the other seasons', (await run(`document.querySelectorAll('table.players.years thead th').length`)) > 12, `${await run(`document.querySelectorAll('table.players thead th').length`)} columns`);
 // a player's row opens his page; its tabs and the Stats switches are links
 await open('/players?c=39');
-await run(`document.querySelector('table.players tbody tr td:nth-child(3)')?.click()`); await sleep(1500);
+await until(`!!document.querySelector('table.players tbody tr td:nth-child(3)')`);
+await run(`document.querySelector('table.players tbody tr td:nth-child(3)')?.click()`); await until(`/^\\/player\\/\\d+$/.test(location.pathname) && !!document.querySelector('.page-tabs a')`);
 check('a Players row opens the player page', /^\/player\/\d+$/.test(await run('location.pathname')), await run('location.pathname'));
 await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Stats')?.click()`); await sleep(1200);
 await run(`[...document.querySelectorAll('.seg a')].find((a) => a.textContent === 'Per 90')?.click()`); await sleep(1200);
@@ -134,6 +138,20 @@ check('formations, and a match opens to its starting XI', (await run(`document.q
 await run(`[...document.querySelectorAll('.page-tabs a')].find((a) => a.textContent === 'Players')?.click()`); await sleep(1800);
 await run(`[...document.querySelectorAll('#nat-tab th.sortable a')].find((a) => a.textContent === 'G')?.click()`); await sleep(1500);
 check('its players under the coach, sorted by goals', (await run('location.search')) === '?sort=goals' && Number(await run(`document.querySelector('#nat-tab tbody tr td:nth-child(6)')?.textContent`)) >= 3, `top scorer ${await run(`document.querySelector('#nat-tab tbody tr td:nth-child(6)')?.textContent`)}`);
+
+// Stats and the Line-up record
+await open('/stats');
+const matches30 = await run(`document.querySelector('#stats-body .stats-value')?.textContent`);
+await run(`[...document.querySelectorAll('#stats-ranges a')].find((a) => a.textContent === '12 months')?.click()`); await sleep(1500);
+check('Stats: the range changes the figures', (await run('location.search')) === '?r=365d' && (await run(`document.querySelector('#stats-body .stats-value')?.textContent`)) !== matches30 && (await run(`document.querySelectorAll('#stats-body .calib-table').length`)) >= 2, `${matches30} -> ${await run(`document.querySelector('#stats-body .stats-value')?.textContent`)} matches`);
+await run(`document.querySelector('#stats-filters button[value="c:England"]')?.click()`); await sleep(1500);
+check('Stats: a country\'s competitions together, the range kept', (await run('location.search')).includes('r=365d') && decodeURIComponent(await run('location.search')).includes('c=c:England') && (await run(`document.querySelectorAll('#stats-body .stats-card').length`)) >= 8, decodeURIComponent(await run('location.search')));
+await open('/lineups');
+check('the line-up record saved before kick-off', (await run(`document.querySelectorAll('#lineup-body .stats-card').length`)) >= 10 && /of 11/.test(await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`)), await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`));
+await run(`[...document.querySelectorAll('#lineup-source a')].find((a) => a.textContent === 'Reconstructed history')?.click()`);
+for (let i = 0; i < 30 && (await run('location.search')) !== '?src=history'; i++) await sleep(400);
+await sleep(1200);
+check('the reconstructed history, with more to list', (await run('location.search')) === '?src=history' && /Reconstructed, not a live record/.test(await run(`document.querySelector('#lineup-body')?.textContent`)) && (await run(`!!document.querySelector('#lineup-body .lr-more')`)), `${await run(`document.querySelector('#lineup-body .stats-value')?.textContent`)} line-ups`);
 
 // the account box: opens from the menu, shows the forms and the bot check, and answers in place
 await open('/clubs?c=39');
