@@ -140,8 +140,10 @@ a.crest { text-decoration: none; }
 	.ov-top .next-meta { flex-direction: row; flex-wrap: wrap; gap: 1px 10px; }
 }
 /* Home below the wide layout: "Create a free account" stands under the slides, whichever is up,
-   in place of the one on the first slide */
+   in place of the one on the first slide: white, as the slide's own button, without its arrow
+   (it opens the account box, it doesn't go to a page) */
 .home-join { display: none; }
+.home-join::after { content: none; }
 @media (max-width: 1099px) {
 	.home-join { display: flex; margin-top: 20px; }
 	.home-slide .home-actions .home-ghost { display: none; }

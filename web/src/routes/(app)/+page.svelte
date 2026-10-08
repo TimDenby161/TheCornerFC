@@ -177,7 +177,7 @@
 		{/if}
 		<!-- on a phone or a tablet the way to an account stands under the slides, there whichever one is up
 		     (on a wide screen it is on the first slide, beside its button) -->
-		{#if !data.user}<a class="home-ghost home-join" href="/account?view=signup" onclick={join}>Create a free account</a>{/if}
+		{#if !data.user}<a class="mt-btn home-go home-join" href="/account?view=signup" onclick={join}>Create a free account</a>{/if}
 	</div>
 	<!-- the four things a first visit asks, each a label, a one-line answer and the detail under it -->
 	<div class="home-brief">
