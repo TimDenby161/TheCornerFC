@@ -1,6 +1,6 @@
 """Defensive contributions and bonus from FPL's own GW results (DESIGN.md): fit on GW1-3, test
 on GW4-5. Offline: reads the two frozen extracts, writes results.json and, from v1.2's frozen
-parameters, thecornerfc/fantasy_params_v1_3.json. Never touches the database."""
+parameters, thecornerfc/fantasy_games/fantasy_params_v1_3.json. Never touches the database."""
 from bisect import bisect_left
 from collections import defaultdict
 from datetime import datetime
@@ -15,12 +15,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import gammaln
-from thecornerfc import fantasy as fm
+from thecornerfc.fantasy_games import fantasy as fm
 
 ROOT = Path(__file__).parent
 DC_INPUTS = Path('.cache/fantasy_dc_inputs.json.gz')
-V12_PARAMS = Path('thecornerfc/fantasy_params_v1_2.json')
-V13_PARAMS = Path('thecornerfc/fantasy_params_v1_3.json')
+V12_PARAMS = Path('thecornerfc/fantasy_games/fantasy_params_v1_2.json')
+V13_PARAMS = Path('thecornerfc/fantasy_games/fantasy_params_v1_3.json')
 _spec = importlib.util.spec_from_file_location('v12run', ROOT.parent / 'fantasy_v1_2' / 'run.py')
 v12 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(v12)

@@ -4,7 +4,9 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-from thecornerfc import config, predictions, match_snapshots
+from thecornerfc import config
+from thecornerfc.models import predictions
+from thecornerfc.evidence import match_snapshots
 
 
 class PredictionConnection:
@@ -62,16 +64,16 @@ class MatchSnapshotTests(unittest.TestCase):
         self.conn = PredictionConnection(self.clock+timedelta(days=2))
         for target,value in [('READ_ONLY',False),('GITHUB_ACTIONS',True)]:
             p=patch.object(config,target,value);p.start();self.addCleanup(p.stop)
-        p=patch('thecornerfc.match_snapshots.register_version',return_value='mv_'+'a'*64)
+        p=patch('thecornerfc.evidence.match_snapshots.register_version',return_value='mv_'+'a'*64)
         p.start();self.addCleanup(p.stop)
-        p=patch('thecornerfc.predictions.missing_strengths',return_value={(1,10):0.2})
+        p=patch('thecornerfc.models.predictions.missing_strengths',return_value={(1,10):0.2})
         p.start();self.addCleanup(p.stop)
         clock=self.clock
         class Frozen(datetime):
             @classmethod
             def now(cls,tz=None):
                 return clock
-        p=patch('thecornerfc.predictions.datetime',Frozen)
+        p=patch('thecornerfc.models.predictions.datetime',Frozen)
         p.start();self.addCleanup(p.stop)
 
     def test_later_model_run_preserves_original_and_deduplicates_retry(self):
@@ -114,7 +116,7 @@ class MatchSnapshotTests(unittest.TestCase):
         self.assertGreater(rebuilt['captured_at'],rebuilt['effective_at'])
 
     def test_failed_snapshot_write_does_not_commit_current_predictions(self):
-        with patch('thecornerfc.match_snapshots.append_snapshots',side_effect=RuntimeError('failed')):
+        with patch('thecornerfc.evidence.match_snapshots.append_snapshots',side_effect=RuntimeError('failed')):
             with self.assertRaises(RuntimeError):
                 predictions.update_predictions(self.conn)
         self.assertEqual(self.conn.commits,0)
@@ -129,9 +131,9 @@ class MatchSnapshotTests(unittest.TestCase):
         kickoff=self.clock-timedelta(days=10)
         history=[(1,None,None,None,home,None,1000.,None,950.,10.,5.,1.5) for home in (True,False)]
         with patch.object(conn,'execute',return_value=[(1,)]), \
-             patch('thecornerfc.predictions.rank_history',return_value=history), \
-             patch('thecornerfc.predictions._predicted_lines',return_value={}), \
-             patch('thecornerfc.predictions.finished_fixtures',return_value=[(1,kickoff,39,None,10,20,2,1,None,1.7,0.8)]):
+             patch('thecornerfc.models.predictions.rank_history',return_value=history), \
+             patch('thecornerfc.models.predictions._predicted_lines',return_value={}), \
+             patch('thecornerfc.models.predictions.finished_fixtures',return_value=[(1,kickoff,39,None,10,20,2,1,None,1.7,0.8)]):
             predictions.backfill_predictions(conn)
         row=next(iter(conn.snapshots.values()))
         self.assertEqual(row['source'],'reconstruction')

@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import Mock
 
-from thecornerfc.export import site_freshness
+from thecornerfc.publish.export import site_freshness
 
 
 def result(row):

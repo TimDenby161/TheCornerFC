@@ -78,7 +78,7 @@ jobs:
           restore-keys: api-usage-
 
 
-      # Local copy of big historical query results (thecornerfc/cache.py): only weeks that
+      # Local copy of big historical query results (thecornerfc/pipeline/cache.py): only weeks that
       # changed since the last run are downloaded from the database
       - name: Restore query cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -115,7 +115,7 @@ jobs:
         run: python -m thecornerfc export
 
       # The owner's team for My FPL team (owner's decision, 2026-09-30; README). Stored in the
-      # database for the owner only, not in docs/data (2026-10-02, audit L3). Not critical.
+      # database for the owner only, not in .export (2026-10-02, audit L3). Not critical.
       - name: My FPL team
         continue-on-error: true
         env:

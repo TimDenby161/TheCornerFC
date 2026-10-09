@@ -1,6 +1,6 @@
 <script lang="ts">
 	// The plain text pages: the site's look without the menu. Ruled, not boxed.
-	import '../../../../docs/assets/page.css';
+	import '../../styles/page.css';
 
 	let { children } = $props();
 </script>

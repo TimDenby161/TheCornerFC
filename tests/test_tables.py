@@ -5,7 +5,7 @@ import unittest.mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from thecornerfc import tables
+from thecornerfc.publish import tables
 
 DAY = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
@@ -128,7 +128,7 @@ class PaidLeagueFileTests(unittest.TestCase):
     """A league's free file once the paid tier's function is there: chances for the next 7 days
     only and no projected goals; the whole file is a paid row (20261006_site_league.sql)."""
     def test_cut_league_fixtures(self):
-        from thecornerfc import export
+        from thecornerfc.publish import export
         now = datetime(2026, 10, 6, 12, tzinfo=timezone.utc)
         row = lambda fid, days, status, hg=None: [fid, (now + timedelta(days=days)).isoformat(), "Regular Season - 9", 1, 2, status,
                                                   hg, hg, None, None, None if hg is not None else 1.6, None if hg is not None else 1.1,
@@ -142,7 +142,7 @@ class PaidLeagueFileTests(unittest.TestCase):
 
     def test_paid_files_are_stored_as_paid_rows(self):
         from unittest.mock import MagicMock, Mock, patch
-        from thecornerfc import export
+        from thecornerfc.publish import export
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / "leagues").mkdir()
@@ -197,7 +197,7 @@ class PaidPlayersTests(unittest.TestCase):
     """The paid tier's players: a free slice, a blanked row for the rest, a cut-down page file
     (db/migrations/20261006_paid_players.sql)."""
     def rows(self, n=120):
-        from thecornerfc import export
+        from thecornerfc.publish import export
         raw = [[i + 1, f"Player {i:03d}", "CM", 95 - i * 0.5, 900, 100 + i % 6, 39 + i % 2, [95 - i * 0.5, None], 24, [],
                 "England", ["CM"], {"CM": 95 - i * 0.5}, [90.0], [900, 3, 2]] for i in range(n)]
         return export.site_player_rows(raw)
@@ -206,7 +206,7 @@ class PaidPlayersTests(unittest.TestCase):
         rows = self.rows()
         free = [p["player_id"] for p in rows if p["free"]]
         self.assertEqual(free, list(range(1, 51)))            # two leagues' top 10s fall inside the overall 50 here
-        from thecornerfc import export
+        from thecornerfc.publish import export
         with unittest.mock.patch.object(export, "FREE_WORLD", 4), unittest.mock.patch.object(export, "FREE_LEAGUE", 3), \
                 unittest.mock.patch.object(export, "FREE_POSITION", 0):
             free = {p["player_id"] for p in self.rows() if p["free"]}
@@ -214,7 +214,8 @@ class PaidPlayersTests(unittest.TestCase):
         self.assertFalse(hasattr(export, "FREE_LEAGUES"))     # every league's top 10, not the five big leagues' (owner, 2026-10-07)
 
     def test_the_free_slice_has_each_positions_top_10(self):
-        from thecornerfc import export, positions
+        from thecornerfc.publish import export
+        from thecornerfc.models import positions
         # 30 left-backs and 30 right-backs outside every other slice; number 61 also plays right-back, where he is the best
         raw = [[i + 1, f"Player {i:03d}", "CM", 95 - i * 0.5, 900, 100, 40, [95 - i * 0.5, None], 24, [],
                 "England", ["CM"], {"CM": 95 - i * 0.5}, [90.0], [900, 3, 2]] for i in range(60)]
@@ -230,7 +231,7 @@ class PaidPlayersTests(unittest.TestCase):
         self.assertEqual(export.FREE_POSITION, 10)
 
     def test_the_blanked_row_keeps_who_he_is_and_loses_every_rank(self):
-        from thecornerfc import export
+        from thecornerfc.publish import export
         p = self.rows()[70]
         got = dict(zip(export.SITE_PLAYER_FIELDS, p["data_free"]))
         whole = dict(zip(export.SITE_PLAYER_FIELDS, p["data"]))
@@ -239,7 +240,7 @@ class PaidPlayersTests(unittest.TestCase):
         self.assertEqual((got["name"], got["team"], got["age"], got["minutes"], got["season"]), ("Player 070", 104, 24, 900, [900, 3, 2]))
 
     def test_the_migration_blanks_the_same_fields_and_marks_the_same_slice(self):
-        from thecornerfc import export
+        from thecornerfc.publish import export
         sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_paid_players.sql").read_text()
         at = export.SITE_PLAYER_FIELDS.index
         # it blanked his place in the export's order too, which 20261007_paid_players_order.sql puts back
@@ -249,7 +250,7 @@ class PaidPlayersTests(unittest.TestCase):
         self.assertIn("WHERE (whole OR p.free OR p.data_free IS NOT NULL)", sql)      # never the whole row for want of a blanked one
 
     def test_the_order_migration_keeps_his_place_and_hides_his_ranks(self):
-        from thecornerfc import export
+        from thecornerfc.publish import export
         root = Path(__file__).resolve().parents[1]
         sql = (root / "db/migrations/20261007_paid_players_order.sql").read_text()
         at = export.SITE_PLAYER_FIELDS.index
@@ -269,7 +270,7 @@ class PaidPlayersTests(unittest.TestCase):
         self.assertIn(sql[sql.index("CREATE OR REPLACE FUNCTION public.site_players("):].split("END; $$;")[0] + "END; $$;", (root / "db/schema.sql").read_text())
 
     def test_the_cut_down_page_has_no_rank_per_match_or_movement(self):
-        from thecornerfc import export
+        from thecornerfc.publish import export
         match = dict.fromkeys(export.MATCH_FIELDS, 1)
         match["rank"] = 71.5
         page = {"id": 9, "matches": [list(match.values())], "seasons": [[2026, 1, 39, 5, 5, 450, 1, 0, 1, 0]], "movement": {"rows": [[7, 0.4, 2, "x"]]}, "born": "2000-01-01"}
@@ -283,7 +284,7 @@ class PaidPlayersTests(unittest.TestCase):
 class HeadlineProjectionTests(unittest.TestCase):
     """The free projected table: places and points only (export.headline_projection)."""
     def test_points_so_far_plus_expected_points_and_the_order(self):
-        from thecornerfc import export
+        from thecornerfc.publish import export
         table = [["League", 1, 1, 10, 6, 2, 2, 20, 10, 10, 20, "WWW", None], ["League", 2, 2, 10, 6, 1, 3, 15, 10, 5, 19, "WLW", None],
                  ["League", 3, 3, 10, 2, 2, 6, 8, 16, -8, 8, "LLD", None]]
         fx = lambda fid, home, away, ph, pd, pa, hx=1.5, ax=1.0: [fid, "2026-11-01T15:00:00+00:00", "Regular Season - 11", home, away, "NS", None, None, None, None, hx, ax, ph, pd, pa]
@@ -294,7 +295,7 @@ class HeadlineProjectionTests(unittest.TestCase):
         self.assertEqual(got, [["League", 1, 2, 2, 23], ["League", 2, 1, 2, 23], ["League", 3, 3, 2, 9]])
 
     def test_nothing_without_projections(self):
-        from thecornerfc import export
+        from thecornerfc.publish import export
         self.assertEqual(export.headline_projection([["League", 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, None, None]], []), [])
 
     def test_the_rank_migration_differs_from_the_line_ups_one_only_by_the_ranks(self):

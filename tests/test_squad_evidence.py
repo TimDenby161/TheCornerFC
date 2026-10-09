@@ -3,7 +3,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-from thecornerfc import config, player_history, squad_evidence as se
+from thecornerfc import config
+from thecornerfc.evidence import player_history, squad_evidence as se
 
 NOW = datetime(2026, 9, 28, 3, tzinfo=timezone.utc)
 ITEMS = [{'team': {'id': 5}, 'players': [
@@ -54,7 +55,7 @@ class SquadEvidenceTests(unittest.TestCase):
         conn = MagicMock()
         conn.execute.return_value.fetchone.side_effect = [None, (7,)]
         conn.execute.return_value.__iter__.return_value = iter([])
-        with patch.object(config, 'require_db_write'), patch('thecornerfc.player_history.register_version', return_value='mv'):
+        with patch.object(config, 'require_db_write'), patch('thecornerfc.evidence.player_history.register_version', return_value='mv'):
             player_history.capture(conn, [(1, 60., 'CM', 100), (2, 50., 'CB', 90)], [(1, 2026, 60., 100, 10)],
                                    {1: (72.5, 910., 61.2, 63.4)})
         rows = conn.cursor.return_value.__enter__.return_value.executemany.call_args[0][1]

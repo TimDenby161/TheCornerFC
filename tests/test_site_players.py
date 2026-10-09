@@ -3,8 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-from thecornerfc import export
-from thecornerfc.export import PLAYER_FIELDS, SITE_PLAYER_FIELDS, site_player_rows, store_players
+from thecornerfc.publish import export
+from thecornerfc.publish.export import PLAYER_FIELDS, SITE_PLAYER_FIELDS, site_player_rows, store_players
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -132,20 +132,9 @@ class SitePlayerRows(unittest.TestCase):
         # in the schema it comes after the first version, so a new database ends up with this one
         self.assertGreater(schema.index("next_fixture integer"), schema.index("CREATE OR REPLACE FUNCTION public.site_player_facets()"))
 
-    def test_views_ask_for_the_players_they_show(self):
-        app = (ROOT / "docs/assets/app.js").read_text()
-        for asked in ('siteAsk("site_players", { ...params, p_limit: FIRST_ROWS })', 'siteAsk("site_players", { ...params, p_limit: 2000, p_offset: at })',
-                      'siteAsk("site_player_facets", {})', 'siteAsk("site_next_xi", { p_team: team })',
-                      "needClubPlayers(m.home, m.away)", "needClubPlayers(id)", "needNation(nat)", "needPlayers([id])"):
-            self.assertIn(asked, app)
-        # there is no list of every player any more, in the site or the export
-        for gone in ("loadPlayers", "playersInDb", "state.players.list.filter((p) => playerSearchMatch"):
-            self.assertNotIn(gone, app)
+    def test_the_export_writes_no_list_of_every_player(self):
+        # there is no list of every player any more
         self.assertNotIn('"players.json"', Path(export.__file__).read_text())
-        # a request the database didn't answer is sent once more
-        self.assertIn("askDatabase(", (ROOT / "docs/assets/data.js").read_text())
-        # long lists of ids are posted, not put in the address
-        self.assertIn('method: "POST"', (ROOT / "docs/assets/data.js").read_text())
 
 
 if __name__ == "__main__":

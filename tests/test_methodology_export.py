@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-from thecornerfc import evaluation
-from thecornerfc import export
-from thecornerfc.export import export_lineup_history, export_lineup_record, export_methodology
+from thecornerfc.evidence import evaluation
+from thecornerfc.publish import export
+from thecornerfc.publish.export import export_lineup_history, export_lineup_record, export_methodology
 
 T1 = datetime(2026, 9, 26, 15, tzinfo=timezone.utc)
 T2 = datetime(2026, 9, 27, 15, tzinfo=timezone.utc)
@@ -271,7 +271,7 @@ class LoadMatchesMarketSwitchTests(unittest.TestCase):
                "p_home": 0.5, "p_draw": 0.3, "p_away": 0.2, "captured_at": T1, "effective_at": T2}
         args = Mock(source="prospective", start=T1, end=T2, as_of=T2, hours_before=0)
         with patch.object(evaluation, "query", return_value=[row]), \
-                patch("thecornerfc.paper_evidence.latest_quotes") as quotes:
+                patch("thecornerfc.evidence.paper_evidence.latest_quotes") as quotes:
             rows, _ = evaluation.load_matches(Mock(), args, market=False)
         quotes.assert_not_called()
         self.assertEqual(rows[0]["outcome"], 0)

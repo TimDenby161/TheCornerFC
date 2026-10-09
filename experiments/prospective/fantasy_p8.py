@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dotenv import dotenv_values
 import psycopg
-from thecornerfc import fantasy as fm
+from thecornerfc.fantasy_games import fantasy as fm
 
 ROOT = Path(__file__).parent
 # Registered in PROTOCOLS.md (P8); change only by a dated amendment there.

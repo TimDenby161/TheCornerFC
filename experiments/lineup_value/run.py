@@ -6,7 +6,7 @@ from pathlib import Path
 import gzip,json,hashlib,sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 import numpy as np
-from thecornerfc import predictions as p,player_ratings as pr
+from thecornerfc.models import predictions as p, player_ratings as pr
 from experiments.player_club_strength.run import calibration,interval
 ROOT=Path(__file__).parent
 GRID=[-.005,0.,.0025,.005,.01,.02]
@@ -172,7 +172,7 @@ def main():
       'prospective_overlap':{'n':len(pro),'mean_correct_of_22':float(np.mean([r['overlap'] for r in pro])) if pro else None},
       'periods':{k:summary([r for r in test if (r['date']<'2025-07-01')==b]) for k,b in [('2024-25',True),('2025-onwards',False)]},
       'leagues':dict(h['leagues']),'provenance':{name:hashlib.sha256(gzip.decompress(Path('.cache/'+name+'.json.gz').read_bytes())).hexdigest() for name in ['lineup_value_inputs','lineup_value_history','player_club_strength_inputs']},
-      'source_sha256':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in [Path(__file__),Path('thecornerfc/predictions.py'),Path('thecornerfc/player_ratings.py')]}}
+      'source_sha256':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in [Path(__file__),Path('thecornerfc/models/predictions.py'),Path('thecornerfc/models/player_ratings.py')]}}
     (ROOT/'results.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
     Path('.cache/lineup_value_rows.json.gz').write_bytes(gzip.compress(json.dumps({'historical':rows,'prospective':pro},allow_nan=False).encode()))
     print(json.dumps({'validation_n':len(val),'test_n':len(test),'prospective_n':len(pro),'prospective_ablation_n':len(allpro),'market_n':len(market),'selected_gk':selected,'exclusions':ex,'prospective_exclusions':pex}))

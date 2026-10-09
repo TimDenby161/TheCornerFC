@@ -3,7 +3,9 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, Mock, patch
 
-from thecornerfc import evaluation, export, national_lineups as nl
+from thecornerfc.evidence import evaluation
+from thecornerfc.publish import export
+from thecornerfc.models import national_lineups as nl
 
 NOW = datetime(2026, 10, 7, 12, tzinfo=timezone.utc)
 ROLES = ["GK", "RB", "CB", "CB", "LB", "DM", "DM", "RW", "AM", "LW", "ST"]      # a 4-2-3-1's XI, players 1-11

@@ -7,7 +7,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from thecornerfc import export, retention, suppression
+from thecornerfc.publish import export
+from thecornerfc.privacy import retention, suppression
 
 ROOT = Path(__file__).resolve().parents[1]
 NONE = {'players': set(), 'coaches': set()}

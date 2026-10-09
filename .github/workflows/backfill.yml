@@ -62,7 +62,7 @@ jobs:
           restore-keys: api-usage-
 
 
-      # Local copy of big historical query results (thecornerfc/cache.py): only weeks that
+      # Local copy of big historical query results (thecornerfc/pipeline/cache.py): only weeks that
       # changed since the last run are downloaded from the database
       - name: Restore query cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -76,7 +76,7 @@ jobs:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          python -m thecornerfc.workflow_inputs "$LEAGUES" "$SEASONS" > /tmp/backfill-inputs.env
+          python -m thecornerfc.pipeline.workflow_inputs "$LEAGUES" "$SEASONS" > /tmp/backfill-inputs.env
           source /tmp/backfill-inputs.env
           python -m thecornerfc preflight --leagues "${LEAGUE_ARGS[@]}" --seasons "${SEASON_ARGS[@]}"
           for target in leagues teams fixtures standings stats odds; do

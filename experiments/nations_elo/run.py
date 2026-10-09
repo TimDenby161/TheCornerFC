@@ -1,4 +1,4 @@
-"""Backtest for the national team Elo (thecornerfc/nations.py). Offline: reads the public results
+"""Backtest for the national team Elo (thecornerfc/models/nations.py). Offline: reads the public results
 CSV only, never the database.
 
 Every rated match is predicted from the ranks before it: expected goal difference = exp_diff.
@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from thecornerfc import nations
+from thecornerfc.models import nations
 
 TUNE = ("2000", "2014")
 TEST = ("2014", "9999")

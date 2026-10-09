@@ -1,7 +1,7 @@
 """Fantasy v1.5 (DESIGN.md): penalty takers, misses and FPL-only assists on top of v1.4.
 Fit on 2024-25, test on 2025-26 and 2026-27 to date (actual minutes: who takes / scores, not how
 many play). Reads the database once (read-only) into inputs.json.gz; rerun with --refresh to
-rebuild it. Writes results.json and thecornerfc/fantasy_params_v1_5.json. Plain Python."""
+rebuild it. Writes results.json and thecornerfc/fantasy_games/fantasy_params_v1_5.json. Plain Python."""
 from collections import Counter, defaultdict
 import gzip
 import hashlib
@@ -11,12 +11,12 @@ from pathlib import Path
 import random
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from thecornerfc import fantasy as fm
+from thecornerfc.fantasy_games import fantasy as fm
 
 ROOT = Path(__file__).parent
 INPUTS = ROOT / 'inputs.json.gz'
-V14_PARAMS = Path('thecornerfc/fantasy_params_v1_4.json')
-V15_PARAMS = Path('thecornerfc/fantasy_params_v1_5.json')
+V14_PARAMS = Path('thecornerfc/fantasy_games/fantasy_params_v1_4.json')
+V15_PARAMS = Path('thecornerfc/fantasy_games/fantasy_params_v1_5.json')
 FIT, TEST = (2024,), (2025, 2026)
 START = '2024-07-01'
 ALPHAS = [0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10]
@@ -31,7 +31,8 @@ def extract(params):
     """Team-matches of Premier League fixtures since START, each player on the pitch with his
     features as known before kickoff, plus league rates and FPL GW assist totals."""
     from datetime import datetime, timezone
-    from thecornerfc import db, fantasy_snapshots as fs
+    from thecornerfc.pipeline import db
+    from thecornerfc.fantasy_games import fantasy_snapshots as fs
     conn = db.connect()
     history = fs.History(fs._pl_lines(conn))
     start = datetime.fromisoformat(START).replace(tzinfo=timezone.utc)

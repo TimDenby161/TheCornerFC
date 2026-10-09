@@ -6,7 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from thecornerfc import efl_fantasy as ef, export
+from thecornerfc.fantasy_games import efl_fantasy as ef
+from thecornerfc.publish import export
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -100,7 +101,7 @@ class EflInputTests(unittest.TestCase):
 
 
 class OwnerOnlyTest(unittest.TestCase):
-    """Audit L11 (owner's decision 2026-10-04): the predictions go to fpl_owner_docs, never docs/data."""
+    """Audit L11 (owner's decision 2026-10-04): the predictions go to fpl_owner_docs, never .export."""
 
     def test_export_stores_the_predictions_for_the_owner_and_writes_no_file(self):
         conn = mock.MagicMock()
@@ -118,21 +119,16 @@ class OwnerOnlyTest(unittest.TestCase):
         allowed = re.findall(r"fpl_owner_docs_name_check\s+CHECK \(name IN \(([^)]*)\)\)", schema)[-1]
         allowed = set(re.findall(r"'(\w+)'", allowed))
         written = set()
-        for path in (ROOT / 'thecornerfc').glob('*.py'):
+        for path in (ROOT / 'thecornerfc').rglob('*.py'):
             written.update(re.findall(r"""store_owner_doc\(conn, ["'](\w+)["']""", path.read_text()))
         self.assertEqual(written, {'fpl_predictions', 'fpl_team', 'efl_predictions'})
         self.assertLessEqual(written, allowed)
 
     def test_site_has_no_public_efl_predictions(self):
-        self.assertFalse((ROOT / 'docs/data/efl_predictions.json').exists())
-        manifest = ROOT / 'docs/data/manifest.json'          # there after a local export; the data isn't in the repository
+        self.assertFalse((ROOT / '.export/efl_predictions.json').exists())
+        manifest = ROOT / '.export/manifest.json'          # there after a local export; the data isn't in the repository
         if manifest.exists():
             self.assertNotIn('efl_predictions.json', manifest.read_text())
-        app = (ROOT / 'docs/assets/app.js').read_text()
-        self.assertNotIn('data/efl_predictions.json', app)
-        self.assertIn('const OWNER_TABS = new Set(["fpl", "myteam", "efl"]);', app)
-        self.assertIn('state.owner.docs.efl_predictions', app)
-        self.assertIn('<button type="button" data-tab="efl" id="efl-tab" hidden>', (ROOT / 'docs/index.html').read_text())
 
 
 if __name__ == '__main__':

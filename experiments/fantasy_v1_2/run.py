@@ -1,7 +1,7 @@
 """Fantasy v1.2 backtest (DESIGN.md): v1's replay and splits plus bonus, cards, penalty saves,
 goalkeeper minutes and team-adjusted saves. Fit on train, select M on validation, refit on
 train + validation, test once against frozen v1.1. Offline: reads the frozen extract, writes
-results.json and thecornerfc/fantasy_params_v1_2.json. Never touches the database."""
+results.json and thecornerfc/fantasy_games/fantasy_params_v1_2.json. Never touches the database."""
 from bisect import bisect_left
 from collections import Counter, defaultdict
 import gzip
@@ -12,12 +12,12 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
-from thecornerfc import fantasy as fm
+from thecornerfc.fantasy_games import fantasy as fm
 
 ROOT = Path(__file__).parent
 INPUTS = Path('.cache/fantasy_v1_2_inputs.json.gz')
-V11_PARAMS = Path('thecornerfc/fantasy_params.json')
-PARAMS = Path('thecornerfc/fantasy_params_v1_2.json')
+V11_PARAMS = Path('thecornerfc/fantasy_games/fantasy_params.json')
+PARAMS = Path('thecornerfc/fantasy_games/fantasy_params_v1_2.json')
 _spec = importlib.util.spec_from_file_location('v1run', ROOT.parent / 'fantasy_v1' / 'run.py')
 v1 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(v1)

@@ -10,8 +10,9 @@ from pathlib import Path
 import random
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
-from thecornerfc import config, predictions
-from thecornerfc.evaluation import probability_metrics
+from thecornerfc import config
+from thecornerfc.models import predictions
+from thecornerfc.evidence.evaluation import probability_metrics
 
 WEIGHTS=(0.,.2,.4,.5,.6,.7,.8,1.)
 VALIDATION_START='2023-07-01'

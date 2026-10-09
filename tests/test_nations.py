@@ -2,8 +2,8 @@ import unittest
 from datetime import date, datetime, timezone
 from unittest import mock
 
-from thecornerfc import nations
-from thecornerfc.nations import Result
+from thecornerfc.models import nations
+from thecornerfc.models.nations import Result
 
 CSV = """date,home_team,away_team,home_score,away_score,tournament,city,country,neutral
 2020-01-01,Spain,France,2,0,FIFA World Cup qualification,Madrid,Spain,FALSE

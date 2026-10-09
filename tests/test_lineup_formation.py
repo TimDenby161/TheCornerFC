@@ -2,7 +2,7 @@ from collections import Counter
 from datetime import datetime, timezone
 import unittest
 
-from thecornerfc.player_ratings import _select_lineup, formation_slots, likely_formation, role_fit
+from thecornerfc.models.player_ratings import _select_lineup, formation_slots, likely_formation, role_fit
 
 
 class FormationLineupTests(unittest.TestCase):

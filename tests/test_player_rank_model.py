@@ -4,7 +4,7 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 
-from thecornerfc import player_ratings as pr, positions
+from thecornerfc.models import player_ratings as pr, positions
 
 
 def sums(**stats):

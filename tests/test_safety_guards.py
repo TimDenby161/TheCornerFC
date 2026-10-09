@@ -47,7 +47,7 @@ class SafetyGuardTests(unittest.TestCase):
             "THECORNERFC_NO_API": "true",
             "API_FOOTBALL_KEY": "example-key",
         })
-        import thecornerfc.api as api
+        import thecornerfc.pipeline.api as api
         api = importlib.reload(api)
 
         with self.assertRaises(api.config.SafetyError):

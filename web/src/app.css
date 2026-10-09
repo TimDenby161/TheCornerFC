@@ -1,4 +1,4 @@
-/* What the new app adds to the old site's stylesheet (docs/assets/styles.css). The menu's entries
+/* What the new app adds to the old site's stylesheet (styles/styles.css). The menu's entries
    are links here, where the old site's were buttons, so they take the same look. */
 nav.tabs a.menu-link {
 	display: block; text-decoration: none; cursor: pointer; text-align: left;

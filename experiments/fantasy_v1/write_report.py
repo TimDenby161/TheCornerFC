@@ -159,7 +159,7 @@ def main():
         '## v1.1 and prospective validation', '',
         f"v1.1 = v1 + goalkeeper saves + injury-list availability. On this test it scores MAE {f(o['v1_1']['mae'])}, with goalkeeper bias vs total "
         f"{f(T['segments']['position']['G']['v1_1']['bias_pct'], 1)}%. But it was **chosen after seeing these test results**, so those numbers are not evidence for it. "
-        "Its parameters are frozen in `thecornerfc/fantasy_params.json`. `thecornerfc/fantasy_snapshots.py` now stores every component for every upcoming "
+        "Its parameters are frozen in `thecornerfc/fantasy_games/fantasy_params.json`. `thecornerfc/fantasy_games/fantasy_snapshots.py` now stores every component for every upcoming "
         "Premier League player before kickoff, with the timed availability and the benchmark values, in `fantasy_fixture_snapshots`. "
         "It is judged only on those prospective snapshots, under protocol P8 (`experiments/prospective/PROTOCOLS.md`): 10 rounds, then unblinded once.", '',
         '## Provenance', '',

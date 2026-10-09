@@ -1,0 +1,2485 @@
+"""Export compact JSON for the website: written to .export/ and sent from there to the database
+(site.docs and the site.* tables), which is what the site reads. Nothing is committed.
+"""
+import html
+import hashlib
+import json
+import logging
+import math
+import re
+import shutil
+import tempfile
+import unicodedata
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from ..pipeline.health import monitored
+from .. import config
+from ..models import availability, national_lineups, national_predictions, predictions
+from . import tables as league_tables
+from ..pipeline.cache import WEEK, cached_rows, finished_fixtures, rank_history
+from ..models.betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_cautious
+from ..models.predictions import GOAL_LINES, UPCOMING_STATUSES, goal_lines
+
+log = logging.getLogger(__name__)
+
+OUT_DIR = Path(__file__).resolve().parent.parent.parent / ".export"
+# Written by other commands, not the export: kept across a full export
+CARRIED_FILES = ()
+PAST_DAYS = 21       # recent results shown on the site
+FUTURE_DAYS = 60     # upcoming fixtures shown on the site
+FORM_GAMES = 6       # rank change over this many recent games = "form"
+CRITICAL_JSON_FILES = (
+    "site.json", "rankings.json", "stats.json", "bets.json", "injuries.json",
+)
+CRITICAL_DETAIL_DIRS = ("players", "clubs", "leagues")
+MIN_MAJOR_ROWS = {
+    "rankings.json": ("rankings", 50),
+}
+MAJOR_ROW_TYPES = {}        # a major file whose rows are a dict, not a list
+COLLAPSE_RATIO = 0.5
+# The matches and the players are rows of site.matches and site.players, not files: each table is
+# checked the same way before it is rewritten (_check_table_collapse)
+MIN_PLAYERS = 50
+
+
+class ExportValidationError(RuntimeError):
+    """Raised when a staged website export is unsafe to publish."""
+
+
+def market_probabilities(conn):
+    """{fixture_id: (p_home, p_draw, p_away)} from the stored match-winner odds: each
+    bookmaker's 1/odds normalised to remove its margin, then averaged across bookmakers."""
+    books = {}
+    for fid, bm, sel, odd in conn.execute(
+            "select fixture_id, bookmaker_id, selection, odd from odds where bet_id = 1 and odd > 1"):
+        books.setdefault((fid, bm), {})[sel] = 1 / float(odd)
+    per_fixture = {}
+    for (fid, _), p in books.items():
+        if len(p) == 3:
+            total = p["Home"] + p["Draw"] + p["Away"]
+            per_fixture.setdefault(fid, []).append((p["Home"] / total, p["Draw"] / total, p["Away"] / total))
+    return {fid: tuple(sum(x[i] for x in ps) / len(ps) for i in range(3)) for fid, ps in per_fixture.items()}
+
+
+def site_freshness(conn):
+    """When the site's model inputs last changed, for the small 'updated' line on the site:
+    the latest stored prediction, injury and odds rows (odds = when we last fetched a price) and
+    the latest registered match model version. Anything with no rows is left out, never guessed."""
+    out = {}
+    for key, table in (("predictions", "fixture_predictions"), ("injuries", "injuries"), ("odds", "odds")):
+        (latest,) = conn.execute(f"select max(updated_at) from {table}").fetchone()
+        if latest is not None:
+            out[key] = latest.isoformat()
+    (registry,) = conn.execute("select to_regclass('public.model_versions')").fetchone()
+    if registry is not None:
+        row = conn.execute(
+            """select version_name, code_sha, created_at from model_versions
+               where model_type = 'match' order by created_at desc limit 1""").fetchone()
+        if row:
+            out["model"] = {"name": row[0], "code": row[1][:7] if row[1] else None,
+                            "registered": row[2].isoformat()}
+    return out
+
+
+def _r(x, n=2):
+    return None if x is None else round(float(x), n)
+
+
+# API-derived values that the site puts into markup: kit colours go into a style attribute, so
+# only a plain hex colour passes
+HEX_COLOR = re.compile(r"[0-9a-fA-F]{6}")
+
+
+def _hex_color(v):
+    """A six-digit hex colour without the '#', lower-cased, or None."""
+    return v.lower() if isinstance(v, str) and HEX_COLOR.fullmatch(v) else None
+
+
+def _kit_colors(shirt, number):
+    """[shirt, number] when the shirt colour is valid (a bad number colour becomes None), else None."""
+    shirt = _hex_color(shirt)
+    return [shirt, _hex_color(number)] if shirt else None
+
+
+def _xi_lines(vals):
+    """[GK, DEF, MID, FWD] average ranks rounded, or None when no line has anyone."""
+    vals = [_r(v, 1) for v in vals]
+    return vals if any(v is not None for v in vals) else None
+
+
+@monitored("exports", conn_index=0)
+def export_site_data(conn, out_dir=OUT_DIR):
+    """Build, validate and publish the static site export without clobbering old data."""
+    _publish_export(lambda staged: _write_site_data(conn, staged), out_dir, conn)
+    mirror_site_docs(conn, out_dir)
+
+
+MANIFEST = "manifest.json"
+
+
+def write_manifest(out_dir=OUT_DIR, conn=None, only=None):
+    """data/manifest.json: a short content hash of each top-level data file. The site asks for
+    a file by its hash and keeps its copy until the hash changes, so unchanged data isn't
+    downloaded again. Anything that writes a top-level data file must call this afterwards
+    (tests/test_manifest.py).
+
+    A full export hashes the files it wrote. A job that writes part of the data (only: the
+    top-level files it wrote) starts from the hashes of the rows in site.docs and replaces its
+    own, so the manifest is whole whether or not the other files are in its working copy."""
+    out_dir = Path(out_dir)
+    files = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()[:16]
+             for p in sorted(out_dir.glob("*.json")) if p.name != MANIFEST and (only is None or p.name in only)}
+    if only is not None:
+        files = dict(sorted({**_stored_hashes(conn), **files}.items()))
+    _write_json_file(out_dir / MANIFEST, {"files": files})
+    return files
+
+
+def _stored_hashes(conn):
+    """{file name: short hash} of the top-level rows of site.docs, as the manifest lists them
+    (a row's sha256 is its file's). Empty on a read-only run (a local one, which publishes
+    nothing and whose role can't see the site schema) and for a database from before the table."""
+    try:
+        config.require_db_write("read the stored manifest")
+    except config.SafetyError as exc:
+        log.info("Manifest lists this run's files only: %s", exc)
+        return {}
+    (table,) = conn.execute("select to_regclass(%s)", ["site.docs"]).fetchone()
+    if table is None:
+        return {}
+    return {f"{key}.json": sha[:16] for key, sha in conn.execute(
+        "select key, sha256 from site.docs where position('/' in key) = 0 and key <> %s", [Path(MANIFEST).stem]).fetchall()}
+
+
+def _publish_export(build, out_dir=OUT_DIR, conn=None):
+    """Build the export in a staging directory, validate it and swap it in. The new export is
+    compared with the one before it (_check_row_collapse): the files in out_dir, or, where the
+    working copy has none (the data isn't kept in the repository), the rows in site.docs."""
+    out_dir = Path(out_dir)
+    parent = out_dir.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    staged = Path(tempfile.mkdtemp(prefix=f".{out_dir.name}-staged-", dir=parent))
+    try:
+        build(staged)
+        for rel in CARRIED_FILES:
+            if (out_dir / rel).exists() and not (staged / rel).exists():
+                shutil.copy2(out_dir / rel, staged / rel)
+        write_manifest(staged)
+        earlier = out_dir.is_dir() and any(out_dir.glob("*.json"))
+        validate_export(staged, previous_dir=out_dir if earlier else None,
+                        previous=None if earlier or conn is None else _stored_shape(conn))
+        _replace_export(staged, out_dir)
+        staged = None
+    finally:
+        if staged and staged.exists():
+            shutil.rmtree(staged, ignore_errors=True)
+
+
+def _replace_export(staged, out_dir):
+    backup = None
+    if out_dir.exists():
+        backup = Path(tempfile.mkdtemp(prefix=f".{out_dir.name}-old-", dir=out_dir.parent))
+        backup.rmdir()
+        out_dir.rename(backup)
+    try:
+        staged.rename(out_dir)
+    except Exception:
+        if backup and backup.exists() and not out_dir.exists():
+            backup.rename(out_dir)
+        raise
+    finally:
+        if backup and backup.exists():
+            shutil.rmtree(backup, ignore_errors=True)
+
+
+def validate_export(out_dir, previous_dir=None, previous=None):
+    out_dir = Path(out_dir)
+    if not out_dir.is_dir():
+        raise ExportValidationError(f"Export directory does not exist: {out_dir}")
+
+    parsed = {}
+    for rel in CRITICAL_JSON_FILES:
+        path = out_dir / rel
+        if not path.exists():
+            raise ExportValidationError(f"Missing critical export file: {rel}")
+        if path.stat().st_size == 0:
+            raise ExportValidationError(f"Critical export file is empty: {rel}")
+        parsed[rel] = _read_json(path)
+
+    for path in out_dir.rglob("*.json"):
+        _read_json(path)
+
+    for rel, (key, minimum) in MIN_MAJOR_ROWS.items():
+        value = parsed[rel].get(key)
+        expected_type = MAJOR_ROW_TYPES.get(rel, list)
+        if not isinstance(value, expected_type):
+            raise ExportValidationError(
+                f"{rel} does not contain a {expected_type.__name__} at {key!r}")
+        if len(value) < minimum:
+            raise ExportValidationError(
+                f"{rel} has only {len(value)} {key} rows; expected at least {minimum}")
+
+    for rel in CRITICAL_DETAIL_DIRS:
+        detail_dir = out_dir / rel
+        if not detail_dir.is_dir():
+            raise ExportValidationError(f"Missing critical export directory: {rel}")
+        if not any(detail_dir.glob("*.json")):
+            raise ExportValidationError(f"Critical export directory is empty: {rel}")
+
+    previous_dir = Path(previous_dir) if previous_dir else None
+    if previous_dir and previous_dir.is_dir():
+        previous = _export_shape(previous_dir)
+    if previous:
+        _check_row_collapse(_export_shape(out_dir), previous)
+
+
+def _read_json(path):
+    try:
+        with path.open(encoding="utf-8") as fh:
+            return json.load(fh)
+    except json.JSONDecodeError as exc:
+        raise ExportValidationError(f"Invalid JSON in {path}: {exc}") from exc
+
+
+def store_owner_doc(conn, name, payload):
+    """Owner-only fantasy data (audit L3, owner's decision 2026-10-02): FPL's terms don't allow its
+    data to be republished, so fpl_predictions and fpl_team go to fpl_owner_docs, never .export.
+    efl_predictions joined them on 2026-10-04 (audit L11, owner's decision). The
+    site reads them through fpl_owner_data, which answers only the signed-in owner
+    (db/migrations/20261004_fpl_owner_login.sql). Raises if the table is missing or the connection
+    is read-only: callers treat that as a skipped export."""
+    config.require_db_write(f"store {name}")
+    conn.execute("""insert into fpl_owner_docs (name, doc, updated_at) values (%s, %s::jsonb, now())
+                    on conflict (name) do update set doc = excluded.doc, updated_at = excluded.updated_at""",
+                 [name, json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"))])
+    conn.commit()
+
+
+def mirror_site_docs(conn, out_dir=OUT_DIR, only=None):
+    """site.docs: a row for every data file, keyed by its path without ".json"
+    (audit/db-api-plan.md, db/migrations/20261004_site_docs.sql). These rows are what the site
+    reads (since 2026-10-05). Only rows whose file changed are written,
+    and it is one transaction. After a full export, rows whose file has gone are deleted. A job
+    that writes part of the data names what it wrote (only: paths or patterns under out_dir,
+    such as "nations/*.json"): just those are written and nothing is deleted, so it doesn't
+    matter what else is, or isn't, in its working copy. A failed write is fatal: the site would
+    go on showing the old rows, so the run has to stop and show red. A read-only run (a local
+    one) is skipped with a log line.
+    Returns (written, deleted), or None when skipped."""
+    out_dir = Path(out_dir)
+    try:
+        config.require_db_write("mirror site docs")
+        found = sorted(out_dir.rglob("*.json")) if only is None else sorted({p for pattern in only for p in out_dir.glob(pattern)})
+        files = {p.relative_to(out_dir).with_suffix("").as_posix(): p for p in found}
+        if not files:
+            return None
+        stored = dict(conn.execute("select key, sha256 from site.docs").fetchall())
+        changed = []
+        for key, path in files.items():
+            raw = path.read_bytes()
+            sha = hashlib.sha256(raw).hexdigest()
+            if stored.get(key) != sha:
+                changed.append((key, raw.decode("utf-8"), sha))
+        gone = sorted(set(stored) - set(files)) if only is None else []
+        with conn.cursor() as cur:
+            # the file's text as it is: no cast, so it goes in whether the column is json (the text
+            # is kept and returned untouched) or, before 20261005_site_doc_raw.sql, jsonb
+            # a file in a paid_ directory is a paid row: site_doc() never returns it (PAID_PREFIX)
+            cur.executemany(f"""insert into site.docs (key, body, sha256, updated_at, paid)
+                                values (%s, %s, %s, now(), %s)
+                                on conflict (key) do update set body = excluded.body, sha256 = excluded.sha256,
+                                                                updated_at = excluded.updated_at, paid = excluded.paid""",
+                            [(*row, row[0].startswith(PAID_PREFIX)) for row in changed])
+            if gone:
+                cur.execute("delete from site.docs where key = any(%s)", [gone])
+        conn.commit()
+        log.info("site.docs: %d written, %d deleted, %d in all", len(changed), len(gone), len(files))
+        return len(changed), len(gone)
+    except config.SafetyError as exc:
+        log.info("site.docs mirror skipped: %s", exc)
+        return None
+    except Exception:
+        conn.rollback()         # leave the caller's connection usable
+        log.error("site.docs was not written: the site is still showing the rows from the last run that wrote them")
+        raise
+
+
+def _write_json_file(path, payload, *, ensure_ascii=True):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(payload, separators=(",", ":"), ensure_ascii=ensure_ascii)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as fh:
+        fh.write(text)
+        tmp = Path(fh.name)
+    try:
+        tmp.replace(path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def _export_shape(root):
+    """What one export is compared with the next by: {"rows": {major file: its rows},
+    "dirs": {detail directory: its files}}. A file or directory that isn't there is left out."""
+    root = Path(root)
+    rows = {}
+    for rel, (key, _) in MIN_MAJOR_ROWS.items():
+        if (root / rel).exists():
+            value = _read_json(root / rel).get(key)
+            if isinstance(value, MAJOR_ROW_TYPES.get(rel, list)):
+                rows[rel] = len(value)
+    return {"rows": rows,
+            "dirs": {rel: sum(1 for _ in (root / rel).glob("*.json")) for rel in CRITICAL_DETAIL_DIRS if (root / rel).is_dir()}}
+
+
+def _stored_shape(conn):
+    """The same for the export in site.docs, the last one published: counted in the database, so
+    no file is fetched. None on a read-only run (a local one, which publishes nothing and whose
+    role can't see the site schema) and for a database from before the table."""
+    try:
+        config.require_db_write("read the stored export")
+    except config.SafetyError as exc:
+        log.info("Export not compared with the stored one: %s", exc)
+        return None
+    (table,) = conn.execute("select to_regclass(%s)", ["site.docs"]).fetchone()
+    if table is None:
+        return None
+    rows = {}
+    for rel, (key, _) in MIN_MAJOR_ROWS.items():
+        row = conn.execute(
+            """select json_typeof(body::json -> %s),
+                      case json_typeof(body::json -> %s)
+                          when 'array' then json_array_length(body::json -> %s)
+                          when 'object' then (select count(*) from json_object_keys(body::json -> %s)) end
+               from site.docs where key = %s""", [key, key, key, key, Path(rel).stem]).fetchone()
+        if row and row[0] == ("object" if MAJOR_ROW_TYPES.get(rel, list) is dict else "array"):
+            rows[rel] = int(row[1])
+    dirs = {name: int(n) for name, n in conn.execute(
+        """select split_part(key, '/', 1), count(*) from site.docs
+           where position('/' in key) > 0 group by 1""").fetchall() if name in CRITICAL_DETAIL_DIRS}
+    return {"rows": rows, "dirs": dirs}
+
+
+def _check_row_collapse(new, old):
+    """Stop an export that has lost most of a major file's rows or a detail directory's files
+    since the one before it. new, old: _export_shape (or _stored_shape)."""
+    for rel, (key, _) in MIN_MAJOR_ROWS.items():
+        was, now = old["rows"].get(rel), new["rows"].get(rel)
+        if not was or now is None:
+            continue
+        if now < was * COLLAPSE_RATIO:
+            raise ExportValidationError(
+                f"{rel} collapsed from {was} to {now} {key} rows")
+
+    for rel in CRITICAL_DETAIL_DIRS:
+        was, now = old["dirs"].get(rel), new["dirs"].get(rel)
+        if was is None or now is None:
+            continue
+        if was >= 10 and now < was * COLLAPSE_RATIO:
+            raise ExportValidationError(
+                f"{rel}/ collapsed from {was} to {now} JSON files")
+
+
+def _write_site_data(conn, out_dir=OUT_DIR):
+    now = datetime.now(timezone.utc)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    competitions = {
+        lid: {"name": name, "country": country, "type": ltype}
+        for lid, name, country, ltype in conn.execute(
+            "select league_id, name, country, type from leagues")
+    }
+
+    market = market_probabilities(conn)
+    matches = []
+    team_ids = set()
+    teams_extra = {}           # national team names (national teams aren't in teams)
+    for row in conn.execute(
+            """select f.fixture_id, f.kickoff, f.league_id, f.round, f.home_team_id, f.away_team_id,
+                      f.status_short, f.home_goals, f.away_goals, f.pen_home, f.pen_away,
+                      p.p_home, p.p_draw, p.p_away, p.home_xg, p.away_xg, p.likely_score,
+                      p.home_rank, p.away_rank, p.source, p.rating, p.rating_winner,
+                      p.rating_margin, p.rating_clean_sheets, p.rating_shape, p.rating_goals,
+                      p.home_missing, p.away_missing, p.p_over25, p.p_btts,
+                      coalesce(rh.actual_xi_rating, rh.predicted_xi_rating), rh.recent_xi_rating,
+                      coalesce(ra.actual_xi_rating, ra.predicted_xi_rating), ra.recent_xi_rating
+               from fixtures f left join fixture_predictions p using (fixture_id)
+               left join fixture_team_ratings rh on rh.fixture_id = f.fixture_id and rh.team_id = f.home_team_id
+               left join fixture_team_ratings ra on ra.fixture_id = f.fixture_id and ra.team_id = f.away_team_id
+               where f.kickoff between %s and %s
+               order by f.kickoff, f.fixture_id""",
+            [now - timedelta(days=PAST_DAYS), now + timedelta(days=FUTURE_DAYS)]):
+        (fid, kickoff, lid, rnd, home, away, status, hg, ag, ph, pa_, p_h, p_d, p_a,
+         hxg, axg, likely, hr, ar, source, *ratings, h_miss, a_miss, p_over, p_btts,
+         h_xi, h_recent, a_xi, a_recent) = row
+        team_ids.update((home, away))
+        matches.append([
+            fid, kickoff.isoformat(), lid, rnd, home, away, status, hg, ag, ph, pa_,
+            _r(p_h, 3), _r(p_d, 3), _r(p_a, 3), _r(hxg), _r(axg), likely, _r(hr, 0), _r(ar, 0),
+            source, *ratings,
+            *[_r(x, 3) for x in market.get(fid, (None, None))[:2]],     # the away share is the rest
+            _r(h_miss), _r(a_miss), _r(p_over, 3), _r(p_btts, 3),
+            _r(h_xi, 1), _r(h_recent, 1), _r(a_xi, 1), _r(a_recent, 1),
+            0,
+        ])
+
+    # National team matches (national_fixtures), on the Matches tab only and flagged intl = 1 so
+    # the site links them to the nation pages. Their projections are national_predictions.py's:
+    # the same fields as a club match's, without the parts national teams have no data for
+    # (absences, line-up ratings)
+    since, until = now - timedelta(days=PAST_DAYS), now + timedelta(days=FUTURE_DAYS)
+    national_why = {}
+    national_xi = national_xis(conn, now)
+    for row in national_matches(conn, since, until):
+        fid, lid, tournament, home, away, h_name, a_name = row[0], row[2], row[3], *row[5:9]
+        competitions.setdefault(lid, {"name": tournament or config.NATIONAL_TEAM_LEAGUES.get(lid, f"Competition {lid}"),
+                                      "country": "World", "type": "International"})
+        teams_extra[home], teams_extra[away] = html.unescape(h_name), html.unescape(a_name)
+        match, why = national_match(row, market.get(fid))
+        matches.append(match)
+        if why:
+            # each side's predicted XI, for the card's line-ups (national_lineups.py)
+            xi = {str(t): national_xi[fid, t] for t in (home, away) if (fid, t) in national_xi}
+            national_why[str(fid)] = {**why, "xi": xi} if xi else why
+    # and the national team competitions with a projected match in the Stats tab's longest range,
+    # so its menu can name the ones no longer on the Matches tab
+    if _table_exists(conn, "national_fixtures") and _table_exists(conn, national_predictions.TABLE):
+        for lid, tournament in conn.execute(
+                f"""select distinct on (f.league_id) f.league_id, f.tournament
+                    from national_fixtures f join {national_predictions.TABLE} p using (fixture_id)
+                    where f.kickoff >= %s order by f.league_id, f.kickoff desc""",
+                [now - timedelta(days=max(STAT_RANGES.values()))]):
+            competitions.setdefault(lid, {"name": tournament or config.NATIONAL_TEAM_LEAGUES.get(lid, f"Competition {lid}"),
+                                          "country": "World", "type": "International"})
+    matches.sort(key=lambda m: (m[1], m[0]))
+    nation_pages = {t: nat for t, nat in national_nationalities(conn, list(teams_extra)).items()
+                    if nat != teams_extra[t]}
+
+    # Form: total rank change over each team's last FORM_GAMES games
+    form = dict(conn.execute(
+        """select team_id, sum(rank_change) from (
+             select team_id, rank_change,
+                    row_number() over (partition by team_id order by match_no desc) rn
+             from team_rank_history) x
+           where rn <= %s group by team_id""", [FORM_GAMES]).fetchall())
+
+    # League each club is playing in this season (league fixtures in a current season); null for
+    # clubs relegated out of every tracked league or only seen in cups
+    current_league = dict(conn.execute(
+        """select distinct on (team_id) team_id, league_id from (
+             select f.home_team_id team_id, f.league_id, f.kickoff from fixtures f
+               join leagues l using (league_id) join league_seasons ls using (league_id, season)
+               where l.type = 'League' and ls.is_current
+             union all
+             select f.away_team_id, f.league_id, f.kickoff from fixtures f
+               join leagues l using (league_id) join league_seasons ls using (league_id, season)
+               where l.type = 'League' and ls.is_current) x
+           order by team_id, kickoff desc""").fetchall())
+
+    rankings = []
+    for team, lid, cur, st, lt, played, att, dfn, home_r, away_r in conn.execute(
+            """select team_id, league_id, current_rank, st_algo, lt_algo, played,
+                      attack, defence, home_rating, away_rating
+               from team_rankings order by lt_algo desc"""):
+        team_ids.add(team)
+        rankings.append([team, current_league.get(team, lid), _r(cur, 1), _r(st, 1), _r(lt, 1),
+                         played, _r(form.get(team), 1),
+                         1 if team in current_league else 0,
+                         _r(att, 1), _r(dfn, 1), _r(home_r, 1), _r(away_r, 1)])
+
+    teams = {t: n for t, n in conn.execute(
+        "select team_id, name from teams where team_id = any(%s)", [list(team_ids)])}
+    for team, name in teams_extra.items():
+        teams.setdefault(team, name)
+
+    generated = now.isoformat()
+    # site.json: what every page needs whatever it shows (the competitions, the clubs' names, when
+    # the data was made). It is one of the two files loaded on every visit (rankings.json is the
+    # other); the matches are rows of site.matches, asked for by the views that show them.
+    site = {
+        "generated_at": generated,
+        "freshness": site_freshness(conn),
+        "competitions": competitions,
+        "teams": teams,
+        "nation_pages": nation_pages,
+        "match_fields": SITE_MATCH_FIELDS,      # the order of a match's row, as site_matches() returns them
+    }
+    (out_dir / "rankings.json").write_text(json.dumps({
+        "generated_at": generated,
+        "fields": ["team", "league", "current", "st", "lt", "played",
+                   "form", "in_league", "attack", "defence", "home", "away"],
+        "rankings": rankings,
+    }, separators=(",", ":")), encoding="utf-8")
+    log.info("Exported %d matches and %d rankings to %s", len(matches), len(rankings), out_dir)
+    export_stats(conn, out_dir)
+    export_bets(conn, out_dir)
+    store_matches(conn, matches, {**match_explanations(conn, now), **national_why})
+    export_methodology(conn, out_dir, now)
+    player_team, listed = export_players(conn, out_dir, rankings)
+    export_injuries(conn, out_dir, listed["free"])
+    # the players are rows of site.players: the site asks for the ones a view shows, and needs the
+    # order of a row, the seasons and the names of their clubs outside the rankings
+    site.update(player_fields=SITE_PLAYER_FIELDS, player_season_fields=PLAYER_SEASON_FIELDS,
+                player_seasons=PLAYER_SEASONS, player_future_seasons=listed["future_seasons"])
+    for team, name in listed["teams"].items():
+        site["teams"].setdefault(team, name)
+    (out_dir / "site.json").write_text(json.dumps(site, separators=(",", ":")), encoding="utf-8")
+    detail = export_player_seasons(conn, out_dir)
+    export_clubs(conn, out_dir, _club_positions(player_team, detail["positions"]))
+    export_leagues(conn, out_dir)
+    export_player_pages(conn, out_dir, detail, listed["free"])
+    export_fantasy(conn, out_dir)
+    export_fantasy_predictions(conn)
+    export_efl_fantasy(conn, out_dir)
+    export_nations(conn, out_dir)
+
+
+def export_nations(conn, out_dir=OUT_DIR):
+    """data/nations.json, the national team ranking, and data/nations/, the national team pages
+    (nations.py). Not critical: if it fails (no copy of the public results and no download), the
+    last published files are kept."""
+    from ..models import nations
+    try:
+        nations.export_nations(conn, out_dir)
+    except Exception:
+        log.exception("Nations export failed; keeping the last published nations.json and nations/")
+        conn.rollback()
+        old, new = OUT_DIR / "nations.json", Path(out_dir) / "nations.json"
+        if old.exists() and old.resolve() != new.resolve():
+            shutil.copy2(old, new)
+            if (OUT_DIR / "nations").is_dir():
+                shutil.copytree(OUT_DIR / "nations", Path(out_dir) / "nations", dirs_exist_ok=True)
+
+
+def _records_sum(side):
+    """SQL for record_totals() of a snapshot's home_records / away_records, so the record lists
+    (most of a snapshot's size) never leave the database."""
+    return f"""cross join lateral (
+        select coalesce(sum((r->>0)::float8), 0), coalesce(sum((r->>1)::float8), 0), count(*)
+        from jsonb_array_elements(coalesce(s.inputs->'{side}_records', '[]'::jsonb)) r) {side[0]}r"""
+
+
+def explanation(inputs, league_id, home_totals, away_totals, stored, meta):
+    """One match's explanation (match_explanations): predictions.explain() on the snapshot behind the
+    stored prediction, plus the inputs it was built from, rounded for display. None if the
+    snapshot doesn't reproduce the stored prediction."""
+    parts = predictions.explain(inputs, league_id, home_totals, away_totals, stored)
+    if parts is None:
+        return None
+    pair = lambda k, n=0: [_r(inputs.get(f"home_{k}"), n), _r(inputs.get(f"away_{k}"), n)]
+    lines = inputs.get("predicted_lines")
+    out = {
+        "current": pair("current_rank"), "baseline": pair("lt_algo"), "match": pair("match_rank"),
+        "margin": {k: _r(v) for k, v in parts["margin"].items()},
+        "exp_diff": _r(parts["exp_diff"]),
+        "tendencies": _r(parts["tendencies"]), "league_goals": _r(parts["league_goals"]),
+        "missing": pair("missing", 1),
+        "lines": [[_r(v, 0) for v in side] for side in lines] if lines else None,
+        "reasons": [[k, _r(v)] for k, v in parts["reasons"]],
+        **meta,
+    }
+    fallback = [bool(inputs.get("home_rank_fallback")), bool(inputs.get("away_rank_fallback"))]
+    if any(fallback):
+        out["fallback"] = fallback
+    return out
+
+
+def match_explanations(conn, now=None):
+    """{fixture id: its explanation} for every match on the site whose prediction has a snapshot:
+    the parts of the prediction (predictions.explain), the key reasons its card shows, when its
+    inputs were captured and the model version that made it. Each goes in the match's row of
+    site.matches (store_matches): the reasons come with the match, the rest is fetched when its
+    card's model detail is opened."""
+    now = now or datetime.now(timezone.utc)
+    out = {}
+    (registry,) = conn.execute("select to_regclass('public.match_prediction_snapshots')").fetchone()
+    if registry is not None:
+        # The latest snapshot whose outputs are the stored prediction's: the one it came from
+        rows = conn.execute(
+            f"""select distinct on (f.fixture_id) f.fixture_id, f.league_id,
+                       s.inputs - 'home_records' - 'away_records',
+                       hr.*, ar.*, p.exp_diff, p.home_xg, p.away_xg,
+                       s.source, s.captured_at, s.model_version_id, v.version_name, v.code_sha
+                from fixtures f join fixture_predictions p using (fixture_id)
+                join match_prediction_snapshots s on s.fixture_id = f.fixture_id
+                  and s.home_xg = p.home_xg and s.away_xg = p.away_xg and s.p_home = p.p_home
+                left join model_versions v on v.model_version_id = s.model_version_id
+                {_records_sum("home")} {_records_sum("away")}
+                where f.kickoff between %s and %s
+                order by f.fixture_id, s.captured_at desc""",
+            [now - timedelta(days=PAST_DAYS), now + timedelta(days=FUTURE_DAYS)]).fetchall()
+        ids = [r[0] for r in rows]
+        seen = {}
+        for key, sql in (("odds_at", "select fixture_id, max(updated_at) from odds where bet_id = 1 and fixture_id = any(%s) group by fixture_id"),
+                         ("injuries_at", "select fixture_id, max(updated_at) from injuries where fixture_id = any(%s) group by fixture_id")):
+            seen[key] = dict(conn.execute(sql, [ids]).fetchall()) if ids else {}
+        for (fid, lid, inputs, hs, hc, hn, as_, ac, an, exp_diff, hxg, axg,
+             source, captured, version_id, version_name, code_sha) in rows:
+            meta = {"source": source, "captured_at": captured.isoformat(), "model": version_id}
+            meta.update((k, v[fid].isoformat()) for k, v in seen.items() if fid in v)
+            entry = explanation(inputs, lid, (hs, hc, hn), (as_, ac, an), (exp_diff, hxg, axg), meta)
+            if entry:
+                out[str(fid)] = entry
+    log.info("Explained %d matches", len(out))
+    return out
+
+
+# A match as the site draws it: the order of its row in site.matches.data
+SITE_MATCH_FIELDS = ["id", "kickoff", "league", "round", "home", "away", "status", "hg", "ag",
+                     "pen_h", "pen_a", "p_home", "p_draw", "p_away", "home_xg", "away_xg",
+                     "likely", "home_rank", "away_rank", "source", "rating", "r_winner",
+                     "r_margin", "r_clean_sheets", "r_shape", "r_goals", "m_home", "m_draw",
+                     "home_missing", "away_missing", "p_over25", "p_btts",
+                     "home_xi", "home_recent_xi", "away_xi", "away_recent_xi", "intl"]
+
+
+# What a visitor without a subscription doesn't get of a match that hasn't kicked off, once
+# the paywall is on (db/migrations/20261006_paid_tier.sql; the line is the owner's of
+# 2026-10-04): the depth always, and the chances themselves more than 7 days ahead.
+MATCH_PAID_DEPTH = ("home_xg", "away_xg", "likely", "home_missing", "away_missing", "p_over25", "p_btts",
+                    "home_xi", "home_recent_xi", "away_xi", "away_recent_xi")
+MATCH_PAID_CHANCES = ("p_home", "p_draw", "p_away")
+
+
+def blanked(row, fields):
+    """A match's row (SITE_MATCH_FIELDS order) with these fields null."""
+    hide = {SITE_MATCH_FIELDS.index(f) for f in fields}
+    return [None if i in hide else v for i, v in enumerate(row)]
+
+
+def store_matches(conn, matches, explained=None):
+    """site.matches: every match on the site as a row, with the key reasons its card shows and
+    its full model detail (match_explanations), for the database functions the site asks
+    (db/migrations/20261005_site_matches.sql and 20261005_site_matches_queries.sql: site_matches,
+    site_match_days, site_match_detail). matches: the rows, in SITE_MATCH_FIELDS order. The table
+    is rewritten whole, in one transaction, unless it would lose most of its rows
+    (_check_table_collapse).
+
+    True once stored. False, with nothing written, on a read-only run or a database from before
+    the migration (logged). Any other failure stops the run."""
+    explained = explained or {}
+    try:
+        config.require_db_write("store the matches")
+    except config.SafetyError as exc:
+        log.info("Matches not stored: %s", exc)
+        return False
+    (table,) = conn.execute("select to_regclass(%s)", ["site.matches"]).fetchone()
+    has = lambda column: conn.execute(
+        "select 1 from pg_attribute where attrelid = 'site.matches'::regclass and attname = %s and not attisdropped",
+        [column]).fetchone() is not None
+    ready = table is not None and has("intl")
+    if not ready:
+        log.warning("site.matches isn't ready (db/migrations/20261005_site_matches.sql and "
+                    "20261005_site_matches_queries.sql): the matches weren't stored")
+        return False
+    text = lambda value: None if value is None else json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+    at = {name: i for i, name in enumerate(SITE_MATCH_FIELDS)}
+    # the blanked copies the paid tier's migration added (20261006_paid_tier.sql), once it is applied
+    paid = has("data_locked")
+    with conn.cursor() as cur:
+        _check_table_collapse(cur, "site.matches", len(matches))
+        cur.execute("delete from site.matches")
+        with cur.copy(f"""copy site.matches (fixture_id, kickoff, league_id, home_id, away_id, status, intl, data, reasons, why
+                          {', data_free, data_locked' if paid else ''}) from stdin""") as copy:
+            for row in matches:
+                why = explained.get(str(row[at["id"]]))
+                copy.write_row((row[at["id"]], row[at["kickoff"]], row[at["league"]], row[at["home"]], row[at["away"]],
+                                row[at["status"]], bool(row[at["intl"]]), text(row), text(why and why["reasons"]), text(why),
+                                *((text(blanked(row, MATCH_PAID_DEPTH)),
+                                   text(blanked(row, MATCH_PAID_DEPTH + MATCH_PAID_CHANCES))) if paid else ())))
+        cur.execute("analyze site.matches")
+    conn.commit()
+    log.info("Stored %d matches (%d with model detail)", len(matches), sum(str(m[0]) in explained for m in matches))
+    return True
+
+
+STAT_RANGES = {"7d": 7, "30d": 30, "90d": 90, "365d": 365}
+ENGLISH = [39, 40, 41, 42, 43, 50, 51, 45, 46, 47, 48, 528]
+
+
+def _stats(rows):
+    """Accuracy summary for (p_home, p_draw, p_away, home_xg, away_xg, likely, hg, ag, source,
+    rating, r_winner, r_margin, r_clean_sheets, r_shape, r_goals)."""
+    n = len(rows)
+    if not n:
+        return None
+    correct = exact = live = home_wins = 0
+    logloss = brier = goal_err = 0.0
+    calib = [[0, 0.0, 0] for _ in range(10)]   # per 10% bin: count, sum of predicted, hits
+    ratings = [0] * 5                               # count of 1s..5s
+    factor_sums = [0.0] * 5
+    rated = 0
+    mk = {"n": 0, "model_ll": 0.0, "market_ll": 0.0, "model_correct": 0, "market_correct": 0}
+    for ph, pd, pa, hxg, axg, likely, hg, ag, source, rating, *factors, mprobs in rows:
+        if mprobs:
+            r_ = 0 if hg > ag else 1 if hg == ag else 2
+            mk["n"] += 1
+            mk["model_ll"] += -math.log(max((ph, pd, pa)[r_], 1e-6))
+            mk["market_ll"] += -math.log(max(mprobs[r_], 1e-6))
+            mk["model_correct"] += (ph, pd, pa).index(max(ph, pd, pa)) == r_
+            mk["market_correct"] += mprobs.index(max(mprobs)) == r_
+        if rating:
+            rated += 1
+            ratings[rating - 1] += 1
+            for i, f in enumerate(factors):
+                factor_sums[i] += f
+        res = 0 if hg > ag else 1 if hg == ag else 2
+        probs = (ph, pd, pa)
+        correct += probs.index(max(probs)) == res
+        exact += likely == f"{hg}-{ag}"
+        live += source == "live"
+        home_wins += res == 0
+        logloss += -math.log(max(probs[res], 1e-6))
+        brier += sum((p - (i == res)) ** 2 for i, p in enumerate(probs))
+        goal_err += (abs(hxg - hg) + abs(axg - ag)) / 2
+        for i, p in enumerate(probs):
+            b = calib[min(9, int(p * 10))]
+            b[0] += 1; b[1] += p; b[2] += i == res
+    return {
+        "n": n, "live": live,
+        "correct": round(correct / n, 4), "exact": round(exact / n, 4),
+        "home_rate": round(home_wins / n, 4),
+        "log_loss": round(logloss / n, 4), "brier": round(brier / n, 4),
+        "goal_error": round(goal_err / n, 3),
+        "market": {"n": mk["n"],
+                   "model_ll": round(mk["model_ll"] / mk["n"], 4),
+                   "market_ll": round(mk["market_ll"] / mk["n"], 4),
+                   "model_correct": round(mk["model_correct"] / mk["n"], 4),
+                   "market_correct": round(mk["market_correct"] / mk["n"], 4)} if mk["n"] else None,
+        "rated": rated,
+        "rating_avg": round(sum((i + 1) * c for i, c in enumerate(ratings)) / rated, 3) if rated else None,
+        "rating_counts": ratings,
+        "factor_avgs": dict(zip(["winner", "margin", "clean_sheets", "shape", "goals"],
+                                [round(x / rated, 2) for x in factor_sums])) if rated else None,
+        "calibration": [[c, round(s / c, 3), round(h / c, 3)] if c else [0, None, None]
+                        for c, s, h in calib],
+    }
+
+
+# Stats tab, model vs bookmakers per market: market -> (bet id, API line or "", selections)
+STAT_MARKETS = {
+    "1X2": (1, "", ("Home", "Draw", "Away")),
+    "BTTS": (8, "", ("Yes", "No")),
+    **{f"OU{int(l * 10)}": (5, str(l), ("Over", "Under")) for l in GOAL_LINES},
+}
+
+
+def market_consensus(conn, since):
+    """{(fixture, market): {"close": [probs], "open": [probs] or None}} for finished fixtures
+    since `since`, in STAT_MARKETS' selection order.
+
+    Each bookmaker's complete set of prices with its margin removed, averaged, worked out in the
+    database so only a dozen numbers per fixture come back. Closing = the last price before
+    kickoff (odds.odd); opening = odds.first_odd, only where the bookmaker's whole set was
+    first seen before kickoff (odds loaded after a match was played have no real opening)."""
+    lines = [f"{side} {l}" for l in GOAL_LINES for side in ("Over", "Under")]
+    out = defaultdict(lambda: {"close": {}, "open": {}})
+    # club matches and, once their table exists, national team matches
+    matches = "select fixture_id, status_short, kickoff from fixtures" + (
+        " union all select fixture_id, status_short, kickoff from national_fixtures"
+        if _table_exists(conn, "national_fixtures") else "")
+    for fid, bet, line, sel, close, open_ in conn.execute(
+            f"""with o as (
+                 select o.fixture_id, o.bookmaker_id, o.bet_id,
+                        case when o.bet_id = 5 then split_part(o.selection, ' ', 2) else '' end as line,
+                        case when o.bet_id = 5 then split_part(o.selection, ' ', 1) else o.selection end as sel,
+                        o.odd::float8 as odd, o.first_odd::float8 as first_odd,
+                        o.first_seen_at < f.kickoff and o.first_odd > 1 as has_open
+                 from odds o join ({matches}) f using (fixture_id)
+                 where f.status_short = any(%s) and f.kickoff >= %s and o.odd > 1
+                   and (o.bet_id in (1, 8) or (o.bet_id = 5 and o.selection = any(%s)))),
+               s as (
+                 select *, sum(1 / odd) over w as tot, count(*) over w as n,
+                        bool_and(has_open) over w as all_open,
+                        sum(case when has_open then 1 / first_odd end) over w as tot_open
+                 from o window w as (partition by fixture_id, bookmaker_id, bet_id, line))
+               select fixture_id, bet_id, line, sel, avg(1 / odd / tot),
+                      avg(1 / first_odd / tot_open) filter (where all_open)
+               from s where n = case when bet_id = 1 then 3 else 2 end
+               group by 1, 2, 3, 4""",
+            [["FT", "AET", "PEN"], since, lines]):
+        market = next((m for m, (b, l, _) in STAT_MARKETS.items() if b == bet and l == line), None)
+        if market:
+            out[(fid, market)]["close"][sel] = close
+            if open_ is not None:
+                out[(fid, market)]["open"][sel] = open_
+    result = {}
+    for (fid, market), d in out.items():
+        sels = STAT_MARKETS[market][2]
+        if all(x in d["close"] for x in sels):
+            result[(fid, market)] = {"close": [d["close"][x] for x in sels],
+                                     "open": [d["open"][x] for x in sels] if all(x in d["open"] for x in sels) else None}
+    return result
+
+
+def _market_stats(rows):
+    """Model vs bookmakers per market for rows of (model {market: probs}, index of what
+    happened per market, consensus {market: {close, open}}): log losses on the same matches."""
+    out = {}
+    for market in STAT_MARKETS:
+        n = no = 0
+        m_ll = c_ll = mo_ll = o_ll = 0.0
+        for model, happened, cons in rows:
+            c = cons.get(market)
+            if not c or market not in model:
+                continue
+            i = happened[market]
+            ll = lambda p: -math.log(max(p[i], 1e-6))
+            n += 1; m_ll += ll(model[market]); c_ll += ll(c["close"])
+            if c["open"]:
+                no += 1; mo_ll += ll(model[market]); o_ll += ll(c["open"])
+        if n:
+            out[market] = {"n": n, "model_ll": round(m_ll / n, 4), "close_ll": round(c_ll / n, 4),
+                           "open_n": no, "model_open_ll": round(mo_ll / no, 4) if no else None,
+                           "open_ll": round(o_ll / no, 4) if no else None}
+    return out or None
+
+
+def export_stats(conn, out_dir=OUT_DIR):
+    """Prediction accuracy by date range and competition, for the site's Stats tab."""
+    now = datetime.now(timezone.utc)
+    rows = conn.execute(
+        """select f.kickoff, f.league_id, p.p_home, p.p_draw, p.p_away, p.home_xg, p.away_xg,
+                  p.likely_score, f.home_goals, f.away_goals, p.source, p.rating, p.rating_winner,
+                  p.rating_margin, p.rating_clean_sheets, p.rating_shape, p.rating_goals,
+                  f.fixture_id
+           from fixture_predictions p join fixtures f using (fixture_id)
+           where f.status_short = any(%s) and f.home_goals is not null and f.kickoff >= %s""",
+        [["FT", "AET", "PEN"], now - timedelta(days=max(STAT_RANGES.values()))]).fetchall()
+    rows += national_stat_rows(conn, now - timedelta(days=max(STAT_RANGES.values())))
+    market = market_probabilities(conn)
+    rows = [(*r, market.get(r[-1])) for r in rows]
+
+    # every market with odds: the model's chances (goal lines from its projected goals) and
+    # what happened over 90 minutes, per fixture
+    since = now - timedelta(days=max(STAT_RANGES.values()))
+    cons = market_consensus(conn, since)
+    with_odds = {fid for fid, _ in cons}
+    per_fixture = {}
+    scored = conn.execute(
+            """select f.fixture_id, p.p_home, p.p_draw, p.p_away, p.p_btts, p.home_xg, p.away_xg,
+                      f.ft_home, f.ft_away
+               from fixture_predictions p join fixtures f using (fixture_id)
+               where f.fixture_id = any(%s) and f.ft_home is not null and p.home_xg is not null""",
+            [list(with_odds)]).fetchall()
+    # national team matches: only the score after extra time is stored, so the ones that went to
+    # extra time are left out rather than marked against a 90-minute price
+    if _table_exists(conn, "national_fixtures") and _table_exists(conn, national_predictions.TABLE):
+        scored += conn.execute(
+            f"""select f.fixture_id, p.p_home, p.p_draw, p.p_away, p.p_btts, p.home_xg, p.away_xg,
+                       f.home_goals, f.away_goals
+                from {national_predictions.TABLE} p join national_fixtures f using (fixture_id)
+                where f.fixture_id = any(%s) and f.status_short = 'FT' and f.home_goals is not null
+                  and p.p_home is not null and p.home_xg is not null""", [list(with_odds)]).fetchall()
+    for fid, ph, pd, pa, pb, hx, ax, hg, ag in scored:
+        model = {"1X2": [float(ph), float(pd), float(pa)]}
+        if pb is not None:
+            model["BTTS"] = [float(pb), 1 - float(pb)]
+        for line, po in goal_lines(float(hx), float(ax)).items():
+            model[f"OU{int(line * 10)}"] = [po, 1 - po]
+        happened = {"1X2": 0 if hg > ag else 1 if hg == ag else 2, "BTTS": 0 if hg > 0 and ag > 0 else 1,
+                    **{f"OU{int(l * 10)}": 0 if hg + ag > l else 1 for l in GOAL_LINES}}
+        per_fixture[fid] = (model, happened, {m: cons[(fid, m)] for m in STAT_MARKETS if (fid, m) in cons})
+    stats = {}
+    for key, days in STAT_RANGES.items():
+        recent = [r for r in rows if r[0] >= now - timedelta(days=days)]
+        by_group = {"all": recent, "eng": [r for r in recent if r[1] in ENGLISH]}
+        for r in recent:
+            by_group.setdefault(str(r[1]), []).append(r)
+        # drop the fixture_id column (second to last) before summarising
+        stats[key] = {g: _stats([(*r[2:-2], r[-1]) for r in rs]) for g, rs in by_group.items() if rs}
+        for g, rs in by_group.items():
+            if g in stats[key]:
+                stats[key][g]["markets"] = _market_stats([per_fixture[r[-2]] for r in rs if r[-2] in per_fixture])
+    (out_dir / "stats.json").write_text(json.dumps(
+        {"generated_at": now.isoformat(), "ranges": stats}, separators=(",", ":")), encoding="utf-8")
+    log.info("Exported prediction stats for %d finished fixtures", len(rows))
+
+
+def national_stat_rows(conn, since):
+    """Finished national team matches since `since` that had a projection, in export_stats' row
+    shape, so the Stats tab counts them with the club matches (under their own competitions).
+    source is 'live' for a projection made before kickoff, else 'backfill', as national_match
+    has it. Empty until national_fixture_predictions exists."""
+    if not _table_exists(conn, "national_fixtures") or not _table_exists(conn, national_predictions.TABLE):
+        return []
+    return conn.execute(
+        f"""select f.kickoff, f.league_id, p.p_home, p.p_draw, p.p_away, p.home_xg, p.away_xg,
+                   p.likely_score, f.home_goals, f.away_goals,
+                   case when p.updated_at > f.kickoff then 'backfill' else 'live' end, p.rating,
+                   p.rating_winner, p.rating_margin, p.rating_clean_sheets, p.rating_shape,
+                   p.rating_goals, f.fixture_id
+            from {national_predictions.TABLE} p join national_fixtures f using (fixture_id)
+            where f.status_short = any(%s) and f.home_goals is not null and f.kickoff >= %s
+              and p.p_home is not null and p.home_xg is not null""",
+        [["FT", "AET", "PEN"], since]).fetchall()
+
+
+def _table_exists(conn, name):
+    (found,) = conn.execute("select to_regclass(%s)", [f"public.{name}"]).fetchone()
+    return found is not None
+
+
+def national_matches(conn, since, until):
+    """Senior national team matches (national_fixtures) kicking off between since and until, for
+    the Matches tab, each with its projection (national_fixture_predictions; nulls where it has
+    none, or before that table exists) and the projection's rating. Friendlies also has youth
+    sides ("England U19") and clubs touring against national teams (teams.national false); both
+    are left out. Empty until national_fixtures exists."""
+    if not _table_exists(conn, "national_fixtures"):
+        return []
+    projected = _table_exists(conn, national_predictions.TABLE)
+    columns = ("p_home", "p_draw", "p_away", "home_xg", "away_xg", "likely_score", "home_rank", "away_rank",
+               "neutral", "exp_diff", "p_over25", "p_btts", "updated_at", "rating", "rating_winner",
+               "rating_margin", "rating_clean_sheets", "rating_shape", "rating_goals")
+    return conn.execute(
+        rf"""select nf.fixture_id, nf.kickoff, nf.league_id, nf.tournament, nf.round, nf.home_team_id,
+                   nf.away_team_id, nf.home_name, nf.away_name, nf.status_short, nf.home_goals, nf.away_goals,
+                   {", ".join(f"p.{c}" if projected else f"null as {c}" for c in columns)}
+            from national_fixtures nf
+            {f"left join {national_predictions.TABLE} p using (fixture_id)" if projected else ""}
+            where nf.kickoff between %s and %s
+              and nf.home_name !~ ' U\d{{2}}$' and nf.away_name !~ ' U\d{{2}}$'
+              and not exists (select 1 from teams t where t.team_id in (nf.home_team_id, nf.away_team_id)
+                                                     and t.national is false)
+            order by nf.kickoff, nf.fixture_id""", [since, until]).fetchall()
+
+
+def national_xis(conn, now=None):
+    """{(fixture, team): [[player, name, role], ...]}: the predicted XI of each national team with
+    a match coming (national_lineups.replay). Not critical: empty if it can't be worked out."""
+    try:
+        if not national_lineups.ready(conn):
+            return {}
+        predicted, names = national_lineups.replay(conn, now)
+    except Exception:
+        log.exception("National line-ups not exported")
+        return {}
+    return {key: [[p, html.unescape(names.get(p) or f"Player {p}"), role] for p, role in m["xi"]]
+            for key, m in predicted.items()}
+
+
+def national_match(row, market=None):
+    """(a national_matches row as the site draws it, in SITE_MATCH_FIELDS order; its model detail,
+    or None where it has no projection). market: the bookmakers' (home, draw, away) chances with
+    their margin removed, where odds were collected for it."""
+    (fid, kickoff, lid, _, rnd, home, away, _, _, status, hg, ag,
+     p_h, p_d, p_a, hxg, axg, likely, hr, ar, neutral, exp_diff, p_over, p_btts, projected_at, *ratings) = row
+    # a projection written after kickoff was reconstructed (national_predictions.backfill_predictions)
+    source = None if p_h is None else "backfill" if projected_at > kickoff else "live"
+    match = [fid, kickoff.isoformat(), lid, rnd, home, away, status, hg, ag, None, None,
+             _r(p_h, 3), _r(p_d, 3), _r(p_a, 3), _r(hxg), _r(axg), likely, _r(hr, 0), _r(ar, 0),
+             source, *ratings,
+             *[_r(x, 3) for x in (market or (None, None))[:2]], None, None, _r(p_over, 3), _r(p_btts, 3),
+             None, None, None, None, 1]
+    why = (national_predictions.explanation(hr, ar, neutral, exp_diff, projected_at, source == "backfill")
+           if p_h is not None else None)
+    return match, why
+
+
+def national_nationalities(conn, team_ids):
+    """{national team id: its players' most common nationality}: the site's nation pages go by
+    nationality, which isn't always the team's name ("Bosnia & Herzegovina" plays as "Bosnia and
+    Herzegovina"). A nationality that is another national team's name is dropped: small nations
+    have many dual nationals (Madagascar's players are mostly listed as French). Teams with no
+    stat lines yet are left out."""
+    if not team_ids or not _table_exists(conn, "national_fixture_players"):
+        return {}
+    return dict(conn.execute(
+        """select x.team_id, x.nationality from (
+             select distinct on (nfp.team_id) nfp.team_id, p.nationality
+             from national_fixture_players nfp join players p using (player_id)
+             where nfp.team_id = any(%s) and p.nationality is not null
+             group by nfp.team_id, p.nationality
+             order by nfp.team_id, count(*) desc, p.nationality) x
+           where not exists (select 1 from national_fixtures nf
+                             where (nf.home_name = x.nationality and nf.home_team_id <> x.team_id)
+                                or (nf.away_name = x.nationality and nf.away_team_id <> x.team_id))""",
+        [team_ids]).fetchall())
+
+
+def _period(rows):
+    kickoffs = [r["effective_at"] for r in rows]
+    return {"from": min(kickoffs).isoformat(), "to": max(kickoffs).isoformat()} if kickoffs else None
+
+
+def _versions(conn, rows):
+    """[{name, n}] for the model versions behind rows, most used first; unregistered ids by id."""
+    counts = defaultdict(int)
+    for r in rows:
+        counts[r["model_version_id"]] += 1
+    names = dict(conn.execute("select model_version_id, version_name from model_versions where model_version_id = any(%s)",
+                              [list(counts)]).fetchall()) if counts else {}
+    return [{"name": names.get(v, v), "n": n} for v, n in sorted(counts.items(), key=lambda x: -x[1])]
+
+
+def export_methodology(conn, out_dir=OUT_DIR, now=None):
+    """.export/methodology.json: the live record for the Methodology page. Only prospective
+    snapshots (captured and stored before kickoff) are scored, through evaluation.py's selection
+    and metrics; reconstructed predictions never enter it. Model vs market is left out on purpose:
+    that comparison is protocol P6, blinded until its registered sample is reached."""
+    from ..evidence import evaluation
+    from types import SimpleNamespace
+    now = now or datetime.now(timezone.utc)
+    args = SimpleNamespace(source="prospective", start=datetime(2000, 1, 1, tzinfo=timezone.utc),
+                           end=now, as_of=now, hours_before=0)
+    out = {"generated_at": now.isoformat(), "freshness": site_freshness(conn), "matches": None, "lineups": None}
+    if _table_exists(conn, "match_prediction_snapshots"):
+        rows, coverage = evaluation.load_matches(conn, args, market=False)
+        if rows:
+            m = evaluation.match_metrics(rows)
+            probs = [p for r in rows for p in r["probabilities"]]
+            hits = [int(k == r["outcome"]) for r in rows for k in range(3)]
+            out["matches"] = {
+                "n": m["n"], "period": _period(rows), "versions": _versions(conn, rows),
+                "accuracy": _r(m["accuracy"], 4), "log_loss": _r(m["log_loss"], 4), "brier": _r(m["brier"], 4),
+                "exact_score": {"n": m["exact_score"]["n"], "accuracy": _r(m["exact_score"]["accuracy"], 4)},
+                # every home/draw/away probability pooled into tenths: [bin, n, mean predicted, observed rate]
+                "calibration": [[b, v["n"], _r(v["mean_probability"], 3), _r(v["observed_rate"], 3)]
+                                for b, v in evaluation.calibration(probs, hits).items()],
+                "excluded_no_regulation_score": coverage["missing_regulation_score"]}
+    if _table_exists(conn, "lineup_prediction_snapshots") and _table_exists(conn, "official_lineup_snapshots"):
+        rows, coverage = evaluation.load_lineups(conn, args)
+        if rows:
+            m = evaluation.lineup_metrics(rows)
+            out["lineups"] = {
+                "n": m["n"], "period": _period(rows), "versions": _versions(conn, rows),
+                "correct_starters_mean": _r(m["correct_starters_mean"], 2),
+                "role_accuracy": {"n": m["role_accuracy"]["n"], "accuracy": _r(m["role_accuracy"]["accuracy"], 4)},
+                "excluded_no_official_xi": coverage["missing_or_incomplete_official_xi"]}
+    _write_json_file(out_dir / "methodology.json", out)
+    log.info("Exported the methodology live record (%s matches, %s lineups)",
+             (out["matches"] or {}).get("n", 0), (out["lineups"] or {}).get("n", 0))
+    export_lineup_record(conn, out_dir, now)
+
+
+LINEUP_RECORD_FIELDS = ["fixture", "kickoff", "league", "team", "opponent", "home", "correct",
+                        "roles_right", "roles_known", "lines", "hours_before", "version", "missed", "wrong"]
+
+
+def _score_xi(predicted, actual):
+    """A predicted XI {player: role} against the XI that started {player: (role, broad position)}:
+    (starters named, of them in the right role, of them with both roles known, [starters, of them
+    named] for GK, DEF, MID and FWD by the starting role, starters missed, players picked instead)."""
+    from ..models.player_ratings import LINES, line_of
+    shared = predicted.keys() & actual.keys()
+    roles = [predicted[p] == actual[p][0] for p in shared if predicted[p] and actual[p][0]]
+    lines = []
+    for line in LINES:
+        starters = [p for p, (role, broad) in actual.items() if line_of(role, broad) == line]
+        lines += [len(starters), sum(p in shared for p in starters)]
+    return len(shared), sum(roles), len(roles), lines, sorted(actual.keys() - shared), sorted(predicted.keys() - shared)
+
+
+def _lineup_names(conn, out, rows, team_i, league_i, missed_i):
+    """Fills out's teams, leagues and players (the missed and wrongly picked) for the rows."""
+    team_ids = list({x for row in rows for x in (row[team_i], row[team_i + 1]) if x})
+    league_ids = list({row[league_i] for row in rows if row[league_i]})
+    people = list({p for row in rows for p in row[missed_i] + row[missed_i + 1]})
+    if team_ids:
+        out["teams"] = {str(t): n for t, n in conn.execute(
+            "select team_id, name from teams where team_id = any(%s)", [team_ids]).fetchall()}
+    if league_ids:
+        out["leagues"] = {str(lid): {"name": n, "country": c} for lid, n, c in conn.execute(
+            "select league_id, name, country from leagues where league_id = any(%s)", [league_ids]).fetchall()}
+    if people:
+        out["players"] = {str(p): n for p, n in conn.execute(
+            "select player_id, name from players where player_id = any(%s)", [people]).fetchall()}
+
+
+def export_lineup_record(conn, out_dir=OUT_DIR, now=None):
+    """.export/lineups.json: every scored pre-match line-up for the Line-up record tab, one row
+    per team, picked by the same rule as the methodology record (evaluation.load_lineups). The tab
+    adds them up itself, so it can filter by competition. lines is [starters, of them predicted]
+    for GK, DEF, MID and FWD, by the official XI's roles; missed are starters the model left out,
+    wrong are the players it picked instead."""
+    from ..evidence import evaluation
+    from types import SimpleNamespace
+    now = now or datetime.now(timezone.utc)
+    out = {"generated_at": now.isoformat(), "fields": LINEUP_RECORD_FIELDS, "rows": [], "versions": [],
+           "leagues": {}, "teams": {}, "players": {}, "excluded_no_official_xi": 0}
+    if _table_exists(conn, "lineup_prediction_snapshots") and _table_exists(conn, "official_lineup_snapshots"):
+        args = SimpleNamespace(source="prospective", start=datetime(2000, 1, 1, tzinfo=timezone.utc),
+                               end=now, as_of=now, hours_before=0)
+        # national team XIs too (national_lineups.py): the methodology record keeps to clubs
+        rows, coverage = evaluation.load_lineups(conn, args, national=True)
+        out["excluded_no_official_xi"] = coverage["missing_or_incomplete_official_xi"]
+        fixtures = {f: (league, home, away) for f, league, home, away in conn.execute(
+            "select fixture_id, league_id, home_team_id, away_team_id from fixtures where fixture_id = any(%s)",
+            [list({r["fixture_id"] for r in rows})]).fetchall()} if rows else {}
+        national = {"teams": {}, "leagues": {}}     # names the club tables don't have
+        if rows and _table_exists(conn, "national_fixtures"):
+            for f, league, tournament, home, away, h_name, a_name in conn.execute(
+                    """select fixture_id, league_id, tournament, home_team_id, away_team_id, home_name, away_name
+                       from national_fixtures where fixture_id = any(%s)""",
+                    [list({r["fixture_id"] for r in rows} - fixtures.keys())]).fetchall():
+                fixtures[f] = (league, home, away)
+                national["teams"].update({str(home): html.unescape(h_name), str(away): html.unescape(a_name)})
+                national["leagues"][str(league)] = {
+                    "name": tournament or config.NATIONAL_TEAM_LEAGUES.get(league, f"Competition {league}"), "country": "World"}
+        version_ids = sorted({r["model_version_id"] for r in rows})
+        registered = {v: (name, created) for v, name, created in conn.execute(
+            "select model_version_id, version_name, created_at from model_versions where model_version_id = any(%s)",
+            [version_ids]).fetchall()} if version_ids else {}
+        # oldest first, so the tab can number them v1, v2, ... even when the names repeat
+        version_ids.sort(key=lambda v: (registered.get(v, (None, None))[1] or now, v))
+        out["versions"] = [{"id": v, "name": registered.get(v, (v,))[0],
+                            "registered": registered[v][1].isoformat() if registered.get(v, (None, None))[1] else None}
+                           for v in version_ids]
+        index = {v: i for i, v in enumerate(version_ids)}
+        for r in sorted(rows, key=lambda r: (r["effective_at"], r["fixture_id"], r["team_id"])):
+            league, home, away = fixtures.get(r["fixture_id"], (None, None, None))
+            correct, right, known, lines, missed, wrong = _score_xi(
+                {p["player"]: p.get("role") for p in r["players"] if p.get("predicted_starter")},
+                {p["player"]: (p.get("role"), p.get("position")) for p in r["official"] if p.get("starter")})
+            out["rows"].append([
+                r["fixture_id"], r["effective_at"].isoformat(), league, r["team_id"],
+                away if r["team_id"] == home else home, int(r["team_id"] == home), correct, right, known, lines,
+                _r(r["seconds_to_kickoff"] / 3600, 1), index[r["model_version_id"]], missed, wrong])
+        _lineup_names(conn, out, out["rows"], 3, 2, 12)
+        for key in national:
+            out[key] = {**national[key], **out[key]}
+        unnamed = [p for row in out["rows"] for p in row[12] + row[13] if str(p) not in out["players"]]
+        if unnamed and _table_exists(conn, "national_fixture_players"):
+            out["players"].update({str(p): html.unescape(n) for p, n in conn.execute(
+                """select distinct on (player_id) player_id, player_name from (
+                       select player_id, player_name from national_fixture_players where player_id = any(%(p)s)
+                       union all select player_id, player_name from national_fixture_lineups where player_id = any(%(p)s)) x
+                   where player_name is not null order by player_id""", {"p": unnamed}).fetchall()})
+    _write_json_file(out_dir / "lineups.json", out)
+    log.info("Exported the line-up record (%s team line-ups)", len(out["rows"]))
+    export_lineup_history(conn, out_dir, now)
+
+
+def export_lineup_history(conn, out_dir=OUT_DIR, now=None):
+    """site.lineup_history: the reconstructed history for the Line-up record tab. The predicted XI
+    the nightly player-ratings replay worked out for every finished match (reconstructed_lineups),
+    from what it knew before kick-off, scored against the XI that started exactly as the live
+    record is. Rebuilt with today's code, so it's kept apart from the live record.
+
+    Stored in the database, not in a file (it was lineups_history.json, 6.5 MB): the tab asks
+    site_lineup_history() for the totals and the rows it shows
+    (db/migrations/20261005_site_lineup_history.sql). The table is rewritten whole and the
+    whole-history counts the function reads are counted again from it
+    (site.lineup_history_refresh, 20261005_site_lineup_history_fast.sql), in one transaction. A
+    read-only run stores nothing, and neither does a database from before the migration
+    (logged); any other failure stops the run. Returns the rows:
+    (fixture, team, kickoff, match date, league, opponent, home, starters named, in the right
+    role, with both roles known, lines, missed, wrong)."""
+    rows = []
+    if _table_exists(conn, "reconstructed_lineups"):
+        starters = defaultdict(dict)
+        for fid, team, player, role, broad in conn.execute(
+                """select fp.fixture_id, fp.team_id, fp.player_id, fp.role, fp.position
+                   from fixture_players fp join reconstructed_lineups r using (fixture_id, team_id)
+                   where fp.started"""):
+            starters[(fid, team)][player] = (role, broad)
+        # cup and European matches: the XI alone is stored (fixture_lineups), with each starter's
+        # role but no broad position, so a starter whose role isn't known counts in no line
+        for fid, team, player, role in conn.execute(
+                """select fl.fixture_id, fl.team_id, fl.player_id, fl.role
+                   from fixture_lineups fl join reconstructed_lineups r using (fixture_id, team_id)
+                   where not exists (select 1 from fixture_players fp
+                                     where fp.fixture_id = fl.fixture_id and fp.team_id = fl.team_id)"""):
+            starters[(fid, team)][player] = (role, None)
+        for fid, team, players, roles, kickoff, league, home, away in conn.execute(
+                """select r.fixture_id, r.team_id, r.players, r.roles, f.kickoff, f.league_id,
+                          f.home_team_id, f.away_team_id
+                   from reconstructed_lineups r join fixtures f using (fixture_id)
+                   where f.status_short = any(%s)
+                   order by f.kickoff, r.fixture_id, r.team_id""", [list(config.FINISHED_STATUSES)]):
+            actual = starters.get((fid, team), {})
+            if len(actual) != 11 or len(players) != 11:
+                continue     # no complete team sheet to check against
+            correct, right, known, lines, missed, wrong = _score_xi(dict(zip(players, roles)), actual)
+            rows.append((fid, team, kickoff, kickoff.date(), league, away if team == home else home, team == home,
+                         correct, right, known, lines, missed, wrong))
+    try:
+        config.require_db_write("store the line-up history")
+    except config.SafetyError as exc:
+        log.info("Line-up history not stored: %s", exc)
+        return rows
+    (table,) = conn.execute("select to_regclass(%s)", ["site.lineup_history"]).fetchone()
+    if table is None:
+        log.warning("site.lineup_history isn't there yet (db/migrations/20261005_site_lineup_history.sql): "
+                    "the reconstructed line-up history wasn't stored")
+        return rows
+    with conn.cursor() as cur:
+        cur.execute("delete from site.lineup_history")
+        with cur.copy("""copy site.lineup_history (fixture_id, team_id, kickoff, day, league_id, opponent_id, home,
+                              correct, roles_right, roles_known, lines, missed, wrong) from stdin""") as copy:
+            for row in rows:
+                copy.write_row(row)
+        (refresh,) = cur.execute("select to_regprocedure('site.lineup_history_refresh()')").fetchone()
+        if refresh is not None:
+            cur.execute("select site.lineup_history_refresh()")
+        else:
+            log.warning("site.lineup_history_refresh() isn't there yet (db/migrations/20261005_site_lineup_history_fast.sql)")
+    conn.commit()
+    log.info("Stored the reconstructed line-up history (%s team line-ups)", len(rows))
+    return rows
+
+
+# Paper money shown on the Bets tab: a flat stake per bet out of a starting bank
+BET_BANK_GBP = 1000
+BET_STAKE_GBP = 10
+
+
+INJURY_LOOKBACK_DAYS = 21
+# reasons that only cover the match they were listed for: left out of a past match's list
+ONE_MATCH_REASONS = {"Red Card", "Yellow Cards", "Suspended", "Coach's decision", "Rest", "International duty",
+                     "Transfer negotiations", "Personal Reasons"}
+# The only reasons published. Anything else is a medical reason (or "Doping") from a third-party
+# feed: health data, which stays in the database for availability.py and never reaches the site
+BAN_REASONS = {"Red Card", "Yellow Cards", "Suspended"}
+# reasons that mean he is out injured or ill (published as a yes/no, for the national teams' XI)
+INJURY_REASON = re.compile(r"injur|illness|knock|surgery|fracture|virus|muscle", re.I)
+
+
+def _ban(reason):
+    """The reason if it is a ban, else None."""
+    return reason if reason in BAN_REASONS else None
+
+
+def _injured(kind, reason):
+    """1 when he is listed out (not doubtful) with an injury or illness, else 0."""
+    return 1 if kind == "Missing Fixture" and INJURY_REASON.search(reason or "") else 0
+
+
+def export_injuries(conn, out_dir=OUT_DIR, free=None):
+    """Each club's injury list for the club page (.export/injuries.json): out and doubtful
+    players for its next match that has a list, else its latest list from the last
+    INJURY_LOOKBACK_DAYS (API-Football publishes a match's list only shortly before it), less
+    the one-match reasons (a ban already served). Upcoming fixtures use the backend
+    availability merge; past red cards alone are not treated as confirmed current bans.
+
+    ban: the reason when it is a ban (BAN_REASONS), else null: medical reasons aren't published.
+    missed: how many of the club's played matches in a row he has been on its list, back from its
+    latest (matches with no list for the club, e.g. cups, are skipped). season_rank: his latest
+    season rank, for players off the current players list. injured: 1 when he is out injured or ill.
+    free: the players in the paid tier's free slice (export_players). Once the paywall is on, a
+    season rank is published only for them: the file is one anyone can ask for.
+    """
+    teams = {}
+    for team, fid, kickoff, upcoming, player, name, kind, reason in conn.execute(
+            """with pick as (
+                   select distinct on (i.team_id) i.team_id, i.fixture_id, f.kickoff,
+                          f.status_short in ('NS', 'TBD') and f.kickoff > now() as upcoming
+                   from injuries i join fixtures f using (fixture_id)
+                   where f.kickoff > now() - %s * interval '1 day'
+                   order by i.team_id, (f.status_short in ('NS', 'TBD') and f.kickoff > now()) desc,
+                            case when f.kickoff > now() then f.kickoff end, f.kickoff desc)
+               select i.team_id, i.fixture_id, pick.kickoff, pick.upcoming, i.player_id, p.name, i.type, i.reason
+               from injuries i join pick using (team_id, fixture_id) left join players p using (player_id)
+               order by i.team_id, i.type, p.name""", [INJURY_LOOKBACK_DAYS]):
+        if not upcoming and reason in ONE_MATCH_REASONS:
+            continue
+        entry = teams.setdefault(str(team), {"fixture": fid, "kickoff": kickoff.isoformat(), "upcoming": upcoming,
+                                             "players": []})
+        entry["players"].append([player, html.unescape(name or ""), kind, reason])   # reason: replaced below
+    # Upcoming display uses the exact same fixture-scoped merge as lineup selection.
+    upcoming_fixtures = availability.next_fixtures(conn)
+    merged = availability.load(conn, upcoming_fixtures)
+    ids = sorted({p for states in merged.values() for p in states})
+    names = dict(conn.execute('SELECT player_id,name FROM players WHERE player_id=any(%s)', [ids]))
+    for fid,kickoff,home,away,upcoming in upcoming_fixtures:
+        for team in (home,away):
+            existing = teams.get(str(team))
+            if existing and existing.get('_merged') and existing['kickoff'] <= kickoff.isoformat():
+                continue
+            states = merged[(fid,team)]
+            rows = []
+            for player,state in states.items():
+                evidence = state['evidence'][-1]  # manual explanation, retaining API evidence in snapshots
+                rows.append([player,html.unescape(names.get(player) or evidence.get('name','')),
+                             'Suspended' if state['state']=='suspended' else evidence.get('type'),
+                             evidence.get('reason')])
+            teams[str(team)] = {'fixture':fid,'kickoff':kickoff.isoformat(),'upcoming':True,
+                                'players':rows,'_merged':True}
+    for entry in teams.values():
+        entry.pop('_merged',None)
+    listed = defaultdict(dict)          # team -> {fixture: (kickoff, {players on its list})}
+    for team, fid, kickoff, player in conn.execute(
+            """select i.team_id, i.fixture_id, f.kickoff, i.player_id from injuries i join fixtures f using (fixture_id)
+               where i.team_id = any(%s) and f.status_short = any(%s) and f.kickoff > now() - interval '365 days'""",
+            [[int(t) for t in teams], list(config.FINISHED_STATUSES)]):
+        listed[team].setdefault(fid, (kickoff, set()))[1].add(player)
+    for team, entry in teams.items():
+        lists = [ps for _, ps in sorted(listed[int(team)].values(), key=lambda x: x[0], reverse=True)]
+        for row in entry["players"]:
+            row.append(next((k for k, ps in enumerate(lists) if row[0] not in ps), len(lists)))
+    # a rank for players off the current list (no recent minutes): his latest season rank, an
+    # estimate for a season he hasn't played (player_ratings: unrated players get one too)
+    ids = [row[0] for entry in teams.values() for row in entry["players"]]
+    season_rank = {p: float(r) for p, r in conn.execute(
+        """select distinct on (player_id) player_id, season_rank from player_season_ranks
+           where player_id = any(%s) and season_rank is not null
+           order by player_id, season desc""", [ids])}
+    if free is not None and _paywall_on(conn):
+        season_rank = {p: r for p, r in season_rank.items() if p in free}
+    for entry in teams.values():
+        for row in entry["players"]:
+            row.append(season_rank.get(row[0]))
+            kind, reason = row[2], row[3]
+            row[3] = _ban(reason)
+            row.append(_injured(kind, reason))
+    _write_json_file(out_dir / "injuries.json", {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "fields": ["player", "name", "type", "ban", "missed", "season_rank", "injured"], "teams": teams,
+    }, ensure_ascii=False)
+    log.info("Exported injury lists for %d clubs", len(teams))
+
+
+def export_bets(conn, out_dir=OUT_DIR):
+    """Every paper bet and its result for the site's Bets tab (.export/bets.json), all of them
+    so the bank there runs from the first bet."""
+    rows = conn.execute(
+        """select b.bet_id, b.strategy, b.fixture_id, b.kickoff, b.league_id, b.market, b.selection,
+                  b.model_prob, b.fair_prob, b.odds_taken, bk.name, b.edge, b.closing_odds, b.clv,
+                  b.result, b.profit, b.placed_at, b.settled_at, h.name, a.name,
+                  coalesce(f.ft_home, f.home_goals), coalesce(f.ft_away, f.away_goals), b.tags,
+                  f.home_team_id, f.away_team_id
+           from paper_bets b join fixtures f using (fixture_id)
+           join teams h on h.team_id = f.home_team_id join teams a on a.team_id = f.away_team_id
+           left join bookmakers bk on bk.bookmaker_id = b.bookmaker_id
+           where b.bookmaker_id = %s       -- bets taken elsewhere before Bet365-only stay in the table
+           order by b.kickoff desc, b.bet_id""", [BOOKMAKER]).fetchall()
+    # bets on national team matches: the sides' names are the fixture's (national teams aren't in
+    # teams) and the score is the 90-minute one the bet was settled on
+    national = set()
+    if _table_exists(conn, "national_fixtures"):
+        from ..models.betting import _national_scores
+        home, away = _national_scores(conn)
+        more = conn.execute(
+            f"""select b.bet_id, b.strategy, b.fixture_id, b.kickoff, b.league_id, b.market, b.selection,
+                       b.model_prob, b.fair_prob, b.odds_taken, bk.name, b.edge, b.closing_odds, b.clv,
+                       b.result, b.profit, b.placed_at, b.settled_at, f.home_name, f.away_name,
+                       {home}, {away}, b.tags, f.home_team_id, f.away_team_id
+                from paper_bets b join national_fixtures f using (fixture_id)
+                left join bookmakers bk on bk.bookmaker_id = b.bookmaker_id
+                where b.bookmaker_id = %s""", [BOOKMAKER]).fetchall()
+        national = {r[0] for r in more}
+        rows = sorted(rows + [(*r[:18], html.unescape(r[18]), html.unescape(r[19]), *r[20:]) for r in more],
+                      key=lambda r: (-r[3].timestamp(), r[0]))
+    bets = [{
+        "id": r[0], "strategy": r[1], "fixture": r[2], "kickoff": r[3].isoformat(), "league": r[4],
+        "market": r[5], "selection": r[6], "model_prob": _r(r[7], 3), "fair_prob": _r(r[8], 3),
+        "odds": float(r[9]), "edge": _r(r[11], 3),
+        "closing_odds": float(r[12]) if r[12] is not None else None, "clv": _r(r[13], 4),
+        "result": r[14], "profit": float(r[15]) if r[15] is not None else None,
+        "home": r[18], "away": r[19], "home_id": r[23], "away_id": r[24], "score": f"{r[20]}-{r[21]}" if r[20] is not None else None,
+        "cautious": is_cautious(r[5], r[22]),       # the tags themselves stay in the database
+        **({"intl": 1} if r[0] in national else {}),
+    } for r in rows]
+    # Only what the Bets tab reads: it adds up its own totals from the bets (app.js, summarise).
+    # No generation timestamp, so the file only changes when bets do
+    _write_json_file(out_dir / "bets.json", {
+        "rules": {"min_edge": MIN_EDGE, "max_odds": MAX_ODDS, "stake": 1, "stake_gbp": BET_STAKE_GBP, "bank": BET_BANK_GBP, "cautious_rule": CAUTIOUS_RULE},
+        "bets": bets,
+    })
+    log.info("Exported %d paper bets", len(bets))
+
+
+PLAYER_SEASONS = list(range(2026, 2020, -1))     # season ranks shown, newest first
+PLAYER_SEASON_FIELDS = ["minutes", "goals", "assists"]     # a player's "season" in his row
+
+
+POSITION_SHARE = 0.25      # a position counts for the filter at this share of his starting minutes
+
+LISTED = """p.current_rank is not null and (p.rank_minutes >= 450 or exists (
+    select 1 from player_season_ranks r where r.player_id = p.player_id and r.season = any(%s)
+      and r.minutes >= 1500) or exists (select 1 from team_squads s where s.player_id = p.player_id))"""
+
+
+def export_players(conn, out_dir=OUT_DIR, rankings=()):
+    """Current player ranks and season ranks, as rows of the site.players table (store_players).
+    A season rank is the player's average rank across that season (after each match, weighted by
+    minutes; player_season_ranks), blank if he didn't play in these leagues. Line-ups aren't
+    here: the site asks the database for the match it opens (site_lineups) and for a club's next
+    predicted XI (site_next_xi). rankings: the rows of rankings.json, for each club's world
+    rank. Returns ({player: his club}, {"stored": whether the table was written,
+    "future_seasons", "teams": the names of the players' clubs, "free": the players in the paid
+    tier's free slice})."""
+    # Listed: 450+ minutes in his last 20 appearances, a 1,500+ minute season in the seasons
+    # shown (an established player back from injury, e.g. John Stones), or in a current squad
+    # (a new signing). His club: the squad he's in now (team_squads), else the club the weekly
+    # current-club check found this season (player_career_checks), else his last appearance.
+    # Nationality can be corrected by hand in player_overrides
+    players = conn.execute(
+        f"""with club_league as (           -- each club's league: its latest league fixture
+                select distinct on (team_id) team_id, league_id from (
+                    select f.home_team_id team_id, f.league_id, f.kickoff from fixtures f join leagues l using (league_id)
+                    where l.type = 'League'
+                    union all
+                    select f.away_team_id, f.league_id, f.kickoff from fixtures f join leagues l using (league_id)
+                    where l.type = 'League') x
+                order by team_id, kickoff desc),
+            this_season as (select max(season) s from fixtures where league_id = any(%s))
+           select p.player_id, p.name, p.rank_position, p.current_rank, p.rank_minutes, c.team_id,
+                  coalesce(cl.league_id, f.league_id), extract(year from age(p.birth_date))::int,
+                  coalesce(o.nationality, p.nationality)
+           from players p
+           left join player_overrides o using (player_id)
+           join lateral (select fp.team_id, fp.fixture_id from fixture_players fp
+                         where fp.player_id = p.player_id order by fp.fixture_id desc limit 1) x on true
+           join fixtures f on f.fixture_id = x.fixture_id
+           left join lateral (select s.team_id from team_squads s where s.player_id = p.player_id
+                              order by (s.team_id = x.team_id) desc, s.fetched_at desc limit 1) sq on true
+           left join player_career_checks cc on cc.player_id = p.player_id
+                and cc.season = (select s from this_season) and cc.team_id is not null
+           -- his last club, unless we have its current squad and he isn't in it (he has left and his
+           -- new club isn't known yet: no club rather than the wrong one)
+           cross join lateral (select coalesce(sq.team_id, cc.team_id,
+                case when exists (select 1 from team_squads s2 where s2.team_id = x.team_id) then null
+                     else x.team_id end) team_id) c
+           left join club_league cl on cl.team_id = c.team_id
+           where {LISTED}
+           order by p.current_rank desc""", [config.MATCH_PLAYER_LEAGUES, PLAYER_SEASONS]).fetchall()
+    season_ranks, estimated = defaultdict(dict), defaultdict(set)
+    for player, season, rank, minutes in conn.execute(
+            "select player_id, season, season_rank, minutes from player_season_ranks where season = any(%s)",
+            [PLAYER_SEASONS]):
+        season_ranks[player][season] = float(rank)
+        if minutes == 0:                 # a gap season filled from the age curve
+            estimated[player].add(season)
+    # Positions he started in for POSITION_SHARE+ of his starting minutes over the last 12 months
+    # (the position filter includes him there too); minutes off the bench have no position
+    role_mins = defaultdict(dict)
+    for player, role, mins in conn.execute(
+            """select fp.player_id, fp.role, sum(fp.minutes) from fixture_players fp join fixtures f using (fixture_id)
+               where fp.player_id = any(%s) and fp.role is not null and fp.minutes > 0
+                 and f.status_short = any(%s) and f.kickoff > now() - interval '365 days'
+               group by 1, 2""", [[r[0] for r in players], list(config.FINISHED_STATUSES)]):
+        role_mins[player][role] = mins
+    pos_12m = {p: sorted((r for r, m in rm.items() if m >= POSITION_SHARE * sum(rm.values())), key=lambda r: -rm[r])
+               for p, rm in role_mins.items()}
+    # his position on the site: where he's started most minutes over the last 12 months (his
+    # latest rating window's most common start if he hasn't started in that time)
+    main_pos = {p: max(rm, key=rm.get) for p, rm in role_mins.items()}
+    pos_ranks = defaultdict(dict)        # {player: {role group: rank as that position}}
+    for player, g, r in conn.execute("select player_id, role_group, position_rank from player_position_ranks"):
+        pos_ranks[player][g] = float(r)
+    # published as the model has them: how good he is in that position (player_ratings step 6),
+    # which needn't equal his overall rank, even in the position shown for him
+    # (line-ups aren't exported: the site asks the database for a match's, site_lineups, and for
+    # a club's next predicted XI, site_next_xi)
+    # this season so far, all his clubs (PLAYER_SEASON_FIELDS): the per-match leagues first, else
+    # the season totals where his league has them (player_seasons). No match rating: API-Football's
+    # rating isn't published anywhere on the site
+    season_stats = {}
+    for _, player, mins, goals, assists in conn.execute(
+            """select 1 src, x.player_id, sum(x.minutes), sum(x.goals), sum(x.assists)
+               from player_seasons x where x.season = %s and x.player_id = any(%s) and x.minutes > 0
+               group by 2
+               union all
+               select 2, x.player_id, sum(x.minutes), sum(x.goals), sum(x.assists)
+               from fixture_players x join fixtures f using (fixture_id)
+               where f.season = %s and x.player_id = any(%s) and f.status_short = any(%s) and x.minutes > 0
+               group by 2
+               order by src""",
+            [PLAYER_SEASONS[0], [r[0] for r in players]] * 2 + [list(config.FINISHED_STATUSES)]):
+        season_stats[player] = [int(mins), int(goals or 0), int(assists or 0)]   # per-match rows come last and win
+    # his next seasons, projected along his age curve (player_ratings.py)
+    future = defaultdict(dict)
+    for player, season, rank in conn.execute("select player_id, season, projected_rank from player_projected_ranks"):
+        future[player][season] = float(rank)
+    future_seasons = sorted({y for ys in future.values() for y in ys})
+    rows = [[r[0], r[1], main_pos.get(r[0], r[2]), float(r[3]), r[4], r[5], r[6],
+             [season_ranks[r[0]].get(y) for y in PLAYER_SEASONS], r[7],
+             [i for i, y in enumerate(PLAYER_SEASONS) if y in estimated[r[0]]], r[8],
+             pos_12m.get(r[0], []), pos_ranks.get(r[0], {}),
+             [future[r[0]].get(y) for y in future_seasons], season_stats.get(r[0])] for r in players]
+    # names of players' clubs outside the club rankings (a move out of our leagues)
+    teams = {t: n for t, n in conn.execute(
+        "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])}
+    log.info("Exported %d player ranks", len(players))
+    site_rows = site_player_rows(rows, rankings)
+    stored = store_players(conn, site_rows)
+    # {player: his club}, for the club files' positions
+    return {r[0]: r[5] for r in players}, {"stored": stored, "future_seasons": future_seasons, "teams": teams,
+                                           "free": {p["player_id"] for p in site_rows if p["free"]}}
+
+
+# A player as the site draws him: the order of his row in site.players.data (SITE_PLAYER_FIELDS):
+# the fields the export builds for each player (PLAYER_FIELDS), then what is counted across all
+# of them: his place by Ability among every listed player (world) and in his league (lg of
+# lg_of), his place by current rank among his league's players with a club (lg_rank of lg_n, on
+# his page), and his place in the export's order (ord).
+PLAYER_FIELDS = ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
+                 "nationality", "positions_12m", "position_ranks", "future", "season"]
+SITE_PLAYER_FIELDS = PLAYER_FIELDS + ["world", "lg", "lg_of", "lg_rank", "lg_n", "ord"]
+# The paid tier (db/migrations/20261006_paid_players.sql, 20261007_paid_players_order.sql): the
+# top FREE_WORLD players by Ability, the top FREE_LEAGUE of each league and the top FREE_POSITION
+# of each position on the Players tab's pitch are free (a position's: of the players listed under
+# it, the best by their rank as that position, the order the tab puts them in when it is picked).
+# For everyone else a visitor without a subscription gets the row with PLAYER_PAID_FIELDS null
+# (who he is, his club, age, minutes, goals and assists stay), once the paywall is on. He keeps
+# his place in the export's order (ord): the owner's line of 2026-10-07 is that every list is in
+# the order a subscriber sees, with the ranks hidden. The owner's line on the slice: every
+# league's top 10 (2026-10-04), the five big leagues' only (2026-10-06, when the hidden players
+# were put after the ranked ones and a nation's page misled), every league's again and each
+# position's (2026-10-07, with the order kept).
+FREE_WORLD, FREE_LEAGUE, FREE_POSITION = 50, 10, 10
+PLAYER_PAID_FIELDS = ("rank", "seasons", "estimated", "position_ranks", "future", "world", "lg", "lg_rank")
+
+
+def blanked_player(data):
+    """A player's row (SITE_PLAYER_FIELDS order) with the paid fields null."""
+    hide = {SITE_PLAYER_FIELDS.index(f) for f in PLAYER_PAID_FIELDS}
+    return [None if i in hide else v for i, v in enumerate(data)]
+
+
+def _fold(text):
+    """Text as the site's search folds it (foldText in app.js): no accents, lower case, anything
+    but letters and digits a space."""
+    plain = "".join(ch for ch in unicodedata.normalize("NFD", str(text or "")) if not "\u0300" <= ch <= "\u036f")
+    return re.sub(r"[^a-z0-9]+", " ", plain.lower()).strip()
+
+
+def _places(values):
+    """{value: its place among values, highest first}; a tie shares the higher place."""
+    places = {}
+    for i, v in enumerate(sorted(values, reverse=True)):
+        places.setdefault(v, i + 1)
+    return places
+
+
+_ENTITIES = {"apos": "'", "#39": "'", "quot": '"', "amp": "&", "lt": "<", "gt": ">"}
+
+
+def _decode(text):
+    """A name as the site shows it (decodeEntities in app.js): API-Football sends some
+    HTML-encoded ("O&apos;Reilly")."""
+    return re.sub(r"&(apos|#39|quot|amp|lt|gt);", lambda m: _ENTITIES[m.group(1)], text or "")
+
+
+def site_player_rows(rows, rankings=()):
+    """The rows of site.players, one dict per player in rows (PLAYER_FIELDS order, the export's
+    order): the columns site_players() filters and sorts on, and "data", his row in
+    SITE_PLAYER_FIELDS order. rankings: the rows of rankings.json (club, ..., Baseline Strength
+    fifth), for his club's world rank. Places are counted as the site counted them from the
+    whole list: by Ability (this season's rank) among every listed player and within his
+    league; a tie shares the higher place."""
+    from ..models.positions import GROUPS
+    at = {name: i for i, name in enumerate(PLAYER_FIELDS)}
+    ability = lambda r: r[at["seasons"]][0] if r[at["seasons"]] else None
+    world = _places([ability(r) for r in rows if ability(r) is not None])
+    by_league, club_league = defaultdict(list), defaultdict(list)
+    for r in rows:
+        if ability(r) is not None and r[at["league"]] is not None:
+            by_league[r[at["league"]]].append(ability(r))
+        if r[at["team"]] and r[at["league"]]:
+            club_league[r[at["league"]]].append(r[at["rank"]])
+    league_place = {lg: _places(v) for lg, v in by_league.items()}
+    club_place = {lg: _places(v) for lg, v in club_league.items()}
+    # each position's players (his main one, and those of positions_12m) by their rank as it
+    plays_of = lambda r: [x for x in dict.fromkeys([r[at["position"]], *r[at["positions_12m"]]]) if x]
+    as_position = lambda r, role: (r[at["position_ranks"]] or {}).get(GROUPS.get(role))
+    by_position = defaultdict(list)
+    for r in rows:
+        for role in plays_of(r):
+            if as_position(r, role) is not None:
+                by_position[role].append(as_position(r, role))
+    position_place = {role: _places(v) for role, v in by_position.items()}
+    strengths = [r[4] for r in rankings if r[4] is not None]
+    club_places = _places(strengths)
+    club_world = {r[0]: club_places[r[4]] for r in rankings if r[4] is not None}
+    out = []
+    for i, r in enumerate(rows):
+        a, league, team = ability(r), r[at["league"]], r[at["team"]]
+        placed = a is not None
+        in_league = placed and league is not None
+        with_club = bool(team and league)
+        season = r[at["season"]]
+        goals, assists = (season[PLAYER_SEASON_FIELDS.index("goals")], season[PLAYER_SEASON_FIELDS.index("assists")]) if season else (None, None)
+        name = _decode(r[at["name"]])
+        plays = plays_of(r)
+        top_of_position = any(as_position(r, role) is not None and position_place[role][as_position(r, role)] <= FREE_POSITION
+                              for role in plays)
+        data = [*r, world[a] if placed else None,
+                league_place[league][a] if in_league else None, len(by_league[league]) if in_league else None,
+                club_place[league][r[at["rank"]]] if with_club else None, len(club_league[league]) if with_club else None, i]
+        out.append({
+            "free": bool((placed and world[a] <= FREE_WORLD)
+                         or (in_league and league_place[league][a] <= FREE_LEAGUE)
+                         or top_of_position),
+            "data_free": blanked_player(data),
+            "player_id": r[at["id"]], "ord": i, "name_lc": name.lower(), "name_fold": _fold(name),
+            "team_id": team, "league_id": league, "age": r[at["age"]], "nationality": r[at["nationality"]],
+            "plays": plays, "ability": None if a is None else math.floor(a + 0.5),
+            "club_world": club_world.get(team), "minutes": r[at["minutes"]],
+            "seasons": r[at["seasons"]], "future": r[at["future"]], "pos_ranks": r[at["position_ranks"]],
+            "ga": None if season is None else goals + assists + goals / 1000,
+            "data": data,
+        })
+    return out
+
+
+def _check_table_collapse(cur, table, rows):
+    """Stop an export that would leave a site table with under half the rows it has (the files'
+    _check_row_collapse, for the data that is stored as rows). Nothing has been deleted yet."""
+    (was,) = cur.execute(f"select count(*) from {table}").fetchone()
+    if was >= 10 and rows < was * COLLAPSE_RATIO:
+        raise ExportValidationError(f"{table} would collapse from {was} to {rows} rows")
+
+
+def store_players(conn, players):
+    """site.players: every listed player as a row (site_player_rows), for the database functions
+    the site asks (db/migrations/20261005_site_players.sql: site_players, site_player_facets).
+    The table is rewritten whole, in one transaction, unless there are too few players or it
+    would lose most of its rows (_check_table_collapse).
+
+    True once stored. False, with nothing written, on a read-only run or a database from before
+    the migration (logged). Any other failure stops the run."""
+    try:
+        config.require_db_write("store the players")
+    except config.SafetyError as exc:
+        log.info("Players not stored: %s", exc)
+        return False
+    (table,) = conn.execute("select to_regclass(%s)", ["site.players"]).fetchone()
+    if table is None:
+        log.warning("site.players isn't there yet (db/migrations/20261005_site_players.sql): the players weren't stored")
+        return False
+    text = lambda value: json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+    columns = ["player_id", "ord", "name_lc", "name_fold", "team_id", "league_id", "age", "nationality", "plays",
+               "ability", "club_world", "minutes", "seasons", "future", "pos_ranks", "ga", "data"]
+    # the free slice and the blanked rows, once the paid tier's migration has added their columns
+    if conn.execute("""select 1 from pg_attribute where attrelid = 'site.players'::regclass and attname = 'data_free'
+                       and not attisdropped""").fetchone() is not None:
+        columns += ["free", "data_free"]
+    if len(players) < MIN_PLAYERS:
+        raise ExportValidationError(f"only {len(players)} players to store; expected at least {MIN_PLAYERS}")
+    with conn.cursor() as cur:
+        _check_table_collapse(cur, "site.players", len(players))
+        cur.execute("delete from site.players")
+        with cur.copy(f"copy site.players ({', '.join(columns)}) from stdin") as copy:
+            for p in players:
+                copy.write_row([text(p[c]) if c in ("pos_ranks", "data", "data_free") else p[c] for c in columns])
+        cur.execute("analyze site.players")
+    conn.commit()
+    log.info("Stored %d players", len(players))
+    return True
+
+
+def _club_spells(rows):
+    """[(player, key, team, minutes, club rank, goals, assists)]
+    -> {player: {key: [[team, mins, rank, goals, assists], ...]}}, clubs by minutes, most first."""
+    out = defaultdict(dict)
+    for player, key, team, mins, rank, goals, assists in rows:
+        out[player].setdefault(key, []).append(
+            [team, int(mins), round(float(rank)) if rank is not None else None, int(goals or 0), int(assists or 0)])
+    for seasons in out.values():
+        for spells in seasons.values():
+            spells.sort(key=lambda x: -x[1])
+    return out
+
+
+SPELL_FIELDS = ["team", "minutes", "club_rank", "goals", "assists"]
+
+
+def export_player_seasons(conn, out_dir=OUT_DIR):
+    """Each player's season detail, returned for the files that carry it: his own rows go in his
+    page file (the hover on his season cells and his page read it) and his club's file.
+
+    For each exported player and each season in PLAYER_SEASONS, and for "now" (his last 20
+    appearances, the ones the current rank is built from): the clubs he played for, his minutes
+    for each, the club's average rank over those matches, and his goals and assists.
+    """
+    ids = [r[0] for r in conn.execute(f"select player_id from players p where {LISTED}", [PLAYER_SEASONS])]
+    per_club = """sum(fp.minutes),
+                  sum(h.lt_before * fp.minutes) / nullif(sum(fp.minutes) filter (where h.lt_before is not null), 0),
+                  sum(fp.goals), sum(fp.assists)"""
+    seasons = conn.execute(
+        f"""select fp.player_id, f.season, fp.team_id, {per_club}
+            from fixture_players fp join fixtures f using (fixture_id)
+            left join team_rank_history h on h.fixture_id = fp.fixture_id and h.team_id = fp.team_id
+            where fp.player_id = any(%s) and f.season = any(%s) and f.status_short = any(%s) and fp.minutes > 0
+            group by 1, 2, 3""", [ids, PLAYER_SEASONS, list(config.FINISHED_STATUSES)]).fetchall()
+    recent = conn.execute(
+        f"""with apps as (
+                select fp.*, row_number() over (partition by fp.player_id order by f.kickoff desc) as n
+                from fixture_players fp join fixtures f using (fixture_id)
+                where fp.player_id = any(%s) and f.status_short = any(%s) and fp.minutes > 0
+                  and f.kickoff > now() - interval '540 days')
+            select fp.player_id, 'now', fp.team_id, {per_club}
+            from apps fp left join team_rank_history h on h.fixture_id = fp.fixture_id and h.team_id = fp.team_id
+            where fp.n <= 20 group by 1, 3""", [ids, list(config.FINISHED_STATUSES)]).fetchall()
+    # seasons away from the per-match leagues: the club he was at and its level that season, with
+    # his season totals where the league has them (player_seasons; minutes 0: an estimate)
+    gaps = conn.execute(
+        """select r.player_id, r.season, r.team_id, r.minutes, avg(h.lt_before),
+                  coalesce((select sum(ps.goals) from player_seasons ps where ps.player_id = r.player_id
+                            and ps.season = r.season and ps.team_id = r.team_id), 0),
+                  coalesce((select sum(ps.assists) from player_seasons ps where ps.player_id = r.player_id
+                            and ps.season = r.season and ps.team_id = r.team_id), 0)
+           from player_season_ranks r
+           left join fixtures f on f.season = r.season and r.team_id in (f.home_team_id, f.away_team_id)
+           left join team_rank_history h on h.fixture_id = f.fixture_id and h.team_id = r.team_id
+           where r.team_id is not null and r.player_id = any(%s)
+           group by 1, 2, 3, 4""", [ids]).fetchall()
+    spells = _club_spells(seasons + recent + gaps)
+    # Starting minutes by position per season: the role he started in (from the line-up grid and
+    # formation), or his broad position (G/D/M/F) if a start has no grid. Minutes off the bench
+    # have no position and aren't counted. Seasons in leagues without per-match data have none
+    positions = defaultdict(dict)
+    for player, season, role, mins in conn.execute(
+            """select fp.player_id, f.season,
+                      coalesce(fp.role, fp.position), sum(fp.minutes)
+               from fixture_players fp join fixtures f using (fixture_id)
+               where fp.player_id = any(%s) and f.season = any(%s) and f.status_short = any(%s) and fp.minutes > 0
+                 and fp.started
+               group by 1, 2, 3 order by 4 desc""", [ids, PLAYER_SEASONS, list(config.FINISHED_STATUSES)]):
+        positions[player].setdefault(str(season), []).append([role, int(mins)])
+    # ... and over the last 12 months ("12m") and all our data from 2020/21 ("all")
+    for key, since in (("12m", "now() - interval '365 days'"), ("all", "'-infinity'::timestamptz")):
+        for player, role, mins in conn.execute(
+                f"""select fp.player_id, coalesce(fp.role, fp.position),
+                           sum(fp.minutes)
+                    from fixture_players fp join fixtures f using (fixture_id)
+                    where fp.player_id = any(%s) and f.status_short = any(%s) and fp.minutes > 0
+                      and fp.started and f.kickoff > {since}
+                    group by 1, 2 order by 3 desc""", [ids, list(config.FINISHED_STATUSES)]):
+            positions[player].setdefault(key, []).append([role, int(mins)])
+    team_ids = {x[0] for p in spells.values() for v in p.values() for x in v}
+    names = dict(conn.execute("select team_id, name from teams where team_id = any(%s)", [list(team_ids)]))
+    detail = {
+        "fields": SPELL_FIELDS,
+        "teams": {str(t): names.get(t) for t in team_ids},
+        "born": {str(p): b.isoformat() for p, b in conn.execute(
+            "select player_id, birth_date from players where player_id = any(%s) and birth_date is not null", [ids])},
+        "players": {str(p): {str(k): v for k, v in d.items()} for p, d in spells.items()},
+        "positions": {str(p): d for p, d in positions.items()},   # {player: {season: [[role, minutes], ...]}}
+    }
+    log.info("Season detail for %d players", len(spells))
+    return detail
+
+
+def _club_positions(player_team, positions):
+    """{team: {player: [[role, minutes], ...]}}: each club's current players' starting minutes by
+    position over the last 12 months (the "12m" rows of the season detail), for its club file."""
+    out = defaultdict(dict)
+    for player, team in player_team.items():
+        rows = positions.get(str(player), {}).get("12m")
+        if team is not None and rows:
+            out[team][str(player)] = rows
+    return out
+
+
+PLAYER_MATCHES = 20      # match log on a player's page: his last this-many appearances
+# What a player's page publishes of his matches: what a match report states (appearances, minutes,
+# goals, assists, cards) and the site's own rank. API-Football's other counts (shots, passes,
+# tackles, duels, dribbles, saves) feed the ranks but aren't published.
+SEASON_FIELDS = ["season", "team", "league", "apps", "starts", "minutes", "goals", "assists", "yellow", "red"]
+MATCH_FIELDS = ["fixture", "date", "league", "team", "opponent", "home", "gf", "ga", "started", "minutes",
+                "role", "rank", "goals", "assists", "yellow", "red"]
+
+
+def build_player_pages(ids, apps, fixtures, other_seasons):
+    """{player: page payload} for .export/players/<id>.json, from cached rows (runs offline).
+
+    apps: player_ratings._appearances rows; fixtures: cache.finished_fixtures rows;
+    other_seasons: player_ratings._other_seasons rows. Season lines are per club and league: from
+    his appearances in the per-match leagues, and the season totals (player_seasons) elsewhere,
+    where starts aren't known. A match's rank (going into it) is filled in later.
+    """
+    ids = set(ids)
+    fx = {r[0]: r for r in fixtures}
+    # per (season, team, league): apps, starts, minutes, goals, assists, yellow, red
+    lines = defaultdict(lambda: defaultdict(lambda: [0] * 7))
+    recent = defaultdict(list)
+    for r in apps:
+        if r[2] not in ids or r[3] <= 0 or r[10] not in config.FINISHED_STATUSES or r[0] not in fx:
+            continue
+        goals, assists = r[11] or 0, r[12] or 0
+        yellow, red = r[24] or 0, r[25] or 0
+        s = lines[r[2]][(r[8], r[1], r[9])]
+        for i, v in enumerate((1, 1 if r[4] else 0, r[3], goals, assists, yellow, red)):
+            s[i] += v
+        recent[r[2]].append(r)
+    out = {}
+    for player in ids:
+        seasons = [[season, team, league, *s] for (season, team, league), s in lines.get(player, {}).items()]
+        matches = []
+        for r in sorted(recent.get(player, []), key=lambda r: fx[r[0]][1], reverse=True)[:PLAYER_MATCHES]:
+            f = fx[r[0]]
+            home = r[1] == f[4]
+            matches.append([r[0], f[1].date().isoformat(), r[9], r[1], f[5] if home else f[4], 1 if home else 0,
+                            f[6] if home else f[7], f[7] if home else f[6], 1 if r[4] else 0, r[3],
+                            r[6] or r[5], None, r[11] or 0, r[12] or 0, r[24] or 0, r[25] or 0])
+        out[player] = {"seasons": seasons, "matches": matches, "injury": None}
+    for (player, team, league, season, _, minutes, n, _, goals, assists, _, _, _, _,
+         _, _, _, _, _, _, _, yellow, yellow_red, red, *_) in other_seasons:
+        if player in out:
+            out[player]["seasons"].append(
+                [season, team, league, n or 0, None, minutes, goals or 0, assists or 0,
+                 yellow, (red or 0) + (yellow_red or 0)])
+    for page in out.values():
+        page["seasons"].sort(key=lambda x: (-x[0], -x[5]))     # newest season first, then most minutes
+    return out
+
+
+MOVEMENT_FIELDS = ["horizon", "rating_change", "rank_movement", "baseline_at"]
+
+
+def _player_movement(conn, ids):
+    """Each player's stored rating movement (player_rating_movement: his latest daily rating
+    capture against an earlier one), for his page's genuine movement. Only horizons with a stored
+    baseline from the same player model version: a change across model versions is the model
+    changing, not the player. Empty until the captures exist (or before the migration)."""
+    (view,) = conn.execute("select to_regclass('public.player_rating_movement')").fetchone()
+    if view is None or not ids:
+        return {}
+    out = {}
+    for pid, captured, horizon, change, move, base_at in conn.execute(
+            """select player_id, captured_at, horizon, rating_change, rank_movement, baseline_at
+               from player_rating_movement
+               where player_id = any(%s) and baseline_at is not null and not model_changed
+               order by player_id, horizon""", [ids]):
+        entry = out.setdefault(pid, {"captured_at": captured.isoformat(), "fields": MOVEMENT_FIELDS, "rows": []})
+        entry["rows"].append([horizon, _r(change, 1), move, base_at.isoformat()])
+    return out
+
+
+def cut_player_page(page):
+    """A player's page file as anyone can ask for it when he is outside the free slice: no rank
+    going into each match and no rating movement, and "cut": true."""
+    at = MATCH_FIELDS.index("rank")
+    return {**{k: v for k, v in page.items() if k != "movement"},
+            "matches": [[None if i == at else v for i, v in enumerate(m)] for m in page["matches"]], "cut": True}
+
+
+def export_player_pages(conn, out_dir=OUT_DIR, detail=None, free=None):
+    """One small file per listed player for his page: .export/players/<player_id>.json, with his
+    stats per season and club, his last PLAYER_MATCHES appearances (with his rank going into each)
+    and his injury status for his next fixture ([fixture, type, ban]: no medical reason), plus his
+    own rows of the season detail (born, spells, positions) so his page needn't load
+    player_seasons.json. Built from the query cache (cache.py), so the
+    only database reads are the per-match ranks and injuries for those few rows."""
+    from ..pipeline.cache import finished_fixtures
+    from ..models.player_ratings import _appearances, _other_seasons
+    ids = [r[0] for r in conn.execute(f"select player_id from players p where {LISTED}", [PLAYER_SEASONS])]
+    apps, fixtures, other = _appearances(conn), finished_fixtures(conn), _other_seasons(conn)
+    pages = build_player_pages(ids, apps, fixtures, other)
+    fids = sorted({m[0] for p in pages.values() for m in p["matches"]})
+    ranks = {(fid, player): float(rank) for fid, player, rank in conn.execute(
+        """select fixture_id, player_id, player_rank from fixture_player_ranks
+           where fixture_id = any(%s) and player_id = any(%s)""", [fids, ids])}
+    injuries = {}
+    next_fixtures = availability.next_fixtures(conn)
+    resolved = availability.load(conn, next_fixtures)
+    for fid,kickoff,home,away,upcoming in next_fixtures:
+        for team in (home,away):
+            for player,state in resolved[(fid,team)].items():
+                item = state['evidence'][-1]
+                injuries.setdefault(player,[fid,'Suspended' if state['state']=='suspended' else item.get('type'),_ban(item.get('reason'))])
+    movement = _player_movement(conn, ids)
+    for pid, page in pages.items():
+        for m in page["matches"]:
+            m[11] = _r(ranks.get((m[0], pid)), 1)
+        page["injury"] = injuries.get(pid)
+        if pid in movement:
+            page["movement"] = movement[pid]
+    # his own rows of the season detail (export_player_seasons), so his page needs only this file
+    detail = detail or {}
+    for pid, page in pages.items():
+        page["born"] = detail.get("born", {}).get(str(pid))
+        page["spell_fields"] = SPELL_FIELDS
+        page["spells"] = detail.get("players", {}).get(str(pid), {})
+        page["positions"] = detail.get("positions", {}).get(str(pid), {})
+    team_ids = {x for p in pages.values() for x in [s[1] for s in p["seasons"]] + [m[4] for m in p["matches"]]
+                + [sp[0] for v in p["spells"].values() for sp in v]}
+    names = dict(conn.execute("select team_id, name from teams where team_id = any(%s)", [list(team_ids)]))
+    player_dir = out_dir / "players"
+    player_dir.mkdir(parents=True, exist_ok=True)
+    for old in player_dir.glob("*.json"):
+        if int(old.stem) not in pages:
+            old.unlink()
+    # the paid tier: a player outside the free slice (free: export_players) has a whole file stored
+    # as a paid row and a cut-down one anyone can ask for, once site_player_page() is there to choose
+    paid = free is not None and _paid_rows(conn, "site_player_page")
+    paid_dir = out_dir / f"{PAID_PREFIX}players"
+    if paid:
+        paid_dir.mkdir(parents=True, exist_ok=True)
+    for old in paid_dir.glob("*.json") if paid_dir.is_dir() else ():
+        if not paid or int(old.stem) not in pages or int(old.stem) in free:
+            old.unlink()
+
+    def write(path, page):
+        payload = json.dumps(page, separators=(",", ":"), ensure_ascii=False)
+        if not path.exists() or path.read_text(encoding="utf-8") != payload:
+            path.write_text(payload, encoding="utf-8")
+    for pid, page in pages.items():
+        teams = ({s[1] for s in page["seasons"]} | {m[4] for m in page["matches"]}
+                 | {sp[0] for v in page["spells"].values() for sp in v})
+        whole = {"id": pid, "season_fields": SEASON_FIELDS, "match_fields": MATCH_FIELDS, **page,
+                 "teams": {str(t): names.get(t) for t in sorted(teams)}}
+        if paid and pid not in free:
+            write(paid_dir / f"{pid}.json", whole)
+            write(player_dir / f"{pid}.json", cut_player_page(whole))
+        else:
+            write(player_dir / f"{pid}.json", whole)
+    log.info("Exported %d player pages", len(pages))
+
+
+CLUB_ACTIVE_DAYS = 400
+# The xG the club pages and league tables show: the site's own estimate from shot counts, for
+# every match with them (API-Football's xG goes into the model but isn't published). A
+# least-squares fit over two years of team matches with both (35,664 of them, September 2026),
+# xG = 0.12 per shot inside the box + 0.002 per shot outside it + 0.101 per shot on target
+# - 0.022 per blocked shot + 0.026. R^2 0.62, typical error 0.4 goals a team a match.
+XG_FROM_SHOTS = (0.12, 0.002, 0.101, -0.022, 0.026)
+
+
+def _xg_from_shots(inside, outside, on_target, blocked):
+    a, b, c, d, e = XG_FROM_SHOTS
+    return max(0.0, a * inside + b * outside + c * on_target + d * (blocked or 0) + e)
+
+# Finished matches at a neutral ground: in a city where neither club played its league home games
+# that season (2+ of them) and not at either's league ground by name (the API's venue names and
+# cities vary: Bayern's league games are at "Fußball Arena München", its cup games at "Allianz
+# Arena"; BayArena's city is sometimes "Bayer Leverkusen"). Wembley, the Stade de France and La
+# Cartuja host finals in their clubs' own cities, so they're neutral unless they're the home
+# club's league ground (Betis at La Cartuja while their stadium is rebuilt).
+NEUTRAL_SQL = """
+    with hv as (
+        select f.home_team_id t, f.season, lower(trim(split_part(f.venue_city, ',', 1))) c, f.venue_name n
+        from fixtures f join leagues l using (league_id) where l.type = 'League'),
+    hc as (select t, season, c from hv where c is not null group by 1, 2, 3 having count(*) >= 2),
+    hn as (select t, season, n from hv where n is not null group by 1, 2, 3 having count(*) >= 2)
+    select f.fixture_id from fixtures f
+    where f.venue_city is not null and f.status_short = any(%s)
+      and exists (select 1 from hc where hc.t = f.home_team_id and hc.season = f.season)
+      and not exists (select 1 from hn where hn.t = f.home_team_id and hn.season = f.season and hn.n = f.venue_name)
+      and (f.venue_name ~* '^(wembley|stade de france|estadio de la cartuja)'
+           or (not exists (select 1 from hn where hn.t = f.away_team_id and hn.season = f.season and hn.n = f.venue_name)
+               and not exists (select 1 from hc where hc.t in (f.home_team_id, f.away_team_id) and hc.season = f.season
+                               and hc.c = lower(trim(split_part(f.venue_city, ',', 1))))))"""
+
+
+def export_clubs(conn, out_dir=OUT_DIR, positions=None):
+    """One small file per active club for its club page: .export/clubs/<team_id>.json.
+
+    history: every match since 2020 as [date, rank after, opponent, home (1, 0 away, 2 neutral), goals for, against,
+    competition, formation (null where the line-up isn't known), attack and defence after,
+    starting XI average rank by line [GK, DEF, MID, FWD] (null outside the line-up leagues)]; plus
+    the current manager and the home kit colours. starts: this season's matches with a
+    line-up (games), each player's starts by position in them, each match's starters (xi) and
+    competition (xi_league) and formation (xi_formation), and per player his starts, substitute appearances and minutes in
+    them over the last 12 months (mins, out of mins_matches). positions: its current players'
+    starting minutes by position over the last 12 months, wherever they played
+    ({player: [[role, minutes], ...]}, from export_player_seasons).
+    Loaded only when the page opens.
+    """
+    now = datetime.now(timezone.utc)
+    active = {r[0] for r in conn.execute(
+        """select team_id from team_rankings where last_match >= %s
+           union select home_team_id from fixtures where status_short in ('NS','TBD') and kickoff > now()
+           union select away_team_id from fixtures where status_short in ('NS','TBD') and kickoff > now()""",
+        [now - timedelta(days=CLUB_ACTIVE_DAYS)])}
+    formations = {(f, t): fm for f, t, fm in cached_rows(conn, "formations", f"""
+            select {WEEK.format('f.kickoff')} as part, ff.fixture_id, ff.team_id, ff.formation
+            from fixture_formations ff join fixtures f using (fixture_id) where ff.formation is not null""",
+            order_by="fixture_id, team_id")}
+    coaches = {t: {"id": c, "name": n, "since": s.isoformat() if s else None}
+               for t, c, n, s in conn.execute("select team_id, coach_id, name, since from team_coaches")}
+    colors = {t: _kit_colors(s, n) for t, s, n in conn.execute("select team_id, shirt, number from team_colors")}
+    xi_lines = {(f, t): _xi_lines(rest) for f, t, *rest in cached_rows(conn, "xi_lines", f"""
+            select {WEEK.format('f.kickoff')} as part, r.fixture_id, r.team_id,
+                   r.actual_gk::float8, r.actual_def::float8, r.actual_mid::float8, r.actual_fwd::float8
+            from fixture_team_ratings r join fixtures f using (fixture_id) where r.actual_xi_rating is not null""",
+            order_by="fixture_id, team_id")}
+    neutral = {f for (f,) in conn.execute(NEUTRAL_SQL, [list(config.FINISHED_STATUSES)])}
+    # this season (the club's latest season with a line-up): matches with a line-up, and starts by
+    # position per player, league (fixture_players.role) and cup (fixture_lineups) alike
+    current = """with cur as (
+            select ff.team_id, max(f.season) s from fixture_formations ff join fixtures f using (fixture_id)
+            where f.status_short = any(%(fin)s) and ff.formation is not null and ff.team_id = any(%(teams)s) group by 1)"""
+    args = {"fin": list(config.FINISHED_STATUSES), "teams": list(active)}
+    starts = {t: {"games": n, "players": {}} for t, n in conn.execute(current + """
+            select ff.team_id, count(*) from fixture_formations ff join fixtures f using (fixture_id)
+            join cur on cur.team_id = ff.team_id and cur.s = f.season
+            where f.status_short = any(%(fin)s) and ff.formation is not null group by 1""", args)}
+    for team, player, role, n in conn.execute(current + """
+            select fp.team_id, fp.player_id, fp.role, count(*) from (select fixture_id, team_id, player_id, role from fixture_players where started and role is not null
+                  union all select fixture_id, team_id, player_id, role from fixture_lineups where role is not null) fp join fixtures f using (fixture_id)
+            join cur on cur.team_id = fp.team_id and cur.s = f.season
+            join fixture_formations ff on ff.fixture_id = fp.fixture_id and ff.team_id = fp.team_id
+            where ff.formation is not null and f.status_short = any(%(fin)s)
+            group by 1, 2, 3""", args):
+        if team in starts:
+            starts[team]["players"].setdefault(str(player), {})[role] = n
+    # the same starts match by match (oldest first): [[player, role, player, role, ...], ...], so the
+    # club page can see who has started in a position since an injured player last did
+    xis, xi_league, xi_formation = defaultdict(dict), defaultdict(dict), defaultdict(dict)
+    for team, fid, league, formation, player, role in conn.execute(current + """
+            select fp.team_id, fp.fixture_id, f.league_id, ff.formation, fp.player_id, fp.role from (select fixture_id, team_id, player_id, role from fixture_players where started and role is not null
+                  union all select fixture_id, team_id, player_id, role from fixture_lineups where role is not null) fp join fixtures f using (fixture_id)
+            join cur on cur.team_id = fp.team_id and cur.s = f.season
+            join fixture_formations ff on ff.fixture_id = fp.fixture_id and ff.team_id = fp.team_id
+            where ff.formation is not null and f.status_short = any(%(fin)s)
+            order by f.kickoff, fp.fixture_id, fp.player_id""", args):
+        xis[team].setdefault(fid, []).extend([player, role])
+        xi_league[team][fid] = league
+        xi_formation[team][fid] = formation
+    for team, by_fixture in xis.items():
+        if team in starts:
+            starts[team]["xi"] = list(by_fixture.values())
+            starts[team]["xi_league"] = list(xi_league[team].values())   # each match's competition
+            starts[team]["xi_formation"] = list(xi_formation[team].values())   # and formation
+    # minutes over the last 12 months (league matches with player data): the club's matches, and
+    # per player [starts, minutes in them, substitute appearances, minutes in those], for the
+    # club page's expected minutes (how long a starter usually lasts, who comes off the bench)
+    for team, matches in conn.execute(
+            """select fp.team_id, count(distinct fp.fixture_id) from fixture_players fp join fixtures f using (fixture_id)
+               where fp.team_id = any(%s) and f.kickoff > now() - interval '365 days' group by 1""", [list(active)]):
+        if team in starts:
+            starts[team]["mins_matches"] = matches
+    for team, player, n_start, m_start, n_sub, m_sub in conn.execute(
+            """select fp.team_id, fp.player_id, count(*) filter (where fp.started),
+                      coalesce(sum(fp.minutes) filter (where fp.started), 0),
+                      count(*) filter (where not fp.started), coalesce(sum(fp.minutes) filter (where not fp.started), 0)
+               from fixture_players fp join fixtures f using (fixture_id)
+               where fp.team_id = any(%s) and f.kickoff > now() - interval '365 days' group by 1, 2""", [list(active)]):
+        if team in starts:
+            starts[team].setdefault("mins", {})[str(player)] = [n_start, m_start, n_sub, m_sub]
+    # the site's estimate from shots, for every match with shot counts: {(fixture, team): xG}
+    shot_xg = {(f, t): _xg_from_shots(i, o, on, bl) for f, t, i, o, on, bl in cached_rows(conn, "shot_counts", f"""
+            select {WEEK.format('f.kickoff')} as part, s.fixture_id, s.team_id, s.shots_inside_box,
+                   s.shots_outside_box, s.shots_on_goal, s.blocked_shots
+            from fixture_team_stats s join fixtures f using (fixture_id)
+            where s.shots_inside_box is not null
+              and s.shots_outside_box is not null and s.shots_on_goal is not null""",
+            order_by="fixture_id, team_id")}
+
+    def xg_pair(fid, team, opp):
+        """(xG for, xG against, estimated: always 1) for the club in this match, from shots."""
+        ef, ea = shot_xg.get((fid, team)), shot_xg.get((fid, opp))
+        return (_r(ef, 2), _r(ea, 2), 1) if ef is not None and ea is not None else (None, None, 0)
+    history = {}
+    club_rows = sorted((r for r in rank_history(conn) if r[1] in active), key=lambda r: (r[1], r[2]))
+    for fid, team, _, kickoff, is_home, opp, rank_before, rank_after, _, hg, ag, league, att, dfn, *_ in club_rows:
+        rows = history.setdefault(team, {"start": round(rank_before), "matches": []})["matches"]
+        gf, ga = (hg, ag) if is_home else (ag, hg)
+        rows.append([kickoff.date().isoformat(), round(rank_after, 1), opp, 2 if fid in neutral else 1 if is_home else 0,
+                     gf, ga, league,
+                     formations.get((fid, team)), _r(att, 1), _r(dfn, 1), xi_lines.get((fid, team)),
+                     *xg_pair(fid, team, opp)])
+    club_dir = out_dir / "clubs"
+    club_dir.mkdir(parents=True, exist_ok=True)
+    for old in club_dir.glob("*.json"):
+        if int(old.stem) not in active:
+            old.unlink()
+    names = dict(conn.execute("select team_id, name from teams"))
+    for team in active:
+        h = history.get(team, {"start": None, "matches": []})
+        opponents = {m[2] for m in h["matches"]}
+        payload = {"id": team, "start": h["start"],
+                   "fields": ["date", "rank", "opponent", "home", "gf", "ga", "league", "formation",
+                              "attack", "defence", "xi_lines", "xgf", "xga", "xg_est"],
+                   "matches": h["matches"], "coach": coaches.get(team),
+                   "colors": colors.get(team), "starts": starts.get(team),
+                   "positions": (positions or {}).get(team, {}),
+                   "teams": {o: names.get(o) for o in opponents}}
+        (club_dir / f"{team}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    log.info("Exported %d club pages", len(active))
+
+
+XG_RECENT = 5   # league games behind the tables' xG and xG conceded per 90
+PAID_PREFIX = "paid_"        # files in a directory named so are stored as paid rows of site.docs (mirror_site_docs)
+FREE_DAYS = 7                # how far ahead the model's chances are free (the owner's line, 2026-10-04)
+LEAGUE_FIXTURE_FIELDS = ["id", "kickoff", "round", "home", "away", "status", "hg", "ag", "pen_h", "pen_a",
+                         "home_xg", "away_xg", "p_home", "p_draw", "p_away"]
+
+
+def cut_league_fixtures(fixtures, now):
+    """A league's fixtures (LEAGUE_FIXTURE_FIELDS rows) as its free file carries them: no
+    projected goals, and the chances only for kick-offs within FREE_DAYS of now."""
+    at = LEAGUE_FIXTURE_FIELDS.index
+    goals, chances = (at("home_xg"), at("away_xg")), (at("p_home"), at("p_draw"), at("p_away"))
+    limit = (now + timedelta(days=FREE_DAYS)).isoformat()
+    out = []
+    for f in fixtures:
+        hide = set(goals) | (set(chances) if f[at("kickoff")] > limit else set())
+        out.append([None if i in hide else v for i, v in enumerate(f)])
+    return out
+
+
+def headline_projection(table, fixtures):
+    """A league's projected final table as its free file carries it: [[group, place, club,
+    matches left, points]], each club's points so far plus the points the model expects from its
+    remaining fixtures (3 x its chance of winning + its chance of a draw), level clubs by goal
+    difference so far plus projected goals. The full version (wins, draws, losses, and each
+    club's chance of finishing in every place) is played out by the page from the paid file.
+    table: tables.FIELDS rows; fixtures: LEAGUE_FIXTURE_FIELDS rows, whole."""
+    at = LEAGUE_FIXTURE_FIELDS.index
+    extra = defaultdict(lambda: [0, 0.0, 0.0])            # club: matches left, expected points, expected goal difference
+    for f in fixtures:
+        ph, pd, pa, hx, ax = (f[at(k)] for k in ("p_home", "p_draw", "p_away", "home_xg", "away_xg"))
+        if ph is None or pd is None or pa is None or hx is None or ax is None:
+            continue
+        for team, win, diff in ((f[at("home")], ph, hx - ax), (f[at("away")], pa, ax - hx)):
+            e = extra[team]
+            e[0] += 1
+            e[1] += 3 * win + pd
+            e[2] += diff
+    if not extra:
+        return []
+    groups = defaultdict(list)
+    for row in table:
+        r = dict(zip(league_tables.FIELDS, row))
+        left, pts, gd = extra.get(r["team"], (0, 0.0, 0.0))
+        groups[r["group"]].append((-(r["points"] + pts), -(r["gd"] + gd), r["rank"], r["team"], left))
+    return [[group, i + 1, team, left, round(-pts)]
+            for group, rows in groups.items() for i, (pts, _, _, team, left) in enumerate(sorted(rows))]
+
+
+def _paywall_on(conn):
+    """Whether the paid tier's paywall is switched on (site.settings; 20261006_paid_tier.sql).
+    False on a read-only run and for a database from before it."""
+    try:
+        config.require_db_write("read the paywall switch")
+    except config.SafetyError:
+        return False
+    if conn.execute("select to_regclass('site.settings')").fetchone()[0] is None:
+        return False
+    row = conn.execute("select value from site.settings where key = 'paywall'").fetchone()
+    return bool(row and row[0] is True)
+
+
+def _paid_rows(conn, function):
+    """Whether to write cut-down and paid files for a kind of page: once the database has the
+    function that chooses between them (site_league: db/migrations/20261006_site_league.sql;
+    site_player_page: 20261006_paid_players.sql). Before it, and on a read-only run, a page's
+    one file is whole, as it always was."""
+    try:
+        config.require_db_write(f"check for {function}")
+    except config.SafetyError:
+        return False
+    return conn.execute("select to_regprocedure(%s)", [f"public.{function}(integer)"]).fetchone()[0] is not None
+
+
+def export_leagues(conn, out_dir=OUT_DIR):
+    """One file per competition for its league page: .export/leagues/<league_id>.json.
+
+    The current season's table (every group, worked out from the results: tables.py) and all its fixtures, the
+    upcoming ones with the model's projected goals and home / draw / away chances (for the page's
+    projected table), and each club's recent xG for and against (for the table): the site's
+    estimate from shots (XG_FROM_SHOTS), not API-Football's xG. Loaded only when
+    the page opens.
+    """
+    seasons = {lid: (season, start) for lid, season, start in conn.execute(
+        """select distinct on (league_id) league_id, season, start_date from league_seasons
+           where is_current order by league_id, season desc""")}
+    # API-Football's standings give the groups and what each place leads to; the figures and
+    # the order are worked out from the results (tables.py)
+    standing, feed = defaultdict(list), defaultdict(list)
+    for (lid, group, team, rank, pts, desc, pl, w, d, l, gf, ga) in conn.execute(
+            """select league_id, group_name, team_id, rank, points, description,
+                      played, win, draw, lose, goals_for, goals_against
+               from standings where (league_id, season) in (select league_id, max(season) from league_seasons
+                                                             where is_current group by league_id)
+               order by league_id, group_name, rank"""):
+        standing[lid].append((group, team, rank, desc))
+        feed[lid].append((group, team, pl, w, d, l, gf, ga, pts))
+    results = defaultdict(list)
+    for lid, kickoff, rnd, home, away, hg, ag in conn.execute(
+            """select f.league_id, f.kickoff, f.round, f.home_team_id, f.away_team_id,
+                      coalesce(f.ft_home, f.home_goals), coalesce(f.ft_away, f.away_goals)
+               from fixtures f
+               where f.status_short = any(%s) and f.home_goals is not null and f.away_goals is not null
+                 and (f.league_id, f.season) in (select league_id, max(season) from league_seasons
+                                                 where is_current group by league_id)""",
+            [list(config.FINISHED_STATUSES)]):
+        results[lid].append((kickoff, rnd, home, away, hg, ag))
+    cups = {lid for lid, in conn.execute("select league_id from leagues where type <> 'League'")}
+    names = dict(conn.execute("select team_id, name from teams"))
+    tables = {}
+    for lid, rows in standing.items():
+        season = seasons[lid][0] if lid in seasons else None
+        tables[lid] = league_tables.league_table(rows, results[lid], league_tables.adjustments(lid, season), names,
+                                                 league_tables.ORDER.get(lid), lid in cups)
+        differ = league_tables.differences(tables[lid], feed[lid])
+        if differ:
+            log.warning("League %s: the table from results differs from API-Football's for %d club(s), e.g. %s "
+                        "(a deduction or an annulled club goes in table_adjustments.json)", lid, len(differ), differ[0])
+    fixtures = defaultdict(list)
+    for fid, lid, kickoff, rnd, home, away, status, hg, ag, ph, pa_, xh, xa, p1, px, p2 in conn.execute(
+            """select f.fixture_id, f.league_id, f.kickoff, f.round, f.home_team_id, f.away_team_id, f.status_short,
+                      f.home_goals, f.away_goals, f.pen_home, f.pen_away,
+                      p.home_xg::float8, p.away_xg::float8, p.p_home::float8, p.p_draw::float8, p.p_away::float8
+               from fixtures f
+               left join fixture_predictions p on p.fixture_id = f.fixture_id and f.status_short = any(%s)
+               where (f.league_id, f.season) in (select league_id, max(season) from league_seasons
+                                                 where is_current group by league_id)
+               order by f.kickoff, f.fixture_id""", [list(UPCOMING_STATUSES)]):
+        fixtures[lid].append([fid, kickoff.isoformat(), rnd, home, away, status, hg, ag, ph, pa_,
+                              _r(xh), _r(xa), _r(p1, 3), _r(px, 3), _r(p2, 3)])
+    # each club's estimated xG and xG conceded per 90 over its last XG_RECENT league games with
+    # shot counts for both sides (a match that went to extra time counts as 120 minutes)
+    xg_sql = ("greatest(0, %s::float8 * {0}.shots_inside_box + %s::float8 * {0}.shots_outside_box + %s::float8 * {0}.shots_on_goal"
+              " + %s::float8 * coalesce({0}.blocked_shots, 0) + %s::float8)")
+    counted = "{0}.shots_inside_box is not null and {0}.shots_outside_box is not null and {0}.shots_on_goal is not null"
+    recent_xg = defaultdict(dict)
+    for lid, team, xg, xga, n in conn.execute(
+            f"""with games as (
+                 select f.league_id, s.team_id, f.kickoff,
+                        {xg_sql.format('s')} * 90 / case when f.status_short in ('AET', 'PEN') then 120 else 90 end as xg,
+                        {xg_sql.format('o')} * 90 / case when f.status_short in ('AET', 'PEN') then 120 else 90 end as xga
+                 from fixtures f
+                 join fixture_team_stats s on s.fixture_id = f.fixture_id
+                 join fixture_team_stats o on o.fixture_id = f.fixture_id and o.team_id <> s.team_id
+                 where f.status_short = any(%s) and {counted.format('s')} and {counted.format('o')}
+                   and (f.league_id, f.season) in (select league_id, max(season) from league_seasons
+                                                   where is_current group by league_id)),
+               ranked as (select *, row_number() over (partition by league_id, team_id order by kickoff desc) as n
+                          from games)
+               select league_id, team_id, avg(xg)::float8, avg(xga)::float8, count(*)
+               from ranked where n <= %s group by 1, 2""",
+            [*XG_FROM_SHOTS, *XG_FROM_SHOTS, list(config.FINISHED_STATUSES), XG_RECENT]):
+        recent_xg[lid][team] = [_r(xg), _r(xga), n]
+    league_dir = out_dir / "leagues"
+    league_dir.mkdir(parents=True, exist_ok=True)
+    for old in league_dir.glob("*.json"):
+        if int(old.stem) not in seasons:
+            old.unlink()
+    paid = _paid_rows(conn, "site_league")
+    now = datetime.now(timezone.utc)
+    paid_dir = out_dir / f"{PAID_PREFIX}leagues"
+    if paid:
+        paid_dir.mkdir(parents=True, exist_ok=True)
+    for old in paid_dir.glob("*.json") if paid_dir.is_dir() else ():
+        if not paid or int(old.stem) not in seasons:
+            old.unlink()
+    for lid, (season, start) in seasons.items():
+        table = tables.get(lid, [])
+        teams = {r[2] for r in table} | {t for f in fixtures[lid] for t in (f[3], f[4])}
+        payload = {"id": lid, "season": season, "start": start.isoformat() if start else None,
+                   "table_fields": league_tables.FIELDS,
+                   "table": table,
+                   "fixture_fields": LEAGUE_FIXTURE_FIELDS,
+                   "fixtures": fixtures[lid],
+                   "recent_xg_fields": ["xg90", "xga90", "games"],
+                   "recent_xg": recent_xg[lid],
+                   "teams": {t: names.get(t) for t in teams}}
+        if paid:
+            # the whole file is the paid row; the one anyone can ask for is cut down
+            (paid_dir / f"{lid}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+            payload = {**payload, "fixtures": cut_league_fixtures(fixtures[lid], now), "cut": True,
+                       "projected_fields": ["group", "place", "team", "left", "points"],
+                       "projected": headline_projection(table, fixtures[lid])}
+        (league_dir / f"{lid}.json").write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    log.info("Exported %d league pages%s", len(seasons), " (cut down, with a paid row each)" if paid else "")
+
+
+FANTASY_RESULTS = Path(__file__).resolve().parent.parent.parent / "experiments" / "fantasy_v1" / "results.json"
+
+
+def _fantasy_progress(conn, model="fantasy-v1.1"):
+    """Accrual of a prospective fantasy test (P8: v1.1): finished fixtures with one of the model's
+    snapshots before kickoff."""
+    if conn.execute("select to_regclass('public.fantasy_fixture_snapshots')").fetchone()[0] is None:
+        return {"state": "not_started"}
+    first, rows, fixtures, rounds = conn.execute(
+        """select min(s.captured_at), count(*), count(distinct s.fixture_id), count(distinct (f.season, f.round))
+                  filter (where f.status_short = 'FT')
+           from fantasy_fixture_snapshots s join fixtures f using (fixture_id)
+           join model_versions mv using (model_version_id)
+           where s.source = 'prospective' and mv.version_name = %s""", [model]).fetchone()
+    done = conn.execute(
+        """select count(distinct s.fixture_id) from fantasy_fixture_snapshots s join fixtures f using (fixture_id)
+           join model_versions mv using (model_version_id)
+           where s.source = 'prospective' and mv.version_name = %s and f.status_short = 'FT'""", [model]).fetchone()[0]
+    return {"state": "capturing" if first else "waiting", "first_capture": first.isoformat() if first else None,
+            "snapshots": rows, "fixtures": fixtures, "finished_fixtures": done, "finished_rounds": rounds}
+
+
+def export_fantasy(conn, out_dir=OUT_DIR):
+    """fpl.json: the fantasy model's validation findings (experiments/fantasy_v1/results.json) and
+    the prospective test's progress. Uses no FPL data. Not critical: any problem skips the file."""
+    try:
+        r = json.loads(FANTASY_RESULTS.read_text(encoding="utf-8"))
+        t = r["test"]
+        pick = lambda m: {k: m[k] for k in ("n", "mae", "rmse", "pearson", "spearman", "mean_pred", "mean_actual", "bias_pct")}
+        names = ("model", "recent5", "ppg", "flat_team_goals", "v1_1")
+        seg = lambda name, keys=None: {g: {k: pick(v[k]) for k in ("model", "recent5", "ppg")}
+                                       for g, v in t["segments"][name].items() if keys is None or g in keys}
+        calib = lambda c: {"ece": c["ece"], "n": c["n"], "mean_p": c["mean_p"], "rate": c["rate"],
+                           "bins": [[b["n"], b["mean_p"], b["rate"]] for b in c["bins"]]}
+        s = r["success"]
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "test": {"rows": r["rows"]["test"], "train_rows": r["rows"]["train"],
+                     "validation_rows": r["rows"]["validation"], "from": "2024-07-01",
+                     "rounds": t["round_wins"]["recent5"]["rounds"]},
+            "criteria": [
+                {"key": "benchmarks", "pass": s["1_beats_ppg_and_recent_on_mae_and_rmse"],
+                 "mae_vs_recent": t["vs"]["recent5"]["mae"], "mse_vs_recent": t["vs"]["recent5"]["mse"]},
+                {"key": "bias", "pass": s["2_bias_within_limits"], **s["2_detail"]},
+                {"key": "calibration", "pass": s["3_calibration"], **s["3_detail"]},
+                {"key": "match_model", "pass": s["4_beats_flat_team_goals"], "mae_vs_flat": t["vs"]["flat_team_goals"]["mae"]}],
+            "overall": {k: pick(t["overall"][k]) for k in names},
+            "top_n": {k: t["top_n"][k] for k in names},
+            "round_wins": t["round_wins"]["recent5"],
+            "vs_regulars": {k: t["vs_regulars"][k]["mae"] for k in ("recent5", "ppg")},
+            "segments": {"regular": seg("regular"), "position": seg("position"),
+                         "round_bucket": seg("round_bucket"), "ability_band": seg("ability_band", ("80+", "70-80", "60-70")),
+                         "season": seg("season")},
+            "minutes": {k: t["minutes"][k] for k in ("mae", "recent5_mae", "rmse", "recent5_rmse", "mean_pred", "mean_actual")},
+            "availability_minutes_mae": t["availability_variant_detail"]["minutes_mae"],
+            "start_calibration": calib(t["start_calibration"]),
+            "clean_sheet_calibration": calib(r["test_team_checks"]["team_clean_sheet"]),
+            "validation_clean_sheet_ece": r["validation_team_checks"]["team_clean_sheet"]["ece"],
+            "components": {k: {"pred": v["mean_pred"], "actual": v["mean_actual"]} for k, v in t["components"].items()},
+            "saves": {"validation_terciles": r["validation_team_checks"]["saves_terciles"],
+                      "posthoc_gk_bias": r["posthoc_with_saves"]["position_v1_bias_pct"]["G"]},
+            "v1_1_gk_bias": t["segments"]["position"]["G"]["v1_1"]["bias_pct"],
+            "coverage_outside_share": r["coverage"]["outside_share"],
+            "fpl_rows_available": sum(r["fpl_audit"].values()),
+            "prospective": dict(_fantasy_progress(conn), target_rounds=10, target_rows=3000),
+        }
+
+        _write_json_file(Path(out_dir) / "fpl.json", payload)
+    except Exception:
+        conn.rollback()         # a failed query must not leave the export's connection aborted
+        log.exception("Fantasy findings export skipped")
+
+
+PREDICTION_GWS = 10                     # gameweeks ahead on the FPL tab
+PUBLISHED_FANTASY_PARAMS = Path(__file__).resolve().parent.parent / "fantasy_games" / "fantasy_params_v1_6.json"   # the FPL tab shows v1.6
+FPL_POSITIONS = {"GKP": "G", "DEF": "D", "MID": "M", "FWD": "F"}
+# v1.5's figures behind the goal / penalty / FPL assist lines of the breakdown
+PENALTY_CELLS = ("exp_np_goals", "exp_pen_goals", "exp_pen_misses", "exp_fpl_pen_assists", "exp_fpl_other_assists")
+
+
+def _fpl_state(conn):
+    """From the latest FPL capture: ({api player: (position letter, price tenths, status, chance)},
+    {(api home, api away): gameweek}, captured_at). Empty without a capture."""
+    cap = conn.execute("""select capture_id, season, fixtures, captured_at from fpl_captures
+                          order by captured_at desc, capture_id desc limit 1""").fetchone()
+    if not cap:
+        return {}, {}, None
+    capture_id, season, fixtures, captured = cap
+    players = {}
+    for api, pos, price, status, chance in conn.execute(
+            """select m.api_id, s.position, s.price_tenths, s.status, s.chance_next_round
+               from fpl_player_states s join fpl_id_map_current m
+                 on m.kind = 'player' and m.season = %s and m.fpl_id = s.fpl_player_id
+               where s.capture_id = %s and m.api_id is not null order by s.fpl_player_id""", [season, capture_id]):
+        players.setdefault(api, (FPL_POSITIONS.get(pos), price, status, chance))
+    teams = dict(conn.execute("""select fpl_id, api_id from fpl_id_map_current
+                                 where kind = 'team' and season = %s and api_id is not null""", [season]).fetchall())
+    gws = {(teams[f["fpl_team_h"]], teams[f["fpl_team_a"]]): f["event_id"] for f in fixtures
+           if f.get("event_id") and f.get("fpl_team_h") in teams and f.get("fpl_team_a") in teams}
+    return players, gws, captured
+
+
+def _round_number(name):
+    try:
+        return int(str(name).rsplit("-", 1)[-1])
+    except ValueError:
+        return None
+
+
+def fantasy_prediction_payload(fixtures, teams_out, doc, fpl_players, names, team_info, *, source, captured=None):
+    """fpl_predictions.json from fantasy_snapshots.build output. fixtures: {fixture: (gameweek,
+    home, away, kickoff)}; fpl_players: fpl_state()'s players. Points are rescored with the FPL
+    position where one is known, since FPL scores by its own position."""
+    from ..fantasy_games import fantasy as fm
+    params = doc["params"]
+    gws = sorted({g for g, *_ in fixtures.values()})
+    index = {g: i for i, g in enumerate(gws)}
+    first = {g: min(k for gg, _, _, k in fixtures.values() if gg == g) for g in gws}
+    parts = [*fm.COMPONENT_POINTS, *(fm.EXTRA_POINTS if "bonus_beta" in params else ())]   # v1.1 has no extras
+    pens = "penalties" in params          # v1.5: penalties after goals, FPL-only assists after assists
+    if pens:
+        parts.insert(parts.index("goal_points") + 1, "penalty_points")
+        parts.insert(parts.index("assist_points") + 1, "fpl_assist_points")
+    players, cells = {}, {}
+    for fid, team, _, preds, inputs in teams_out:
+        gw, home, away, _ = fixtures[fid]
+        lam = preds[0]["lambda_against"] if preds else None
+        save_mean = max(params["save_intercept"] + params["save_slope"] * lam, 0.1) if doc["saves"] and lam is not None else None
+        for p in preds:
+            pid = p["player_id"]
+            fpl = fpl_players.get(pid)
+            if source == "fpl" and fpl_players and not fpl:
+                continue     # not in FPL at his club: left it, though our match history still has him
+            position = (fpl and fpl[0]) or p["position"]
+            if position != p["position"]:
+                mins = {k: p[k] for k in ("p_start", "p_play", "p60", "exp_minutes")}
+                p = dict(p, **fm.expected_points(position, mins, p.get("exp_np_goals", p["exp_goals"]), p["exp_assists"],
+                                                 p["lambda_against"],
+                                                 p.get("save_mean", save_mean), fm.player_extras(params, stored=p)))
+            if pid not in players:
+                players[pid] = [pid, names.get(pid, str(pid)), team, p["position"], fpl[0] if fpl else None,
+                                fpl[1] if fpl else None, fpl[2] if fpl else None, fpl[3] if fpl else None,
+                                inputs["availability"].get(str(pid))]
+            cells.setdefault(pid, []).append([index[gw], away if team == home else home, team == home,
+                                              _r(p["expected_points"]), round(p["exp_minutes"]),
+                                              _r(p["exp_goals"]), _r(p["exp_assists"]), _r(p["p_clean_sheet"]),
+                                              [_r(p[k]) for k in parts],
+                                              *([_r(p[k]) for k in PENALTY_CELLS] if pens else [])])
+    order = sorted(players, key=lambda pid: -sum(c[3] for c in cells[pid]))
+    return {"generated_at": datetime.now(timezone.utc).isoformat(), "model": doc["version_name"], "source": source,
+            "fpl_captured_at": captured.isoformat() if captured else None,
+            "gameweeks": [{"id": g, "first_kickoff": first[g].isoformat()} for g in gws],
+            "teams": {str(t): v for t, v in team_info.items()},
+            "fields": ["player", "name", "team", "position", "fpl_position", "price", "fpl_status", "fpl_chance", "availability"],
+            "cell_fields": ["gw", "opponent", "home", "xp", "minutes", "goals", "assists", "p_clean_sheet", "parts",
+                            *([k.removeprefix("exp_") for k in PENALTY_CELLS] if pens else [])],
+            "part_fields": [k.removesuffix("_points") for k in parts],
+            "players": [players[pid] for pid in order], "cells": [sorted(cells[pid]) for pid in order]}
+
+
+def export_fantasy_predictions(conn, doc=None):
+    """fpl_predictions: every player's expected points for the next PREDICTION_GWS gameweeks
+    (FPL's gameweeks once FPL is captured, else API-Football rounds), with FPL position and price.
+    Same code as the fantasy snapshots, with v1.6's frozen parameters (the version the site shows)
+    unless doc is given. Owner only (store_owner_doc). Not critical: a failure skips it."""
+    try:
+        from ..fantasy_games import fantasy_snapshots
+        now = datetime.now(timezone.utc)
+        fpl_players, fpl_gws, captured = _fpl_state(conn)
+        upcoming = conn.execute(
+            """select fixture_id, round, home_team_id, away_team_id, kickoff from fixtures
+               where league_id = %s and status_short = any(%s) and kickoff > %s order by kickoff""",
+            [fantasy_snapshots.PL, list(UPCOMING_STATUSES), now]).fetchall()
+        source = "fpl" if fpl_gws else "rounds"
+        fixtures = {}
+        for fid, name, home, away, kickoff in upcoming:
+            gw = fpl_gws.get((home, away)) if fpl_gws else _round_number(name)
+            if gw is not None:          # FPL has no gameweek for it yet: a blank until rescheduled
+                fixtures[fid] = (gw, home, away, kickoff)
+        keep = sorted({g for g, *_ in fixtures.values()})[:PREDICTION_GWS]
+        fixtures = {f: v for f, v in fixtures.items() if v[0] in keep}
+        if not fixtures:
+            return
+        horizon = max(v[3] for v in fixtures.values()) - now + timedelta(days=1)
+        doc, teams_out = fantasy_snapshots.build(conn, list(fixtures), now=now, horizon=horizon,
+                                                 doc=doc or fantasy_snapshots.load_params(PUBLISHED_FANTASY_PARAMS))
+        pids = sorted({p["player_id"] for *_, preds, _ in teams_out for p in preds})
+        names = dict(conn.execute("select player_id, name from players where player_id = any(%s)", [pids]).fetchall())
+        team_ids = sorted({t for v in fixtures.values() for t in v[1:3]})
+        team_info = {t: [n, c] for t, n, c in conn.execute(
+            "select team_id, name, code from teams where team_id = any(%s)", [team_ids])}
+        store_owner_doc(conn, "fpl_predictions", fantasy_prediction_payload(
+            fixtures, teams_out, doc, fpl_players, names, team_info, source=source, captured=captured))
+    except Exception:
+        conn.rollback()
+        log.exception("Fantasy predictions export skipped")
+
+
+def export_efl_fantasy(conn, out_dir=OUT_DIR):
+    """efl_predictions: expected Fantasy EFL points for Championship, League One and League Two
+    players and clubs (efl_fantasy.py). Owner only (store_owner_doc): nothing is written to out_dir.
+    Not critical: a failure skips it."""
+    try:
+        from ..fantasy_games import efl_fantasy
+        doc = efl_fantasy.payload(conn)
+        if doc:
+            store_owner_doc(conn, "efl_predictions", doc)
+    except Exception:
+        conn.rollback()
+        log.exception("EFL fantasy export skipped")

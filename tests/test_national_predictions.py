@@ -2,8 +2,10 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, Mock, patch
 
-from thecornerfc import export, matchday, national_predictions as np_, nations
-from thecornerfc.nations import Result
+from thecornerfc.publish import export
+from thecornerfc.pipeline import matchday
+from thecornerfc.models import national_predictions as np_, nations
+from thecornerfc.models.nations import Result
 
 NOW = datetime(2026, 10, 7, 12, tzinfo=timezone.utc)
 KICKOFF = NOW + timedelta(days=3)
@@ -312,7 +314,7 @@ class MatchdayTests(unittest.TestCase):
         self.assertEqual(matchday.national_with_odds(conn, NOW), [])        # before the migration
 
     def test_the_ninety_minute_score_is_stored_once_its_columns_exist(self):
-        from thecornerfc import ingest
+        from thecornerfc.pipeline import ingest
         item = {"fixture": {"id": 7, "date": KICKOFF.isoformat(), "status": {"short": "AET"}},
                 "league": {"id": 1, "season": 2026, "name": "World Cup", "round": "Final"},
                 "teams": {"home": {"id": 10, "name": "England"}, "away": {"id": 2, "name": "France"}},
@@ -325,7 +327,7 @@ class MatchdayTests(unittest.TestCase):
         self.assertNotIn("ft_home", ingest._national_rows(conn, [item])[0])
 
     def test_nightly_odds_only_for_competitions_with_a_match_coming(self):
-        from thecornerfc import ingest
+        from thecornerfc.pipeline import ingest
         conn, api = MagicMock(), Mock()
         conn.execute.return_value = [(5, 2026), (32, 2024)]
         with patch.object(ingest, "sync_odds") as sync:

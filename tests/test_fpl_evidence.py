@@ -7,7 +7,9 @@ import unittest
 from unittest.mock import MagicMock, Mock, patch
 import uuid
 
-from thecornerfc import config, evaluation, fpl
+from thecornerfc import config
+from thecornerfc.evidence import evaluation
+from thecornerfc.fantasy_games import fpl
 from thecornerfc.__main__ import main
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -241,7 +243,7 @@ class SchemaTests(unittest.TestCase):
 class FplPostgresTests(unittest.TestCase):
     def test_migration_guards_and_writers(self):
         import psycopg
-        from thecornerfc.model_versions import register_model_version
+        from thecornerfc.evidence.model_versions import register_model_version
         with psycopg.connect(os.environ['MODEL_VERSION_TEST_DSN']) as conn:
             try:
                 schema = 'fpl_test_' + uuid.uuid4().hex

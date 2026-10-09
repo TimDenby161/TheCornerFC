@@ -1,5 +1,5 @@
 <script lang="ts">
-	import '../../../../docs/assets/styles.css';
+	import '../../styles/styles.css';
 	import '#lib/crest-hues.css';
 	import '../../app.css';
 	import { invalidateAll } from '$app/navigation';

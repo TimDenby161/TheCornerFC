@@ -4,7 +4,7 @@ from pathlib import Path
 root=Path(__file__).parent
 r=json.loads((root/'results.json').read_text())
 s=json.loads((root/'compatible_results.json').read_text())
-site=json.loads(Path('docs/data/matches.json').read_text())
+site=json.loads(Path('.export/matches.json').read_text())
 team_names=site['teams'];competitions=site['competitions']
 lines=['# Current versus Baseline Strength: controlled chronological experiment','',
 '**Recommendation: retain the production 0.6 Current / 0.4 Baseline near-kickoff blend. Do not deploy a new coefficient or subgroup-specific rule from this experiment.**','',

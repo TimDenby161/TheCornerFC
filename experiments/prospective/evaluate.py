@@ -13,8 +13,9 @@ from datetime import datetime,timezone
 import hashlib,json,math,random,sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
-from thecornerfc import config,predictions as p,player_ratings as pr
-from thecornerfc.evaluation import probability_metrics
+from thecornerfc import config
+from thecornerfc.models import predictions as p, player_ratings as pr
+from thecornerfc.evidence.evaluation import probability_metrics
 ROOT=Path(__file__).parent
 
 # Registered in PROTOCOLS.md; change only by a dated amendment there.

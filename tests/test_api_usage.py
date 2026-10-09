@@ -3,7 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from thecornerfc import api, config, usage
+from thecornerfc.pipeline import api, usage
+from thecornerfc import config
 
 
 class UsageTests(unittest.TestCase):
@@ -21,7 +22,7 @@ class UsageTests(unittest.TestCase):
         response.json.return_value = payload if payload is not None else {'response': [1, 2], 'errors': []}
         return response
 
-    @patch('thecornerfc.api.time.sleep')
+    @patch('thecornerfc.pipeline.api.time.sleep')
     def test_retry_and_success_are_recorded_without_secrets(self, sleep):
         client = api.ApiFootball(api_key='secret', min_interval=0)
         client.session.get = Mock(side_effect=[self.response(500), self.response()])
@@ -32,7 +33,7 @@ class UsageTests(unittest.TestCase):
             self.assertNotIn('secret', str(conn.execute('SELECT * FROM api_calls').fetchall()))
         self.assertIn('fixtures=2', usage.report())
 
-    @patch('thecornerfc.api.time.sleep')
+    @patch('thecornerfc.pipeline.api.time.sleep')
     def test_reserve_blocks_retry(self, sleep):
         client = api.ApiFootball(api_key='secret', daily_reserve=200, min_interval=0)
         client.session.get = Mock(return_value=self.response(429, '200'))
@@ -40,7 +41,7 @@ class UsageTests(unittest.TestCase):
             client.get('fixtures')
         self.assertEqual(client.session.get.call_count, 1)
 
-    @patch('thecornerfc.api.time.sleep')
+    @patch('thecornerfc.pipeline.api.time.sleep')
     def test_transport_error_and_body_error(self, sleep):
         client = api.ApiFootball(api_key='secret', min_interval=0)
         client.session.get = Mock(side_effect=[api.requests.ConnectionError('secret'),
@@ -85,7 +86,7 @@ class UsageTests(unittest.TestCase):
         from thecornerfc.__main__ import main
         with patch.object(config, 'API_RUN_BUDGET', 1000), \
              patch('thecornerfc.__main__.ApiFootball') as factory, \
-             patch('thecornerfc.usage.publish'):
+             patch('thecornerfc.pipeline.usage.publish'):
             factory.return_value.daily_remaining = 500
             factory.return_value.daily_reserve = 200
             with self.assertRaises(api.QuotaExhausted):

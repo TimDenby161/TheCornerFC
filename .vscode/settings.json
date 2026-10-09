@@ -1,0 +1,11 @@
+{
+    // Folders the tools make for themselves: hidden from the Explorer and from search, still on disk.
+    "files.exclude": {
+        "**/.cache": true,
+        "**/.api-usage": true,
+        "**/.pytest_cache": true,
+        "**/__pycache__": true,
+        "**/node_modules": true,
+        "**/.DS_Store": true
+    }
+}

@@ -13,13 +13,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
 from scipy.stats import spearmanr
-from thecornerfc import fantasy as fm
-from thecornerfc.model_versions import version_metadata
+from thecornerfc.fantasy_games import fantasy as fm
+from thecornerfc.evidence.model_versions import version_metadata
 
 ROOT = Path(__file__).parent
 INPUTS = Path('.cache/fantasy_v1_inputs.json.gz')
 SNAPSHOTS = Path('.cache/fantasy_v1_snapshots.jsonl.gz')
-PARAMS = Path('thecornerfc/fantasy_params.json')
+PARAMS = Path('thecornerfc/fantasy_games/fantasy_params.json')
 TRAIN, VAL, TEST = datetime.fromisoformat('2021-07-01T00:00:00+00:00'), \
     datetime.fromisoformat('2023-07-01T00:00:00+00:00'), datetime.fromisoformat('2024-07-01T00:00:00+00:00')
 DECAYS, KS = (0.5, 0.7, 0.85), (450, 900, 1800)

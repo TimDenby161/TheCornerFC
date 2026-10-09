@@ -4,9 +4,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
-from thecornerfc import predictions
-from thecornerfc import export
-from thecornerfc.export import ExportValidationError, explanation, match_explanations, store_matches
+from thecornerfc.models import predictions
+from thecornerfc.publish import export
+from thecornerfc.publish.export import ExportValidationError, explanation, match_explanations, store_matches
 from tests import test_match_snapshots
 
 HOME = [(1.8, 0.9), (2.1, 1.2), (1.1, 1.0)]
@@ -227,7 +227,6 @@ class FixturePageTests(unittest.TestCase):
         self.assertIn("REVOKE ALL ON site.matches FROM PUBLIC", sql)
         self.assertIn("SET search_path = ''", sql)
         self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
-        self.assertIn('siteAsk("site_match_detail", { p_fixture: id })', (root / "docs/assets/app.js").read_text())
 
     def test_views_ask_for_the_matches_they_show(self):
         root = Path(__file__).resolve().parents[1]
@@ -239,12 +238,6 @@ class FixturePageTests(unittest.TestCase):
         self.assertIn("LIMIT 2000", sql)                                    # never every match
         self.assertIn("(p_from IS NOT NULL OR p_to IS NOT NULL OR p_leagues IS NOT NULL OR p_team IS NOT NULL OR p_ids IS NOT NULL)", sql)
         self.assertNotIn("GRANT SELECT", sql.upper().replace("GRANT EXECUTE", ""))
-        app = (root / "docs/assets/app.js").read_text()
-        for asked in ('siteAsk("site_matches", params)', 'siteAsk("site_match_days"', "ensureDay(state.date)", "ensureLeague(lid)", "ensureTeam(id)"):
-            self.assertIn(asked, app)
-        # there is no file of every match any more
-        for gone in ("matches.json", "loadAllMatches", "matchStore.all"):
-            self.assertNotIn(gone, app)
         self.assertIn('"match_fields": SITE_MATCH_FIELDS', Path(export.__file__).read_text())
 
     def test_line_ups_come_from_the_database_for_one_match(self):
@@ -257,21 +250,17 @@ class FixturePageTests(unittest.TestCase):
         # one match by its id in every part, and the site's own limits on what a finished match shows
         self.assertEqual(sql.count("fixture_id = p_fixture"), 6)
         self.assertEqual(sql.count("interval '21 days'"), 2)
-        from thecornerfc import export
+        from thecornerfc.publish import export
         self.assertEqual(export.PAST_DAYS, 21)
-        app = (root / "docs/assets/app.js").read_text()
-        self.assertIn('siteAsk("site_lineups", { p_fixture: id })', app)
 
     def test_the_shared_files_no_longer_carry_every_match(self):
         import inspect
-        from thecornerfc import export
+        from thecornerfc.publish import export
         players = inspect.getsource(export.export_players)
         for gone in ("fixture_xi", "actual_xi", "prematch_xi"):
             self.assertNotIn(gone, players)
-        app = (Path(export.__file__).resolve().parents[1] / "docs/assets/app.js").read_text()
         source = Path(export.__file__).read_text()
         for gone in ("data/fixtures/", "explanations.json", "player_seasons.json", "players.json"):
-            self.assertNotIn(gone, app)
             self.assertNotIn(f'"{gone}"', source)
 
 

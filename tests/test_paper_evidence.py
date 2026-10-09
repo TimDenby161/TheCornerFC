@@ -5,7 +5,9 @@ from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
-from thecornerfc import betting, config, paper_evidence
+from thecornerfc.models import betting
+from thecornerfc import config
+from thecornerfc.evidence import paper_evidence
 
 
 class PaperEvidenceTests(unittest.TestCase):
@@ -36,7 +38,7 @@ class PaperEvidenceTests(unittest.TestCase):
         pred=(1,39,self.kickoff,.6,.2,.2,.5,.5,1.7,.9)
         row=['early',1,39,self.kickoff,'1X2','Home',.6,.45,2.,8,.2,['big5']]
         market={'books':{8:{'Home':2.,'Draw':3.,'Away':4.}},'fair':{'Home':.45}}
-        with patch('thecornerfc.paper_evidence.latest_quotes',return_value=[(9,8,'Home',2.,self.now)]):
+        with patch('thecornerfc.evidence.paper_evidence.latest_quotes',return_value=[(9,8,'Home',2.,self.now)]):
             paper_evidence.record_decision(conn,5,row,market,pred,self.now,'mv_strategy',
                 selection_context={'candidates':[row], 'market_states':{'1X2':market}})
         sql,values=conn.execute.call_args.args
@@ -70,7 +72,7 @@ class PaperEvidenceTests(unittest.TestCase):
         conn.execute.return_value.fetchone.return_value=(4,1,1,'Home',8,2.5,.4,self.kickoff,
                                                        {'selections':['Home','Draw','Away']})
         quotes=[(1,8,'Home',2.,self.now),(2,8,'Draw',3.,self.now),(3,8,'Away',4.,self.now)]
-        with patch('thecornerfc.paper_evidence.latest_quotes',return_value=quotes) as loader:
+        with patch('thecornerfc.evidence.paper_evidence.latest_quotes',return_value=quotes) as loader:
             paper_evidence.attach_outcome(conn,5,'win',1.5,'FT',2,0)
         loader.assert_called_once_with(conn,1,1,self.kickoff,strict=True)
         sql,args=conn.execute.call_args.args
@@ -87,11 +89,11 @@ class PaperEvidenceTests(unittest.TestCase):
         conn.execute.side_effect=[Mock(fetchall=Mock(return_value=[prediction])),[],Mock(fetchone=Mock(return_value=(99,)))]
         market={'best':{'Home':(2.,8),'Draw':(3.,8),'Away':(4.,8)},
                 'fair':{'Home':.45,'Draw':.3,'Away':.25},'books':{8:{'Home':2.,'Draw':3.,'Away':4.}}}
-        with patch('thecornerfc.betting.load_prices',return_value={1:{'1X2':market}}), \
-             patch('thecornerfc.betting.match_tags',return_value={}), \
-             patch('thecornerfc.betting._has_national',return_value=False), \
-             patch('thecornerfc.paper_evidence.strategy_version',return_value='strategy'), \
-             patch('thecornerfc.paper_evidence.record_decision') as record:
+        with patch('thecornerfc.models.betting.load_prices',return_value={1:{'1X2':market}}), \
+             patch('thecornerfc.models.betting.match_tags',return_value={}), \
+             patch('thecornerfc.models.betting._has_national',return_value=False), \
+             patch('thecornerfc.evidence.paper_evidence.strategy_version',return_value='strategy'), \
+             patch('thecornerfc.evidence.paper_evidence.record_decision') as record:
             self.assertEqual(betting.place_bets(conn,'early',timedelta(hours=36)),1)
         self.assertEqual(record.call_args.args[2][5],'Home')
         self.assertIn('selection_context',record.call_args.kwargs)
@@ -106,11 +108,11 @@ class PaperEvidenceTests(unittest.TestCase):
                                   [],Mock(fetchone=Mock(return_value=(99,)))]
         market={'best':{'Home':(2.,8),'Draw':(3.,8),'Away':(4.,8)},
                 'fair':{'Home':.45,'Draw':.3,'Away':.25},'books':{8:{'Home':2.,'Draw':3.,'Away':4.}}}
-        with patch('thecornerfc.betting.load_prices',return_value={7:{'1X2':market}}), \
-             patch('thecornerfc.betting.match_tags',return_value={7:['intl']}), \
-             patch('thecornerfc.betting._has_national',return_value=True), \
-             patch('thecornerfc.paper_evidence.strategy_version',return_value='strategy'), \
-             patch('thecornerfc.paper_evidence.record_decision') as record:
+        with patch('thecornerfc.models.betting.load_prices',return_value={7:{'1X2':market}}), \
+             patch('thecornerfc.models.betting.match_tags',return_value={7:['intl']}), \
+             patch('thecornerfc.models.betting._has_national',return_value=True), \
+             patch('thecornerfc.evidence.paper_evidence.strategy_version',return_value='strategy'), \
+             patch('thecornerfc.evidence.paper_evidence.record_decision') as record:
             self.assertEqual(betting.place_bets(conn,'early',timedelta(hours=36)),1)
         sql=conn.execute.call_args_list[1].args[0]
         self.assertIn('from national_fixture_predictions p join national_fixtures f',sql)
@@ -131,10 +133,10 @@ class PaperEvidenceTests(unittest.TestCase):
         club,national=Mock(fetchall=Mock(return_value=[])),Mock(fetchall=Mock(return_value=[(5,7,'1X2','Home',2.,1,'AET',None,None)]))
         conn=MagicMock()
         conn.execute.side_effect=[club,national]
-        with patch('thecornerfc.betting._has_national',return_value=True), \
-             patch('thecornerfc.betting._national_scores',return_value=('x','y')), \
-             patch('thecornerfc.betting.load_prices',return_value={}), \
-             patch('thecornerfc.paper_evidence.attach_outcome') as outcome:
+        with patch('thecornerfc.models.betting._has_national',return_value=True), \
+             patch('thecornerfc.models.betting._national_scores',return_value=('x','y')), \
+             patch('thecornerfc.models.betting.load_prices',return_value={}), \
+             patch('thecornerfc.evidence.paper_evidence.attach_outcome') as outcome:
             self.assertEqual(betting.settle_bets(conn),1)
         self.assertEqual(outcome.call_args.args[1:4],(5,'void',0))
 
@@ -160,8 +162,8 @@ class OddsPostgresTests(unittest.TestCase):
     def test_price_reversions_dedup_and_immutable_decisions(self):
         import psycopg
         import uuid
-        from thecornerfc.model_versions import register_model_version
-        from thecornerfc.match_snapshots import make_snapshot, append_snapshots
+        from thecornerfc.evidence.model_versions import register_model_version
+        from thecornerfc.evidence.match_snapshots import make_snapshot, append_snapshots
         root=Path(__file__).resolve().parents[1]/'db/migrations'
         with psycopg.connect(os.environ['MODEL_VERSION_TEST_DSN']) as conn:
             try:

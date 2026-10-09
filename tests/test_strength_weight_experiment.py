@@ -1,7 +1,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
-from thecornerfc import predictions
+from thecornerfc.models import predictions
 
 spec=importlib.util.spec_from_file_location('strength_experiment',Path(__file__).resolve().parents[1]/'experiments/strength_weight/run.py')
 experiment=importlib.util.module_from_spec(spec)

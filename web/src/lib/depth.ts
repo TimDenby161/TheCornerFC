@@ -1,8 +1,7 @@
 // A club's squad by position for its next match: who can play where, each player's chance of
 // starting there and the minutes he is expected to play. Worked out from the club's own file
 // (who started where this season, minutes over 12 months), its players' ranks and its injury
-// list. Carried over from the old site's clubDepth, line for line where it could be, and checked
-// against it (scripts/depth-check.mjs).
+// list. Carried over from the old site's clubDepth, line for line where it could be.
 import { formationRoles } from './formations.ts';
 import { GROUP_OF, PITCH_SPOTS } from './playerFilters.ts';
 

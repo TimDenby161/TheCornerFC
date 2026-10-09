@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import uuid
 
 from thecornerfc import config
-from thecornerfc.model_versions import (ModelType, current_code_sha, register_model_version,
+from thecornerfc.evidence.model_versions import (ModelType, current_code_sha, register_model_version,
                                        snapshot_times, version_metadata)
 
 MIGRATION = Path(__file__).resolve().parents[1]/'db/migrations/20260926_model_versions.sql'
@@ -63,7 +63,7 @@ class ModelVersionTests(unittest.TestCase):
         self.assertNotIn('created_at',values)
         conn.commit.assert_not_called()
 
-    @patch('thecornerfc.model_versions.subprocess.check_output',return_value=' M changed.py')
+    @patch('thecornerfc.evidence.model_versions.subprocess.check_output',return_value=' M changed.py')
     def test_dirty_tree_has_no_claimed_sha(self, command):
         self.assertIsNone(current_code_sha())
 
@@ -92,7 +92,7 @@ class RegistryPostgresTests(unittest.TestCase):
                 self.assertEqual(conn.execute('SELECT count(*) FROM model_versions').fetchone()[0],1)
                 self.assertIsNotNone(conn.execute('SELECT created_at FROM model_versions').fetchone()[0])
                 self.assertEqual(conn.execute('SELECT value FROM historical_output').fetchone()[0],'unchanged')
-                from thecornerfc.match_snapshots import append_snapshots, make_snapshot
+                from thecornerfc.evidence.match_snapshots import append_snapshots, make_snapshot
                 conn.execute((MIGRATION.parent/'20260926_match_prediction_snapshots.sql').read_text())
                 conn.execute((MIGRATION.parent/'20260926_match_prediction_snapshots.sql').read_text())
                 with patch.object(config,'READ_ONLY',False), patch.object(config,'GITHUB_ACTIONS',True):

@@ -1,4 +1,4 @@
-"""Backtest for the national team projections (thecornerfc/national_predictions.py). Offline: reads
+"""Backtest for the national team projections (thecornerfc/models/national_predictions.py). Offline: reads
 the public results CSV only, never the database.
 
 Every rated match is projected from the ranks before it, as the club projections are built:
@@ -21,7 +21,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from thecornerfc import nations, predictions
+from thecornerfc.models import nations, predictions
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "nations_elo"))
 import run as elo_run   # noqa: E402  (the ordered logistic and its periods)
@@ -126,7 +126,7 @@ def main():
 
 
 def predictions_base():
-    from thecornerfc import national_predictions
+    from thecornerfc.models import national_predictions
     return national_predictions.LEVEL_GOALS
 
 

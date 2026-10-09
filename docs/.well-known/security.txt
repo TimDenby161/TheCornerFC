@@ -1,5 +1,0 @@
-Contact: https://github.com/TimDenby161/TheCornerFC/security/advisories/new
-Expires: 2027-09-27T00:00:00.000Z
-Policy: https://github.com/TimDenby161/TheCornerFC/blob/main/SECURITY.md
-Canonical: https://thecornerfc.com/.well-known/security.txt
-Preferred-Languages: en

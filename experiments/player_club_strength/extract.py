@@ -7,7 +7,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dotenv import dotenv_values
 import psycopg
-from thecornerfc import config, player_ratings as pr
+from thecornerfc import config
+from thecornerfc.models import player_ratings as pr
 
 
 def main():

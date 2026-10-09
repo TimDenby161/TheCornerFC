@@ -88,7 +88,7 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
 ## P8: Fantasy v1.1 expected points
 
 - **Question.** Does fantasy v1.1 hold up on gameweeks it has never seen? v1 (`experiments/fantasy_v1/REPORT.md`) beat the benchmarks on a 2024–26 backtest but failed its bias criterion. v1.1 (v1 plus goalkeeper saves plus injury-list availability) was **chosen after seeing that test**, so only prospective evidence can validate it.
-- **Evidence.** `fantasy_fixture_snapshots` rows with `source = 'prospective'`, with `captured_at` and `created_at` before kickoff, written by `thecornerfc.fantasy_snapshots` on each nightly and match-day run. Availability is the injury lists and manual absences as observed at capture time.
+- **Evidence.** `fantasy_fixture_snapshots` rows with `source = 'prospective'`, with `captured_at` and `created_at` before kickoff, written by `thecornerfc.fantasy_games.fantasy_snapshots` on each nightly and match-day run. Availability is the injury lists and manual absences as observed at capture time.
 - **Views.**
   - Primary: the latest snapshot before kickoff for each team-fixture.
   - Secondary: the latest snapshot before a round-level deadline, 90 minutes before the round's first kickoff. That is the view an FPL manager would have.
@@ -112,7 +112,7 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
   - defensive contributions fitted on FPL's 2026/27 GW1–5 results (`experiments/fantasy_dc/`)
 
   Its v1.2 core failed its backtest on MAE (better RMSE and bias), and everything after the designs was seen before freezing. So only this test can support it.
-- **Evidence.** `fantasy_fixture_snapshots` rows whose model version is named `fantasy-v1.3`, with P8's timing rules. Parameters are frozen in `thecornerfc/fantasy_params_v1_3.json`.
+- **Evidence.** `fantasy_fixture_snapshots` rows whose model version is named `fantasy-v1.3`, with P8's timing rules. Parameters are frozen in `thecornerfc/fantasy_games/fantasy_params_v1_3.json`.
 - **Views.** As P8: latest before kickoff (primary) and before the round deadline (secondary).
 - **Target.** Points as FPL scores them, as far as the data allows:
   - the reconstructed total (`fantasy.actual_points` 'total', with the snapshot's position)
@@ -181,7 +181,7 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
 **Amendment 2 (2026-09-27): P8, fantasy v1.1.** Registered before any P8 outcome existed: 0 snapshots were stored, and the next Premier League round kicks off 2026-10-10.
 
 - Capture: `fantasy_snapshots.capture_safely` runs after predictions in the nightly job (fixtures in the next 8 days) and in the match-day job (fixtures within 3 hours). It is evidence only: a failure is logged and never fails either run, and nothing reads the table.
-- Parameters are frozen in `thecornerfc/fantasy_params.json` (fitted 2021-07 to 2024-06). Any refit is a new model version, and its snapshots accrue separately.
+- Parameters are frozen in `thecornerfc/fantasy_games/fantasy_params.json` (fitted 2021-07 to 2024-06). Any refit is a new model version, and its snapshots accrue separately.
 - **Migration:** `db/migrations/20260927_fantasy_fixture_snapshots.sql`, **not yet applied**. Until it is, the capture logs a warning and skips.
 
 **Amendment 3 (2026-09-29): P8 restricted to v1.1; P9 registered.** From 2026-09-29 the capture also stores fantasy v1.3 snapshots in `fantasy_fixture_snapshots`. P8's evaluator (`fantasy_p8.py`) and the site's accrual counter (`export._fantasy_progress`) now read only rows whose model version is named `fantasy-v1.1`, as Amendment 2 intended ("its snapshots accrue separately"). This was made before any P8 outcome existed, with no Premier League round played since capture began.
@@ -189,7 +189,7 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
 ## P10: Fantasy v1.4 expected points
 
 - **Question.** Does each player's own FPL defensive-contribution record improve v1.3 on gameweeks neither has seen? v1.4 is v1.3 with each player's per-90 DC mean updated by his FPL count and minutes this season: (count + mean × m) / (minutes / 90 + m). m and each position's r are fitted on GW2–5 (`experiments/fantasy_v1_4/`). On GW4–5, with m chosen on GW2–3, it beat v1.3's Brier score for defenders (0.133 vs 0.147) and midfielders (0.053 vs 0.057). That backtest is small, and it was designed after seeing Tarkowski's case.
-- **Evidence.** `fantasy_fixture_snapshots` rows whose model version is named `fantasy-v1.4`, with P8's timing rules. Parameters are frozen in `thecornerfc/fantasy_params_v1_4.json`. Each snapshot stores the FPL record it used (`fpl_dc_minutes`, `fpl_dc_count`): only final (`data_checked`) results captured before the snapshot.
+- **Evidence.** `fantasy_fixture_snapshots` rows whose model version is named `fantasy-v1.4`, with P8's timing rules. Parameters are frozen in `thecornerfc/fantasy_games/fantasy_params_v1_4.json`. Each snapshot stores the FPL record it used (`fpl_dc_minutes`, `fpl_dc_count`): only final (`data_checked`) results captured before the snapshot.
 - **Target.** As P9.
 - **Primary.** v1.4 minus v1.3, paired on player-fixtures present in both. First, the Brier score of P(DC) against FPL's own DC points, for FPL defenders and midfielders. Then points MAE and MSE. 95% round-cluster bootstrap. v1.4 is supported only if the Brier interval excludes 0 in its favour and points MAE is not worse (the upper end of its interval ≤ 0.02).
 - **Secondary.** As P9, plus DC calibration by the size of a player's record.
@@ -205,7 +205,7 @@ Run `python3 experiments/prospective/evaluate.py` at any time to refresh accrual
 
 - **Question.** Do penalty takers, penalty misses and FPL-only assists improve v1.4 on gameweeks neither has seen? v1.5 takes expected penalty goals (league rate × conversion) out of the team total. It gives them by taker weight: decayed penalty attempts for the club, plus α × non-penalty goal rate, blended with FPL's `penalties_order`. It shares the rest by non-penalty evidence, and adds the assists FPL gives that API-Football doesn't. See `experiments/fantasy_v1_5/`.
 - **Retrospective result.** On 2025-26 and 2026-27 to date, taker log loss was 1.19 against 1.33 for the last taker and 1.81 for v1.4. The scorer log-likelihood change was +0.0004 per goal (95% CI −0.0030 to +0.0037), which does not pass. FPL's order weights (0.75, 0.15) were set without data.
-- **Evidence.** `fantasy_fixture_snapshots` rows whose model version is named `fantasy-v1.5`, with P8's timing rules. Parameters are frozen in `thecornerfc/fantasy_params_v1_5.json`. Each snapshot's inputs store every player's FPL penalty order and penalty record (`penalty_takers`).
+- **Evidence.** `fantasy_fixture_snapshots` rows whose model version is named `fantasy-v1.5`, with P8's timing rules. Parameters are frozen in `thecornerfc/fantasy_games/fantasy_params_v1_5.json`. Each snapshot's inputs store every player's FPL penalty order and penalty record (`penalty_takers`).
 - **Target.** FPL's own points per player-fixture: goals, penalty misses and assists from `fpl_player_results`. FPL results don't separate penalty goals, so the primary is the sum of goal + penalty + FPL assist + assist points.
 - **Primary.** v1.5 minus v1.4, paired on player-fixtures present in both: MAE and MSE of goal + assist points (v1.5's goal, penalty, assist and FPL assist parts, against v1.4's goal and assist parts). 95% round-cluster bootstrap. Reported separately for players with a predicted penalty share above 0.5. v1.5 is supported only if the MAE interval excludes 0 in its favour and all-points MAE is not worse (upper end ≤ 0.02).
 - **Secondary.** As P9. Also calibration of predicted penalty share against FPL's `penalties_missed` and the API-Football penalty takers.

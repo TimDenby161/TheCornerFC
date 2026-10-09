@@ -1,5 +1,5 @@
 <script lang="ts">
-	import raw from '../../../../../docs/terms.html?raw';
+	import raw from '../../../text/terms.html?raw';
 	import { textPage } from '#lib/textPage.ts';
 
 	const page = textPage(raw);

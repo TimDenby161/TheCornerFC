@@ -3,7 +3,7 @@ from decimal import Decimal
 import unittest
 from unittest.mock import Mock
 
-from thecornerfc.export import _player_movement
+from thecornerfc.publish.export import _player_movement
 
 
 def conn_with(view, rows=()):

@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from thecornerfc import config, player_ratings as pr  # noqa: E402
+from thecornerfc import config; from thecornerfc.models import player_ratings as pr  # noqa: E402
 
 MIN_MINUTES = 900
 CLUB = 900                 # club level used to turn a percentile into a rank (the same for both versions)

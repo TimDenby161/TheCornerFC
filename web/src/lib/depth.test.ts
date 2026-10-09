@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { clubDepth, predictedXi, squadStrength, xiSpots, type SquadPlayer } from './depth';
 import { formationRoles } from './formations';
 
-// (the whole model is compared with the old site's on real clubs by scripts/depth-check.mjs)
 const player = (id: number, position: string, rank: number): SquadPlayer => ({ id, name: `P${id}`, position, rank, position_ranks: null, positions_12m: [position] });
 const squad = [player(1, 'GK', 80), player(2, 'GK', 60), ...['RB', 'CB', 'CB', 'LB', 'CM', 'CM', 'AM', 'RW', 'LW', 'ST'].map((pos, i) => player(10 + i, pos, 85 - i)), player(30, 'ST', 70)];
 // six matches in a 4-2-3-1 with the same eleven, in team-sheet order

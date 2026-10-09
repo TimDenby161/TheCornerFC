@@ -1,7 +1,7 @@
 import importlib.util
 import unittest
 from datetime import datetime,timezone
-from thecornerfc import predictions as p
+from thecornerfc.models import predictions as p
 
 AVAILABLE=all(importlib.util.find_spec(m) for m in ('numpy','scipy'))
 if AVAILABLE:

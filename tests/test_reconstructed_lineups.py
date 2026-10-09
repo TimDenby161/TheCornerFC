@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from thecornerfc import player_ratings
+from thecornerfc.models import player_ratings
 
 
 def write(history, table_exists=True):

@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from thecornerfc import export
+from thecornerfc.publish import export
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / 'db/migrations/20261004_site_docs.sql'
@@ -102,8 +102,8 @@ class MirrorTests(unittest.TestCase):
         self.assertEqual((conn.written, conn.commits, conn.rollbacks), ([], 0, 0))
 
     def test_keys_fit_the_table(self):
-        for path in (ROOT / 'docs/data').rglob('*.json'):
-            self.assertRegex(path.relative_to(ROOT / 'docs/data').with_suffix('').as_posix(), r'^[a-z_]+(/[0-9]+)?$')
+        for path in (ROOT / '.export').rglob('*.json'):
+            self.assertRegex(path.relative_to(ROOT / '.export').with_suffix('').as_posix(), r'^[a-z_]+(/[0-9]+)?$')
 
 
 class MigrationTests(unittest.TestCase):
@@ -164,36 +164,13 @@ class RawMigrationTests(unittest.TestCase):
 
 
 class SiteReaderTests(unittest.TestCase):
-    def test_pages_load_the_reader_before_the_scripts_that_use_it(self):
-        for page, script in (('index.html', 'app.js'), ('methodology.html', 'methodology.js')):
-            html = (ROOT / 'docs' / page).read_text()
-            self.assertLess(html.index('<script src="assets/data.js">'), html.index(f'<script src="assets/{script}">'), page)
-            self.assertIn("connect-src 'self' https://bookkurhdabdeccckjbn.supabase.co;", html, page)
-
-    def test_a_visit_loads_the_names_and_ratings_and_each_view_its_own_files(self):
-        app = (ROOT / 'docs/assets/app.js').read_text()
-        start = app[app.index('async function loadData()'):app.index('function renderFreshness()')]
-        self.assertIn('getJson("data/site.json"), getJson("data/rankings.json")', start)
-        for later in ('stats.json', 'bets.json', 'fpl.json', 'loadEuroCups()'):
-            self.assertNotIn(later, start)
-        self.assertIn('const TAB_NEEDS = { matches: ["matches"], tips: ["bets", "stats", "tipMatches"], bets: ["bets"], stats: ["stats"], fpl: ["fpl"] };', app)
-        # the export writes the names apart from the matches, and won't publish without them
+    def test_the_export_writes_the_names_apart_from_the_matches(self):
+        # and won't publish without them
         self.assertIn("site.json", export.CRITICAL_JSON_FILES)
-        source = (ROOT / 'thecornerfc/export.py').read_text()
+        source = (ROOT / 'thecornerfc/publish/export.py').read_text()
         site = source[source.index('    site = {'):source.index('(out_dir / "rankings.json").write_text')]
         for named in ('"teams"', '"competitions"', '"nation_pages"', '"freshness"', '"match_fields"'):
             self.assertIn(named, site)
-
-    def test_the_database_is_the_default_and_is_asked_by_key(self):
-        reader = (ROOT / 'docs/assets/data.js').read_text()
-        self.assertIn(': "db";', reader)
-        # and it is the only source: there are no data files on the published site to fall back on
-        app = (ROOT / 'docs/assets/app.js').read_text()
-        self.assertIn('if (DATA_SOURCE === "db") return siteDoc(', app)
-        self.assertNotIn("published file", app)
-        self.assertNotIn(".catch(file)", (ROOT / 'docs/assets/methodology.js').read_text())
-        self.assertIn("/rest/v1/rpc/site_doc?", reader)
-        self.assertIn('q.set("p_v", hash)', reader)
 
 
 if __name__ == '__main__':

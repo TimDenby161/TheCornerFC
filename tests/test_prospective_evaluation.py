@@ -2,7 +2,7 @@
 import unittest
 from datetime import datetime,timedelta,timezone
 from experiments.prospective import evaluate as e
-from thecornerfc import predictions as p
+from thecornerfc.models import predictions as p
 
 KICKOFF=datetime(2026,10,3,15,tzinfo=timezone.utc)
 

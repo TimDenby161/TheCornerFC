@@ -3,25 +3,25 @@
 Football data, club and player ranks, match predictions and a paper betting record, published at
 thecornerfc.com. One owner, no team. This repository is public.
 
-How the models work, what every table holds and why each decision was made is in `README.md`
-(long: search it by heading, don't read it whole). This file is the short list of what to know
-before changing anything.
+How the models work, what every table holds and why each decision was made is in `guide/`, one
+page per topic, listed in `README.md`: read the page the work touches, not the whole folder. This
+file is the short list of what to know before changing anything.
 
 ## The parts
 
 | Folder | What it is |
 |---|---|
-| `thecornerfc/` | The Python jobs: fetch from API-Football, rank, predict, and export to the database. Run as `python -m thecornerfc <command>`. |
+| `thecornerfc/` | The Python jobs, run as `python -m thecornerfc <command>`. Six folders: `pipeline/` (fetch from API-Football, the database, the nightly and match-day runs), `models/` (ranks, ratings, predictions, bets), `evidence/` (model versions and the append-only snapshots), `fantasy_games/` (FPL and Fantasy EFL), `publish/` (the export to the database), `privacy/` (accounts, retention, removals). `config.py` and `__main__.py` stay at the top. |
 | `db/` | `schema.sql` and dated files in `migrations/`. A Supabase Postgres database. |
-| `web/` | The site: SvelteKit, deployed as the Cloudflare Worker `thecornerfc` (`web/wrangler.jsonc`). |
-| `docs/` | The old static site (GitHub Pages). `web/` still reads its stylesheets (`docs/assets`) and text pages (`docs/*.html`) at build time, so don't delete or restyle them casually. |
+| `web/` | The site: SvelteKit, deployed as the Cloudflare Worker `thecornerfc` (`web/wrangler.jsonc`). Its stylesheets are in `src/styles`, its text pages in `src/text`. |
+| `guide/` | The written explanation, one page per topic. `README.md` is its contents list. |
 | `tests/` | Python unit tests, with stand-in database connections. |
 | `experiments/` | One folder per model experiment, with its evaluator and results. |
 | `.github/workflows/` | The scheduled jobs (nightly, match day, FPL, backfills). They write to the database and commit nothing. |
 | `audit/` | Private notes, plans and drafts. Gitignored: never commit it or quote it in a public file. |
 
 The site reads only the database, through functions with fixed SQL that the public key is
-allowed to call. `docs/data/` is a local export folder and is not in git.
+allowed to call. `.export/` is a local export folder and is not in git.
 
 ## Commands
 
@@ -43,8 +43,7 @@ node scripts/browser-check.mjs [address]   # drives the pages in headless Chrome
 
 Run all three site checks before a push. `browser-check.mjs` catches crashes that fetching a
 page can't: add a step to it for each new interactive piece, and wait with its `until()`, not a
-fixed sleep. `scripts/depth-check.mjs` and `scripts/fantasy-check.mjs` cover the club squad
-pitch and the fantasy pages.
+fixed sleep. `scripts/fantasy-check.mjs` covers the fantasy pages.
 
 ## Rules that must not be broken
 
@@ -91,7 +90,7 @@ Python and data:
 - A page asks the database for what it shows. Don't add whole-list files or prepared copies of
   whole datasets.
 - Model changes are versioned and judged by an evaluator written before the results are seen
-  (`experiments/`, `thecornerfc/model_versions.py`).
+  (`experiments/`, `thecornerfc/evidence/model_versions.py`).
 - API-Football is the only match data source. A new data source needs the owner's yes first.
 
 Commits: one plain sentence saying what the site or job now does, as in `git log`.

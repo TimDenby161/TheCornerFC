@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from thecornerfc import ingest
+from thecornerfc.pipeline import ingest
 
 
 def _fixture(fid, days_ago, players=True):

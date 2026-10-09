@@ -6,7 +6,9 @@ from unittest.mock import MagicMock, patch
 
 import tempfile
 
-from thecornerfc import config, export, fantasy as fm, fantasy_snapshots as fs
+from thecornerfc import config
+from thecornerfc.publish import export
+from thecornerfc.fantasy_games import fantasy as fm, fantasy_snapshots as fs
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / 'db/migrations/20260927_fantasy_fixture_snapshots.sql'
@@ -138,15 +140,15 @@ class ParamsAndMigrationTests(unittest.TestCase):
         self.assertEqual(len(doc['params']['start_beta']), 7)
 
     def test_v1_3_is_v1_2_plus_defensive_contributions(self):
-        v12 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_2.json')
-        v13 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_3.json')
+        v12 = fs.load_params(ROOT / 'thecornerfc/fantasy_games/fantasy_params_v1_2.json')
+        v13 = fs.load_params(ROOT / 'thecornerfc/fantasy_games/fantasy_params_v1_3.json')
         self.assertEqual(v13['version_name'], 'fantasy-v1.3')
         self.assertEqual({k: v for k, v in v13['params'].items() if k != 'dc'}, v12['params'])
         self.assertEqual(v13['params']['dc']['thresholds'], {'D': 10, 'M': 12, 'F': 12})
 
     def test_v1_4_is_v1_3_plus_his_own_record(self):
-        v13 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_3.json')['params']
-        v14 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_4.json')
+        v13 = fs.load_params(ROOT / 'thecornerfc/fantasy_games/fantasy_params_v1_3.json')['params']
+        v14 = fs.load_params(ROOT / 'thecornerfc/fantasy_games/fantasy_params_v1_4.json')
         self.assertEqual(v14['version_name'], 'fantasy-v1.4')
         p = v14['params']
         self.assertEqual({k: v for k, v in p.items() if k != 'dc'}, {k: v for k, v in v13.items() if k != 'dc'})
@@ -155,8 +157,8 @@ class ParamsAndMigrationTests(unittest.TestCase):
             self.assertEqual({k: p['dc'][pos][k] for k in 'ck'}, {k: v13['dc'][pos][k] for k in 'ck'})
 
     def test_v1_5_is_v1_4_plus_penalties(self):
-        v14 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_4.json')['params']
-        v15 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_5.json')
+        v14 = fs.load_params(ROOT / 'thecornerfc/fantasy_games/fantasy_params_v1_4.json')['params']
+        v15 = fs.load_params(ROOT / 'thecornerfc/fantasy_games/fantasy_params_v1_5.json')
         self.assertEqual(v15['version_name'], 'fantasy-v1.5')
         self.assertEqual({k: v for k, v in v15['params'].items() if k != 'penalties'}, v14)
         pen = v15['params']['penalties']
@@ -164,8 +166,8 @@ class ParamsAndMigrationTests(unittest.TestCase):
         self.assertEqual((pen['order_weight'], pen['order_ratio']), (0.75, 0.15))
 
     def test_v1_6_is_v1_5_plus_fpl_availability(self):
-        v15 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_5.json')['params']
-        v16 = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_6.json')
+        v15 = fs.load_params(ROOT / 'thecornerfc/fantasy_games/fantasy_params_v1_5.json')['params']
+        v16 = fs.load_params(ROOT / 'thecornerfc/fantasy_games/fantasy_params_v1_6.json')
         self.assertEqual(v16['version_name'], 'fantasy-v1.6')
         self.assertEqual({k: v for k, v in v16['params'].items() if k != 'fpl_availability'}, v15)
         self.assertIs(v16['params']['fpl_availability'], True)
@@ -240,7 +242,7 @@ class PredictionPayloadTests(unittest.TestCase):
         self.assertAlmostEqual(sum(cells[0]['parts']), cells[0]['xp'], places=1)
 
     def test_v1_5_payload_splits_goals_penalties_and_fpl_assists(self):
-        doc = fs.load_params(ROOT / 'thecornerfc/fantasy_params_v1_5.json')
+        doc = fs.load_params(ROOT / 'thecornerfc/fantasy_games/fantasy_params_v1_5.json')
         mins = fm.minutes_expectation(0.9, 0.5, 85, 0.9, 20, 0.0)
         pens = {'exp_pen_goals': 0.08, 'exp_pen_misses': 0.02, 'exp_fpl_pen_assists': 0.01, 'exp_fpl_other_assists': 0.04}
         extras = {'yellow90': 0.1, 'red90': 0.0, 'base_bps90': 5.0, 'penalty_saves': 0.03, 'start_minutes': 85,

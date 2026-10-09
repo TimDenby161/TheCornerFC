@@ -5,8 +5,9 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from thecornerfc import config, health, usage
-from thecornerfc.export import _publish_export, ExportValidationError
+from thecornerfc import config
+from thecornerfc.pipeline import health, usage
+from thecornerfc.publish.export import _publish_export, ExportValidationError
 from test_export_safety import write_valid_export
 
 
@@ -24,7 +25,7 @@ class HealthTests(unittest.TestCase):
             p = patch.object(config, name, value)
             p.start()
             self.addCleanup(p.stop)
-        p = patch('thecornerfc.health.publish')
+        p = patch('thecornerfc.pipeline.health.publish')
         p.start()
         self.addCleanup(p.stop)
 

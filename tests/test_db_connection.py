@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from thecornerfc import db
+from thecornerfc.pipeline import db
 
 
 class ConnectionTests(unittest.TestCase):

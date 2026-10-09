@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import unittest
 from unittest.mock import Mock, patch
 
-from thecornerfc import matchday
+from thecornerfc.pipeline import matchday
 
 NOW = datetime(2026, 10, 3, 14, tzinfo=timezone.utc)
 

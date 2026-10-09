@@ -1,6 +1,4 @@
 <script lang="ts">
-	// (this site's own copy: it names the host and the cookies of this app, where the old site's
-	// page, docs/privacy.html, names its own)
 	import raw from '../../../text/privacy.html?raw';
 	import { textPage } from '#lib/textPage.ts';
 

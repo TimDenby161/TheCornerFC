@@ -15,7 +15,7 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.special import logsumexp
 from scipy.stats import spearmanr
-from thecornerfc import player_ratings as pr
+from thecornerfc.models import player_ratings as pr
 
 ROOT = Path(__file__).parent
 NORM_END = '2022-01-01'
@@ -102,8 +102,8 @@ def calibration(p,y):
 
 
 def snapshot_audit():
-    players=json.loads(Path('docs/data/players.json').read_text())
-    rankings=json.loads(Path('docs/data/rankings.json').read_text())
+    players=json.loads(Path('.export/players.json').read_text())
+    rankings=json.loads(Path('.export/rankings.json').read_text())
     ranks={r[0]:r[4] for r in rankings['rankings'] if r[4] is not None}
     grouped=defaultdict(list)
     for r in players['players']:
@@ -125,7 +125,7 @@ def snapshot_audit():
                   'median_within_club_sd':float(np.median([np.std(v) for v in eligible])) if eligible else None,
                   'median_within_club_p90_p10':float(np.median([np.quantile(v,.9)-np.quantile(v,.1) for v in eligible])) if eligible else None}
     return {'rankings_generated_at':rankings.get('generated_at'),'positions':out,
-            'export_hashes':{n:hashlib.sha256(Path('docs/data/'+n+'.json').read_bytes()).hexdigest() for n in ('players','rankings')}}
+            'export_hashes':{n:hashlib.sha256(Path('.export/'+n+'.json').read_bytes()).hexdigest() for n in ('players','rankings')}}
 
 
 def temporal_norms(apps, offsets):
@@ -395,7 +395,7 @@ def main():
     output={'generated_at':datetime.now(timezone.utc).isoformat(),'input_sha256':hashlib.sha256(encoded).hexdigest(),
         'code_sha256':CODE_SHA256,
         'production_source_hashes':{name:hashlib.sha256(Path('thecornerfc',name+'.py').read_bytes()).hexdigest()
-                                    for name in ('player_ratings','positions','config')},
+                                    for name in ('models/player_ratings','models/positions','config')},
         'data_extracted_at':data['extracted_at'],'captures':data['captures'],
         'fixture_n':len(data['fixtures']),'appearance_n':len(data['apps']),
         'first_kickoff':data['fixtures'][0][1],'last_kickoff':data['fixtures'][-1][1],

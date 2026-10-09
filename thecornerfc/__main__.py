@@ -9,8 +9,8 @@
     python -m thecornerfc nightly        # refresh everything that changes (scheduled task)
     python -m thecornerfc rank           # recalculate club rankings from every fixture
     python -m thecornerfc predict        # projected scores / W-D-L for upcoming fixtures
-    python -m thecornerfc export         # JSON for the website in docs/data
-    python -m thecornerfc nations        # national team ranking and pages only (docs/data/nations.json, nations/)
+    python -m thecornerfc export         # JSON for the website in .export
+    python -m thecornerfc nations        # national team ranking and pages only (.export/nations.json, nations/)
     python -m thecornerfc sync national  # API-Football internationals and their line-ups
     python -m thecornerfc matchday       # pre-kickoff odds/injuries, late paper bets, settle
     python -m thecornerfc fpl capture    # pre-deadline FPL state (needs FPL_CAPTURE_ENABLED)
@@ -22,9 +22,10 @@ import logging
 import os
 import sys
 
-from . import usage, health, evaluation
+from .pipeline import usage, health
+from .evidence import evaluation
 from . import config
-from .api import ApiFootball, QuotaExhausted
+from .pipeline.api import ApiFootball, QuotaExhausted
 
 TARGETS = ["leagues", "teams", "fixtures", "standings", "stats", "odds", "players", "injuries",
            "player_minutes", "player_careers", "retired", "squads", "coaches", "lineup_coaches", "colors", "cup_lineups"]
@@ -58,8 +59,8 @@ def main(argv=None):
 
     sub.add_parser("rank", help="Recalculate club rankings from every finished fixture")
     sub.add_parser("predict", help="Project scores and W/D/L chances for upcoming fixtures")
-    sub.add_parser("export", help="Write JSON for the website to docs/data")
-    sub.add_parser("nations", help="Rebuild the national team ranking (docs/data/nations.json) only")
+    sub.add_parser("export", help="Write JSON for the website to .export")
+    sub.add_parser("nations", help="Rebuild the national team ranking (.export/nations.json) only")
     sub.add_parser("player-ratings", help="Recalculate player ranks and team XI ratings (backdated)")
     sub.add_parser("matchday", help="Pre-kickoff odds and injuries, late paper bets, settle bets")
     suppress = sub.add_parser("suppress", help="Remove a person on request and keep them out (README: Removing a person)")
@@ -136,8 +137,10 @@ def _execute(args):
         print(f"Requests today: {info['requests']['current']} / {info['requests']['limit_day']}")
         return 0
 
-    from . import export, ingest, matchday, player_ratings, predictions, ranking
-    from .db import connect, init_schema
+    from .publish import export
+    from .pipeline import ingest, matchday
+    from .models import player_ratings, predictions, ranking
+    from .pipeline.db import connect, init_schema
 
     with connect() as conn:
         if args.command == "init-db":
@@ -152,7 +155,7 @@ def _execute(args):
             return 0
         if args.command == "predict":
             predictions.update_predictions(conn)
-            from . import national_predictions
+            from .models import national_predictions
             national_predictions.update_safely(conn)
             return 0
         if args.command == "export":
@@ -164,7 +167,7 @@ def _execute(args):
             export.mirror_site_docs(conn, only=["nations.json", "nations/*.json", export.MANIFEST])
             return 0
         if args.command == "suppress":
-            from . import suppression
+            from .privacy import suppression
             kind, person = ("player", args.player) if args.player is not None else ("coach", args.coach)
             if args.apply:
                 config.require_db_write("suppress")
@@ -173,16 +176,16 @@ def _execute(args):
             print("Done: now run the export." if args.apply else "Nothing changed. Add --apply to delete and add to suppressed.json.")
             return 0
         if args.command == "fantasy":
-            from . import fantasy_snapshots
+            from .fantasy_games import fantasy_snapshots
             fantasy_snapshots.capture(conn)
             return 0
         if args.command == "fpl":
-            from . import fpl
+            from .fantasy_games import fpl
             client = fpl.FplClient()
             if args.action == "capture":
                 fpl.capture(client, conn)
             elif args.action == "team":
-                from . import fpl_team
+                from .fantasy_games import fpl_team
                 fpl_team.export_team(client, conn, config.FPL_TEAM_ENTRY)
             else:
                 fpl.capture_results(client, conn, args.events)
@@ -201,7 +204,7 @@ def _execute(args):
             if args.command == "nightly":
                 failures = ingest.sync_nightly(api, conn, args.leagues)
                 logging.info("Nightly sync finished with %d failed step(s)", failures)
-                from . import retention
+                from .privacy import retention
                 retention.run(conn)
                 return 1 if failures else 0
 

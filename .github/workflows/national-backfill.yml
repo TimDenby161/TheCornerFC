@@ -61,7 +61,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           # the league list is a placeholder: only the validated seasons are used
-          python -m thecornerfc.workflow_inputs 0 "$SEASONS" > /tmp/backfill-inputs.env
+          python -m thecornerfc.pipeline.workflow_inputs 0 "$SEASONS" > /tmp/backfill-inputs.env
           source /tmp/backfill-inputs.env
           python -m thecornerfc sync national --seasons "${SEASON_ARGS[@]}"
 

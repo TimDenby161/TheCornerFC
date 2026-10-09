@@ -1,6 +1,5 @@
-// The plain text pages (terms, privacy, how the models work) are still the old site's own files in
-// docs/, read from where they are until the domain moves to this app, so the wording can't drift
-// between the two. This takes one's text out of its file and points its links at this site.
+// The plain text pages (terms, privacy, how the models work) are whole HTML files in src/text, as
+// the old site wrote them. This takes one's text out of its file and points its links at this site.
 export function textPage(html: string) {
 	const main = /<main>([\s\S]*)<\/main>/.exec(html)?.[1] ?? '';
 	return {

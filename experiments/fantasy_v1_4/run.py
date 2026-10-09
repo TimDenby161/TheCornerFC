@@ -1,6 +1,6 @@
 """Fantasy v1.4 (DESIGN.md): v1.3's defensive-contribution rate updated by each player's own FPL
 record. Fit on GW1-3 (m and r on GW2-3), test on GW4-5. Offline: reads the frozen extracts of
-experiments/fantasy_dc, writes results.json and thecornerfc/fantasy_params_v1_4.json."""
+experiments/fantasy_dc, writes results.json and thecornerfc/fantasy_games/fantasy_params_v1_4.json."""
 from bisect import bisect_left
 from collections import defaultdict
 from datetime import datetime
@@ -13,11 +13,11 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
 from scipy.optimize import minimize
-from thecornerfc import fantasy as fm
+from thecornerfc.fantasy_games import fantasy as fm
 
 ROOT = Path(__file__).parent
-V13_PARAMS = Path('thecornerfc/fantasy_params_v1_3.json')
-V14_PARAMS = Path('thecornerfc/fantasy_params_v1_4.json')
+V13_PARAMS = Path('thecornerfc/fantasy_games/fantasy_params_v1_3.json')
+V14_PARAMS = Path('thecornerfc/fantasy_games/fantasy_params_v1_4.json')
 _spec = importlib.util.spec_from_file_location('dcrun', ROOT.parent / 'fantasy_dc' / 'run.py')
 dcrun = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(dcrun)

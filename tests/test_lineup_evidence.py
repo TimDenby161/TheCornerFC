@@ -5,8 +5,10 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from thecornerfc import availability, config, lineup_snapshots
-from thecornerfc.player_ratings import _select_lineup
+from thecornerfc.models import availability
+from thecornerfc import config
+from thecornerfc.evidence import lineup_snapshots
+from thecornerfc.models.player_ratings import _select_lineup
 
 
 class EvidenceConnection:
@@ -59,7 +61,7 @@ class LineupEvidenceTests(unittest.TestCase):
         self.assertNotIn(3,[row[0] for row in selected])
         self.assertEqual([row[0] for row in baseline],[1]+list(range(3,13)))
 
-    @patch('thecornerfc.lineup_snapshots.register_version',return_value='mv_'+'a'*64)
+    @patch('thecornerfc.evidence.lineup_snapshots.register_version',return_value='mv_'+'a'*64)
     def test_old_prediction_and_availability_survive_new_capture(self,version):
         fixtures=[(1,self.kickoff,10,20,True)]
         states={(1,10):self.merge(manual=[{'player':2,'reason':'Injury'}])}
@@ -76,7 +78,7 @@ class LineupEvidenceTests(unittest.TestCase):
         self.assertEqual(player['availability_state'],'not_reported')
         self.assertEqual(json.loads(old['availability'])['2']['state'],'unavailable')
 
-    @patch('thecornerfc.lineup_snapshots.register_version',return_value='mv_'+'a'*64)
+    @patch('thecornerfc.evidence.lineup_snapshots.register_version',return_value='mv_'+'a'*64)
     def test_a_cup_match_is_captured_only_for_the_teams_given(self,version):
         # fixture 2 is a cup match against a club with no player data (20): only team 10 is captured
         fixtures=[(1,self.kickoff,10,20,True),(2,self.kickoff,10,20,True),(3,self.kickoff,10,20,True)]
@@ -115,7 +117,7 @@ import uuid
 class LineupPostgresTests(unittest.TestCase):
     def test_append_only_tables_preserve_old_evidence(self):
         import psycopg
-        from thecornerfc.model_versions import register_model_version
+        from thecornerfc.evidence.model_versions import register_model_version
         root=Path(__file__).resolve().parents[1]/'db/migrations'
         with psycopg.connect(os.environ['MODEL_VERSION_TEST_DSN']) as conn:
             try:
@@ -130,7 +132,7 @@ class LineupPostgresTests(unittest.TestCase):
                 kickoff=now+timedelta(days=1)
                 with patch.object(config,'READ_ONLY',False),patch.object(config,'GITHUB_ACTIONS',True):
                     version=register_model_version(conn,'lineup','test')
-                    with patch('thecornerfc.lineup_snapshots.register_version',return_value=version):
+                    with patch('thecornerfc.evidence.lineup_snapshots.register_version',return_value=version):
                         fixtures=[(1,kickoff,10,20,True)]
                         lineup_snapshots.capture_predictions(conn,fixtures,[(1,10,1,'CM',60.)],{}, {})
                         lineup_snapshots.capture_predictions(conn,fixtures,[(1,10,2,'CM',65.)],{}, {})

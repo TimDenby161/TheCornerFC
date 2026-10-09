@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from thecornerfc import export
+from thecornerfc.publish import export
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -55,7 +55,7 @@ class ManifestTests(unittest.TestCase):
             after = main.split(call, 1)[1].split('return 0', 1)[0]
             self.assertIn(f'export.write_manifest(conn=conn, only={wrote})', after, call)
             self.assertIn(f'export.mirror_site_docs(conn, only={wrote[:-1]}, ', after, call)       # and writes just those rows
-        publish = (ROOT / 'thecornerfc/export.py').read_text().split('def _publish_export', 1)[1].split('\ndef ', 1)[0]
+        publish = (ROOT / 'thecornerfc/publish/export.py').read_text().split('def _publish_export', 1)[1].split('\ndef ', 1)[0]
         self.assertLess(publish.index('write_manifest(staged)'), publish.index('_replace_export(staged'))
 
     def test_no_workflow_commits_data(self):
@@ -64,12 +64,7 @@ class ManifestTests(unittest.TestCase):
             text = path.read_text()
             for gone in ('git add', 'git commit', 'git push', 'contents: write'):
                 self.assertNotIn(gone, text, path.name)
-        self.assertIn('\ndocs/data/\n', (ROOT / '.gitignore').read_text())
-
-    def test_site_checks_the_hash_before_trusting_a_kept_copy(self):
-        app = (ROOT / 'docs/assets/app.js').read_text()
-        self.assertIn('data/manifest.json', app)
-        self.assertIn('crypto.subtle.digest("SHA-256"', app)
+        self.assertIn('\n.export/\n', (ROOT / '.gitignore').read_text())
 
 
 if __name__ == '__main__':

@@ -35,8 +35,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from thecornerfc import config, predictions, ranking  # noqa: E402
-from thecornerfc.cache import CACHE_DIR  # noqa: E402
+from thecornerfc import config; from thecornerfc.models import predictions, ranking  # noqa: E402
+from thecornerfc.pipeline.cache import CACHE_DIR  # noqa: E402
 
 INPUTS = CACHE_DIR / "results_only_inputs.pickle"
 OUT = Path(__file__).parent / "results.json"
@@ -49,9 +49,9 @@ EFL = {40, 41, 42}
 
 def read_inputs():
     """The inputs, read once in a read-only transaction and frozen in the cache."""
-    from thecornerfc import db
-    from thecornerfc.cache import finished_fixtures
-    from thecornerfc.injuries import missing_strengths
+    from thecornerfc.pipeline import db
+    from thecornerfc.pipeline.cache import finished_fixtures
+    from thecornerfc.models.injuries import missing_strengths
     conn = db.connect()
     fixtures = finished_fixtures(conn)
     levels = {k: float(v) for k, v in conn.execute(

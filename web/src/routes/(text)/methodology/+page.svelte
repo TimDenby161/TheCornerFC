@@ -1,5 +1,5 @@
 <script lang="ts">
-	import raw from '../../../../../docs/methodology.html?raw';
+	import raw from '../../../text/methodology.html?raw';
 	import { textPage, textParts } from '#lib/textPage.ts';
 
 	let { data } = $props();

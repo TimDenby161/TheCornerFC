@@ -4,7 +4,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-from thecornerfc import config, player_history
+from thecornerfc import config
+from thecornerfc.evidence import player_history
 
 
 class PlayerHistoryTests(unittest.TestCase):
@@ -28,7 +29,7 @@ class PlayerHistoryTests(unittest.TestCase):
     def test_existing_day_is_not_written_again(self):
         conn=Mock()
         conn.execute.return_value.fetchone.return_value=(99,)
-        with patch.object(config,'require_db_write'),patch('thecornerfc.player_history.register_version') as register:
+        with patch.object(config,'require_db_write'),patch('thecornerfc.evidence.player_history.register_version') as register:
             player_history.capture(conn,[(1,60.,'CM',100)],[(1,2026,60.,100,10)])
         register.assert_not_called()
         conn.cursor.assert_not_called()
@@ -44,7 +45,7 @@ class PlayerHistoryPostgresTests(unittest.TestCase):
     def test_stored_movement_and_immutability(self):
         import psycopg
         import uuid
-        from thecornerfc.model_versions import register_model_version
+        from thecornerfc.evidence.model_versions import register_model_version
         root=Path(__file__).resolve().parents[1]/'db/migrations'
         with psycopg.connect(os.environ['MODEL_VERSION_TEST_DSN']) as conn:
             try:

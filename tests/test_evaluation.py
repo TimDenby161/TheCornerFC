@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from thecornerfc import evaluation as e
+from thecornerfc.evidence import evaluation as e
 
 
 class EvaluationTests(unittest.TestCase):
@@ -68,13 +68,13 @@ class EvaluationTests(unittest.TestCase):
 
     def test_cutoffs_in_snapshot_queries(self):
         args=e.prepare(SimpleNamespace(as_of=None,start=None,end=None,hours_before=24,domain='matches',source='prospective'))
-        with patch('thecornerfc.evaluation.query',return_value=[]) as query:
+        with patch('thecornerfc.evidence.evaluation.query',return_value=[]) as query:
             rows,coverage=e.load_matches(None,args)
             sql,params=query.call_args.args[1:]
             self.assertIn('s.created_at<=s.effective_at',sql)
             self.assertEqual(sql.count('%s'),len(params))
             self.assertEqual(params[-2:],[86400,86400])
-        with patch('thecornerfc.evaluation.query',return_value=[]) as query:
+        with patch('thecornerfc.evidence.evaluation.query',return_value=[]) as query:
             e.load_lineups(None,args)
             sql,params=query.call_args.args[1:]
             self.assertIn('min(first_xi.captured_at)',sql)

@@ -8,7 +8,7 @@ from pathlib import Path
 import gzip,json,sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 import numpy as np
-from thecornerfc import predictions as p
+from thecornerfc.models import predictions as p
 from experiments.player_club_strength.run import interval
 ROOT=Path(__file__).parent
 MULTIPLIERS=[0.,.5,1.,1.5,2.,3.,4.]

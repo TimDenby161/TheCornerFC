@@ -10,7 +10,7 @@ expect a reply within about a week.
 
 Data errors (a wrong result, player or injury) aren't security issues. Report them as a normal
 [issue](https://github.com/TimDenby161/TheCornerFC/issues/new). The site's privacy, corrections and
-security page is [`docs/privacy.html`](docs/privacy.html).
+security page is [`web/src/text/privacy.html`](web/src/text/privacy.html).
 
 ## What there is to protect
 
@@ -32,7 +32,7 @@ database role and no API calls (README: Local development safety).
 
 ### The Supabase publishable key
 
-`docs/assets/app.js` contains the Supabase project URL and a key starting `sb_publishable_`. It is
+`web/src/lib/config.ts` contains the Supabase project URL and a key starting `sb_publishable_`. It is
 public on purpose and is not a secret: it only identifies the project to Supabase's API, and the
 database decides what it may do. Secret scanners flag it (see below); that match is expected.
 
@@ -93,7 +93,7 @@ on a lost machine). Otherwise, rotate about once a year. After each rotation, ru
 
 **Supabase publishable key.** It isn't a secret, so a leak isn't possible. To replace it anyway
 (for example to cut off a script that misuses it): Supabase → Project Settings → API Keys, create
-a new publishable key, put it in `SUPABASE.key` in `docs/assets/app.js`, deploy, then delete the
+a new publishable key, put it in `SUPABASE.key` in `web/src/lib/config.ts`, deploy, then delete the
 old one.
 
 **If a secret was committed.** Rotate it first. Removing it from git history doesn't un-leak it.
@@ -104,7 +104,7 @@ Then check the whole history (below). The repository is public, so assume it has
 On 2026-10-01 the full history (426 commits) was scanned with gitleaks 8.30 and trufflehog 3.97.
 Neither found a real credential. The only matches were the placeholder URLs in `.env.example`,
 README and `tests/test_db_connection.py`, the empty `API_FOOTBALL_KEY=` line in `.env.example`,
-and the Supabase publishable key in `docs/assets/app.js` (public by design, see above). To repeat
+and the Supabase publishable key in `web/src/lib/config.ts` (public by design, see above). To repeat
 the scan:
 
 ```bash
@@ -143,9 +143,9 @@ are in the page:
 - `Referrer-Policy: strict-origin-when-cross-origin`, so the flag host sees only the site's
   origin, not the page.
 - API data that goes into markup is checked. Kit colours must be six-digit hex, both in the export
-  (`thecornerfc/export.py`) and again in `docs/assets/app.js`, and flag URLs are built from a
+  (`thecornerfc/publish/export.py`) and again in `docs/assets/app.js`, and flag URLs are built from a
   fixed list of country codes. Text goes through `escapeHtml`.
 - **Enforce HTTPS** must be on in the Pages settings. With it on, GitHub redirects HTTP to HTTPS
   and sends HSTS for one year (checked 2026-10-01). The header has no `includeSubDomains` or
   `preload`, and Pages can't add them.
-- `docs/.well-known/security.txt` expires 2027-09-27. Renew the date before then.
+- `web/static/.well-known/security.txt` expires 2027-09-27. Renew the date before then.

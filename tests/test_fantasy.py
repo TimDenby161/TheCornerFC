@@ -2,8 +2,8 @@ from datetime import timedelta
 import math
 import unittest
 
-from thecornerfc import fantasy as fm
-from thecornerfc.predictions import _pmf
+from thecornerfc.fantasy_games import fantasy as fm
+from thecornerfc.models.predictions import _pmf
 
 
 def poisson(lam, x):

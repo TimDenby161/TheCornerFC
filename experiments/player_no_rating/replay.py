@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).parent))
-from thecornerfc import config, db, lineup_snapshots, player_ratings as pr, positions  # noqa: E402
+from thecornerfc import config; from thecornerfc.pipeline import db; from thecornerfc.evidence import lineup_snapshots; from thecornerfc.models import player_ratings as pr, positions  # noqa: E402
 from run import quantile, rating_offsets, spearman, without_rating  # noqa: E402
 
 BACKUP_GAMES = 5
