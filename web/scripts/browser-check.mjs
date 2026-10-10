@@ -151,18 +151,28 @@ await until(`location.pathname === '/club/42'`);
 check('... and after a move to another tab', await until(tabSeen, 3000));
 await send('Emulation.clearDeviceMetricsOverride');
 
-// Matches: a day at a time, a round at a time for one competition
-await open('/matches?d=2026-09-19');
+// Matches: a day at a time, a round at a time for one competition. The day is the Saturday a week
+// or more back: results stay on the site for 21 days, so a fixed date stops having any
+const saturday = new Date(); saturday.setUTCDate(saturday.getUTCDate() - 7 - ((saturday.getUTCDay() + 1) % 7));
+const matchDay = saturday.toISOString().slice(0, 10), dayAfter = new Date(saturday.getTime() + 864e5).toISOString().slice(0, 10);
+await open(`/matches?d=${matchDay}`);
 const dayCards = await run(`document.querySelectorAll('#matches-list .match-card').length`);
 check('a day\'s matches by competition', dayCards > 20 && (await run(`document.querySelectorAll('#matches-list .comp-group').length`)) > 5, `${dayCards} matches`);
 check('finished matches carry a prediction rating', (await run(`document.querySelectorAll('#matches-list .rating-badge').length`)) > 5);
 await run(`document.querySelector('#matches-list .comp-group-header')?.click()`); await sleep(300);
 check('a competition folds away', await run(`document.querySelector('#matches-list .comp-group')?.classList.contains('collapsed')`));
 await run(`document.querySelector('.secondary-filters a[aria-label="Next day"]')?.click()`); await sleep(1800);
-check('the next day has its own address', (await run('location.search')) === '?d=2026-09-20', await run('location.search'));
-await open('/matches?c=39&d=2026-09-19');
-check('one competition goes a round at a time', /^Round 5/.test(await run(`document.querySelector('.secondary-filters select')?.selectedOptions[0]?.textContent`)) && (await run(`document.querySelectorAll('#matches-list .match-card').length`)) === 10, await run(`document.querySelector('.secondary-filters select')?.selectedOptions[0]?.textContent`));
-// a finished match's card opens its line-ups (on a click anywhere on it) and its model detail
+check('the next day has its own address', (await run('location.search')) === `?d=${dayAfter}`, await run('location.search'));
+await open(`/matches?c=39&d=${matchDay}`);
+check('one competition goes a round at a time', /^Round \d+/.test(await run(`document.querySelector('.secondary-filters select')?.selectedOptions[0]?.textContent`)) && (await run(`document.querySelectorAll('#matches-list .match-card').length`)) === 10, await run(`document.querySelector('.secondary-filters select')?.selectedOptions[0]?.textContent`));
+// a finished match's card opens its line-ups (on a click anywhere on it) and its model detail: the
+// latest round already played, in the first of these competitions to have one on the site (a
+// round to come is no use: its line-ups are for subscribers)
+for (const comp of [39, 40, 140, 78]) {
+	if (comp !== 39) await open(`/matches?c=${comp}&d=${matchDay}`);
+	const played = await run(`[...(document.querySelector('.secondary-filters select')?.options || [])].map((o) => o.value).filter((v) => v < new Date().toISOString().slice(0, 10)).pop() || null`);
+	if (played) { await open(`/matches?c=${comp}&d=${played}`); break; }
+}
 await run(`document.querySelector('#matches-list .match-card .match-score')?.click()`); await sleep(2500);
 check('a card opens its line-ups: two elevens on pitches', (await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel .pp-pitch').length`)) === 2 && (await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel .xi-spot').length`)) === 22, `${await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel .xi-spot').length`)} players`);
 await run(`document.querySelectorAll('#matches-list .match-card')[1]?.querySelector('.why-toggle')?.click()`); await sleep(1800);
