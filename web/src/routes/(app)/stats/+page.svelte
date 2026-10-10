@@ -37,8 +37,8 @@
 					<div class="stats-label">Model vs Market ({s.market.n.toLocaleString('en-GB')} matches with odds)</div>
 					<div class="vs-market">
 						<span></span><span class="hd">Model</span><span class="hd">Market fair</span>
-						<span>Right result</span><span class="num" class:better={s.market.right.modelBetter}>{s.market.right.model}</span><span class="num" class:better={s.market.right.marketBetter}>{s.market.right.market}</span>
-						<span>Log loss</span><span class="num" class:better={s.market.ll.modelBetter}>{s.market.ll.model}</span><span class="num" class:better={s.market.ll.marketBetter}>{s.market.ll.market}</span>
+						<span>Right result (matches with odds)</span><span class="num" class:better={s.market.right.modelBetter}>{s.market.right.model}</span><span class="num" class:better={s.market.right.marketBetter}>{s.market.right.market}</span>
+						<span>Log loss (matches with odds)</span><span class="num" class:better={s.market.ll.modelBetter}>{s.market.ll.model}</span><span class="num" class:better={s.market.ll.marketBetter}>{s.market.ll.market}</span>
 					</div>
 					<div class="stats-note">Market fair probability: the average across bookmakers with their margin removed, from the last odds before kickoff. Only matches with odds are compared{s.market.small ? '; the sample is still small, so treat this as a rough guide' : ''}.</div>
 				</div>
