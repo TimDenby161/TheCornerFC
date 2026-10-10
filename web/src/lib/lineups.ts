@@ -28,6 +28,17 @@ export function markPredicted(xi: Starter[], predicted: XiRow[]): number {
 	return xi.length - missed.length;
 }
 
+// A match to come: each predicted starter with his Ability, the number his own page shows (the
+// stored line-up carries his rank over his recent matches, which it doesn't); none where he has
+// no Ability or it is for subscribers
+export const withAbility = (rows: XiRow[], ability: Map<number, number | null>): XiRow[] =>
+	rows.map(([pid, name, role]) => [pid, name, role, ability.get(pid) ?? null]);
+// The average of an eleven's ranks to a whole number, those without one left out
+export function averageRank(ranks: (number | null)[]): number | null {
+	const known = ranks.filter((r): r is number => r != null);
+	return known.length ? Math.round(known.reduce((t, r) => t + r, 0) / known.length) : null;
+}
+
 // Where each starter stands and what his spot says. `ranks`: whether ranks are shown at all
 // (national sides have none).
 export type Spot = ReturnType<typeof spots>[number];

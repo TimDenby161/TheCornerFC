@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { markPredicted, spots, type Starter, type XiRow } from './lineups';
+import { averageRank, markPredicted, spots, withAbility, type Starter, type XiRow } from './lineups';
 
 const starter = (id: number, label: string): Starter => ({ id, name: `A. Player${id}`, label, rank: 70 });
 describe('markPredicted', () => {
@@ -38,5 +38,20 @@ describe('spots', () => {
 	});
 	it('shows a predicted XI\'s chance and minutes', () => {
 		expect(spots([{ id: 1, name: 'A. Keeper', label: 'GK', rank: 80.5, chance: 97.6, mins: 88 }])[0]).toMatchObject({ chance: 98, mins: 88, predicted: null, tip: 'A. Keeper · GK · rank 80.5 · 98% to start · 88′ expected' });
+	});
+});
+
+describe('withAbility', () => {
+	it('swaps each stored rank for the player\'s Ability, and leaves none where he has none', () => {
+		const rows: XiRow[] = [[1, 'A', 'AM', 94.2], [2, 'B', 'ST', 64], [3, 'C', 'GK', 87]];
+		expect(withAbility(rows, new Map([[1, 84.3], [2, null]]))).toEqual([[1, 'A', 'AM', 84.3], [2, 'B', 'ST', null], [3, 'C', 'GK', null]]);
+	});
+});
+
+describe('averageRank', () => {
+	it('averages the ranks there are, to a whole number', () => {
+		expect(averageRank([84.3, 70, null, 77.2])).toBe(77);
+		expect(averageRank([null])).toBeNull();
+		expect(averageRank([])).toBeNull();
 	});
 });
