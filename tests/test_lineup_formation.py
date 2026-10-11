@@ -2,7 +2,7 @@ from collections import Counter
 from datetime import datetime, timezone
 import unittest
 
-from thecornerfc.models.player_ratings import _select_lineup, formation_slots, likely_formation, role_fit
+from thecornerfc.models.player_ratings import _drop_moved, _select_lineup, formation_slots, likely_formation, role_fit
 
 
 class FormationLineupTests(unittest.TestCase):
@@ -20,6 +20,15 @@ class FormationLineupTests(unittest.TestCase):
     def test_fit_prefers_same_side(self):
         self.assertGreater(role_fit('RB', 'RWB'), role_fit('LWB', 'RWB'))
         self.assertEqual(role_fit('CB', 'GK'), 0.0)
+
+    def test_player_who_moved_to_the_opponent_is_only_in_his_new_club_minutes(self):
+        # 7 left club 52 for club 65 and has recent minutes at both; 8 moved to a third club
+        last_team = {7: 65, 8: 40, 9: 52}
+        old, new = Counter({7: 55, 8: 90, 9: 450}), Counter({7: 204, 10: 450})
+        _drop_moved(old, last_team, 65)
+        _drop_moved(new, last_team, 52)
+        self.assertEqual(sorted(old), [8, 9])
+        self.assertEqual(sorted(new), [7, 10])
 
     def test_back_three_gets_one_wing_back_each_side_and_a_striker(self):
         # Two right wing-backs play more minutes than the striker; the old rule took both

@@ -62,7 +62,7 @@ These are set by judgement. The results data can't measure position value, becau
 - `players.current_rank` holds his rank now, which is his season rank for the current season (see season ranks below), so the players list follows the same age curve and minutes weighting as his seasons. The last-20-appearances rank above is what goes into each match (`fixture_player_ranks`) and the team XI ratings.
 
 **Team ratings** (`fixture_team_ratings`, for every match and team)
-- **Predicted XI rating:** the average rank of the predicted XI. That's 1 goalkeeper plus 10 outfield players with the most minutes over the last 5 matches, leaving out anyone on the injury list.
+- **Predicted XI rating:** the average rank of the predicted XI. That's 1 goalkeeper plus 10 outfield players with the most minutes over the last 5 matches, leaving out anyone on the injury list, and anyone whose latest match was for the opponent (a player who has moved between the two clubs would otherwise be picked for both).
 - **Recent rating:** the average rank of the XIs actually started in the last 5 matches.
 - **Actual XI rating:** the average rank of the XI that started, for finished matches.
 - **By line:** the same averages for the goalkeeper, defenders, midfielders and forwards, for both the XI that started and the predicted XI (`fixture_team_ratings.actual_gk`, `actual_def`, `actual_mid`, `actual_fwd` and the `predicted_…` columns). A starter's line is the role he started in. LM and RM count as midfield here, although they're rated alongside the wingers; LW, RW and ST are forwards. The match cards show them when you hover the XI rating, and each club result shows them after the competition.

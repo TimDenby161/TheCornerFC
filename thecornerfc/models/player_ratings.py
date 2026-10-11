@@ -969,6 +969,15 @@ def _select_lineup(minutes, out, raw_score, kickoff, formation=None, roles_of=No
     return candidates, scored, [(*x, None) for x in keepers + outfield]
 
 
+def _drop_moved(minutes, last_team, opponent):
+    """Take out of a club's recent minutes anyone whose latest match was for the opponent: a
+    player who has moved between the two clubs is in both sets of recent minutes, and can only
+    start for the club he is at now (Muñoz, Crystal Palace to Nottingham Forest, was predicted
+    for both sides on 2026-10-11)."""
+    for p in [p for p in minutes if last_team.get(p) == opponent]:
+        del minutes[p]
+
+
 @monitored("player_ratings", conn_index=0)
 def compute_player_ratings(conn):
     appearances = _appearances(conn)
@@ -1014,6 +1023,7 @@ def compute_player_ratings(conn):
     selection_inputs = {}
     windows = defaultdict(Window)
     team_recent = defaultdict(lambda: deque(maxlen=PREDICT_MATCHES))     # team -> [{player: minutes}]
+    last_team = {}             # player -> the team he last had minutes for
     team_shapes = defaultdict(lambda: deque(maxlen=PREDICT_MATCHES))     # team -> [formation]
     formations = dict(((f, t), shape) for f, t, shape in conn.execute(
         "select fixture_id, team_id, formation from fixture_formations where formation is not null"))
@@ -1049,6 +1059,7 @@ def compute_player_ratings(conn):
             minutes = Counter()
             for g in team_recent[team]:
                 minutes.update(g)
+            _drop_moved(minutes, last_team, away if team == home else home)
             out = injured.get((fid, team), set())
             shape = likely_formation(list(team_shapes[team]))
             candidates, scored, predicted = _select_lineup(minutes, out, raw_score, kickoff, shape,
@@ -1093,6 +1104,8 @@ def compute_player_ratings(conn):
             st = _row_stats(a)
             st["club_mins"] = team_rank.get((fid, a["team"]), tr_mean) * (a["minutes"] or 0)
             windows[a["player"]].add(kickoff, st, a["role"], a["position"])
+            if a["minutes"]:
+                last_team[a["player"]] = a["team"]
         for team in (home, away):
             played = {a["player"]: a["minutes"] for a in apps.get(fid, []) if a["team"] == team}
             if played:
