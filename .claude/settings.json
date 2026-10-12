@@ -1,0 +1,69 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m unittest *)",
+      "Bash(python3 -m unittest *)",
+      "Bash(python -m thecornerfc export)",
+      "Bash(python -m thecornerfc health)",
+      "Bash(python -m thecornerfc usage)",
+      "Bash(python -m thecornerfc evaluate *)",
+      "Bash(python db/check_local_access.py)",
+      "Bash(npm test)",
+      "Bash(npm test *)",
+      "Bash(npm run check)",
+      "Bash(npm run build)",
+      "Bash(node scripts/browser-check.mjs *)",
+      "Bash(node scripts/fantasy-check.mjs *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git ls-files *)"
+    ],
+    "deny": [
+      "Read(/.env)",
+      "Read(./.env)",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.dev.vars)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(gh workflow *)",
+      "Bash(gh api *)",
+      "Bash(npx wrangler *)",
+      "Bash(wrangler *)",
+      "Bash(npm install *)",
+      "Bash(npm ci *)",
+      "Bash(psql *)",
+      "Bash(python -m thecornerfc sync *)",
+      "Bash(python -m thecornerfc nightly *)",
+      "Bash(python -m thecornerfc matchday *)",
+      "Bash(python -m thecornerfc init-db *)",
+      "Bash(python -m thecornerfc rank *)",
+      "Bash(python -m thecornerfc predict *)",
+      "Bash(python -m thecornerfc player-ratings *)",
+      "Bash(python -m thecornerfc fantasy *)",
+      "Bash(python -m thecornerfc fpl *)",
+      "Bash(python -m thecornerfc suppress *)",
+      "Bash(python -m thecornerfc nations *)",
+      "Bash(python -m thecornerfc status *)",
+      "Bash(python -m thecornerfc preflight *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

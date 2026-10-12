@@ -4,8 +4,10 @@ Football data, club and player ranks, match predictions and a paper betting reco
 thecornerfc.com. One owner, no team. This repository is public.
 
 How the models work, what every table holds and why each decision was made is in `guide/`, one
-page per topic, listed in `README.md`: read the page the work touches, not the whole folder. This
-file is the short list of what to know before changing anything.
+page per topic, listed in `README.md`: read the page the work touches, not the whole folder.
+Start with `guide/architecture.md` (the parts, what may depend on what, how data reaches a page,
+what deploys and what gates it). This file is the short list of what to know before changing
+anything; the conventions for each part load from `.claude/rules/` when you work in it.
 
 ## The parts
 
@@ -17,7 +19,7 @@ file is the short list of what to know before changing anything.
 | `guide/` | The written explanation, one page per topic. `README.md` is its contents list. |
 | `tests/` | Python unit tests, with stand-in database connections. |
 | `experiments/` | One folder per model experiment, with its evaluator and results. |
-| `.github/workflows/` | The scheduled jobs (nightly, match day, FPL, backfills). They write to the database and commit nothing. |
+| `.github/workflows/` | The scheduled jobs (nightly, match day, FPL, backfills): they write to the database and commit nothing, and each runs the unit tests first. `tests.yml` runs both test suites on every push. |
 | `audit/` | Private notes, plans and drafts. Gitignored: never commit it or quote it in a public file. |
 
 The site reads only the database, through functions with fixed SQL that the public key is
@@ -25,11 +27,13 @@ allowed to call. `.export/` is a local export folder and is not in git.
 
 ## Commands
 
-Python (the system Pythons lack the packages: make a venv from `requirements.txt` first):
+Python (the jobs run on 3.13; the system Pythons lack the packages, so make a venv first, on
+this Mac with `/opt/homebrew/bin/python3.14 -m venv`, then `pip install -r requirements.txt`):
 
 ```bash
-python -m unittest discover -s tests
-python -m thecornerfc export        # read-only locally
+python -m unittest discover -s tests    # the result is its own `OK` line
+python -m thecornerfc export            # read-only locally: writes .export/ only
+python db/check_local_access.py         # what this machine's database addresses may do
 ```
 
 Site, from `web/`:
@@ -41,14 +45,24 @@ npm run check                       # types
 node scripts/browser-check.mjs [address]   # drives the pages in headless Chrome
 ```
 
-Run all three site checks before a push. `browser-check.mjs` catches crashes that fetching a
-page can't: add a step to it for each new interactive piece, and wait with its `until()`, not a
-fixed sleep. `scripts/fantasy-check.mjs` covers the fantasy pages.
+Run all three site checks before a push (`/pre-push` runs everything and reports each result
+line). `npm run build` runs the first two before it builds, which is what gates a deploy.
+`browser-check.mjs` catches crashes that fetching a page can't: add a step to it for each new
+interactive piece, and wait with its `until()`, not a fixed sleep. `scripts/fantasy-check.mjs`
+covers the fantasy pages.
+
+Skills: `/new-migration` (any database change), `/model-experiment` (any change to a model),
+`/pre-push`.
 
 ## Rules that must not be broken
 
 - **Local runs are read-only.** `.env` blocks database writes and API-Football calls. Don't set
-  the override flag or work around the guard.
+  the override flag or work around the guard, and don't read `.env` (`guide/local-safety.md`).
+- **Sixteen model files are fingerprinted**: their bytes are part of each model version's
+  identity, so any edit, even a comment, starts a new model version. Never touch one to tidy,
+  rename or reformat it; change one only as a deliberate model release (`/model-experiment`,
+  `guide/model-versions.md`). The list is in `tests/test_model_fingerprints.py`. No two `.py`
+  files in `thecornerfc/` may share a name.
 - **The owner applies migrations**, in the Supabase SQL editor. Write the file in
   `db/migrations/`, say it is waiting, and once it has been applied mark its first line and the
   copy in `db/schema.sql`.
@@ -70,28 +84,15 @@ fixed sleep. `scripts/fantasy-check.mjs` covers the fantasy pages.
 
 ## Conventions
 
-Site (`web/`):
+Each part's conventions are in a rule file that loads when you open a file there:
 
-- No back buttons on any page. Navigation is the menu and the browser.
-- Logic goes in tested `src/lib/*.ts`; database reads in `src/lib/server/`; pages stay thin.
-- A page's choices live in its address, through GET forms. No inline styles: computed positions
-  are classes from `placed.css` (the security policy forbids inline styles).
-- Each page's intro and key come from `src/lib/tabInfo.ts`. Kick-off times go through
-  `LocalTime.svelte`.
-- Keep `#ad-top` and `#ad-rail` free when laying out a page. Adverts never go on Home, the two
-  betting pages, the fantasy pages or the text pages.
-- Heavy sums run in the browser, not the Worker (the free plan allows about 10 ms of CPU a
-  request).
-- Redirects to another site must name it: `redirect(..., { external: [...] })`.
-- Secrets are Cloudflare Worker secrets, declared in `src/env.ts`. None in the code.
+- `.claude/rules/web.md`: the site (`web/`)
+- `.claude/rules/python.md`: the jobs, tests and experiments, and the `publish/` import order
+- `.claude/rules/database.md`: migrations and what the public key may reach (`db/`)
 
-Python and data:
-
-- A page asks the database for what it shows. Don't add whole-list files or prepared copies of
-  whole datasets.
-- Model changes are versioned and judged by an evaluator written before the results are seen
-  (`experiments/`, `thecornerfc/evidence/model_versions.py`).
-- API-Football is the only match data source. A new data source needs the owner's yes first.
+Two that apply everywhere: model changes are versioned and judged by an evaluator written
+before the results are seen (`experiments/`, `thecornerfc/evidence/model_versions.py`), and
+API-Football is the only match data source (a new one needs the owner's yes first).
 
 Commits: one plain sentence saying what the site or job now does, as in `git log`.
 
