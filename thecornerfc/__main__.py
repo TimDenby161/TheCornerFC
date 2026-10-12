@@ -63,7 +63,7 @@ def main(argv=None):
     sub.add_parser("nations", help="Rebuild the national team ranking (.export/nations.json) only")
     sub.add_parser("player-ratings", help="Recalculate player ranks and team XI ratings (backdated)")
     sub.add_parser("matchday", help="Pre-kickoff odds and injuries, late paper bets, settle bets")
-    suppress = sub.add_parser("suppress", help="Remove a person on request and keep them out (README: Removing a person)")
+    suppress = sub.add_parser("suppress", help="Remove a person on request and keep them out (guide/retention.md)")
     who = suppress.add_mutually_exclusive_group(required=True)
     who.add_argument("--player", type=int, help="API-Football player id")
     who.add_argument("--coach", type=int, help="API-Football coach id")

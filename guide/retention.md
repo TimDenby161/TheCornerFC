@@ -18,4 +18,3 @@ To remove a player or manager who asks (privacy page, "People the site covers"):
    the delete and are listed as kept; those rows are never published by name.
 3. Commit `suppressed.json`, then run the export (the nightly run does, or run a workflow by hand).
 4. Old copies stay in git history. Offer to rewrite it for their files if they ask.
-- **Local preview.** `python3 -m http.server 8000 --directory docs`, then `http://localhost:8000`.

@@ -92,3 +92,42 @@ Tests: `python -m unittest discover -s tests`. The optional real PostgreSQL migr
 test requires `MODEL_VERSION_TEST_DSN` pointing at a disposable test database with
 schema-creation privileges; it tests reapplication, deduplication, immutability,
 DB creation time and preservation of unrelated history, then rolls back its schema.
+
+## Changing a fingerprinted file
+
+Sixteen files are part of a model version's identity. Each model registers itself with
+`source_digests((...))`, the sha256 of the files that make its numbers, inside its
+`configuration`; the version id is a hash of that. So one changed byte in one of these files,
+a comment included, is a new model version on the next run, and that model's evidence record
+starts again under the new id:
+
+`player_ratings.py`, `predictions.py`, `injuries.py`, `ranking.py`, `betting.py`,
+`positions.py`, `availability.py`, `nations.py`, `national_predictions.py`,
+`national_lineups.py` (in `models/`); `fantasy.py`, `fantasy_snapshots.py` (in
+`fantasy_games/`); `match_snapshots.py`, `lineup_snapshots.py`, `player_history.py`,
+`paper_evidence.py` (in `evidence/`).
+
+`tests/test_model_fingerprints.py` holds each file's hash and fails when one moves, so it only
+happens on purpose. It also fails if two `.py` files in the package share a name
+(`source_digests` finds a file by its bare name, so a second `nations.py` anywhere would be
+hashed in place of the model), or if a file is newly passed to `source_digests` without being
+added to the table.
+
+To release a model change:
+
+1. Write the evaluator that will judge it before looking at any result, and register the
+   protocol (`experiments/prospective/PROTOCOLS.md`, [Chronological evaluation](evaluation.md)).
+2. Make the change, and give the version a new name where the model registers itself.
+3. Run `python -m unittest discover -s tests`. The fingerprint test fails and its message lists
+   each changed file with its new hash. Check the list is exactly the files you meant to
+   change: an unexpected name is an edit to undo.
+4. Put those hashes in `FINGERPRINTS` in `tests/test_model_fingerprints.py`. Commit the model
+   change, the new hashes and the evaluator together, so the history shows the version changing
+   in one step. A file newly fingerprinted, or no longer, is added to or taken out of the table
+   the same way.
+5. The new version is registered by the first scheduled run after the commit reaches `main`.
+   Say in the commit which models get a new version.
+
+Never update a hash to make the test pass after a tidy-up, a rename or a formatter run: undo the
+edit instead. Moving a function out of one of these files, or a file to another folder, changes
+the hash or the lookup just as an edit does.

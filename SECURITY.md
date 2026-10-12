@@ -14,21 +14,29 @@ security page is [`web/src/text/privacy.html`](web/src/text/privacy.html).
 
 ## What there is to protect
 
-The website is static files on GitHub Pages with no cookies or analytics. Visitors can create an
-optional account (README: Accounts): Supabase Auth holds their email addresses and password hashes,
-and the site's files hold none of it. The
-secrets are two GitHub Actions repository secrets and the owner's own sign-in. Nothing
-secret is in the site's files.
+The website is a SvelteKit app running as the Cloudflare Worker `thecornerfc`. It reads the
+database on the server and sends pages to the browser; the browser talks only to
+thecornerfc.com. There is no analytics script. Visitors can create an optional account
+([Accounts](guide/accounts.md)): Supabase Auth holds their email addresses and password hashes,
+and a signed-in visitor's session is a cookie the page's scripts can't read (`HttpOnly`,
+`Secure`, `SameSite=Lax`). Nothing secret is in the repository or in what the browser is sent.
 
-| Secret | Used by | Grants |
-|---|---|---|
-| `API_FOOTBALL_KEY` | nightly, match day and both backfill workflows | API-Football requests on the paid plan (quota and billing) |
-| `DATABASE_URL` | all five workflows | Write access to the Supabase Postgres database |
-| `GITHUB_TOKEN` | all workflows (automatic) | Push to this repo: each job gets only `contents: write`, and the workflow default is no permissions |
-| The owner's sign-in (Google account or site password) | the owner, through Sign in | Reading the owner-only FPL and EFL Fantasy pages, and saving or undoing that FPL entry's locked-in transfers. Nothing else |
+| Secret | Held by | Used by | Grants |
+|---|---|---|---|
+| `API_FOOTBALL_KEY` | GitHub Actions secret | nightly, match day and both backfill workflows | API-Football requests on the paid plan (quota and billing) |
+| `DATABASE_URL` | GitHub Actions secret | all five job workflows | Write access to the Supabase Postgres database |
+| `GITHUB_TOKEN` | GitHub (automatic) | all workflows | Read the repository only: the workflow default is no permissions and each job asks for `contents: read` (the nightly check also `actions: read`). No job commits or pushes |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_YEARLY` | Cloudflare Worker secrets (declared in `web/src/env.ts`) | `web/src/lib/server/payments.ts` | Taking payment. Each may be missing; until all are set, subscriptions can't be bought |
+| `SUPABASE_SERVICE_KEY` | Cloudflare Worker secret | `web/src/lib/server/payments.ts` only | Writing the `subscriptions` table. It bypasses row level security, so it is used nowhere else |
+| The owner's sign-in (Google account or site password) | the owner | Sign in | Reading the owner-only FPL and EFL Fantasy pages, and saving or undoing that FPL entry's locked-in transfers. Nothing else |
 
-Locally, `.env` holds the same names and is git-ignored. Local runs default to a read-only
-database role and no API calls (README: Local development safety).
+The tests (`.github/workflows/tests.yml`, and the "Unit tests" step in each job) are given no
+secret.
+
+Locally, `.env` is git-ignored and should hold only a read-only database role: no write
+address and no API key ([Local development safety](guide/local-safety.md);
+`python db/check_local_access.py` says what each address may do without showing it). Local runs
+refuse database writes and API calls in code as well.
 
 ### The Supabase publishable key
 
@@ -41,15 +49,19 @@ What the key can do on its own, once `db/migrations/20261001_anon_grants.sql` an
 before them):
 
 - Sign a visitor up or in through Supabase Auth.
-- Nothing in the database: it holds no grant on any table, view or function. A signed-in visitor
-  can call `delete_my_account` (their own account only) and the three FPL functions, which answer
-  only the owner.
+- Call the functions the site reads through, and nothing else: `site_doc` and the `site_*`
+  queries, each with fixed SQL, which never return a row marked paid to a visitor who isn't a
+  subscriber. It holds no grant on any table or view. A signed-in visitor can also call
+  `delete_my_account` (their own account only) and the three FPL functions, which answer only
+  the owner. (The grants are in `db/schema.sql`; this list was last checked against the live
+  project before the `site_*` functions existed, so check it again there.)
 
 Row level security is the only barrier on most tables, so **every new table or view needs it
 before it exists in production**: `alter table … enable row level security`, and for a view,
 revoke `anon` and `authenticated` (views skip row level security). Supabase's secret keys
 (`sb_secret_…`, or the legacy `service_role` key) bypass all of this and must never go into the
-site, the repo or a workflow. The pipeline uses `DATABASE_URL` instead.
+repo, a workflow or anything the browser is sent. The one use is the Worker secret
+`SUPABASE_SERVICE_KEY` above. The pipeline uses `DATABASE_URL` instead.
 
 ### My FPL team lock-in
 
@@ -63,8 +75,9 @@ database. How it's protected:
   page uses the player ids in a lock and ignores any that don't fit the squad.
 - The owner's access is as strong as that sign-in: keep two-step verification on the Google
   account, and sign out on a device that isn't yours.
-- The site's Content-Security-Policy allows connections only to the site itself and this one
-  Supabase project.
+- The browser never calls Supabase itself: the page posts to this site (`web/src/routes/fantasy/`),
+  which passes the request on with the signed-in visitor's own token. The Content-Security-Policy's
+  `connect-src` is `'self'`.
 
 ## Rotating a credential
 
@@ -89,7 +102,7 @@ on a lost machine). Otherwise, rotate about once a year. After each rotation, ru
 1. If the Google account or site password may be known to someone else, change it there first,
    then in Supabase → Authentication → Users open the owner's user and sign out all its sessions.
 2. To move the owner pages to a different address, run the `INSERT INTO fpl_team_owners …`
-   statement from README (My FPL team) with the new one.
+   statement from [My FPL team](guide/my-fpl-team.md) with the new one.
 
 **Supabase publishable key.** It isn't a secret, so a leak isn't possible. To replace it anyway
 (for example to cut off a script that misuses it): Supabase → Project Settings → API Keys, create
@@ -133,19 +146,23 @@ GitHub secret scanning and push protection (repo settings) catch new leaks as th
 
 ## Website controls
 
-GitHub Pages sends its own fixed response headers and doesn't let a site add any, so most controls
-are in the page:
+The Worker sends the controls as response headers (`web/vite.config.ts`, `web/src/hooks.server.ts`):
 
-- A Content-Security-Policy `<meta>` in `docs/index.html`: scripts only from the site itself
-  (no inline script or `on…=` handlers), images only from the site and `flagcdn.com`, and data only fetched from the site and the
-  Supabase project (My FPL team's lock-in). `frame-ancestors` (clickjacking)
-  can't be set this way. It would need a host or CDN that sends headers.
-- `Referrer-Policy: strict-origin-when-cross-origin`, so the flag host sees only the site's
-  origin, not the page.
-- API data that goes into markup is checked. Kit colours must be six-digit hex, both in the export
-  (`thecornerfc/publish/export.py`) and again in `docs/assets/app.js`, and flag URLs are built from a
-  fixed list of country codes. Text goes through `escapeHtml`.
-- **Enforce HTTPS** must be on in the Pages settings. With it on, GitHub redirects HTTP to HTTPS
-  and sends HSTS for one year (checked 2026-10-01). The header has no `includeSubDomains` or
-  `preload`, and Pages can't add them.
+- A Content-Security-Policy header on every page, with a one-off nonce for the one script the
+  server writes into the page. Scripts only from the site itself and Cloudflare's bot check; no
+  inline styles (one hashed exception, the framework's own); images only from the site and
+  `flagcdn.com`; `connect-src 'self'`; `object-src 'none'`; `base-uri 'self'`;
+  `frame-ancestors 'none'` (clickjacking); forms may post only to the site, the Supabase project,
+  Google's sign-in and Stripe's checkout and billing pages.
+- `Referrer-Policy: strict-origin-when-cross-origin` (a `<meta>` in `web/src/app.html`), so the
+  flag host sees only the site's origin, not the page.
+- A page differs by who asks: every response carries `Vary: Cookie`, and a signed-in visitor's
+  is `Cache-Control: private, no-store`.
+- `http://` and `www.` are redirected to `https://thecornerfc.com` by the Worker. HSTS is a
+  Cloudflare setting (SSL/TLS → Edge Certificates), not in the repository: check it is on.
+- A redirect to another site has to name it (`redirect(..., { external: [...] })`), and the
+  address to return to after signing in must be a path of this site (`safePath`).
+- API data that goes into a page is escaped by Svelte. Kit colours must be six-digit hex in the
+  export (`_kit_colors` in `thecornerfc/publish/site_clubs.py`), and flag URLs are built from a
+  fixed list of country codes.
 - `web/static/.well-known/security.txt` expires 2027-09-27. Renew the date before then.

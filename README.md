@@ -9,6 +9,7 @@ Pulls football data from [API-Football](https://www.api-football.com/) (v3) into
 
 Each topic has its own page in `guide/`. A note elsewhere that says "README: Accounts" means the page of that name here.
 
+- [Architecture](guide/architecture.md): the parts, what may depend on what, how data gets to the site, what deploys and what gates it
 - [Setup](guide/setup.md)
 - [Local development safety](guide/local-safety.md)
 - [Syncing](guide/syncing.md)
