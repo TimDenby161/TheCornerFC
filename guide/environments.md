@@ -99,6 +99,18 @@ GitHub environments are under the repository's Settings → Environments. `produ
 branch `main` only and has no reviewer (its jobs run every 30 minutes); `staging` allows
 `staging` only.
 
+## Making the staging Worker again
+
+Cloudflare's "import a repository" form has no branch option, so its first build is from `main`.
+To keep that copy from ever being public: on the form set the name `thecornerfc-staging`, build
+command `npm run build`, deploy command `npx wrangler deploy --env staging`, path `web`, the
+build variable `VITE_SITE_ENV=staging`, preview builds off and "Protect with Cloudflare Access"
+on. Then, in the new Worker's Settings → Builds, change the production branch to `staging` and
+push to `staging`. The live Worker (`thecornerfc`) builds `main` only: its preview builds are
+off, and its build variable is `VITE_SITE_ENV=production`. The lock on staging.thecornerfc.com
+is a Zero Trust self-hosted application for that hostname, with one policy allowing the owner's
+email and one for the check's service token.
+
 ## When something goes wrong
 
 - **The live site is wrong after a promotion.** Cloudflare → Workers → thecornerfc → Deployments
