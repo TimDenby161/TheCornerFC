@@ -1,4 +1,4 @@
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-12, to staging and to production, and each one's row set.
 -- Which database this is (owner, 2026-10-12: a staging copy beside production). Each database
 -- says of itself whether it is production or staging, in the row 'environment' of site.settings,
 -- and a run that may write checks the answer before it does (config.verify_database; one of

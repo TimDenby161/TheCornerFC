@@ -3528,7 +3528,7 @@ ALTER TABLE national_fixtures ADD COLUMN IF NOT EXISTS ft_away integer;
 --   select count(*) from information_schema.columns where table_name = 'national_fixtures' and column_name in ('ft_home', 'ft_away');   -- 2
 
 -- Which database this is (db/migrations/20261012_database_environment.sql)
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-12, to staging and to production, and each one's row set.
 -- Which database this is (owner, 2026-10-12: a staging copy beside production). Each database
 -- says of itself whether it is production or staging, in the row 'environment' of site.settings,
 -- and a run that may write checks the answer before it does (config.verify_database; one of
