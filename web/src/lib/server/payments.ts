@@ -1,4 +1,4 @@
-import { SUPABASE } from '#lib/config.ts';
+import { SITE_ENV, SUPABASE } from '#lib/config.ts';
 
 // Subscriptions are paid through Stripe: its hosted checkout takes the card (no card detail ever
 // reaches this site), and its webhook tells this server who has paid, which is written to the
@@ -8,8 +8,11 @@ import { SUPABASE } from '#lib/config.ts';
 //   STRIPE_PRICE_MONTHLY, STRIPE_PRICE_YEARLY  the two prices' ids in Stripe
 //   SUPABASE_SERVICE_KEY                       the database key that may write `subscriptions`
 export type Payments = { key: string; hook: string; prices: { monthly: string; yearly: string }; db: string };
-export function payments(env: Record<string, string | undefined>): Payments | null {
+// Only the live site takes real money: anywhere else a live Stripe key is treated as no key at
+// all, so staging can be given test keys and nothing else.
+export function payments(env: Record<string, string | undefined>, site: string = SITE_ENV): Payments | null {
 	const { STRIPE_SECRET_KEY: key, STRIPE_WEBHOOK_SECRET: hook, STRIPE_PRICE_MONTHLY: monthly, STRIPE_PRICE_YEARLY: yearly, SUPABASE_SERVICE_KEY: db } = env;
+	if (site !== 'production' && key && !key.startsWith('sk_test_')) return null;
 	return key && hook && monthly && yearly && db ? { key, hook, prices: { monthly, yearly }, db } : null;
 }
 

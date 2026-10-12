@@ -45,13 +45,17 @@ jobs:
 
   sync:
     needs: check
-    if: needs.check.outputs.run == 'true'
+    # Production's secrets are for main only: said here, and by the production environment's own
+    # branch rule. The same file on any other branch runs nothing (guide/environments.md).
+    if: github.ref == 'refs/heads/main' && needs.check.outputs.run == 'true'
     permissions:
       contents: read       # the data goes to the database, nothing is committed
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       API_DAILY_RESERVE: "200"
+      THECORNERFC_ENV: production      # the database must be production's, and say so (guide/environments.md)
       THECORNERFC_MODE: production
       THECORNERFC_READ_ONLY: "false"
       THECORNERFC_NO_API: "false"

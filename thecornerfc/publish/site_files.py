@@ -5,6 +5,7 @@ the free rows and the paid ones.
 import hashlib
 import json
 import logging
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -15,7 +16,9 @@ from .. import config
 log = logging.getLogger("thecornerfc.publish.export")
 
 
-OUT_DIR = Path(__file__).resolve().parent.parent.parent / ".export"
+# .export, unless the local switch names another folder: each environment's export is checked
+# against its own last one, never the other's (scripts/environment.py)
+OUT_DIR = Path(os.getenv("THECORNERFC_EXPORT_DIR") or Path(__file__).resolve().parent.parent.parent / ".export")
 # Written by other commands, not the export: kept across a full export
 CARRIED_FILES = ()
 CRITICAL_JSON_FILES = (

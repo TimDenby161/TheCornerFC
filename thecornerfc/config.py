@@ -29,20 +29,37 @@ READ_ONLY_DATABASE_URL = os.getenv("READ_ONLY_DATABASE_URL")
 API_DAILY_RESERVE = int(os.getenv("API_DAILY_RESERVE", "200"))
 
 
+# Which copy of the system this run belongs to: "production", "staging", or not said. Each has its
+# own Supabase project, named here by its public id (the site's address for each is in web/). A
+# run that names none writes nothing. The name alone is never trusted: before a session that may
+# write is used, the address must belong to that project and the database must say the same of
+# itself (require_write_address, verify_database; guide/environments.md).
+ENV = os.getenv("THECORNERFC_ENV", "").strip().lower()
+if ENV not in ("", "production", "staging"):
+    raise ValueError("THECORNERFC_ENV must be production or staging")
+PROJECTS = {
+    "production": "bookkurhdabdeccckjbn",
+    "staging": "sjvzmlbdowebylnzvisa",
+}
+
+
 def _local_override_allowed():
-    return LOCAL_OVERRIDE == LOCAL_OVERRIDE_TOKEN
+    """The override token, which now lifts only the API block, and only for staging: nothing on
+    this machine writes to production or spends its quota, whatever it carries."""
+    return LOCAL_OVERRIDE == LOCAL_OVERRIDE_TOKEN and ENV == "staging"
 
 
 def writes_allowed():
     """Whether this run may write to the database at all: read-only mode is off, and it is either
-    a GitHub Actions job or a local run carrying the override token. The same test as
-    require_db_write, for choosing the connection."""
-    return not READ_ONLY and (GITHUB_ACTIONS or _local_override_allowed())
+    a GitHub Actions job or a local run against staging. A local run never writes to production.
+    The same test as require_db_write, for choosing the connection; connect() then checks that
+    the database is the one this run names."""
+    return not READ_ONLY and (GITHUB_ACTIONS or ENV == "staging")
 
 
 # The write address is only ever picked up where a write is meant. Turning THECORNERFC_READ_ONLY
-# off on its own (no Actions run, no override token) still connects with the read-only address,
-# and connect() still opens a read-only session (guide/local-safety.md).
+# off on its own (no Actions run, not staging) still connects with the read-only address, and
+# connect() still opens a read-only session (guide/local-safety.md).
 DATABASE_URL = os.getenv("DATABASE_URL") if writes_allowed() else READ_ONLY_DATABASE_URL
 
 
@@ -50,14 +67,86 @@ def require_db_write(action):
     if READ_ONLY:
         raise SafetyError(
             f"{action} requires database writes, but THECORNERFC_READ_ONLY is enabled. "
-            "Use a read-only command locally, or set THECORNERFC_READ_ONLY=false plus "
-            f"THECORNERFC_LOCAL_OVERRIDE={LOCAL_OVERRIDE_TOKEN!r} if you really intend local writes."
+            "Locally only staging can be written to: python scripts/environment.py staging."
         )
-    if not GITHUB_ACTIONS and not _local_override_allowed():
+    if not writes_allowed():
         raise SafetyError(
-            f"{action} can write production data. Local writes require "
-            f"THECORNERFC_LOCAL_OVERRIDE={LOCAL_OVERRIDE_TOKEN!r}."
+            f"{action} writes to the database, and a local run writes only to staging "
+            "(python scripts/environment.py staging). Production is written by the GitHub jobs."
         )
+
+
+def database_project(url):
+    """The Supabase project a database address belongs to, or None when it names none or more
+    than one. The shared pooler has one host for every project and carries the project in the
+    user name (role.project); the direct address carries it in the host (db.project.supabase.co);
+    either may also carry it as options=reference=project."""
+    import re
+    from psycopg.conninfo import conninfo_to_dict
+    try:
+        params = conninfo_to_dict((url or "").strip())
+    except Exception:
+        return None
+    found = set()
+    user, host, options = (str(params.get(k) or "") for k in ("user", "host", "options"))
+    if "." in user:
+        found.add(user.rsplit(".", 1)[1])
+    at_host = re.fullmatch(r"db\.([a-z0-9]+)\.supabase\.(?:co|com)", host.lower())
+    if at_host:
+        found.add(at_host.group(1))
+    in_options = re.search(r"reference[=:]([a-z0-9]+)", options)
+    if in_options:
+        found.add(in_options.group(1))
+    return found.pop() if len(found) == 1 else None
+
+
+def require_write_address(url):
+    """Before a session that may write is opened: the address must belong to the project this
+    run's environment names. An address whose project can't be read is not known to be the right
+    one, so it is refused too. The address is never shown."""
+    expected = PROJECTS.get(ENV)
+    if not ENV:
+        raise SafetyError("This run may write but names no environment (THECORNERFC_ENV).")
+    if not expected:
+        raise SafetyError(f"No Supabase project is recorded for {ENV} yet (config.PROJECTS).")
+    project = database_project(url)
+    if project != expected:
+        raise SafetyError(
+            f"This run is for {ENV}, but its database address "
+            + ("names no project that can be read." if project is None else "belongs to another project.")
+        )
+
+
+def verify_database(conn):
+    """Before a session that may write is used: the database must say it is this run's
+    environment (site.environment(), a row that is set once in each database and can't then be
+    changed: db/migrations/20261012_database_environment.sql). One of three checks, with the
+    address and the credentials themselves; not on its own a boundary."""
+    try:
+        said = conn.execute("select site.environment()").fetchone()[0]
+    except Exception:
+        said = None
+    finally:
+        conn.rollback()             # leave the session as connect() found it: no open transaction
+    if said != ENV or not ENV:
+        raise SafetyError(
+            f"This run is for {ENV or 'no named environment'}, but the database "
+            + (f"says it is {said}." if isinstance(said, str) else "does not say which it is.")
+        )
+
+
+def confirm_destructive(action):
+    """A local command that replaces or deletes what staging holds asks for the environment's name
+    to be typed at the terminal first. There is no flag to skip it, so it can't be run unattended.
+    The GitHub jobs' commands are fixed in their workflow files and are not asked."""
+    import sys
+    if GITHUB_ACTIONS:
+        return
+    if not sys.stdin.isatty():
+        raise SafetyError(f"{action} needs its confirmation typed at a terminal.")
+    print(f"\n{action} will replace or delete data in the {ENV.upper()} database.")
+    if input(f"Type {ENV} to go on: ").strip() != ENV:
+        raise SafetyError(f"{action} was not confirmed.")
 
 
 def require_api_access(action):
@@ -68,7 +157,7 @@ def require_api_access(action):
         )
     if not GITHUB_ACTIONS and not _local_override_allowed():
         raise SafetyError(
-            f"{action} can consume API-Football quota. Local API access requires "
+            f"{action} can consume API-Football quota. Local API access is for staging only and requires "
             f"THECORNERFC_LOCAL_OVERRIDE={LOCAL_OVERRIDE_TOKEN!r}."
         )
 
@@ -91,7 +180,7 @@ def require_fpl_access(action):
         raise SafetyError(f"{action} is an external data request, but THECORNERFC_NO_API is enabled.")
     if not GITHUB_ACTIONS and not _local_override_allowed():
         raise SafetyError(
-            f"{action} writes production evidence. Local runs require "
+            f"{action} writes evidence. Local runs are for staging only and require "
             f"THECORNERFC_LOCAL_OVERRIDE={LOCAL_OVERRIDE_TOKEN!r}."
         )
 

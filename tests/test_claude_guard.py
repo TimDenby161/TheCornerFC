@@ -40,7 +40,35 @@ REFUSED = [
     "python x.py < .env",
     "cp .env /tmp/copy",
     "head -5 web/.env.local",
+    # the environment is chosen by scripts/environment.py, never named by hand
+    "THECORNERFC_ENV=production python -m thecornerfc export",
+    "THECORNERFC_ENV=staging python -m thecornerfc rank",
+    "export THECORNERFC_ENV=staging",
+    "THECORNERFC_PROFILE_DIR=/tmp/p python scripts/environment.py staging",
+    # the profiles it switches between hold the addresses
+    "cat ~/.config/thecornerfc/production.env",
+    "grep -r DATABASE_URL $HOME/.config/thecornerfc",
+    "cp /Users/someone/.config/thecornerfc/staging.env /tmp/x",
+    "cat ~/.config/thecornerfc/env.before-switch",
+    # main moves only by promotion, and nothing is forced
+    "git push origin main",
+    "git push origin HEAD:main",
+    "git push origin staging:main",
+    "git push origin feature:refs/heads/main",
+    "git push --force origin staging",
+    "git push -f",
+    "git push --force-with-lease origin staging",
+    "git push origin +staging",
+    "git push origin --delete staging",
+    "git push origin :main",
+    "git push --no-verify origin origin/staging:main",
+    "git push upstream origin/staging:main",
+    "git -C web push origin main",
+    "git add -A && git commit -m x && git push origin main",
+    "git push origin main 'unfinished",
 ]
+
+REFUSED_ON_MAIN = ["git push", "git push origin", "git push -u origin"]
 
 ALLOWED = [
     "ls -la",
@@ -66,6 +94,16 @@ ALLOWED = [
     "printf '%s' '{\"tool_input\":{\"command\":\"THECORNERFC_READ_ONLY=false python x\"}}' | python3 .claude/hooks/guard.py",
     "node scripts/browser-check.mjs http://localhost:4517",
     "CHROME_MAP='thecornerfc.com 104.21.21.76' node scripts/browser-check.mjs https://thecornerfc.com",
+    "python scripts/environment.py status",
+    "python scripts/environment.py staging",
+    "ls -la ~/.config/thecornerfc",
+    "grep -rn THECORNERFC_ENV thecornerfc tests",
+    "git push origin staging",
+    "git push -u origin staging",
+    "git push origin origin/staging:main",
+    "git push origin fix-a-typo",
+    "git log origin/main..origin/staging --oneline",
+    "git commit -m 'what a push to main does now'",
 ]
 
 
@@ -77,6 +115,18 @@ class GuardTests(unittest.TestCase):
     def test_ordinary_work_that_only_mentions_the_names_is_let_through(self):
         for command in ALLOWED:
             self.assertIsNone(guard.refusal(command), command)
+
+    def test_a_bare_push_is_refused_on_main_and_allowed_on_staging(self):
+        for command in REFUSED_ON_MAIN:
+            self.assertIsNotNone(guard.refusal(command, branch="main"), command)
+            self.assertIsNone(guard.refusal(command, branch="staging"), command)
+
+    def test_the_settings_know_the_environment_switch_and_keep_the_profiles_unread(self):
+        settings = json.loads((ROOT / ".claude" / "settings.json").read_text())["permissions"]
+        self.assertIn("Bash(python scripts/environment.py status)", settings["allow"])
+        self.assertIn("Bash(python scripts/environment.py staging)", settings["allow"])
+        self.assertIn("Bash(python scripts/environment.py production)", settings["ask"])
+        self.assertIn("Read(~/.config/thecornerfc/**)", settings["deny"])
 
     def test_a_command_that_cannot_be_split_is_still_checked(self):
         # an unbalanced quote: fall back to looking anywhere in the text

@@ -1,5 +1,8 @@
 -- The Corner FC schema for API-Football data (Supabase / Postgres).
--- Idempotent: safe to re-run.
+-- Builds a new, empty database in one run (staging was made this way on 2026-10-12). It is NOT
+-- for running again on a database that already has it: later sections change what earlier
+-- ones create (a view's columns, a function's return type), so a second run stops with an
+-- error. Change an existing database with the one migration it lacks (db/migrations/).
 
 create table if not exists leagues (
     league_id     int primary key,
@@ -1594,6 +1597,83 @@ END; $$;
 -- Check afterwards (expect one row: authenticated):
 --   select grantee from information_schema.routine_privileges
 --    where routine_schema='public' and routine_name='delete_my_account' and grantee in ('anon','authenticated','PUBLIC');
+
+-- The public key holds no grant on any table (db/migrations/20261001_anon_grants.sql)
+-- Here, where it was applied to the live database: after the owner-only functions it gives back
+-- to signed-in visitors, and before the site_* functions below, which grant themselves. It was
+-- missing from this file until 2026-10-12, when a database built from it (staging) answered the
+-- public key with empty lists where the live one refuses.
+-- Repeatable. Applied 2026-10-04 (audit/findings.md S1; public-API audit of 2026-10-01).
+-- The site's public key (anon) should hold nothing, and signed-in visitors (authenticated)
+-- exactly what docs/assets/app.js calls for them: fpl_owner_data and lock_fpl_transfers /
+-- unlock_fpl_transfers, which answer only the owner (20261004_fpl_owner_login.sql), and
+-- delete_my_account. Until 2026-10-04 this file gave the passphrase versions of the first three
+-- to anon as well; that is how it was first run.
+-- Before it, anon and authenticated held every privilege on almost every table, so row level security with no policies is the only
+-- barrier, and a new table gets the same grants the moment it is created.
+-- 1. Row level security on the eight tables that db/schema.sql never gave it (live already has it).
+-- 2. Take every table, view, sequence and function grant in public away from anon, authenticated
+--    and PUBLIC, then give signed-in visitors back the functions the site uses.
+-- 3. New tables, sequences and functions made by the role running this (postgres) start closed.
+-- The pipeline (DATABASE_URL, postgres) and local_readonly are not touched. After this, anon
+-- reads of the other tables answer 401 instead of 200 with no rows.
+-- When applied, append this file to db/schema.sql as the other migrations are.
+ALTER TABLE fixture_player_ranks   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_career_checks   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_career_teams    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_overrides       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_position_ranks  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_projected_ranks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE player_season_ranks    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE team_squads            ENABLE ROW LEVEL SECURITY;
+
+DO $$ DECLARE r text; f regprocedure; BEGIN
+    -- Functions one by one, so an extension's functions that happen to live in public are left alone
+    FOR f IN SELECT p.oid::regprocedure FROM pg_proc p
+             WHERE p.pronamespace = 'public'::regnamespace
+               AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e') LOOP
+        EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
+        FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+            IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
+                EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f, r);
+            END IF;
+        END LOOP;
+    END LOOP;
+    FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+        IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
+            EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', r);      -- views too
+            EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', r);
+            EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', r);
+            EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', r);
+            EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', r);
+        END IF;
+    END LOOP;
+    -- Signed-in visitors only: deleting their own account (20261004_delete_my_account.sql) and the
+    -- owner-only FPL functions (20261004_fpl_owner_login.sql). Each is skipped until it exists.
+    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN
+        FOREACH r IN ARRAY ARRAY['delete_my_account()', 'fpl_owner_data(integer)',
+                                 'lock_fpl_transfers(integer, integer, integer, jsonb)',
+                                 'unlock_fpl_transfers(integer, integer, integer)'] LOOP
+            IF to_regprocedure(r) IS NOT NULL THEN
+                EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated', r);
+            END IF;
+        END LOOP;
+    END IF;
+END; $$;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+-- PUBLIC's EXECUTE on new functions is a database-wide default, which a per-schema revoke can't
+-- remove: this covers functions this role creates in any schema.
+ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+
+-- Check afterwards (each should return no rows). Tables made in the dashboard's Table editor may
+-- be created by another role (supabase_admin), whose defaults this can't change: re-run the checks
+-- after adding one there.
+--   select relname from pg_class where relnamespace='public'::regnamespace and relkind in ('r','p')
+--     and not relrowsecurity;
+--   select grantee, table_name, privilege_type from information_schema.role_table_grants
+--     where table_schema='public' and grantee in ('anon','authenticated','PUBLIC');
+--   select p.oid::regprocedure from pg_proc p where p.pronamespace='public'::regnamespace
+--     and has_function_privilege('anon', p.oid, 'execute');
 
 -- Trigger functions: fixed search_path (db/migrations/20261004_guard_search_path.sql)
 
@@ -3446,3 +3526,73 @@ ALTER TABLE national_fixtures ADD COLUMN IF NOT EXISTS ft_home integer;   -- aft
 ALTER TABLE national_fixtures ADD COLUMN IF NOT EXISTS ft_away integer;
 -- Check:
 --   select count(*) from information_schema.columns where table_name = 'national_fixtures' and column_name in ('ft_home', 'ft_away');   -- 2
+
+-- Which database this is (db/migrations/20261012_database_environment.sql)
+-- Repeatable. Not yet applied.
+-- Which database this is (owner, 2026-10-12: a staging copy beside production). Each database
+-- says of itself whether it is production or staging, in the row 'environment' of site.settings,
+-- and a run that may write checks the answer before it does (config.verify_database; one of
+-- three checks, with the address and the credentials themselves; guide/environments.md).
+--
+-- This file carries no value, so the schema is the same in both. After applying it, set the row
+-- ONCE, by hand, in the database it describes:
+--     insert into site.settings (key, value) values ('environment', '"production"');   -- in production
+--     insert into site.settings (key, value) values ('environment', '"staging"');      -- in staging
+-- From then on the row can't be changed or deleted, and the table can't be emptied: only someone
+-- who can drop the trigger can alter it, which no job or page does.
+--
+-- Production: apply this and set the row BEFORE the code that asks for it is on main. That code
+-- stops a job whose database doesn't answer; the site then goes on showing the last export.
+CREATE OR REPLACE FUNCTION site.keep_environment() RETURNS trigger
+LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+    IF TG_OP = 'TRUNCATE' THEN
+        RAISE EXCEPTION 'site.settings is never emptied: it says which database this is';
+    END IF;
+    IF TG_OP IN ('UPDATE', 'DELETE') THEN
+        IF OLD.key = 'environment' THEN
+            RAISE EXCEPTION 'site.settings: environment is set once and never changed';
+        END IF;
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    IF NEW.key = 'environment' AND NEW.value NOT IN ('"production"'::jsonb, '"staging"'::jsonb) THEN
+        RAISE EXCEPTION 'site.settings: environment is "production" or "staging"';
+    END IF;
+    RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS keep_environment ON site.settings;
+CREATE TRIGGER keep_environment BEFORE INSERT OR UPDATE OR DELETE ON site.settings
+    FOR EACH ROW EXECUTE FUNCTION site.keep_environment();
+DROP TRIGGER IF EXISTS keep_environment_whole ON site.settings;
+CREATE TRIGGER keep_environment_whole BEFORE TRUNCATE ON site.settings
+    FOR EACH STATEMENT EXECUTE FUNCTION site.keep_environment();
+
+-- The one way to read it. Fixed SQL; in the schema the Data API doesn't expose, so no key reaches it.
+CREATE OR REPLACE FUNCTION site.environment() RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+    SELECT s.value #>> '{}' FROM site.settings s WHERE s.key = 'environment';
+$$;
+REVOKE ALL ON FUNCTION site.keep_environment() FROM PUBLIC;
+REVOKE ALL ON FUNCTION site.environment() FROM PUBLIC;
+DO $$ DECLARE r text; BEGIN
+    FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+        IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
+            EXECUTE format('REVOKE ALL ON FUNCTION site.environment() FROM %I', r);
+        END IF;
+    END LOOP;
+    -- the read-only role this machine uses may ask (scripts/environment.py status), and nothing more
+    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='local_readonly') THEN
+        GRANT USAGE ON SCHEMA site TO local_readonly;
+        GRANT EXECUTE ON FUNCTION site.environment() TO local_readonly;
+    END IF;
+END; $$;
+
+-- Check afterwards:
+--   select site.environment();                                                   -- null until the row is set, then production (or staging)
+--   update site.settings set value = '"staging"' where key = 'environment';      -- refused
+--   delete from site.settings where key = 'environment';                         -- refused
+--   update site.settings set value = value where key = 'paywall';                -- still allowed
+--   select has_function_privilege('anon', 'site.environment()', 'execute');      -- f

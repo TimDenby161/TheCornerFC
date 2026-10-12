@@ -144,6 +144,7 @@ def _execute(args):
 
     with connect() as conn:
         if args.command == "init-db":
+            config.confirm_destructive("init-db")
             init_schema(conn)
             print("Schema created.")
             return 0
@@ -171,6 +172,7 @@ def _execute(args):
             kind, person = ("player", args.player) if args.player is not None else ("coach", args.coach)
             if args.apply:
                 config.require_db_write("suppress")
+                config.confirm_destructive("suppress --apply")
             for table, count, what in suppression.remove(conn, kind, person, apply=args.apply):
                 print(f"{table}: {count} row(s) {what}")
             print("Done: now run the export." if args.apply else "Nothing changed. Add --apply to delete and add to suppressed.json.")

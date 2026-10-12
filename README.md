@@ -11,6 +11,7 @@ Each topic has its own page in `guide/`. A note elsewhere that says "README: Acc
 
 - [Architecture](guide/architecture.md): the parts, what may depend on what, how data gets to the site, what deploys and what gates it
 - [Setup](guide/setup.md)
+- [Production and staging](guide/environments.md): the two copies, switching between them, promoting, where every key lives
 - [Local development safety](guide/local-safety.md)
 - [Syncing](guide/syncing.md)
 - [Nightly refresh](guide/nightly-refresh.md)

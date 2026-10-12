@@ -25,14 +25,26 @@ def connect():
     database_url = (config.DATABASE_URL or "").strip()
     if not database_url:
         raise RuntimeError("DATABASE_URL or READ_ONLY_DATABASE_URL is not set (see .env.example)")
+    # A run that may write goes no further unless the address is its own environment's project
+    # (guide/environments.md); the address is checked before anything is sent to it.
+    may_write = config.writes_allowed()
+    if may_write:
+        config.require_write_address(database_url)
     # prepare_threshold=None keeps it compatible with Supabase's pgbouncer poolers.
     conn = psycopg.connect(database_url, prepare_threshold=None, **_tls(database_url))
     # read-only unless this run is one that is meant to write (config.writes_allowed)
-    if not config.writes_allowed():
+    if not may_write:
         try:
             conn.read_only = True
         except AttributeError:
             conn.execute("set session characteristics as transaction read only")
+        return conn
+    # and then only once the database itself says it is that environment
+    try:
+        config.verify_database(conn)
+    except config.SafetyError:
+        conn.close()
+        raise
     return conn
 
 

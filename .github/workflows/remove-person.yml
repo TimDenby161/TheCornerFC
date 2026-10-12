@@ -1,0 +1,75 @@
+name: Remove a person
+
+# Removing a player or manager who asks (guide/retention.md). Production is written only by the
+# jobs, so this is where it is done: first add their id to thecornerfc/privacy/suppressed.json
+# and promote that to main (so no later sync stores them again), then run this. Without "apply"
+# it only counts the rows it would delete.
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "Who"
+        type: choice
+        required: true
+        options: [player, coach]
+      id:
+        description: "Their API-Football id"
+        required: true
+      apply:
+        description: "Delete their rows (leave off to count only)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: db-sync            # never overlaps the nightly or match-day jobs
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  remove:
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      THECORNERFC_ENV: production      # the database must be production's, and say so (guide/environments.md)
+      THECORNERFC_MODE: production
+      THECORNERFC_READ_ONLY: "false"
+      THECORNERFC_NO_API: "true"
+      KIND: ${{ inputs.kind }}
+      PERSON: ${{ inputs.id }}
+      APPLY: ${{ inputs.apply }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Unit tests
+        env:
+          THECORNERFC_MODE: local
+          THECORNERFC_READ_ONLY: "true"
+          THECORNERFC_NO_API: "true"
+        run: python -m unittest discover -s tests
+
+      - name: Count, or delete, their rows
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          case "$PERSON" in ''|*[!0-9]*) echo "The id must be a whole number"; exit 1;; esac
+          if [ "$APPLY" = "true" ]; then
+            # the list on main must already name them, or the next sync would bring them back
+            python -c "import sys; from thecornerfc.privacy import suppression as s; sys.exit(0 if int(sys.argv[2]) in s.load()[s.KINDS[sys.argv[1]][0]] else 'Add the id to thecornerfc/privacy/suppressed.json and promote it to main first')" "$KIND" "$PERSON"
+            python -m thecornerfc suppress "--$KIND" "$PERSON" --apply
+          else
+            python -m thecornerfc suppress "--$KIND" "$PERSON"
+          fi

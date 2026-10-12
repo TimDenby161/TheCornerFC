@@ -1,0 +1,128 @@
+name: Staging pipeline
+
+# The jobs, against the STAGING database only. Run by hand, from the staging branch; there is
+# no schedule (guide/environments.md). With a call budget of 0, which is the default, it makes
+# no API-Football request at all: it rebuilds the models and the export from what staging holds.
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: "What to run"
+        type: choice
+        required: true
+        default: "models and export"
+        options:
+          - "export"
+          - "models and export"
+          - "nightly (needs a call budget)"
+      call_budget:
+        description: "Maximum API-Football attempts for this run. 0 = no API calls"
+        required: true
+        default: "0"
+
+concurrency:
+  group: staging-db         # its own group: never queued with, or ahead of, production's jobs
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  staging:
+    # Staging's branch only, said here and by the staging environment's own branch rule
+    if: github.ref == 'refs/heads/staging'
+    environment: staging
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      THECORNERFC_ENV: staging         # the address must be staging's project, and the database must say staging
+      THECORNERFC_MODE: local
+      THECORNERFC_READ_ONLY: "false"
+      THECORNERFC_NO_API: ${{ inputs.call_budget == '0' && 'true' || 'false' }}
+      API_RUN_BUDGET: ${{ inputs.call_budget }}
+      API_DAILY_RESERVE: "3000"        # staging stops long before the day's allowance that production needs
+      STEPS: ${{ inputs.steps }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # Nothing is written unless the unit tests pass on the code this job is running. No secrets
+      # are given to this step.
+      - name: Unit tests
+        env:
+          THECORNERFC_ENV: ""
+          THECORNERFC_MODE: local
+          THECORNERFC_READ_ONLY: "true"
+          THECORNERFC_NO_API: "true"
+        run: python -m unittest discover -s tests
+
+      # Staging's secrets have staging's own names. No repository-level secret has them, so a
+      # missing one is empty, never production's: and an empty one stops the run here.
+      - name: Staging's database address is set
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          [ -n "$DATABASE_URL" ] || { echo "STAGING_DATABASE_URL is not set in the staging environment"; exit 1; }
+          # written plainly, "0" or a number with no leading zero: "00" would read as no cap at all
+          case "$API_RUN_BUDGET" in ''|*[!0-9]*|0?*) echo "The call budget must be a whole number"; exit 1;; esac
+          if [ "$STEPS" = "nightly (needs a call budget)" ] && [ "$API_RUN_BUDGET" = "0" ]; then echo "nightly needs a call budget above 0"; exit 1; fi
+
+      - name: Restore staging's query cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .cache
+          key: staging-db-cache-${{ github.run_id }}
+          restore-keys: staging-db-cache-
+
+      - name: Restore staging's API usage ledger
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .api-usage
+          key: staging-api-usage-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: staging-api-usage-
+
+      - name: Nightly sync into staging
+        if: inputs.steps == 'nightly (needs a call budget)'
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.STAGING_API_FOOTBALL_KEY }}
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: python -m thecornerfc nightly
+
+      - name: Rebuild the models
+        if: inputs.steps == 'models and export'
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          python -m thecornerfc rank
+          python -m thecornerfc player-ratings
+          python -m thecornerfc predict
+
+      - name: Export website data
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: python -m thecornerfc export
+
+      - name: Save staging's query cache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .cache
+          key: staging-db-cache-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Report API usage
+        if: always()
+        run: python -m thecornerfc usage
+
+      - name: Save staging's API usage ledger
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .api-usage
+          key: staging-api-usage-${{ github.run_id }}-${{ github.run_attempt }}

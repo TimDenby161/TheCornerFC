@@ -1,8 +1,9 @@
 <script lang="ts" module>
+	import { SITE } from '#lib/config.ts';
 	// The check that a visitor isn't a bot, on the sign-in, sign-up and reset forms (Cloudflare
 	// Turnstile). Supabase verifies its answer before it acts. Cloudflare's script is asked for
 	// only when a form that needs it is first shown.
-	const SITE_KEY = '0x4AAAAAAFQgIiqxiuE9dqIM';
+	const SITE_KEY = SITE.botCheck;
 	const LIB = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 	type Turnstile = { render: (el: HTMLElement, o: Record<string, unknown>) => string; remove: (id: string) => void };
 	let lib: Promise<Turnstile> | undefined;

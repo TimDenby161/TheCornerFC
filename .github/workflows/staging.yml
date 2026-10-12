@@ -1,0 +1,42 @@
+name: Staging
+
+# The check a commit must hold before it can be promoted to main (guide/environments.md). It
+# runs only on a push to the staging branch, and passes only when the staging site is serving
+# this very commit and works: so "staging-check passed" on a commit means it was built, deployed
+# and seen working on staging. Cloudflare builds the staging site itself from the same push.
+#
+# This is its own workflow, with no other trigger, on purpose: a job that is skipped counts as
+# passed, so the check must never exist as a skipped job on some other branch's commit.
+on:
+  push:
+    branches: [staging]
+
+concurrency:
+  group: staging-check
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  staging-check:
+    permissions:
+      contents: read
+    # Only the staging branch may use this environment (its branch rule says the same), and a run
+    # in it is the "deployed to staging" that main's rules ask for.
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      # Staging's own secrets, under staging's own names: there is no repository-level secret
+      # with these names, so nothing of production's can stand in for a missing one.
+      - name: The staging site serves this commit, reads the staging database and is closed to the public
+        env:
+          STAGING_ACCESS_CLIENT_ID: ${{ secrets.STAGING_ACCESS_CLIENT_ID }}
+          STAGING_ACCESS_CLIENT_SECRET: ${{ secrets.STAGING_ACCESS_CLIENT_SECRET }}
+        run: node web/scripts/staging-smoke.mjs https://staging.thecornerfc.com "$GITHUB_SHA"

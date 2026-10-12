@@ -23,8 +23,9 @@ and a signed-in visitor's session is a cookie the page's scripts can't read (`Ht
 
 | Secret | Held by | Used by | Grants |
 |---|---|---|---|
-| `API_FOOTBALL_KEY` | GitHub Actions secret | nightly, match day and both backfill workflows | API-Football requests on the paid plan (quota and billing) |
-| `DATABASE_URL` | GitHub Actions secret | all five job workflows | Write access to the Supabase Postgres database |
+| `API_FOOTBALL_KEY` | GitHub Actions secret, in the `production` environment (branch `main` only) | nightly, match day and both backfill workflows | API-Football requests on the paid plan (quota and billing) |
+| `DATABASE_URL` | GitHub Actions secret, in the `production` environment (branch `main` only) | all five job workflows, and Remove a person | Write access to the Supabase Postgres database |
+| `STAGING_DATABASE_URL`, `STAGING_API_FOOTBALL_KEY`, `STAGING_ACCESS_CLIENT_ID`, `STAGING_ACCESS_CLIENT_SECRET` | GitHub Actions secrets, in the `staging` environment (branch `staging` only) | the Staging and Staging pipeline workflows | The staging database and site only: a separate Supabase project, whose credentials do not open production ([Production and staging](guide/environments.md)) |
 | `GITHUB_TOKEN` | GitHub (automatic) | all workflows | Read the repository only: the workflow default is no permissions and each job asks for `contents: read` (the nightly check also `actions: read`). No job commits or pushes |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_YEARLY` | Cloudflare Worker secrets (declared in `web/src/env.ts`) | `web/src/lib/server/payments.ts` | Taking payment. Each may be missing; until all are set, subscriptions can't be bought |
 | `SUPABASE_SERVICE_KEY` | Cloudflare Worker secret | `web/src/lib/server/payments.ts` only | Writing the `subscriptions` table. It bypasses row level security, so it is used nowhere else |

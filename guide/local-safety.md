@@ -1,44 +1,41 @@
 # Local development safety
 
 A local run must not be able to write to the production database or spend API-Football quota.
-Three things stand in the way, strongest first.
+Since 2026-10-12 there is a staging copy to write to instead ([Production and staging](environments.md)),
+and nothing on this machine writes to production at all. Three things stand in the way,
+strongest first.
 
 ## 1. No write address on the machine
 
-`.env` should hold only a role that can read:
-
-```bash
-THECORNERFC_MODE=local
-THECORNERFC_READ_ONLY=true
-THECORNERFC_NO_API=true
-READ_ONLY_DATABASE_URL=postgresql://local_readonly:...@.../postgres
-DATABASE_URL=<the same read-only address>
-API_FOOTBALL_KEY=
-```
-
-The write address and the API key live in GitHub's repository secrets, where the jobs run. With
-both names holding the read-only role, nothing on the machine can write, whatever is run. The
-scripts in `experiments/` connect with `DATABASE_URL` directly, so it needs a value: the
-read-only one.
+`.env` is written by `python scripts/environment.py staging|production`, from a profile kept
+outside the repository, and is never edited by hand. In production mode it holds one address,
+a role that can only read, under both names (the scripts in `experiments/` read `DATABASE_URL`
+directly), no API key and both flags on. The switch asks the database before it selects
+production, and refuses unless the role has no insert, update, delete or create, does not pass
+row-level security, and is read-only by default. Production's write address and the
+API-Football key live in GitHub's `production` environment, where the jobs run.
 
 To see what each address may do, without showing either:
 
 ```bash
+python scripts/environment.py status
 python db/check_local_access.py
 ```
 
-It prints the role each one signs in as and `cannot write` or `CAN WRITE`, and exits 1 if either
-can. The role should have `select` only and `default_transaction_read_only = on`.
-
 ## 2. The code refuses
 
-Whatever `.env` says, outside a GitHub Actions run and without the override token:
+Whatever `.env` says:
 
-- `config.DATABASE_URL` is the read-only address, and `connect()` opens a read-only session.
-  Switching `THECORNERFC_READ_ONLY` off on its own does not reach the write address
-  (`config.writes_allowed`, `tests/test_safety_guards.py`).
-- `require_db_write`, `require_api_access` and `require_fpl_access` raise `SafetyError` before
-  any write or request.
+- A run that names no environment, or names production outside a GitHub Actions run, connects
+  with the read-only address in a read-only session, and `require_db_write` raises
+  `SafetyError` (`config.writes_allowed`, `tests/test_safety_guards.py`). The override token no
+  longer changes that: it lifts the API block for a local **staging** run only.
+- A run that may write (a job, or a local run in staging mode) goes no further unless its
+  address belongs to its own environment's project and the database says the same of itself.
+- `require_api_access` and `require_fpl_access` raise before any request unless the run is a
+  job, or a local staging run carrying the token with the API flag switched off.
+
+In production mode, locally:
 
 | Command | Local safe mode? | Needs DB writes? | Needs API-Football? |
 |---|---:|---:|---:|
@@ -56,17 +53,18 @@ Whatever `.env` says, outside a GitHub Actions run and without the override toke
 | `python -m thecornerfc player-ratings` | Blocked | Yes | No |
 | `python -m thecornerfc fantasy`, `fpl ...` | Blocked | Yes | No |
 
-An intended local write needs all of: a write address in `DATABASE_URL`, the read-only and
-no-API flags switched off, and `THECORNERFC_LOCAL_OVERRIDE` set to the token in
-`thecornerfc/config.py`. GitHub Actions sets production mode itself, so the scheduled jobs are
-unaffected.
+In staging mode the "Blocked" commands that need only the database run against staging, and
+those that need API-Football stay blocked. Production's jobs are started from GitHub, and a
+person is removed with the **Remove a person** workflow ([Retention](retention.md)).
 
 ## 3. Claude Code
 
-`.claude/settings.json` stops a session reading `.env`, asks before any
-`python -m thecornerfc` command that writes or calls an API, `psql`, a commit, a push or a
-deploy, and runs `.claude/hooks/guard.py` before every shell command. The hook refuses a
-command that sets the override, switches either flag off, sets production mode, sets
-`DATABASE_URL`, switches FPL capture on, pretends to be a GitHub Actions run, or reads `.env`
-(`cat`, `grep`, `source` and the like). A command that only mentions those names, such as a
-search for one, is let through. `tests/test_claude_guard.py` holds the list of both kinds.
+`.claude/settings.json` stops a session reading `.env` and the profiles, asks before any
+`python -m thecornerfc` command that writes or calls an API, `psql`, a commit, a push, a deploy
+or a switch to production, and runs `.claude/hooks/guard.py` before every shell command. The
+hook refuses a command that sets the override, switches either flag off, sets production mode,
+names the environment by hand, sets `DATABASE_URL`, switches FPL capture on, pretends to be a
+GitHub Actions run, reads `.env` or a profile (`cat`, `grep`, `source` and the like), forces a
+push, or pushes to `main` in any form but the promotion. A command that only mentions those
+names, such as a search for one, is let through. `tests/test_claude_guard.py` holds the list of
+both kinds.

@@ -45,7 +45,8 @@ Boundaries that are enforced:
   checks a staged export must pass, publishing, the paid cut), `site_matches`, `site_record`
   (how the models have done), `site_players`, `site_clubs`, `site_fantasy` (owner-only).
   `site_files` imports none of the others, and none imports `export`.
-- **Nothing local writes** ([Local development safety](local-safety.md)).
+- **Nothing local writes to production** ([Local development safety](local-safety.md)); staging is the
+  copy to write to ([Production and staging](environments.md)).
 
 Known and left alone, because fixing them means editing fingerprinted files: `models/` and
 `evidence/` import each other inside functions; `models/nations.py` imports two helpers from
@@ -85,7 +86,7 @@ Conventions: `.claude/rules/web.md`.
 
 | What | Deploys when | Gate |
 |---|---|---|
-| The site | A push to `main`: Cloudflare runs the build and deploys the Worker | `npm run build` runs the unit tests and the type check before `vite build`. A failure fails the build and the last deployment stays live. This holds while Cloudflare's build command is `npm run build` (Workers & Pages → thecornerfc → Settings → Build; the owner confirmed it on 2026-10-12) |
+| The site | `main` moving forward to the commit `staging` tested ([Production and staging](environments.md)): Cloudflare runs the build and deploys the Worker. A push to `staging` does the same for the staging site | `npm run build` runs the unit tests and the type check before `vite build`. A failure fails the build and the last deployment stays live. This holds while Cloudflare's build command is `npm run build` (Workers & Pages → thecornerfc → Settings → Build; the owner confirmed it on 2026-10-12) |
 | The jobs | Whatever is on `main` when a schedule fires: nightly 01:17 UTC (two later tries), match day every 30 minutes, FPL at 07:00, 13:00 and 19:00, two backfills by hand | Each job runs `python -m unittest discover -s tests` straight after installing, with no secrets, and stops before it fetches or writes anything if a test fails. The site goes on showing the last export |
 | The database | The owner runs a migration in the SQL editor | A test asserts each migration is word for word in `db/schema.sql` |
 

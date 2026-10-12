@@ -6,7 +6,7 @@ name: Tests
 # the Python tests first (guide/architecture.md, "What gates a deploy").
 on:
   push:
-    branches: [main]     # the branch that deploys; other branches are tested by their pull request
+    branches: [main, staging]     # staging is where work lands first; main is what it is promoted to
   pull_request:
   workflow_dispatch:
 
@@ -63,5 +63,8 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # (the type check loads the build's settings, which must name an environment)
       - name: Types
+        env:
+          VITE_SITE_ENV: production
         run: npm run check

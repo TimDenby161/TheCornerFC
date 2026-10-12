@@ -1,12 +1,18 @@
-import { redirect } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
-import { SITE_HOST } from '#lib/config.ts';
+import { SITE_ENV, SITE_HOST } from '#lib/config.ts';
 import { oldFile, tabFor } from '#lib/menu.ts';
 import { supabaseFor } from '#lib/server/auth.ts';
 
 const LINK_TYPES = new Set(['signup', 'email', 'recovery', 'magiclink', 'invite', 'email_change']);
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// This code was built for one environment and its Worker is set up as one (SITE_ENV in
+	// wrangler.jsonc). If the two differ, a staging build has reached the live Worker or the other
+	// way round: serve nothing.
+	const deployed = event.platform?.env;
+	if (deployed && deployed.SITE_ENV !== SITE_ENV) error(500, 'This build is not for this site');
+
 	// www is the same site: one address for it. And the old site's files by their old names
 	// (/terms.html) go to the page here; the part after a # is kept by the browser.
 	// (and the site's address without https goes to it with)
@@ -55,6 +61,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// a page differs by who asks: nothing may hand one visitor's copy to another, and a signed-in
 	// visitor's is never kept
 	response.headers.append('vary', 'Cookie');
+	// staging is never for search engines, whatever links to it
+	if (SITE_ENV !== 'production') response.headers.set('x-robots-tag', 'noindex, nofollow');
 	if (event.locals.user) response.headers.set('cache-control', 'private, no-store');
 	return response;
 };

@@ -20,6 +20,7 @@ anything; the conventions for each part load from `.claude/rules/` when you work
 | `tests/` | Python unit tests, with stand-in database connections. |
 | `experiments/` | One folder per model experiment, with its evaluator and results. |
 | `.github/workflows/` | The scheduled jobs (nightly, match day, FPL, backfills): they write to the database and commit nothing, and each runs the unit tests first. `tests.yml` runs both test suites on every push. |
+| `scripts/` | `environment.py`: the switch between staging and production on this machine. |
 | `audit/` | Private notes, plans and drafts. Gitignored: never commit it or quote it in a public file. |
 
 The site reads only the database, through functions with fixed SQL that the public key is
@@ -27,12 +28,22 @@ allowed to call. `.export/` is a local export folder and is not in git.
 
 ## Commands
 
-Python (the jobs run on 3.13; the system Pythons lack the packages, so make a venv first, on
-this Mac with `/opt/homebrew/bin/python3.14 -m venv`, then `pip install -r requirements.txt`):
+There are two copies of everything, production and staging: `guide/environments.md`. Find out
+which this machine is on before anything else, and never take a variable's word for it:
+
+```bash
+python scripts/environment.py status       # which is selected, and what each address may do
+python scripts/environment.py staging      # develop: may write to staging
+python scripts/environment.py production   # look at live data: read-only
+```
+
+Python (the jobs run on 3.13; the system Pythons lack the packages, so use the venv, `.venv`,
+made on this Mac with `/opt/homebrew/bin/python3.14 -m venv .venv`, then
+`pip install -r requirements.txt`):
 
 ```bash
 python -m unittest discover -s tests    # the result is its own `OK` line
-python -m thecornerfc export            # read-only locally: writes .export/ only
+python -m thecornerfc export            # production mode: writes .export/ only. Staging mode: also writes staging's database
 python db/check_local_access.py         # what this machine's database addresses may do
 ```
 
@@ -52,26 +63,30 @@ interactive piece, and wait with its `until()`, not a fixed sleep. `scripts/fant
 covers the fantasy pages.
 
 Skills: `/new-migration` (any database change), `/model-experiment` (any change to a model),
-`/pre-push`.
+`/pre-push` (work goes to `staging`), `/promote-production` (the only way onto `main`).
 
 ## Rules that must not be broken
 
-- **Local runs are read-only.** `.env` blocks database writes and API-Football calls. Don't set
-  the override flag or work around the guard, and don't read `.env` (`guide/local-safety.md`).
+- **Production is never written from this machine**, and no local run calls API-Football.
+  Staging is the copy to write to. Don't set the override flag, name the environment by hand or
+  work around a guard, and don't read `.env` or `~/.config/thecornerfc/`
+  (`guide/environments.md`, `guide/local-safety.md`).
+- **`main` moves only by promotion** of the commit `staging` tested
+  (`git push origin origin/staging:main`). Work is pushed to `staging`.
 - **Sixteen model files are fingerprinted**: their bytes are part of each model version's
   identity, so any edit, even a comment, starts a new model version. Never touch one to tidy,
   rename or reformat it; change one only as a deliberate model release (`/model-experiment`,
   `guide/model-versions.md`). The list is in `tests/test_model_fingerprints.py`. No two `.py`
   files in `thecornerfc/` may share a name.
-- **The owner applies migrations**, in the Supabase SQL editor. Write the file in
+- **The owner applies migrations**, in the Supabase SQL editor, to staging first. Write the file in
   `db/migrations/`, say it is waiting, and once it has been applied mark its first line and the
   copy in `db/schema.sql`.
 - **Go easy on the live database.** No repeated full exports, whole-table copies or looped heavy
   calls against it for testing. Test a new function on a local Postgres that holds every table
   it joins at full size, then call it twenty at once live after it is applied.
 - **Push only when the tests have passed**, checked on their own `OK` line, not through a pipe
-  whose last command can succeed on its own. A push to `main` deploys
-  the live site.
+  whose last command can succeed on its own. A push to `staging` deploys the staging site; a
+  promotion to `main` deploys the live one.
 - **Fantasy game data is owner-only.** Anything derived from FPL or Fantasy EFL goes only where
   the owner's sign-in can read it (`fpl_owner_data`): never into a public table, file, page or
   server-rendered HTML. Any new use of that data is the owner's decision: ask first.
@@ -89,6 +104,7 @@ Each part's conventions are in a rule file that loads when you open a file there
 - `.claude/rules/web.md`: the site (`web/`)
 - `.claude/rules/python.md`: the jobs, tests and experiments, and the `publish/` import order
 - `.claude/rules/database.md`: migrations and what the public key may reach (`db/`)
+- `.claude/rules/environments.md`: production and staging, and how to tell which you are on
 
 Two that apply everywhere: model changes are versioned and judged by an evaluator written
 before the results are seen (`experiments/`, `thecornerfc/evidence/model_versions.py`), and

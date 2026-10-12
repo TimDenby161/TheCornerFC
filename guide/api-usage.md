@@ -47,7 +47,8 @@ a preflight prints a lower bound for league/team/fixture/standing requests, call
 fetched fixtures, odds pagination and retries are additional unknown costs. The cap
 is enforced across every process in that Actions run, including preflight and retries;
 a cap stop may leave a partial backfill that can be resumed in a later run.
-For intentional local backfills, use the existing local safety override and share
+Local runs never call the API for production: a backfill is run from its workflow. For an
+intentional local staging fetch, carry the local override (staging only) and share
 an explicit unique `API_RUN_ID` and positive `API_RUN_BUDGET` across preflight and sync
 commands. `API_RUN_BUDGET=0` disables the extra cap, not the daily reserve. Preflight
 requires a positive budget and an observed daily quota header.

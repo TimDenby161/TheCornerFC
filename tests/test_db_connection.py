@@ -25,6 +25,7 @@ class ConnectionTests(unittest.TestCase):
             with self.subTest(url=url), \
                  patch.object(db.config, "DATABASE_URL", url), \
                  patch.object(db.config, "READ_ONLY", False), \
+                 patch.object(db.config, "GITHUB_ACTIONS", False), patch.object(db.config, "ENV", ""), \
                  patch.object(db.psycopg, "connect") as connect:
                 db.connect()
                 connect.assert_called_once_with(url, prepare_threshold=None, **extra)
