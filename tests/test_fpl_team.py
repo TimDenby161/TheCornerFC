@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from thecornerfc.publish import export
+from thecornerfc.publish import export, site_files
 from thecornerfc.fantasy_games import fpl_team
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,7 +88,7 @@ class TeamTests(unittest.TestCase):
             out.mkdir()
             (out / 'fpl_team.json').write_text('{"entry": 1}')
             (out / 'fpl_predictions.json').write_text('{}')
-            with mock.patch.object(export, 'validate_export'):
+            with mock.patch.object(site_files, 'validate_export'):
                 export._publish_export(lambda staged: (staged / 'matches.json').write_text('{}'), out)
             self.assertEqual(sorted(f.name for f in out.iterdir()), ['manifest.json', 'matches.json'])   # + the content hashes
 

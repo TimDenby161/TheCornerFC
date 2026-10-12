@@ -119,7 +119,7 @@ class ExportSafetyTests(unittest.TestCase):
                     write_valid_export(staged, "new")
                     write_json(staged / "rankings.json", {"rankings": [[i] for i in range(build_players)]})
 
-                with patch("thecornerfc.publish.export._stored_shape", return_value=stored) as asked, \
+                with patch("thecornerfc.publish.site_files._stored_shape", return_value=stored) as asked, \
                         self.assertRaisesRegex(ExportValidationError, message):
                     _publish_export(build, live, conn=object())
                 asked.assert_called_once()
@@ -127,7 +127,7 @@ class ExportSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             live = Path(tmp) / "data"
             write_valid_export(live, "old")
-            with patch("thecornerfc.publish.export._stored_shape") as asked:           # files from before: they are what it is compared with
+            with patch("thecornerfc.publish.site_files._stored_shape") as asked:           # files from before: they are what it is compared with
                 _publish_export(lambda staged: write_valid_export(staged, "new"), live, conn=object())
             asked.assert_not_called()
 

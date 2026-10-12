@@ -55,7 +55,7 @@ class ManifestTests(unittest.TestCase):
             after = main.split(call, 1)[1].split('return 0', 1)[0]
             self.assertIn(f'export.write_manifest(conn=conn, only={wrote})', after, call)
             self.assertIn(f'export.mirror_site_docs(conn, only={wrote[:-1]}, ', after, call)       # and writes just those rows
-        publish = (ROOT / 'thecornerfc/publish/export.py').read_text().split('def _publish_export', 1)[1].split('\ndef ', 1)[0]
+        publish = (ROOT / 'thecornerfc/publish/site_files.py').read_text().split('def _publish_export', 1)[1].split('\ndef ', 1)[0]
         self.assertLess(publish.index('write_manifest(staged)'), publish.index('_replace_export(staged'))
 
     def test_no_workflow_commits_data(self):

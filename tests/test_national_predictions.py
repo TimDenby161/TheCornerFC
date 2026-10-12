@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, Mock, patch
 
-from thecornerfc.publish import export
+from thecornerfc.publish import export, site_record
 from thecornerfc.pipeline import matchday
 from thecornerfc.models import national_predictions as np_, nations
 from thecornerfc.models.nations import Result
@@ -251,7 +251,7 @@ class StatsTests(unittest.TestCase):
         import json, tempfile
         from pathlib import Path
         with tempfile.TemporaryDirectory() as d, \
-                patch.object(export, "datetime", Mock(now=lambda tz: KICKOFF + timedelta(days=1))):
+                patch.object(site_record, "datetime", Mock(now=lambda tz: KICKOFF + timedelta(days=1))):
             export.export_stats(conn, Path(d))
             return json.loads((Path(d) / "stats.json").read_text())["ranges"]["7d"]
 

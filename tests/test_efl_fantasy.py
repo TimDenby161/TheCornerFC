@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 from thecornerfc.fantasy_games import efl_fantasy as ef
-from thecornerfc.publish import export
+from thecornerfc.publish import export, site_fantasy
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -107,7 +107,7 @@ class OwnerOnlyTest(unittest.TestCase):
         conn = mock.MagicMock()
         doc = {'players': [[1]], 'clubs': []}
         with tempfile.TemporaryDirectory() as d, mock.patch.object(ef, 'payload', return_value=doc), \
-                mock.patch.object(export, 'store_owner_doc') as store:
+                mock.patch.object(site_fantasy, 'store_owner_doc') as store:
             export.export_efl_fantasy(conn, Path(d))
             self.assertEqual(list(Path(d).iterdir()), [])
         store.assert_called_once_with(conn, 'efl_predictions', doc)

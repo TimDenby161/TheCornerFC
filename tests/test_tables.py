@@ -5,7 +5,7 @@ import unittest.mock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from thecornerfc.publish import tables
+from thecornerfc.publish import site_players, tables
 
 DAY = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
@@ -207,8 +207,8 @@ class PaidPlayersTests(unittest.TestCase):
         free = [p["player_id"] for p in rows if p["free"]]
         self.assertEqual(free, list(range(1, 51)))            # two leagues' top 10s fall inside the overall 50 here
         from thecornerfc.publish import export
-        with unittest.mock.patch.object(export, "FREE_WORLD", 4), unittest.mock.patch.object(export, "FREE_LEAGUE", 3), \
-                unittest.mock.patch.object(export, "FREE_POSITION", 0):
+        with unittest.mock.patch.object(site_players, "FREE_WORLD", 4), unittest.mock.patch.object(site_players, "FREE_LEAGUE", 3), \
+                unittest.mock.patch.object(site_players, "FREE_POSITION", 0):
             free = {p["player_id"] for p in self.rows() if p["free"]}
         self.assertEqual(free, {1, 2, 3, 4, 5, 6})            # the top 4, and the third of each league (5 and 6)
         self.assertFalse(hasattr(export, "FREE_LEAGUES"))     # every league's top 10, not the five big leagues' (owner, 2026-10-07)
@@ -221,7 +221,7 @@ class PaidPlayersTests(unittest.TestCase):
                 "England", ["CM"], {"CM": 95 - i * 0.5}, [90.0], [900, 3, 2]] for i in range(60)]
         raw += [[61 + i, f"Back {i:03d}", "LB" if i < 30 else "RB", 40 - i * 0.1, 900, 100, 40, [40 - i * 0.1, None], 24, [],
                  "England", ["RB"] if i == 0 else [], {"FB": 60 - i * 0.1}, [40.0], [900, 0, 0]] for i in range(60)]
-        with unittest.mock.patch.object(export, "FREE_WORLD", 0):
+        with unittest.mock.patch.object(site_players, "FREE_WORLD", 0):
             free = {p["player_id"] for p in export.site_player_rows(raw) if p["free"]}
         self.assertEqual(free, set(range(1, 11)) | set(range(61, 71)) | set(range(91, 100)))   # CM; LB; RB: 61 and its next nine
         sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261007_paid_players_order.sql").read_text()

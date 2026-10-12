@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 from thecornerfc.evidence import evaluation
-from thecornerfc.publish import export
+from thecornerfc.publish import export, site_record
 from thecornerfc.publish.export import export_lineup_history, export_lineup_record, export_methodology
 
 T1 = datetime(2026, 9, 26, 15, tzinfo=timezone.utc)
@@ -37,7 +37,7 @@ class MethodologyExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d, \
                 patch.object(evaluation, "load_matches", return_value=(list(matches), {"missing_regulation_score": 2})) as lm, \
                 patch.object(evaluation, "load_lineups", return_value=(list(lineups), {"missing_or_incomplete_official_xi": 1})), \
-                patch.object(export, "export_lineup_record") as record:
+                patch.object(site_record, "export_lineup_record") as record:
             export_methodology(conn, Path(d), now=T2)
             self.load_matches = lm
             record.assert_called_once()
@@ -129,7 +129,7 @@ class LineupRecordExportTests(unittest.TestCase):
     def export(self, conn, lineups=()):
         with tempfile.TemporaryDirectory() as d, \
                 patch.object(evaluation, "load_lineups", return_value=(list(lineups), {"missing_or_incomplete_official_xi": 3})):
-            with patch.object(export, "export_lineup_history") as history:
+            with patch.object(site_record, "export_lineup_history") as history:
                 export_lineup_record(conn, Path(d), now=T2)
             history.assert_called_once()
             return json.loads((Path(d) / "lineups.json").read_text())
@@ -160,7 +160,7 @@ class LineupRecordExportTests(unittest.TestCase):
     def test_a_national_team_line_up_is_listed_with_the_fixture_s_names(self):
         row = {**lineup(770, "mv_nat", list(range(9)) + [41, 42]), "fixture_id": 70}
         with patch.object(evaluation, "load_lineups", return_value=([row], {"missing_or_incomplete_official_xi": 0})) as load, \
-                patch.object(export, "export_lineup_history"), tempfile.TemporaryDirectory() as d:
+                patch.object(site_record, "export_lineup_history"), tempfile.TemporaryDirectory() as d:
             export_lineup_record(record_conn(), Path(d), now=T2)
             out = json.loads((Path(d) / "lineups.json").read_text())
         self.assertTrue(load.call_args.kwargs["national"])              # the methodology record keeps to clubs
