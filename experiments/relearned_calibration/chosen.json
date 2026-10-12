@@ -1,0 +1,364 @@
+{
+ "selection_window": [
+  "2022-07-01",
+  "2024-07-01"
+ ],
+ "selection_matches": 38922,
+ "refitted_on": [
+  "2022-01-01",
+  "2022-07-01",
+  "2023-01-01",
+  "2023-07-01",
+  "2024-01-01"
+ ],
+ "production_selection_log_loss": 0.9975207620470671,
+ "registered_settings": {
+  "movers": {
+   "pull": 0.5,
+   "boost": 0.5,
+   "tau": 40.0
+  },
+  "goal_level": {
+   "half_life": 60,
+   "comp": 100
+  },
+  "formula_ridge": 50.0
+ },
+ "goal_level_only_selection_log_loss": 0.9973935219600846,
+ "curve_grid": [
+  {
+   "years": 2,
+   "ridge": 10.0,
+   "curved": false,
+   "cups": false,
+   "selection_log_loss": 0.9973175861460613
+  },
+  {
+   "years": 2,
+   "ridge": 10.0,
+   "curved": false,
+   "cups": true,
+   "selection_log_loss": 0.9974527439778069
+  },
+  {
+   "years": 2,
+   "ridge": 10.0,
+   "curved": true,
+   "cups": false,
+   "selection_log_loss": 0.9974022488657387
+  },
+  {
+   "years": 2,
+   "ridge": 10.0,
+   "curved": true,
+   "cups": true,
+   "selection_log_loss": 0.9974860777801988
+  },
+  {
+   "years": 2,
+   "ridge": 100.0,
+   "curved": false,
+   "cups": false,
+   "selection_log_loss": 0.9973180032293101
+  },
+  {
+   "years": 2,
+   "ridge": 100.0,
+   "curved": false,
+   "cups": true,
+   "selection_log_loss": 0.9974406566960922
+  },
+  {
+   "years": 2,
+   "ridge": 100.0,
+   "curved": true,
+   "cups": false,
+   "selection_log_loss": 0.9973975144492215
+  },
+  {
+   "years": 2,
+   "ridge": 100.0,
+   "curved": true,
+   "cups": true,
+   "selection_log_loss": 0.9974738939380973
+  },
+  {
+   "years": 2,
+   "ridge": 1000.0,
+   "curved": false,
+   "cups": false,
+   "selection_log_loss": 0.9973220734053522
+  },
+  {
+   "years": 2,
+   "ridge": 1000.0,
+   "curved": false,
+   "cups": true,
+   "selection_log_loss": 0.9973817909579458
+  },
+  {
+   "years": 2,
+   "ridge": 1000.0,
+   "curved": true,
+   "cups": false,
+   "selection_log_loss": 0.9973746302804695
+  },
+  {
+   "years": 2,
+   "ridge": 1000.0,
+   "curved": true,
+   "cups": true,
+   "selection_log_loss": 0.9974100250804544
+  },
+  {
+   "years": 4,
+   "ridge": 10.0,
+   "curved": false,
+   "cups": false,
+   "selection_log_loss": 0.9973280928052894
+  },
+  {
+   "years": 4,
+   "ridge": 10.0,
+   "curved": false,
+   "cups": true,
+   "selection_log_loss": 0.9974538343106566
+  },
+  {
+   "years": 4,
+   "ridge": 10.0,
+   "curved": true,
+   "cups": false,
+   "selection_log_loss": 0.9974161248487848
+  },
+  {
+   "years": 4,
+   "ridge": 10.0,
+   "curved": true,
+   "cups": true,
+   "selection_log_loss": 0.99749048567336
+  },
+  {
+   "years": 4,
+   "ridge": 100.0,
+   "curved": false,
+   "cups": false,
+   "selection_log_loss": 0.9973283520572804
+  },
+  {
+   "years": 4,
+   "ridge": 100.0,
+   "curved": false,
+   "cups": true,
+   "selection_log_loss": 0.9974416626726018
+  },
+  {
+   "years": 4,
+   "ridge": 100.0,
+   "curved": true,
+   "cups": false,
+   "selection_log_loss": 0.997411305406903
+  },
+  {
+   "years": 4,
+   "ridge": 100.0,
+   "curved": true,
+   "cups": true,
+   "selection_log_loss": 0.9974782560864616
+  },
+  {
+   "years": 4,
+   "ridge": 1000.0,
+   "curved": false,
+   "cups": false,
+   "selection_log_loss": 0.9973309501100743
+  },
+  {
+   "years": 4,
+   "ridge": 1000.0,
+   "curved": false,
+   "cups": true,
+   "selection_log_loss": 0.9973824039329965
+  },
+  {
+   "years": 4,
+   "ridge": 1000.0,
+   "curved": true,
+   "cups": false,
+   "selection_log_loss": 0.9973876883444833
+  },
+  {
+   "years": 4,
+   "ridge": 1000.0,
+   "curved": true,
+   "cups": true,
+   "selection_log_loss": 0.9974143852490619
+  },
+  {
+   "years": null,
+   "ridge": 10.0,
+   "curved": false,
+   "cups": false,
+   "selection_log_loss": 0.9973280928052894
+  },
+  {
+   "years": null,
+   "ridge": 10.0,
+   "curved": false,
+   "cups": true,
+   "selection_log_loss": 0.9974538343106566
+  },
+  {
+   "years": null,
+   "ridge": 10.0,
+   "curved": true,
+   "cups": false,
+   "selection_log_loss": 0.9974161248487848
+  },
+  {
+   "years": null,
+   "ridge": 10.0,
+   "curved": true,
+   "cups": true,
+   "selection_log_loss": 0.99749048567336
+  },
+  {
+   "years": null,
+   "ridge": 100.0,
+   "curved": false,
+   "cups": false,
+   "selection_log_loss": 0.9973283520572804
+  },
+  {
+   "years": null,
+   "ridge": 100.0,
+   "curved": false,
+   "cups": true,
+   "selection_log_loss": 0.9974416626726018
+  },
+  {
+   "years": null,
+   "ridge": 100.0,
+   "curved": true,
+   "cups": false,
+   "selection_log_loss": 0.997411305406903
+  },
+  {
+   "years": null,
+   "ridge": 100.0,
+   "curved": true,
+   "cups": true,
+   "selection_log_loss": 0.9974782560864616
+  },
+  {
+   "years": null,
+   "ridge": 1000.0,
+   "curved": false,
+   "cups": false,
+   "selection_log_loss": 0.9973309501100743
+  },
+  {
+   "years": null,
+   "ridge": 1000.0,
+   "curved": false,
+   "cups": true,
+   "selection_log_loss": 0.9973824039329965
+  },
+  {
+   "years": null,
+   "ridge": 1000.0,
+   "curved": true,
+   "cups": false,
+   "selection_log_loss": 0.9973876883444833
+  },
+  {
+   "years": null,
+   "ridge": 1000.0,
+   "curved": true,
+   "cups": true,
+   "selection_log_loss": 0.9974143852490619
+  }
+ ],
+ "curve": {
+  "setting": null,
+  "selection_gain_over_goal_level": 7.593581402332017e-05,
+  "chosen": false
+ },
+ "candidates": {
+  "formula": {
+   "selection": {
+    "log_loss": -0.0024458020853760196,
+    "brier": -0.001643282649153293,
+    "goal_markets": -2.7872057837281524e-05,
+    "sd_per_fixture": 0.06932903438494681,
+    "sd_week_clustered": 0.07412323721842395
+   },
+   "by_season": {
+    "2021/22": -0.0037367269012531577,
+    "2022/23": -0.002888381961671993,
+    "2023/24": -0.0019930082964507304
+   }
+  },
+  "calibration": {
+   "selection": {
+    "log_loss": -0.00012724008698254913,
+    "brier": -6.152936920294316e-05,
+    "goal_markets": -0.0006444813041600832,
+    "sd_per_fixture": 0.013805992406825477,
+    "sd_week_clustered": 0.01573323923737366
+   },
+   "by_season": {
+    "2021/22": -0.0001981373624206356,
+    "2022/23": -4.340257792173006e-05,
+    "2023/24": -0.0002130124083528959
+   }
+  },
+  "movers": {
+   "selection": {
+    "log_loss": -0.0008987903236685098,
+    "brier": -0.0006361865730671939,
+    "goal_markets": -9.076708745544314e-05,
+    "sd_per_fixture": 0.040565827976565084,
+    "sd_week_clustered": 0.039408014606618615
+   },
+   "by_season": {
+    "2021/22": -0.0006316689691914603,
+    "2022/23": -0.0011152787274280216,
+    "2023/24": -0.0006773057739934502
+   }
+  },
+  "combined": {
+   "selection": {
+    "log_loss": -0.0034717613134175426,
+    "brier": -0.0023535291959883233,
+    "goal_markets": -0.0008270651858997441,
+    "sd_per_fixture": 0.08171558038790631,
+    "sd_week_clustered": 0.07840872087113966
+   },
+   "by_season": {
+    "2021/22": -0.004319643656927654,
+    "2022/23": -0.003975859264165498,
+    "2023/24": -0.0029560297283781965
+   }
+  }
+ },
+ "coefficients_at_the_last_refit": {
+  "formula": {
+   "xG difference": -0.11296495094045908,
+   "shot difference": 0.03794834688684759,
+   "on-target difference": -0.024576234320086866,
+   "in-box shot difference": 0.0009982332253354758,
+   "goals minus xG": 0.01885891094369073,
+   "constant": -0.013210618691661428
+  },
+  "curve": null
+ },
+ "sha256": {
+  "run.py": "987c8208f41f67c3d01793337c39e0913a0db8813424a1031e61568d1d1255f9",
+  "frame.py": "dd5a3e1e2973f0574234e8d120b1a9c99187bb1b999a11eaca250fd698671fba",
+  "features.py": "3d850304212cd88146df88b3497e8d491e8c9bb507bdc4af1e90354904bb6ab6",
+  "rating_dynamics/run.py": "b06d25bf6f32a54aa1ab09cb3fa3021d189973f9bb84f033b94366db0671c8b7",
+  "goals_home_scores/run.py": "002490ff967636765db2fda0982d47911cfdab43583d82414d62c571d05d5e68"
+ },
+ "inputs_extracted_at": "2026-10-12T17:37:59.311657+00:00"
+}
