@@ -1,0 +1,560 @@
+{
+ "development_matches": 57992,
+ "by_kind": {
+  "league": {
+   "n": 51267,
+   "log_loss": 1.008124893366425,
+   "abs_goal_error": 1.2545734011402372,
+   "sharpness_power": 1.05
+  },
+  "cup, sides from different leagues": {
+   "n": 2421,
+   "log_loss": 0.9209785673603051,
+   "abs_goal_error": 1.3640863886282852,
+   "sharpness_power": 0.97
+  },
+  "cup, one side with no league": {
+   "n": 1147,
+   "log_loss": 0.8571243877620888,
+   "abs_goal_error": 1.4895338958635522,
+   "sharpness_power": 1.18
+  },
+  "cup, other": {
+   "n": 3157,
+   "log_loss": 0.9930146201355114,
+   "abs_goal_error": 1.7675471261863342,
+   "sharpness_power": 1.4
+  }
+ },
+ "league_offsets": {
+  "2021/22": [
+   {
+    "league": "Eredivisie",
+    "country": "Netherlands",
+    "goals": 0.688,
+    "matches": 64
+   },
+   {
+    "league": "Premier League",
+    "country": "England",
+    "goals": -0.604,
+    "matches": 115
+   },
+   {
+    "league": "Premiership",
+    "country": "Scotland",
+    "goals": 0.457,
+    "matches": 55
+   },
+   {
+    "league": "Championship",
+    "country": "England",
+    "goals": -0.442,
+    "matches": 52
+   },
+   {
+    "league": "League One",
+    "country": "England",
+    "goals": -0.399,
+    "matches": 86
+   },
+   {
+    "league": "Bundesliga",
+    "country": "Austria",
+    "goals": 0.386,
+    "matches": 44
+   },
+   {
+    "league": "Ligat Ha'al",
+    "country": "Israel",
+    "goals": 0.328,
+    "matches": 32
+   },
+   {
+    "league": "National League - South",
+    "country": "England",
+    "goals": 0.261,
+    "matches": 15
+   }
+  ],
+  "2022/23": [
+   {
+    "league": "Championship",
+    "country": "England",
+    "goals": -0.599,
+    "matches": 54
+   },
+   {
+    "league": "Super League 1",
+    "country": "Greece",
+    "goals": -0.494,
+    "matches": 16
+   },
+   {
+    "league": "Premier League",
+    "country": "England",
+    "goals": -0.375,
+    "matches": 116
+   },
+   {
+    "league": "Ligat Ha'al",
+    "country": "Israel",
+    "goals": 0.33,
+    "matches": 28
+   },
+   {
+    "league": "Premyer Liqa",
+    "country": "Azerbaijan",
+    "goals": 0.313,
+    "matches": 21
+   },
+   {
+    "league": "National League - South",
+    "country": "England",
+    "goals": 0.304,
+    "matches": 35
+   },
+   {
+    "league": "Eredivisie",
+    "country": "Netherlands",
+    "goals": 0.299,
+    "matches": 47
+   },
+   {
+    "league": "League One",
+    "country": "England",
+    "goals": 0.292,
+    "matches": 105
+   }
+  ],
+  "2023/24": [
+   {
+    "league": "Premiership",
+    "country": "Scotland",
+    "goals": 0.362,
+    "matches": 56
+   },
+   {
+    "league": "League One",
+    "country": "England",
+    "goals": -0.361,
+    "matches": 103
+   },
+   {
+    "league": "Superliga",
+    "country": "Denmark",
+    "goals": 0.356,
+    "matches": 26
+   },
+   {
+    "league": "Super Liga",
+    "country": "Serbia",
+    "goals": -0.335,
+    "matches": 27
+   },
+   {
+    "league": "Virsliga",
+    "country": "Latvia",
+    "goals": -0.31,
+    "matches": 11
+   },
+   {
+    "league": "National League - South",
+    "country": "England",
+    "goals": 0.298,
+    "matches": 40
+   },
+   {
+    "league": "Serie A",
+    "country": "Italy",
+    "goals": 0.264,
+    "matches": 68
+   },
+   {
+    "league": "Eredivisie",
+    "country": "Netherlands",
+    "goals": -0.258,
+    "matches": 44
+   }
+  ]
+ },
+ "league_offset_persistence": {
+  "2021/22 to 2022/23": {
+   "leagues": 35,
+   "correlation": 0.27362015270520573,
+   "next_season_matches": 784,
+   "mse_before": 3.1807813047192757,
+   "mse_after": 3.208532254496088,
+   "slope_of_residual_on_correction": {
+    "slope": 0.3931846203684573,
+    "se": 0.15783740642841618,
+    "n": 784
+   }
+  },
+  "2022/23 to 2023/24": {
+   "leagues": 35,
+   "correlation": -0.02491730411671519,
+   "next_season_matches": 833,
+   "mse_before": 2.849783557633136,
+   "mse_after": 2.9682617933361604,
+   "slope_of_residual_on_correction": {
+    "slope": -0.06656477079653486,
+    "se": 0.2144860787454604,
+    "n": 833
+   }
+  }
+ },
+ "higher_league_side_residual": {
+  "2021/22": [
+   -0.21776244348111634,
+   0.06087256073261017,
+   799
+  ],
+  "2022/23": [
+   -0.11796228051458385,
+   0.06410658106674841,
+   776
+  ],
+  "2023/24": [
+   0.10392397663653649,
+   0.05877607384532078,
+   820
+  ],
+  "European competitions 2021/22": [
+   -0.16801185461987322,
+   0.0668826039311592,
+   615
+  ],
+  "European competitions 2022/23": [
+   -0.006157615841389207,
+   0.07438867456443707,
+   553
+  ],
+  "European competitions 2023/24": [
+   0.17653396878386435,
+   0.06508997823183656,
+   585
+  ],
+  "domestic cups 2021/22": [
+   -0.38404837907711914,
+   0.14072749423934847,
+   184
+  ],
+  "domestic cups 2022/23": [
+   -0.39521779425573483,
+   0.12376350707618904,
+   223
+  ],
+  "domestic cups 2023/24": [
+   -0.07682855700681165,
+   0.12519257952385796,
+   235
+  ]
+ },
+ "league_mean_rank_by_season": {
+  "Premier League (England)": {
+   "starting_rank": 1150.0,
+   "2020/21": 1117.4,
+   "2021/22": 1076.4,
+   "2022/23": 1049.3,
+   "2023/24": 1026.2,
+   "2024/25": 1020.9,
+   "2025/26": 1027.6,
+   "2026/27": 1022.0
+  },
+  "Championship (England)": {
+   "starting_rank": 901.0,
+   "2020/21": 901.3,
+   "2021/22": 906.6,
+   "2022/23": 897.7,
+   "2023/24": 898.1,
+   "2024/25": 894.8,
+   "2025/26": 880.4,
+   "2026/27": 889.2
+  },
+  "League One (England)": {
+   "starting_rank": 815.0,
+   "2020/21": 810.8,
+   "2021/22": 798.9,
+   "2022/23": 808.3,
+   "2023/24": 803.3,
+   "2024/25": 808.0,
+   "2025/26": 818.5,
+   "2026/27": 824.4
+  },
+  "League Two (England)": {
+   "starting_rank": 700.0,
+   "2020/21": 714.3,
+   "2021/22": 736.3,
+   "2022/23": 742.5,
+   "2023/24": 751.3,
+   "2024/25": 741.6,
+   "2025/26": 751.8,
+   "2026/27": 745.7
+  },
+  "La Liga (Spain)": {
+   "starting_rank": 978.0,
+   "2020/21": 975.4,
+   "2021/22": 963.3,
+   "2022/23": 955.7,
+   "2023/24": 951.9,
+   "2024/25": 949.8,
+   "2025/26": 948.9,
+   "2026/27": 944.1
+  },
+  "Serie A (Italy)": {
+   "starting_rank": 968.0,
+   "2020/21": 965.6,
+   "2021/22": 954.5,
+   "2022/23": 947.7,
+   "2023/24": 954.5,
+   "2024/25": 956.4,
+   "2025/26": 949.3,
+   "2026/27": 944.9
+  },
+  "Bundesliga (Germany)": {
+   "starting_rank": 970.0,
+   "2020/21": 971.6,
+   "2021/22": 966.2,
+   "2022/23": 966.3,
+   "2023/24": 959.2,
+   "2024/25": 959.3,
+   "2025/26": 952.7
+  },
+  "Ligue 1 (France)": {
+   "starting_rank": 926.0,
+   "2020/21": 923.0,
+   "2021/22": 922.8,
+   "2022/23": 918.7,
+   "2023/24": 932.0,
+   "2024/25": 929.9,
+   "2025/26": 936.9,
+   "2026/27": 934.1
+  },
+  "Eredivisie (Netherlands)": {
+   "starting_rank": 817.0,
+   "2020/21": 822.0,
+   "2021/22": 847.0,
+   "2022/23": 856.2,
+   "2023/24": 859.6,
+   "2024/25": 864.5,
+   "2025/26": 871.7,
+   "2026/27": 863.6
+  },
+  "Primeira Liga (Portugal)": {
+   "starting_rank": 886.0,
+   "2020/21": 890.2,
+   "2021/22": 902.7,
+   "2022/23": 908.4,
+   "2023/24": 909.7,
+   "2024/25": 905.8,
+   "2025/26": 900.6,
+   "2026/27": 903.6
+  },
+  "S\u00fcper Lig (Turkey)": {
+   "starting_rank": 831.0,
+   "2020/21": 831.8,
+   "2021/22": 842.0,
+   "2022/23": 858.7,
+   "2023/24": 853.1,
+   "2024/25": 846.2,
+   "2025/26": 859.4,
+   "2026/27": 861.9
+  },
+  "Major League Soccer (USA)": {
+   "starting_rank": 850.0,
+   "2020/21": 851.7,
+   "2021/22": 850.9,
+   "2022/23": 850.4,
+   "2023/24": 851.0,
+   "2024/25": 851.1,
+   "2025/26": 851.8,
+   "2026/27": 849.7
+  },
+  "Premiership (Scotland)": {
+   "starting_rank": 706.0,
+   "2020/21": 716.2,
+   "2021/22": 738.7,
+   "2022/23": 743.1,
+   "2023/24": 749.8,
+   "2024/25": 774.9,
+   "2025/26": 786.5
+  },
+  "Jupiler Pro League (Belgium)": {
+   "starting_rank": 859.0,
+   "2020/21": 857.9,
+   "2021/22": 861.0,
+   "2022/23": 867.2,
+   "2023/24": 881.8,
+   "2024/25": 886.3,
+   "2025/26": 886.3,
+   "2026/27": 885.8
+  }
+ },
+ "changed_league": {
+  "came up, league matches 1 to 5": [
+   0.16857358773631978,
+   0.07877727042604132,
+   420
+  ],
+  "came up, league matches 6 to 10": [
+   0.07850982626520721,
+   0.08927401287920719,
+   396
+  ],
+  "came up, league matches 11 to 20": [
+   0.14360626684771147,
+   0.05722215387678113,
+   790
+  ],
+  "came up, league matches 21 to 46": [
+   0.02226824692269315,
+   0.037969980211990745,
+   1845
+  ],
+  "came down, league matches 1 to 5": [
+   -0.4694923322731109,
+   0.07899146598543927,
+   460
+  ],
+  "came down, league matches 6 to 10": [
+   -0.3464719130852289,
+   0.0787246999615387,
+   460
+  ],
+  "came down, league matches 11 to 20": [
+   -0.17773511913049136,
+   0.053222726515608276,
+   920
+  ],
+  "came down, league matches 21 to 46": [
+   -0.06468087545001573,
+   0.03502627727157689,
+   2128
+  ]
+ },
+ "reaction": {
+  "all league matches": {
+   "slope": 0.04271645650583142,
+   "se": 0.007070605617947745,
+   "n": 97525
+  },
+  "leagues with xG": {
+   "slope": -0.0008080710487991626,
+   "se": 0.017747514138698565,
+   "n": 15298
+  },
+  "leagues without xG": {
+   "slope": 0.05039513531127416,
+   "se": 0.007840397622420158,
+   "n": 82227
+  },
+  "league matches, August and September": {
+   "slope": 0.07503152823848178,
+   "se": 0.017567252640913442,
+   "n": 16667
+  },
+  "league matches, other months": {
+   "slope": 0.03564417326616038,
+   "se": 0.007664064461853781,
+   "n": 80858
+  },
+  "cup matches": {
+   "slope": 0.043880519659346716,
+   "se": 0.021248761016360723,
+   "n": 9428
+  },
+  "total goals, league matches": {
+   "slope": 0.04309253430851617,
+   "se": 0.007494398295023919,
+   "n": 97525
+  }
+ },
+ "cup_distortion": {
+  "after a cup match": {
+   "slope": 0.004211755577667995,
+   "se": 0.012056701571754957,
+   "n": 6287
+  },
+  "after a league match": {
+   "slope": 0.010387920555938658,
+   "se": 0.0034010034501919363,
+   "n": 95215
+  }
+ },
+ "by_matches_played": {
+  "0 to 10": {
+   "n": 4833,
+   "log_loss": 0.9989793783263469,
+   "sharpness_power": 1.22,
+   "goal_error_sd": 2.043445045748196
+  },
+  "10 to 30": {
+   "n": 5937,
+   "log_loss": 0.9945942022301819,
+   "sharpness_power": 1.1,
+   "goal_error_sd": 1.718823736807161
+  },
+  "30 to 60": {
+   "n": 13709,
+   "log_loss": 1.006591178589488,
+   "sharpness_power": 1.01,
+   "goal_error_sd": 1.6323419044610885
+  },
+  "60 to 120": {
+   "n": 23280,
+   "log_loss": 0.9985581022603256,
+   "sharpness_power": 1.06,
+   "goal_error_sd": 1.6335820972723034
+  },
+  "120 to up": {
+   "n": 10233,
+   "log_loss": 1.0019087898300831,
+   "sharpness_power": 1.07,
+   "goal_error_sd": 1.622303325079267
+  }
+ },
+ "after_a_break": {
+  "0 to 15 days": {
+   "n": 104179,
+   "goal_error_sd": 1.656353137936017,
+   "favourite_residual": [
+    0.004267703328963755,
+    0.005131729379382566,
+    104179
+   ]
+  },
+  "15 to 40 days": {
+   "n": 5528,
+   "goal_error_sd": 1.7874829322344465,
+   "favourite_residual": [
+    0.006823010143592529,
+    0.024045798944946867,
+    5528
+   ]
+  },
+  "40 to 80 days": {
+   "n": 2294,
+   "goal_error_sd": 1.6637693458926013,
+   "favourite_residual": [
+    -0.11217772444324754,
+    0.03467050278048995,
+    2294
+   ]
+  },
+  "80 to 400 days": {
+   "n": 3447,
+   "goal_error_sd": 2.074508231710754,
+   "favourite_residual": [
+    0.05846925335946908,
+    0.035366448391230876,
+    3447
+   ]
+  }
+ },
+ "summer_regression": {
+  "slope": 0.018808918519226264,
+  "se": 0.02055812750213033,
+  "n": 2870
+ }
+}

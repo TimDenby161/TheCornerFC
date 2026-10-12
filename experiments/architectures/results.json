@@ -1,0 +1,2097 @@
+{
+ "level": 0.9961538461538462,
+ "family": 13,
+ "final_matches": 44383,
+ "chosen_sha256": "7b6a4b0fc51b78c3cbddc4aa620b417fb88e278170b65b29236dfe9dbd259502",
+ "evaluator_sha256": "6d971182346bcace45b0d3504daf35fac089e26f60bef5da54255c192b9342da",
+ "frame_sha256": "dd5a3e1e2973f0574234e8d120b1a9c99187bb1b999a11eaca250fd698671fba",
+ "features_sha256": "3d850304212cd88146df88b3497e8d491e8c9bb507bdc4af1e90354904bb6ab6",
+ "seconds": 88.32024717330933,
+ "base_rate_log_loss": 1.0670956244681145,
+ "candidates": {
+  "dc": {
+   "baseline": {
+    "n": 44383,
+    "log_loss": 0.9935952511393114,
+    "brier": 0.5927651290844805,
+    "rps": 0.20633756972265524,
+    "accuracy": 0.5158281323930334,
+    "calibration_error": 0.010282776930265835,
+    "sharpness_power": 1.1
+   },
+   "candidate": {
+    "n": 44383,
+    "log_loss": 0.99897164809294,
+    "brier": 0.596483787206498,
+    "rps": 0.2081872883586202,
+    "accuracy": 0.5120879616069216,
+    "calibration_error": 0.016431273402127355,
+    "sharpness_power": 1.18
+   },
+   "level": 0.9961538461538462,
+   "log_loss": [
+    0.0053763969536287344,
+    0.003683608500155278,
+    0.0068717559788547605
+   ],
+   "brier": [
+    0.0037186581220174375,
+    0.0025986957833336165,
+    0.004723512847751203
+   ],
+   "rps": [
+    0.0018497186359649636,
+    0.001326540258145196,
+    0.0023238146409631467
+   ],
+   "by_season": {
+    "2024/25": {
+     "n": 19662,
+     "log_loss": 0.005590419207489632
+    },
+    "2025/26": {
+     "n": 19515,
+     "log_loss": 0.0047668121847780015
+    },
+    "2026/27": {
+     "n": 5206,
+     "log_loss": 0.006853143248040781
+    }
+   },
+   "by_competition": {
+    "2": {
+     "name": "UEFA Champions League",
+     "country": "World",
+     "type": "Cup",
+     "n": 639,
+     "log_loss": 0.015328713340911453
+    },
+    "3": {
+     "name": "UEFA Europa League",
+     "country": "World",
+     "type": "Cup",
+     "n": 603,
+     "log_loss": 0.011579742423583192
+    },
+    "39": {
+     "name": "Premier League",
+     "country": "England",
+     "type": "League",
+     "n": 819,
+     "log_loss": 0.008483506969429557
+    },
+    "40": {
+     "name": "Championship",
+     "country": "England",
+     "type": "League",
+     "n": 1219,
+     "log_loss": 0.0026389105646822965
+    },
+    "41": {
+     "name": "League One",
+     "country": "England",
+     "type": "League",
+     "n": 1215,
+     "log_loss": 0.00449187378793625
+    },
+    "42": {
+     "name": "League Two",
+     "country": "England",
+     "type": "League",
+     "n": 1227,
+     "log_loss": 0.0026182454554837123
+    },
+    "43": {
+     "name": "National League",
+     "country": "England",
+     "type": "League",
+     "n": 1262,
+     "log_loss": 0.011384742119191644
+    },
+    "45": {
+     "name": "FA Cup",
+     "country": "England",
+     "type": "Cup",
+     "n": 1901,
+     "log_loss": 0.026723679000191302
+    },
+    "47": {
+     "name": "FA Trophy",
+     "country": "England",
+     "type": "Cup",
+     "n": 690,
+     "log_loss": -0.018386946096173334
+    },
+    "50": {
+     "name": "National League - North",
+     "country": "England",
+     "type": "League",
+     "n": 1241,
+     "log_loss": 0.0030894084301889683
+    },
+    "51": {
+     "name": "National League - South",
+     "country": "England",
+     "type": "League",
+     "n": 1235,
+     "log_loss": 0.002941887438801621
+    },
+    "61": {
+     "name": "Ligue 1",
+     "country": "France",
+     "type": "League",
+     "n": 668,
+     "log_loss": 0.000752315023001018
+    },
+    "62": {
+     "name": "Ligue 2",
+     "country": "France",
+     "type": "League",
+     "n": 689,
+     "log_loss": -0.004491056306936552
+    },
+    "71": {
+     "name": "Serie A",
+     "country": "Brazil",
+     "type": "League",
+     "n": 932,
+     "log_loss": 0.006990347412145019
+    },
+    "78": {
+     "name": "Bundesliga",
+     "country": "Germany",
+     "type": "League",
+     "n": 660,
+     "log_loss": 0.012169246751835915
+    },
+    "79": {
+     "name": "2. Bundesliga",
+     "country": "Germany",
+     "type": "League",
+     "n": 678,
+     "log_loss": -0.00040785135132878126
+    },
+    "88": {
+     "name": "Eredivisie",
+     "country": "Netherlands",
+     "type": "League",
+     "n": 697,
+     "log_loss": 0.007477431583161331
+    },
+    "94": {
+     "name": "Primeira Liga",
+     "country": "Portugal",
+     "type": "League",
+     "n": 686,
+     "log_loss": 0.015386785155750822
+    },
+    "103": {
+     "name": "Eliteserien",
+     "country": "Norway",
+     "type": "League",
+     "n": 559,
+     "log_loss": 0.013795460259188354
+    },
+    "106": {
+     "name": "Ekstraklasa",
+     "country": "Poland",
+     "type": "League",
+     "n": 698,
+     "log_loss": -0.0032762879762900355
+    },
+    "113": {
+     "name": "Allsvenskan",
+     "country": "Sweden",
+     "type": "League",
+     "n": 568,
+     "log_loss": 0.010888136513644729
+    },
+    "119": {
+     "name": "Superliga",
+     "country": "Denmark",
+     "type": "League",
+     "n": 444,
+     "log_loss": 0.011824922289764882
+    },
+    "128": {
+     "name": "Liga Profesional Argentina",
+     "country": "Argentina",
+     "type": "League",
+     "n": 1238,
+     "log_loss": 0.002206185566488968
+    },
+    "135": {
+     "name": "Serie A",
+     "country": "Italy",
+     "type": "League",
+     "n": 818,
+     "log_loss": 0.008982831171728595
+    },
+    "136": {
+     "name": "Serie B",
+     "country": "Italy",
+     "type": "League",
+     "n": 839,
+     "log_loss": 0.0001907002539266444
+    },
+    "140": {
+     "name": "La Liga",
+     "country": "Spain",
+     "type": "League",
+     "n": 837,
+     "log_loss": 0.008595725847376636
+    },
+    "141": {
+     "name": "Segunda Divisi\u00f3n",
+     "country": "Spain",
+     "type": "League",
+     "n": 1030,
+     "log_loss": -0.004698316043454241
+    },
+    "144": {
+     "name": "Jupiler Pro League",
+     "country": "Belgium",
+     "type": "League",
+     "n": 706,
+     "log_loss": 0.007847618023540691
+    },
+    "172": {
+     "name": "First League",
+     "country": "Bulgaria",
+     "type": "League",
+     "n": 661,
+     "log_loss": 0.009568382694357594
+    },
+    "179": {
+     "name": "Premiership",
+     "country": "Scotland",
+     "type": "League",
+     "n": 516,
+     "log_loss": 0.0019550279125878497
+    },
+    "180": {
+     "name": "Championship",
+     "country": "Scotland",
+     "type": "League",
+     "n": 418,
+     "log_loss": -0.001238900229875184
+    },
+    "188": {
+     "name": "A-League",
+     "country": "Australia",
+     "type": "League",
+     "n": 337,
+     "log_loss": -0.006083865004754276
+    },
+    "197": {
+     "name": "Super League 1",
+     "country": "Greece",
+     "type": "League",
+     "n": 513,
+     "log_loss": 0.0013560790389481015
+    },
+    "203": {
+     "name": "S\u00fcper Lig",
+     "country": "Turkey",
+     "type": "League",
+     "n": 710,
+     "log_loss": 0.010816030406898557
+    },
+    "207": {
+     "name": "Super League",
+     "country": "Switzerland",
+     "type": "League",
+     "n": 519,
+     "log_loss": 0.0026336491364993184
+    },
+    "210": {
+     "name": "HNL",
+     "country": "Croatia",
+     "type": "League",
+     "n": 404,
+     "log_loss": 0.0031974606201745966
+    },
+    "218": {
+     "name": "Bundesliga",
+     "country": "Austria",
+     "type": "League",
+     "n": 438,
+     "log_loss": 0.005674933164210431
+    },
+    "233": {
+     "name": "Premier League",
+     "country": "Egypt",
+     "type": "League",
+     "n": 668,
+     "log_loss": 0.002810028633331994
+    },
+    "235": {
+     "name": "Premier League",
+     "country": "Russia",
+     "type": "League",
+     "n": 568,
+     "log_loss": 0.009888332885847841
+    },
+    "244": {
+     "name": "Veikkausliiga",
+     "country": "Finland",
+     "type": "League",
+     "n": 421,
+     "log_loss": 0.0015503849342662095
+    },
+    "253": {
+     "name": "Major League Soccer",
+     "country": "USA",
+     "type": "League",
+     "n": 1172,
+     "log_loss": 0.0021436319853476386
+    },
+    "262": {
+     "name": "Liga MX",
+     "country": "Mexico",
+     "type": "League",
+     "n": 770,
+     "log_loss": 0.00018187470582989963
+    },
+    "271": {
+     "name": "NB I",
+     "country": "Hungary",
+     "type": "League",
+     "n": 449,
+     "log_loss": 0.003166362847050021
+    },
+    "283": {
+     "name": "Liga I",
+     "country": "Romania",
+     "type": "League",
+     "n": 722,
+     "log_loss": 0.009308108456205373
+    },
+    "286": {
+     "name": "Super Liga",
+     "country": "Serbia",
+     "type": "League",
+     "n": 670,
+     "log_loss": 0.00562097584686941
+    },
+    "307": {
+     "name": "Pro League",
+     "country": "Saudi-Arabia",
+     "type": "League",
+     "n": 683,
+     "log_loss": 0.0019550908404739526
+    },
+    "310": {
+     "name": "Superliga",
+     "country": "Albania",
+     "type": "League",
+     "n": 403,
+     "log_loss": 0.004341707027508625
+    },
+    "315": {
+     "name": "Premijer Liga",
+     "country": "Bosnia",
+     "type": "League",
+     "n": 423,
+     "log_loss": 0.014685879040987249
+    },
+    "318": {
+     "name": "1. Division",
+     "country": "Cyprus",
+     "type": "League",
+     "n": 514,
+     "log_loss": 0.007628340989280077
+    },
+    "327": {
+     "name": "Erovnuli Liga",
+     "country": "Georgia",
+     "type": "League",
+     "n": 415,
+     "log_loss": 0.0030352931972155235
+    },
+    "332": {
+     "name": "Super Liga",
+     "country": "Slovakia",
+     "type": "League",
+     "n": 446,
+     "log_loss": 0.0068817112250820316
+    },
+    "333": {
+     "name": "Premier League",
+     "country": "Ukraine",
+     "type": "League",
+     "n": 545,
+     "log_loss": 0.007844762452124215
+    },
+    "342": {
+     "name": "Premier League",
+     "country": "Armenia",
+     "type": "League",
+     "n": 348,
+     "log_loss": 0.0022894390104513957
+    },
+    "345": {
+     "name": "Czech Liga",
+     "country": "Czech-Republic",
+     "type": "League",
+     "n": 635,
+     "log_loss": 0.005513300826016749
+    },
+    "362": {
+     "name": "A Lyga",
+     "country": "Lithuania",
+     "type": "League",
+     "n": 405,
+     "log_loss": -0.0032404293379619427
+    },
+    "365": {
+     "name": "Virsliga",
+     "country": "Latvia",
+     "type": "League",
+     "n": 420,
+     "log_loss": 0.0010722853061047061
+    },
+    "373": {
+     "name": "1. SNL",
+     "country": "Slovenia",
+     "type": "League",
+     "n": 399,
+     "log_loss": 0.0027897386650007653
+    },
+    "383": {
+     "name": "Ligat Ha'al",
+     "country": "Israel",
+     "type": "League",
+     "n": 520,
+     "log_loss": -0.003349533096395126
+    },
+    "389": {
+     "name": "Premier League",
+     "country": "Kazakhstan",
+     "type": "League",
+     "n": 475,
+     "log_loss": 0.008077318757309541
+    },
+    "419": {
+     "name": "Premyer Liqa",
+     "country": "Azerbaijan",
+     "type": "League",
+     "n": 418,
+     "log_loss": -0.00023708297901101297
+    },
+    "758": {
+     "name": "Premier Division",
+     "country": "Gibraltar",
+     "type": "League",
+     "n": 300,
+     "log_loss": -0.008598627663541145
+    },
+    "848": {
+     "name": "UEFA Europa Conference League",
+     "country": "World",
+     "type": "Cup",
+     "n": 991,
+     "log_loss": 0.012207943474268249
+    }
+   },
+   "competitions_no_worse": [
+    11,
+    62
+   ],
+   "leagues": {
+    "n": 38538,
+    "log_loss": 0.0043742871717462615
+   },
+   "cups": {
+    "n": 5845,
+    "log_loss": 0.011983635067262058
+   },
+   "interval_95": [
+    0.0053763969536287344,
+    0.00420717619009998,
+    0.006429789338196865
+   ],
+   "goal_markets": {
+    "over15": -0.0012219696614034214,
+    "over25": 7.77062682455476e-05,
+    "over35": -0.001319582495043603,
+    "over45": -0.001004633085537887,
+    "btts": 0.00047627602831623594
+   },
+   "verdict": {
+    "conditions": {
+     "log_loss_better_by_0.002": false,
+     "adjusted_interval_excludes_zero": false,
+     "brier_agrees": false,
+     "better_in_2024/25_and_2025/26": false,
+     "no_goal_market_worse_by_0.0005": true,
+     "60_percent_of_competitions_no_worse": false
+    },
+    "label": "no gain shown"
+   }
+  },
+  "gb": {
+   "baseline": {
+    "n": 44383,
+    "log_loss": 0.9935952511393114,
+    "brier": 0.5927651290844805,
+    "rps": 0.20633756972265524,
+    "accuracy": 0.5158281323930334,
+    "calibration_error": 0.010282776930265835,
+    "sharpness_power": 1.1
+   },
+   "candidate": {
+    "n": 44383,
+    "log_loss": 0.9907960053511023,
+    "brier": 0.590974176890756,
+    "rps": 0.20549332369543746,
+    "accuracy": 0.5176080931888336,
+    "calibration_error": 0.010936904728484131,
+    "sharpness_power": 1.09
+   },
+   "level": 0.9961538461538462,
+   "log_loss": [
+    -0.0027992457882088906,
+    -0.004101269656104288,
+    -0.0014723222100948173
+   ],
+   "brier": [
+    -0.0017909521937245075,
+    -0.0026815592365894087,
+    -0.0008455169098899586
+   ],
+   "rps": [
+    -0.0008442460272177838,
+    -0.0012280184397630883,
+    -0.0004493757610488824
+   ],
+   "by_season": {
+    "2024/25": {
+     "n": 19662,
+     "log_loss": -0.0025799198744729706
+    },
+    "2025/26": {
+     "n": 19515,
+     "log_loss": -0.0026247498317276403
+    },
+    "2026/27": {
+     "n": 5206,
+     "log_loss": -0.004281703472920236
+    }
+   },
+   "by_competition": {
+    "2": {
+     "name": "UEFA Champions League",
+     "country": "World",
+     "type": "Cup",
+     "n": 639,
+     "log_loss": 0.0035293833957446416
+    },
+    "3": {
+     "name": "UEFA Europa League",
+     "country": "World",
+     "type": "Cup",
+     "n": 603,
+     "log_loss": 0.001622937412420691
+    },
+    "39": {
+     "name": "Premier League",
+     "country": "England",
+     "type": "League",
+     "n": 819,
+     "log_loss": -0.0027326748148674375
+    },
+    "40": {
+     "name": "Championship",
+     "country": "England",
+     "type": "League",
+     "n": 1219,
+     "log_loss": -0.003991164965580563
+    },
+    "41": {
+     "name": "League One",
+     "country": "England",
+     "type": "League",
+     "n": 1215,
+     "log_loss": -0.0015746744089763865
+    },
+    "42": {
+     "name": "League Two",
+     "country": "England",
+     "type": "League",
+     "n": 1227,
+     "log_loss": -0.0038059208452301155
+    },
+    "43": {
+     "name": "National League",
+     "country": "England",
+     "type": "League",
+     "n": 1262,
+     "log_loss": 0.0028810605087580773
+    },
+    "45": {
+     "name": "FA Cup",
+     "country": "England",
+     "type": "Cup",
+     "n": 1901,
+     "log_loss": 0.001321792505556817
+    },
+    "47": {
+     "name": "FA Trophy",
+     "country": "England",
+     "type": "Cup",
+     "n": 690,
+     "log_loss": -0.005333051426694309
+    },
+    "50": {
+     "name": "National League - North",
+     "country": "England",
+     "type": "League",
+     "n": 1241,
+     "log_loss": 0.00045312944266519414
+    },
+    "51": {
+     "name": "National League - South",
+     "country": "England",
+     "type": "League",
+     "n": 1235,
+     "log_loss": -6.0949713638399455e-05
+    },
+    "61": {
+     "name": "Ligue 1",
+     "country": "France",
+     "type": "League",
+     "n": 668,
+     "log_loss": -0.0025210449005027068
+    },
+    "62": {
+     "name": "Ligue 2",
+     "country": "France",
+     "type": "League",
+     "n": 689,
+     "log_loss": -0.01104399611749109
+    },
+    "71": {
+     "name": "Serie A",
+     "country": "Brazil",
+     "type": "League",
+     "n": 932,
+     "log_loss": -0.0019129265234500232
+    },
+    "78": {
+     "name": "Bundesliga",
+     "country": "Germany",
+     "type": "League",
+     "n": 660,
+     "log_loss": 0.0002596419059446304
+    },
+    "79": {
+     "name": "2. Bundesliga",
+     "country": "Germany",
+     "type": "League",
+     "n": 678,
+     "log_loss": -0.007431954853940244
+    },
+    "88": {
+     "name": "Eredivisie",
+     "country": "Netherlands",
+     "type": "League",
+     "n": 697,
+     "log_loss": -0.001922935121119269
+    },
+    "94": {
+     "name": "Primeira Liga",
+     "country": "Portugal",
+     "type": "League",
+     "n": 686,
+     "log_loss": -0.004740113045138218
+    },
+    "103": {
+     "name": "Eliteserien",
+     "country": "Norway",
+     "type": "League",
+     "n": 559,
+     "log_loss": -0.0024213240910211753
+    },
+    "106": {
+     "name": "Ekstraklasa",
+     "country": "Poland",
+     "type": "League",
+     "n": 698,
+     "log_loss": -0.0021886257314463
+    },
+    "113": {
+     "name": "Allsvenskan",
+     "country": "Sweden",
+     "type": "League",
+     "n": 568,
+     "log_loss": -0.002076893442862822
+    },
+    "119": {
+     "name": "Superliga",
+     "country": "Denmark",
+     "type": "League",
+     "n": 444,
+     "log_loss": -0.000518906546117468
+    },
+    "128": {
+     "name": "Liga Profesional Argentina",
+     "country": "Argentina",
+     "type": "League",
+     "n": 1238,
+     "log_loss": 0.00061114446859796
+    },
+    "135": {
+     "name": "Serie A",
+     "country": "Italy",
+     "type": "League",
+     "n": 818,
+     "log_loss": -0.005761991418059998
+    },
+    "136": {
+     "name": "Serie B",
+     "country": "Italy",
+     "type": "League",
+     "n": 839,
+     "log_loss": -0.0048250304607665405
+    },
+    "140": {
+     "name": "La Liga",
+     "country": "Spain",
+     "type": "League",
+     "n": 837,
+     "log_loss": -0.004475721731372731
+    },
+    "141": {
+     "name": "Segunda Divisi\u00f3n",
+     "country": "Spain",
+     "type": "League",
+     "n": 1030,
+     "log_loss": -0.008126942959394971
+    },
+    "144": {
+     "name": "Jupiler Pro League",
+     "country": "Belgium",
+     "type": "League",
+     "n": 706,
+     "log_loss": -0.001454787323159857
+    },
+    "172": {
+     "name": "First League",
+     "country": "Bulgaria",
+     "type": "League",
+     "n": 661,
+     "log_loss": -0.005858946307984521
+    },
+    "179": {
+     "name": "Premiership",
+     "country": "Scotland",
+     "type": "League",
+     "n": 516,
+     "log_loss": -0.003560663800010423
+    },
+    "180": {
+     "name": "Championship",
+     "country": "Scotland",
+     "type": "League",
+     "n": 418,
+     "log_loss": -0.0029001390653210233
+    },
+    "188": {
+     "name": "A-League",
+     "country": "Australia",
+     "type": "League",
+     "n": 337,
+     "log_loss": -6.78914293563885e-05
+    },
+    "197": {
+     "name": "Super League 1",
+     "country": "Greece",
+     "type": "League",
+     "n": 513,
+     "log_loss": -0.00883205170288623
+    },
+    "203": {
+     "name": "S\u00fcper Lig",
+     "country": "Turkey",
+     "type": "League",
+     "n": 710,
+     "log_loss": -0.0035956007358446977
+    },
+    "207": {
+     "name": "Super League",
+     "country": "Switzerland",
+     "type": "League",
+     "n": 519,
+     "log_loss": -0.0024221016044122597
+    },
+    "210": {
+     "name": "HNL",
+     "country": "Croatia",
+     "type": "League",
+     "n": 404,
+     "log_loss": -0.0054566822368278586
+    },
+    "218": {
+     "name": "Bundesliga",
+     "country": "Austria",
+     "type": "League",
+     "n": 438,
+     "log_loss": -0.0015524405886999
+    },
+    "233": {
+     "name": "Premier League",
+     "country": "Egypt",
+     "type": "League",
+     "n": 668,
+     "log_loss": -0.012111531317638953
+    },
+    "235": {
+     "name": "Premier League",
+     "country": "Russia",
+     "type": "League",
+     "n": 568,
+     "log_loss": 0.002688476004931068
+    },
+    "244": {
+     "name": "Veikkausliiga",
+     "country": "Finland",
+     "type": "League",
+     "n": 421,
+     "log_loss": 0.0017466296293275779
+    },
+    "253": {
+     "name": "Major League Soccer",
+     "country": "USA",
+     "type": "League",
+     "n": 1172,
+     "log_loss": -6.992141117405906e-05
+    },
+    "262": {
+     "name": "Liga MX",
+     "country": "Mexico",
+     "type": "League",
+     "n": 770,
+     "log_loss": -0.003217191827242221
+    },
+    "271": {
+     "name": "NB I",
+     "country": "Hungary",
+     "type": "League",
+     "n": 449,
+     "log_loss": 7.859074686922905e-05
+    },
+    "283": {
+     "name": "Liga I",
+     "country": "Romania",
+     "type": "League",
+     "n": 722,
+     "log_loss": -0.003157608749844239
+    },
+    "286": {
+     "name": "Super Liga",
+     "country": "Serbia",
+     "type": "League",
+     "n": 670,
+     "log_loss": -0.0023524713189662814
+    },
+    "307": {
+     "name": "Pro League",
+     "country": "Saudi-Arabia",
+     "type": "League",
+     "n": 683,
+     "log_loss": -0.008653515224977239
+    },
+    "310": {
+     "name": "Superliga",
+     "country": "Albania",
+     "type": "League",
+     "n": 403,
+     "log_loss": 0.005253653465361641
+    },
+    "315": {
+     "name": "Premijer Liga",
+     "country": "Bosnia",
+     "type": "League",
+     "n": 423,
+     "log_loss": 0.0022422478811868676
+    },
+    "318": {
+     "name": "1. Division",
+     "country": "Cyprus",
+     "type": "League",
+     "n": 514,
+     "log_loss": -0.0013504977708082234
+    },
+    "327": {
+     "name": "Erovnuli Liga",
+     "country": "Georgia",
+     "type": "League",
+     "n": 415,
+     "log_loss": -0.003953716303963668
+    },
+    "332": {
+     "name": "Super Liga",
+     "country": "Slovakia",
+     "type": "League",
+     "n": 446,
+     "log_loss": -0.0006215680246371691
+    },
+    "333": {
+     "name": "Premier League",
+     "country": "Ukraine",
+     "type": "League",
+     "n": 545,
+     "log_loss": -0.006415335891095739
+    },
+    "342": {
+     "name": "Premier League",
+     "country": "Armenia",
+     "type": "League",
+     "n": 348,
+     "log_loss": -0.013296727848621348
+    },
+    "345": {
+     "name": "Czech Liga",
+     "country": "Czech-Republic",
+     "type": "League",
+     "n": 635,
+     "log_loss": -0.004581119893547812
+    },
+    "362": {
+     "name": "A Lyga",
+     "country": "Lithuania",
+     "type": "League",
+     "n": 405,
+     "log_loss": -0.006460905727531756
+    },
+    "365": {
+     "name": "Virsliga",
+     "country": "Latvia",
+     "type": "League",
+     "n": 420,
+     "log_loss": -0.005292216280599421
+    },
+    "373": {
+     "name": "1. SNL",
+     "country": "Slovenia",
+     "type": "League",
+     "n": 399,
+     "log_loss": 0.0006521840162558044
+    },
+    "383": {
+     "name": "Ligat Ha'al",
+     "country": "Israel",
+     "type": "League",
+     "n": 520,
+     "log_loss": -0.005471413765462156
+    },
+    "389": {
+     "name": "Premier League",
+     "country": "Kazakhstan",
+     "type": "League",
+     "n": 475,
+     "log_loss": -0.0020887173770208437
+    },
+    "419": {
+     "name": "Premyer Liqa",
+     "country": "Azerbaijan",
+     "type": "League",
+     "n": 418,
+     "log_loss": -0.012249604986224329
+    },
+    "758": {
+     "name": "Premier Division",
+     "country": "Gibraltar",
+     "type": "League",
+     "n": 300,
+     "log_loss": -0.020147557118086315
+    },
+    "848": {
+     "name": "UEFA Europa Conference League",
+     "country": "World",
+     "type": "Cup",
+     "n": 991,
+     "log_loss": 0.0072471569439529595
+    }
+   },
+   "competitions_no_worse": [
+    48,
+    62
+   ],
+   "leagues": {
+    "n": 38538,
+    "log_loss": -0.003258337719391164
+   },
+   "cups": {
+    "n": 5845,
+    "log_loss": 0.00022769772657339166
+   },
+   "interval_95": [
+    -0.0027992457882088906,
+    -0.0037043688860745523,
+    -0.0019040041789345444
+   ],
+   "goal_markets": {
+    "over15": -0.0020793273989627714,
+    "over25": -0.0019334590627020365,
+    "over35": -0.002751019831123802,
+    "over45": -0.0021457951132916042,
+    "btts": -0.0006085725791413754
+   },
+   "verdict": {
+    "conditions": {
+     "log_loss_better_by_0.002": true,
+     "adjusted_interval_excludes_zero": true,
+     "brier_agrees": true,
+     "better_in_2024/25_and_2025/26": true,
+     "no_goal_market_worse_by_0.0005": true,
+     "60_percent_of_competitions_no_worse": true
+    },
+    "label": "meets the bar"
+   }
+  },
+  "pool2": {
+   "baseline": {
+    "n": 44383,
+    "log_loss": 0.9935952511393114,
+    "brier": 0.5927651290844805,
+    "rps": 0.20633756972265524,
+    "accuracy": 0.5158281323930334,
+    "calibration_error": 0.010282776930265835,
+    "sharpness_power": 1.1
+   },
+   "candidate": {
+    "n": 44383,
+    "log_loss": 0.9933743140794049,
+    "brier": 0.5926351009702431,
+    "rps": 0.2063226391713142,
+    "accuracy": 0.5166392537683347,
+    "calibration_error": 0.01305963369649136,
+    "sharpness_power": 1.14
+   },
+   "level": 0.9961538461538462,
+   "log_loss": [
+    -0.00022093705990620726,
+    -0.0007685605853520568,
+    0.00021154043873985556
+   ],
+   "brier": [
+    -0.00013002811423744095,
+    -0.00047616729491796586,
+    0.00017851664544162144
+   ],
+   "rps": [
+    -1.493055134103015e-05,
+    -0.00017265833594909982,
+    0.00011490447008458393
+   ],
+   "by_season": {
+    "2024/25": {
+     "n": 19662,
+     "log_loss": -5.5453236349172336e-05
+    },
+    "2025/26": {
+     "n": 19515,
+     "log_loss": -0.0003499187758310644
+    },
+    "2026/27": {
+     "n": 5206,
+     "log_loss": -0.0003624400857427103
+    }
+   },
+   "by_competition": {
+    "2": {
+     "name": "UEFA Champions League",
+     "country": "World",
+     "type": "Cup",
+     "n": 639,
+     "log_loss": 0.0019522986039645744
+    },
+    "3": {
+     "name": "UEFA Europa League",
+     "country": "World",
+     "type": "Cup",
+     "n": 603,
+     "log_loss": 0.00046833215315714405
+    },
+    "39": {
+     "name": "Premier League",
+     "country": "England",
+     "type": "League",
+     "n": 819,
+     "log_loss": 0.0009592023721196494
+    },
+    "40": {
+     "name": "Championship",
+     "country": "England",
+     "type": "League",
+     "n": 1219,
+     "log_loss": -0.00088602332899675
+    },
+    "41": {
+     "name": "League One",
+     "country": "England",
+     "type": "League",
+     "n": 1215,
+     "log_loss": 2.9235754690124976e-05
+    },
+    "42": {
+     "name": "League Two",
+     "country": "England",
+     "type": "League",
+     "n": 1227,
+     "log_loss": -0.0011413819879121183
+    },
+    "43": {
+     "name": "National League",
+     "country": "England",
+     "type": "League",
+     "n": 1262,
+     "log_loss": 0.0008774573954206624
+    },
+    "45": {
+     "name": "FA Cup",
+     "country": "England",
+     "type": "Cup",
+     "n": 1901,
+     "log_loss": 0.0037417524619104974
+    },
+    "47": {
+     "name": "FA Trophy",
+     "country": "England",
+     "type": "Cup",
+     "n": 690,
+     "log_loss": -0.009237562986597014
+    },
+    "50": {
+     "name": "National League - North",
+     "country": "England",
+     "type": "League",
+     "n": 1241,
+     "log_loss": -0.0005028450001151426
+    },
+    "51": {
+     "name": "National League - South",
+     "country": "England",
+     "type": "League",
+     "n": 1235,
+     "log_loss": -0.0004599365625970316
+    },
+    "61": {
+     "name": "Ligue 1",
+     "country": "France",
+     "type": "League",
+     "n": 668,
+     "log_loss": -0.002060576606644709
+    },
+    "62": {
+     "name": "Ligue 2",
+     "country": "France",
+     "type": "League",
+     "n": 689,
+     "log_loss": -0.00359436559047117
+    },
+    "71": {
+     "name": "Serie A",
+     "country": "Brazil",
+     "type": "League",
+     "n": 932,
+     "log_loss": 0.0008625620239200506
+    },
+    "78": {
+     "name": "Bundesliga",
+     "country": "Germany",
+     "type": "League",
+     "n": 660,
+     "log_loss": 0.0015562935469716761
+    },
+    "79": {
+     "name": "2. Bundesliga",
+     "country": "Germany",
+     "type": "League",
+     "n": 678,
+     "log_loss": -0.0017365403783251427
+    },
+    "88": {
+     "name": "Eredivisie",
+     "country": "Netherlands",
+     "type": "League",
+     "n": 697,
+     "log_loss": 0.0006762115119727304
+    },
+    "94": {
+     "name": "Primeira Liga",
+     "country": "Portugal",
+     "type": "League",
+     "n": 686,
+     "log_loss": 0.003304900173192705
+    },
+    "103": {
+     "name": "Eliteserien",
+     "country": "Norway",
+     "type": "League",
+     "n": 559,
+     "log_loss": 0.002746597115090933
+    },
+    "106": {
+     "name": "Ekstraklasa",
+     "country": "Poland",
+     "type": "League",
+     "n": 698,
+     "log_loss": -0.001842555018513464
+    },
+    "113": {
+     "name": "Allsvenskan",
+     "country": "Sweden",
+     "type": "League",
+     "n": 568,
+     "log_loss": 0.0020991924180112395
+    },
+    "119": {
+     "name": "Superliga",
+     "country": "Denmark",
+     "type": "League",
+     "n": 444,
+     "log_loss": 0.0023849430934748507
+    },
+    "128": {
+     "name": "Liga Profesional Argentina",
+     "country": "Argentina",
+     "type": "League",
+     "n": 1238,
+     "log_loss": -0.0003299648903835558
+    },
+    "135": {
+     "name": "Serie A",
+     "country": "Italy",
+     "type": "League",
+     "n": 818,
+     "log_loss": -0.00038577952326272237
+    },
+    "136": {
+     "name": "Serie B",
+     "country": "Italy",
+     "type": "League",
+     "n": 839,
+     "log_loss": -0.0038408829537519783
+    },
+    "140": {
+     "name": "La Liga",
+     "country": "Spain",
+     "type": "League",
+     "n": 837,
+     "log_loss": 9.019947747279151e-05
+    },
+    "141": {
+     "name": "Segunda Divisi\u00f3n",
+     "country": "Spain",
+     "type": "League",
+     "n": 1030,
+     "log_loss": -0.0038581946392723357
+    },
+    "144": {
+     "name": "Jupiler Pro League",
+     "country": "Belgium",
+     "type": "League",
+     "n": 706,
+     "log_loss": 0.0010166174707616005
+    },
+    "172": {
+     "name": "First League",
+     "country": "Bulgaria",
+     "type": "League",
+     "n": 661,
+     "log_loss": 0.0014340589687662987
+    },
+    "179": {
+     "name": "Premiership",
+     "country": "Scotland",
+     "type": "League",
+     "n": 516,
+     "log_loss": -0.0005883271937121852
+    },
+    "180": {
+     "name": "Championship",
+     "country": "Scotland",
+     "type": "League",
+     "n": 418,
+     "log_loss": -0.0015409648645840818
+    },
+    "188": {
+     "name": "A-League",
+     "country": "Australia",
+     "type": "League",
+     "n": 337,
+     "log_loss": -0.0024586949178106087
+    },
+    "197": {
+     "name": "Super League 1",
+     "country": "Greece",
+     "type": "League",
+     "n": 513,
+     "log_loss": -0.0006843182594489962
+    },
+    "203": {
+     "name": "S\u00fcper Lig",
+     "country": "Turkey",
+     "type": "League",
+     "n": 710,
+     "log_loss": 0.0018196311168046202
+    },
+    "207": {
+     "name": "Super League",
+     "country": "Switzerland",
+     "type": "League",
+     "n": 519,
+     "log_loss": -0.00026985771427406484
+    },
+    "210": {
+     "name": "HNL",
+     "country": "Croatia",
+     "type": "League",
+     "n": 404,
+     "log_loss": -0.0003502140688705982
+    },
+    "218": {
+     "name": "Bundesliga",
+     "country": "Austria",
+     "type": "League",
+     "n": 438,
+     "log_loss": 0.0003289204810982316
+    },
+    "233": {
+     "name": "Premier League",
+     "country": "Egypt",
+     "type": "League",
+     "n": 668,
+     "log_loss": -0.0006368999829640807
+    },
+    "235": {
+     "name": "Premier League",
+     "country": "Russia",
+     "type": "League",
+     "n": 568,
+     "log_loss": 0.002226913257757313
+    },
+    "244": {
+     "name": "Veikkausliiga",
+     "country": "Finland",
+     "type": "League",
+     "n": 421,
+     "log_loss": -0.0006349403174545197
+    },
+    "253": {
+     "name": "Major League Soccer",
+     "country": "USA",
+     "type": "League",
+     "n": 1172,
+     "log_loss": -0.0005748190069352478
+    },
+    "262": {
+     "name": "Liga MX",
+     "country": "Mexico",
+     "type": "League",
+     "n": 770,
+     "log_loss": -0.000639777798289838
+    },
+    "271": {
+     "name": "NB I",
+     "country": "Hungary",
+     "type": "League",
+     "n": 449,
+     "log_loss": 0.0002096819810371218
+    },
+    "283": {
+     "name": "Liga I",
+     "country": "Romania",
+     "type": "League",
+     "n": 722,
+     "log_loss": 0.001527303352480187
+    },
+    "286": {
+     "name": "Super Liga",
+     "country": "Serbia",
+     "type": "League",
+     "n": 670,
+     "log_loss": 0.00040906546953601734
+    },
+    "307": {
+     "name": "Pro League",
+     "country": "Saudi-Arabia",
+     "type": "League",
+     "n": 683,
+     "log_loss": -0.0003257758470591349
+    },
+    "310": {
+     "name": "Superliga",
+     "country": "Albania",
+     "type": "League",
+     "n": 403,
+     "log_loss": 0.000263796689861986
+    },
+    "315": {
+     "name": "Premijer Liga",
+     "country": "Bosnia",
+     "type": "League",
+     "n": 423,
+     "log_loss": 0.00337128385887713
+    },
+    "318": {
+     "name": "1. Division",
+     "country": "Cyprus",
+     "type": "League",
+     "n": 514,
+     "log_loss": 0.0011218835430280313
+    },
+    "327": {
+     "name": "Erovnuli Liga",
+     "country": "Georgia",
+     "type": "League",
+     "n": 415,
+     "log_loss": -0.0004507154463748402
+    },
+    "332": {
+     "name": "Super Liga",
+     "country": "Slovakia",
+     "type": "League",
+     "n": 446,
+     "log_loss": 0.0012513914257685976
+    },
+    "333": {
+     "name": "Premier League",
+     "country": "Ukraine",
+     "type": "League",
+     "n": 545,
+     "log_loss": 0.0008386120227818473
+    },
+    "342": {
+     "name": "Premier League",
+     "country": "Armenia",
+     "type": "League",
+     "n": 348,
+     "log_loss": -0.00033804021028146196
+    },
+    "345": {
+     "name": "Czech Liga",
+     "country": "Czech-Republic",
+     "type": "League",
+     "n": 635,
+     "log_loss": 0.0006624922768963048
+    },
+    "362": {
+     "name": "A Lyga",
+     "country": "Lithuania",
+     "type": "League",
+     "n": 405,
+     "log_loss": -0.0017315164868884668
+    },
+    "365": {
+     "name": "Virsliga",
+     "country": "Latvia",
+     "type": "League",
+     "n": 420,
+     "log_loss": -0.000613221412528587
+    },
+    "373": {
+     "name": "1. SNL",
+     "country": "Slovenia",
+     "type": "League",
+     "n": 399,
+     "log_loss": -4.0812655828530997e-05
+    },
+    "383": {
+     "name": "Ligat Ha'al",
+     "country": "Israel",
+     "type": "League",
+     "n": 520,
+     "log_loss": -0.0018363139222473436
+    },
+    "389": {
+     "name": "Premier League",
+     "country": "Kazakhstan",
+     "type": "League",
+     "n": 475,
+     "log_loss": 0.0015025628794770732
+    },
+    "419": {
+     "name": "Premyer Liqa",
+     "country": "Azerbaijan",
+     "type": "League",
+     "n": 418,
+     "log_loss": -0.001188858637888889
+    },
+    "758": {
+     "name": "Premier Division",
+     "country": "Gibraltar",
+     "type": "League",
+     "n": 300,
+     "log_loss": -0.0038771663311543995
+    },
+    "848": {
+     "name": "UEFA Europa Conference League",
+     "country": "World",
+     "type": "Cup",
+     "n": 991,
+     "log_loss": 0.00045510092548062064
+    }
+   },
+   "competitions_no_worse": [
+    32,
+    62
+   ],
+   "leagues": {
+    "n": 38538,
+    "log_loss": -0.0001769038746936685
+   },
+   "cups": {
+    "n": 5845,
+    "log_loss": -0.0005112622766249105
+   },
+   "interval_95": [
+    -0.00022093705990620726,
+    -0.0005670943686445387,
+    8.670030215331184e-05
+   ],
+   "goal_markets": {
+    "over15": 0.0,
+    "over25": 0.0,
+    "over35": 0.0,
+    "over45": 0.0,
+    "btts": 0.0
+   },
+   "verdict": {
+    "conditions": {
+     "log_loss_better_by_0.002": false,
+     "adjusted_interval_excludes_zero": false,
+     "brier_agrees": true,
+     "better_in_2024/25_and_2025/26": true,
+     "no_goal_market_worse_by_0.0005": true,
+     "60_percent_of_competitions_no_worse": false
+    },
+    "label": "no gain shown"
+   }
+  },
+  "pool3": {
+   "baseline": {
+    "n": 44383,
+    "log_loss": 0.9935952511393114,
+    "brier": 0.5927651290844805,
+    "rps": 0.20633756972265524,
+    "accuracy": 0.5158281323930334,
+    "calibration_error": 0.010282776930265835,
+    "sharpness_power": 1.1
+   },
+   "candidate": {
+    "n": 44383,
+    "log_loss": 0.9907799618457397,
+    "brier": 0.5909496618254705,
+    "rps": 0.20548743653383017,
+    "accuracy": 0.5182164342203096,
+    "calibration_error": 0.011174895439415763,
+    "sharpness_power": 1.1
+   },
+   "level": 0.9961538461538462,
+   "log_loss": [
+    -0.0028152892935716174,
+    -0.0040003734380736145,
+    -0.0016187211859809126
+   ],
+   "brier": [
+    -0.0018154672590100542,
+    -0.0026201505660911405,
+    -0.0009646676774231168
+   ],
+   "rps": [
+    -0.0008501331888250793,
+    -0.0011992564372968878,
+    -0.0004919778358041092
+   ],
+   "by_season": {
+    "2024/25": {
+     "n": 19662,
+     "log_loss": -0.002623152316581238
+    },
+    "2025/26": {
+     "n": 19515,
+     "log_loss": -0.0026391920316918447
+    },
+    "2026/27": {
+     "n": 5206,
+     "log_loss": -0.0042010624989439966
+    }
+   },
+   "by_competition": {
+    "2": {
+     "name": "UEFA Champions League",
+     "country": "World",
+     "type": "Cup",
+     "n": 639,
+     "log_loss": 0.0028348991068753355
+    },
+    "3": {
+     "name": "UEFA Europa League",
+     "country": "World",
+     "type": "Cup",
+     "n": 603,
+     "log_loss": 0.0010432515615301505
+    },
+    "39": {
+     "name": "Premier League",
+     "country": "England",
+     "type": "League",
+     "n": 819,
+     "log_loss": -0.002697878398988786
+    },
+    "40": {
+     "name": "Championship",
+     "country": "England",
+     "type": "League",
+     "n": 1219,
+     "log_loss": -0.0038074311331542637
+    },
+    "41": {
+     "name": "League One",
+     "country": "England",
+     "type": "League",
+     "n": 1215,
+     "log_loss": -0.0016471598328665527
+    },
+    "42": {
+     "name": "League Two",
+     "country": "England",
+     "type": "League",
+     "n": 1227,
+     "log_loss": -0.003720117531051369
+    },
+    "43": {
+     "name": "National League",
+     "country": "England",
+     "type": "League",
+     "n": 1262,
+     "log_loss": 0.0022857346775530443
+    },
+    "45": {
+     "name": "FA Cup",
+     "country": "England",
+     "type": "Cup",
+     "n": 1901,
+     "log_loss": 0.0008649753392713464
+    },
+    "47": {
+     "name": "FA Trophy",
+     "country": "England",
+     "type": "Cup",
+     "n": 690,
+     "log_loss": -0.005064983319957713
+    },
+    "50": {
+     "name": "National League - North",
+     "country": "England",
+     "type": "League",
+     "n": 1241,
+     "log_loss": 0.00014865659947796837
+    },
+    "51": {
+     "name": "National League - South",
+     "country": "England",
+     "type": "League",
+     "n": 1235,
+     "log_loss": -0.00023212447395616712
+    },
+    "61": {
+     "name": "Ligue 1",
+     "country": "France",
+     "type": "League",
+     "n": 668,
+     "log_loss": -0.0025101277754885644
+    },
+    "62": {
+     "name": "Ligue 2",
+     "country": "France",
+     "type": "League",
+     "n": 689,
+     "log_loss": -0.010561115597977717
+    },
+    "71": {
+     "name": "Serie A",
+     "country": "Brazil",
+     "type": "League",
+     "n": 932,
+     "log_loss": -0.001926351544964433
+    },
+    "78": {
+     "name": "Bundesliga",
+     "country": "Germany",
+     "type": "League",
+     "n": 660,
+     "log_loss": -4.309218908692806e-05
+    },
+    "79": {
+     "name": "2. Bundesliga",
+     "country": "Germany",
+     "type": "League",
+     "n": 678,
+     "log_loss": -0.007075915014468142
+    },
+    "88": {
+     "name": "Eredivisie",
+     "country": "Netherlands",
+     "type": "League",
+     "n": 697,
+     "log_loss": -0.001993320426192406
+    },
+    "94": {
+     "name": "Primeira Liga",
+     "country": "Portugal",
+     "type": "League",
+     "n": 686,
+     "log_loss": -0.004508643289478298
+    },
+    "103": {
+     "name": "Eliteserien",
+     "country": "Norway",
+     "type": "League",
+     "n": 559,
+     "log_loss": -0.0024010534573025003
+    },
+    "106": {
+     "name": "Ekstraklasa",
+     "country": "Poland",
+     "type": "League",
+     "n": 698,
+     "log_loss": -0.0022081953100824576
+    },
+    "113": {
+     "name": "Allsvenskan",
+     "country": "Sweden",
+     "type": "League",
+     "n": 568,
+     "log_loss": -0.002065156584530191
+    },
+    "119": {
+     "name": "Superliga",
+     "country": "Denmark",
+     "type": "League",
+     "n": 444,
+     "log_loss": -0.0006810930485008223
+    },
+    "128": {
+     "name": "Liga Profesional Argentina",
+     "country": "Argentina",
+     "type": "League",
+     "n": 1238,
+     "log_loss": 0.0002579633289447355
+    },
+    "135": {
+     "name": "Serie A",
+     "country": "Italy",
+     "type": "League",
+     "n": 818,
+     "log_loss": -0.005451109590170363
+    },
+    "136": {
+     "name": "Serie B",
+     "country": "Italy",
+     "type": "League",
+     "n": 839,
+     "log_loss": -0.005057325793412913
+    },
+    "140": {
+     "name": "La Liga",
+     "country": "Spain",
+     "type": "League",
+     "n": 837,
+     "log_loss": -0.004276861301825221
+    },
+    "141": {
+     "name": "Segunda Divisi\u00f3n",
+     "country": "Spain",
+     "type": "League",
+     "n": 1030,
+     "log_loss": -0.007880857093055967
+    },
+    "144": {
+     "name": "Jupiler Pro League",
+     "country": "Belgium",
+     "type": "League",
+     "n": 706,
+     "log_loss": -0.001519795898794913
+    },
+    "172": {
+     "name": "First League",
+     "country": "Bulgaria",
+     "type": "League",
+     "n": 661,
+     "log_loss": -0.005491472697064651
+    },
+    "179": {
+     "name": "Premiership",
+     "country": "Scotland",
+     "type": "League",
+     "n": 516,
+     "log_loss": -0.0034110309122199443
+    },
+    "180": {
+     "name": "Championship",
+     "country": "Scotland",
+     "type": "League",
+     "n": 418,
+     "log_loss": -0.002862902479728804
+    },
+    "188": {
+     "name": "A-League",
+     "country": "Australia",
+     "type": "League",
+     "n": 337,
+     "log_loss": -0.0003754982353482371
+    },
+    "197": {
+     "name": "Super League 1",
+     "country": "Greece",
+     "type": "League",
+     "n": 513,
+     "log_loss": -0.008255320320212438
+    },
+    "203": {
+     "name": "S\u00fcper Lig",
+     "country": "Turkey",
+     "type": "League",
+     "n": 710,
+     "log_loss": -0.003477846855924503
+    },
+    "207": {
+     "name": "Super League",
+     "country": "Switzerland",
+     "type": "League",
+     "n": 519,
+     "log_loss": -0.002334573691528041
+    },
+    "210": {
+     "name": "HNL",
+     "country": "Croatia",
+     "type": "League",
+     "n": 404,
+     "log_loss": -0.005151558219142674
+    },
+    "218": {
+     "name": "Bundesliga",
+     "country": "Austria",
+     "type": "League",
+     "n": 438,
+     "log_loss": -0.0016417412878505582
+    },
+    "233": {
+     "name": "Premier League",
+     "country": "Egypt",
+     "type": "League",
+     "n": 668,
+     "log_loss": -0.011217673203101278
+    },
+    "235": {
+     "name": "Premier League",
+     "country": "Russia",
+     "type": "League",
+     "n": 568,
+     "log_loss": 0.0021450502711923003
+    },
+    "244": {
+     "name": "Veikkausliiga",
+     "country": "Finland",
+     "type": "League",
+     "n": 421,
+     "log_loss": 0.0013330829319388013
+    },
+    "253": {
+     "name": "Major League Soccer",
+     "country": "USA",
+     "type": "League",
+     "n": 1172,
+     "log_loss": -0.0002679696440361692
+    },
+    "262": {
+     "name": "Liga MX",
+     "country": "Mexico",
+     "type": "League",
+     "n": 770,
+     "log_loss": -0.003156157219076107
+    },
+    "271": {
+     "name": "NB I",
+     "country": "Hungary",
+     "type": "League",
+     "n": 449,
+     "log_loss": -0.00020804022132165961
+    },
+    "283": {
+     "name": "Liga I",
+     "country": "Romania",
+     "type": "League",
+     "n": 722,
+     "log_loss": -0.0030770363008163276
+    },
+    "286": {
+     "name": "Super Liga",
+     "country": "Serbia",
+     "type": "League",
+     "n": 670,
+     "log_loss": -0.002411229076360091
+    },
+    "307": {
+     "name": "Pro League",
+     "country": "Saudi-Arabia",
+     "type": "League",
+     "n": 683,
+     "log_loss": -0.008140802323304044
+    },
+    "310": {
+     "name": "Superliga",
+     "country": "Albania",
+     "type": "League",
+     "n": 403,
+     "log_loss": 0.004525066486187509
+    },
+    "315": {
+     "name": "Premijer Liga",
+     "country": "Bosnia",
+     "type": "League",
+     "n": 423,
+     "log_loss": 0.0018646160882151504
+    },
+    "318": {
+     "name": "1. Division",
+     "country": "Cyprus",
+     "type": "League",
+     "n": 514,
+     "log_loss": -0.0014894859901983415
+    },
+    "327": {
+     "name": "Erovnuli Liga",
+     "country": "Georgia",
+     "type": "League",
+     "n": 415,
+     "log_loss": -0.0036989916603696166
+    },
+    "332": {
+     "name": "Super Liga",
+     "country": "Slovakia",
+     "type": "League",
+     "n": 446,
+     "log_loss": -0.0007568346546531093
+    },
+    "333": {
+     "name": "Premier League",
+     "country": "Ukraine",
+     "type": "League",
+     "n": 545,
+     "log_loss": -0.006067333717527856
+    },
+    "342": {
+     "name": "Premier League",
+     "country": "Armenia",
+     "type": "League",
+     "n": 348,
+     "log_loss": -0.01230475225790583
+    },
+    "345": {
+     "name": "Czech Liga",
+     "country": "Czech-Republic",
+     "type": "League",
+     "n": 635,
+     "log_loss": -0.004392056540218669
+    },
+    "362": {
+     "name": "A Lyga",
+     "country": "Lithuania",
+     "type": "League",
+     "n": 405,
+     "log_loss": -0.00594318694306498
+    },
+    "365": {
+     "name": "Virsliga",
+     "country": "Latvia",
+     "type": "League",
+     "n": 420,
+     "log_loss": -0.005014003259385299
+    },
+    "373": {
+     "name": "1. SNL",
+     "country": "Slovenia",
+     "type": "League",
+     "n": 399,
+     "log_loss": 0.0003405906783526101
+    },
+    "383": {
+     "name": "Ligat Ha'al",
+     "country": "Israel",
+     "type": "League",
+     "n": 520,
+     "log_loss": -0.005229955031309288
+    },
+    "389": {
+     "name": "Premier League",
+     "country": "Kazakhstan",
+     "type": "League",
+     "n": 475,
+     "log_loss": -0.002066771838474338
+    },
+    "419": {
+     "name": "Premyer Liqa",
+     "country": "Azerbaijan",
+     "type": "League",
+     "n": 418,
+     "log_loss": -0.011330713473755593
+    },
+    "758": {
+     "name": "Premier Division",
+     "country": "Gibraltar",
+     "type": "League",
+     "n": 300,
+     "log_loss": -0.018830490862173126
+    },
+    "848": {
+     "name": "UEFA Europa Conference League",
+     "country": "World",
+     "type": "Cup",
+     "n": 991,
+     "log_loss": 0.006127984017079719
+    }
+   },
+   "competitions_no_worse": [
+    50,
+    62
+   ],
+   "leagues": {
+    "n": 38538,
+    "log_loss": -0.0032146773962851557
+   },
+   "cups": {
+    "n": 5845,
+    "log_loss": -0.0001819926806760955
+   },
+   "interval_95": [
+    -0.0028152892935716174,
+    -0.0036404300279165728,
+    -0.002001155094569772
+   ],
+   "goal_markets": {
+    "over15": 0.0,
+    "over25": 0.0,
+    "over35": 0.0,
+    "over45": 0.0,
+    "btts": 0.0
+   },
+   "verdict": {
+    "conditions": {
+     "log_loss_better_by_0.002": true,
+     "adjusted_interval_excludes_zero": true,
+     "brier_agrees": true,
+     "better_in_2024/25_and_2025/26": true,
+     "no_goal_market_worse_by_0.0005": true,
+     "60_percent_of_competitions_no_worse": true
+    },
+    "label": "meets the bar"
+   }
+  }
+ }
+}

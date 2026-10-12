@@ -1,0 +1,331 @@
+{
+ "selection_window": [
+  "2022-07-01",
+  "2024-07-01"
+ ],
+ "selection_matches": 38922,
+ "production_selection_log_loss": 0.9975207620470671,
+ "base_rate_selection_log_loss": 1.0684692859626053,
+ "dc": {
+  "setting": {
+   "half_life": 250.0,
+   "ridge_team": 10.0,
+   "use_xg": 1
+  },
+  "rho": 0.0,
+  "trail": [
+   {
+    "half_life": 500.0,
+    "ridge_team": 25.0,
+    "use_xg": 1,
+    "selection_log_loss": 1.0047129527615803
+   },
+   {
+    "half_life": 500.0,
+    "ridge_team": 1.0,
+    "use_xg": 1,
+    "selection_log_loss": 1.0035202596687027
+   },
+   {
+    "half_life": 500.0,
+    "ridge_team": 3.0,
+    "use_xg": 1,
+    "selection_log_loss": 1.00155363256157
+   },
+   {
+    "half_life": 500.0,
+    "ridge_team": 10.0,
+    "use_xg": 1,
+    "selection_log_loss": 1.0014408890859339
+   },
+   {
+    "half_life": 250.0,
+    "ridge_team": 10.0,
+    "use_xg": 1,
+    "selection_log_loss": 1.0013084340745644
+   },
+   {
+    "half_life": 1000.0,
+    "ridge_team": 10.0,
+    "use_xg": 1,
+    "selection_log_loss": 1.0026722594523745
+   },
+   {
+    "half_life": 250.0,
+    "ridge_team": 10.0,
+    "use_xg": 0,
+    "selection_log_loss": 1.0014056191651908
+   }
+  ],
+  "rho_grid": [
+   {
+    "rho": -0.2,
+    "selection_log_loss": 1.006481344527061
+   },
+   {
+    "rho": -0.19,
+    "selection_log_loss": 1.0059823198728237
+   },
+   {
+    "rho": -0.18,
+    "selection_log_loss": 1.0055074582131112
+   },
+   {
+    "rho": -0.17,
+    "selection_log_loss": 1.0050569187894949
+   },
+   {
+    "rho": -0.16,
+    "selection_log_loss": 1.0046308644082806
+   },
+   {
+    "rho": -0.15,
+    "selection_log_loss": 1.004229467526707
+   },
+   {
+    "rho": -0.14,
+    "selection_log_loss": 1.003852906915884
+   },
+   {
+    "rho": -0.13,
+    "selection_log_loss": 1.0035013691270154
+   },
+   {
+    "rho": -0.12,
+    "selection_log_loss": 1.003175048644929
+   },
+   {
+    "rho": -0.11,
+    "selection_log_loss": 1.0028741478813183
+   },
+   {
+    "rho": -0.1,
+    "selection_log_loss": 1.0025988773785082
+   },
+   {
+    "rho": -0.09,
+    "selection_log_loss": 1.002349456023905
+   },
+   {
+    "rho": -0.08,
+    "selection_log_loss": 1.0021261112756077
+   },
+   {
+    "rho": -0.07,
+    "selection_log_loss": 1.0019290793996751
+   },
+   {
+    "rho": -0.06,
+    "selection_log_loss": 1.0017586057195857
+   },
+   {
+    "rho": -0.05,
+    "selection_log_loss": 1.0016149448784704
+   },
+   {
+    "rho": -0.04,
+    "selection_log_loss": 1.00149836111472
+   },
+   {
+    "rho": -0.03,
+    "selection_log_loss": 1.0014091285516393
+   },
+   {
+    "rho": -0.02,
+    "selection_log_loss": 1.0013475315018363
+   },
+   {
+    "rho": -0.01,
+    "selection_log_loss": 1.0013138647871034
+   },
+   {
+    "rho": 0.0,
+    "selection_log_loss": 1.0013084340745644
+   },
+   {
+    "rho": 0.01,
+    "selection_log_loss": 1.0013315562301426
+   },
+   {
+    "rho": 0.02,
+    "selection_log_loss": 1.0013835596896696
+   },
+   {
+    "rho": 0.03,
+    "selection_log_loss": 1.0014647848496145
+   },
+   {
+    "rho": 0.04,
+    "selection_log_loss": 1.0015755844774827
+   },
+   {
+    "rho": 0.05,
+    "selection_log_loss": 1.0017163241436131
+   },
+   {
+    "rho": 0.06,
+    "selection_log_loss": 1.0018873826753696
+   },
+   {
+    "rho": 0.07,
+    "selection_log_loss": 1.0020891526350513
+   },
+   {
+    "rho": 0.08,
+    "selection_log_loss": 1.002322040822898
+   },
+   {
+    "rho": 0.09,
+    "selection_log_loss": 1.0025864688066777
+   },
+   {
+    "rho": 0.1,
+    "selection_log_loss": 1.0028828734794366
+   }
+  ],
+  "selection_log_loss": 1.0013084340745644,
+  "by_season": {
+   "2021/22": 1.0081489692669234,
+   "2022/23": 1.0035417517538774,
+   "2023/24": 0.9990235756161246
+  }
+ },
+ "gb": {
+  "params": {
+   "max_depth": 3,
+   "max_iter": 300
+  },
+  "shrink": 1.0,
+  "grid": [
+   {
+    "max_depth": 2,
+    "max_iter": 150,
+    "shrink": 0.5,
+    "selection_log_loss": 0.9954070012131139
+   },
+   {
+    "max_depth": 2,
+    "max_iter": 150,
+    "shrink": 0.75,
+    "selection_log_loss": 0.9948229534175833
+   },
+   {
+    "max_depth": 2,
+    "max_iter": 150,
+    "shrink": 1.0,
+    "selection_log_loss": 0.9945517259832295
+   },
+   {
+    "max_depth": 3,
+    "max_iter": 150,
+    "shrink": 0.5,
+    "selection_log_loss": 0.9950686314362991
+   },
+   {
+    "max_depth": 3,
+    "max_iter": 150,
+    "shrink": 0.75,
+    "selection_log_loss": 0.9944889476423479
+   },
+   {
+    "max_depth": 3,
+    "max_iter": 150,
+    "shrink": 1.0,
+    "selection_log_loss": 0.9943337970153163
+   },
+   {
+    "max_depth": 3,
+    "max_iter": 300,
+    "shrink": 0.5,
+    "selection_log_loss": 0.9949969107393979
+   },
+   {
+    "max_depth": 3,
+    "max_iter": 300,
+    "shrink": 0.75,
+    "selection_log_loss": 0.9944312913067926
+   },
+   {
+    "max_depth": 3,
+    "max_iter": 300,
+    "shrink": 1.0,
+    "selection_log_loss": 0.9943212780729281
+   }
+  ],
+  "selection_log_loss": 0.9943212780729281,
+  "features": [
+   "exp_diff",
+   "pred_total",
+   "rank_gap",
+   "least_played",
+   "is_league",
+   "is_europe",
+   "level",
+   "month",
+   "h_res5",
+   "a_res5",
+   "h_res10",
+   "a_res10",
+   "h_tot5",
+   "a_tot5",
+   "h_momentum",
+   "a_momentum",
+   "h_luck10",
+   "a_luck10",
+   "h_shots10",
+   "a_shots10",
+   "h_sot10",
+   "a_sot10",
+   "h_box10",
+   "a_box10",
+   "h_xgd10",
+   "a_xgd10",
+   "h_rest",
+   "a_rest",
+   "h_last14",
+   "a_last14",
+   "h_last30",
+   "a_last30",
+   "h_moved",
+   "a_moved",
+   "h_since_move",
+   "a_since_move",
+   "h_manager_matches",
+   "a_manager_matches",
+   "home_missing",
+   "away_missing",
+   "h_home_res10",
+   "a_away_res10",
+   "dc_margin",
+   "dc_total"
+  ],
+  "loss_added_by_removing_group": {
+   "form": -0.0001608195697113679,
+   "shots_xg": 0.0018133824960862022,
+   "schedule": 6.668453169578203e-05,
+   "movers": 0.00017283698543368864,
+   "manager": 0.00013608168059620063,
+   "injuries": 4.4558683012785316e-05,
+   "venue": 3.2697270576642623e-06,
+   "dc": 0.00037598435076879877
+  }
+ },
+ "pool2": {
+  "weights": {
+   "production": 0.7,
+   "dc": 0.3
+  },
+  "selection_log_loss": 0.9968595784334536
+ },
+ "pool3": {
+  "weights": {
+   "production": 0.09999999999999998,
+   "dc": 0.0,
+   "gb": 0.9
+  },
+  "selection_log_loss": 0.9943099603165692
+ },
+ "evaluator_sha256": "6d971182346bcace45b0d3504daf35fac089e26f60bef5da54255c192b9342da",
+ "frame_sha256": "dd5a3e1e2973f0574234e8d120b1a9c99187bb1b999a11eaca250fd698671fba",
+ "features_sha256": "3d850304212cd88146df88b3497e8d491e8c9bb507bdc4af1e90354904bb6ab6"
+}

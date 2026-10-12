@@ -1,0 +1,74 @@
+{
+ "note": "descriptive, after the registered result; not a test",
+ "feature_check": {
+  "fixtures_checked": 150,
+  "largest_difference": 0.0
+ },
+ "registered_again": -0.0027992457882088906,
+ "by_kind_of_competition": {
+  "competitions with neither": {
+   "n": 11090,
+   "log_loss": [
+    -0.00243,
+    -0.00392,
+    -0.00091
+   ]
+  },
+  "competitions with partial statistics": {
+   "n": 6204,
+   "log_loss": [
+    -0.00026,
+    -0.00219,
+    0.00167
+   ]
+  },
+  "competitions with shots, no xG": {
+   "n": 16606,
+   "log_loss": [
+    -0.00405,
+    -0.00556,
+    -0.00252
+   ]
+  },
+  "competitions with xG": {
+   "n": 10483,
+   "log_loss": [
+    -0.00272,
+    -0.00418,
+    -0.00128
+   ]
+  }
+ },
+ "size_of_correction": {
+  "margin, goals: sd": 0.1543239434944458,
+  "margin: 5th and 95th": [
+   -0.23732038099380648,
+   0.23325704434020544
+  ],
+  "total, goals: sd": 0.14822929937616014,
+  "mean total correction": -0.05180835964826956
+ },
+ "final_without": {
+  "injuries (lists were written in September 2026, not at the time)": -0.0027505379429564715,
+  "manager": -0.0027592623770319315,
+  "shots and xG": -0.0015260737144973115,
+  "everything but base and shots and xG": -0.0016660478782352525
+ },
+ "development_linear_correction": {
+  "what": "ridge regression of the margin error on five differences of each side's last-10 shot and xG figures, refitted each half-season",
+  "selection_log_loss": [
+   -0.00245,
+   -0.00319,
+   -0.00172
+  ],
+  "boosted_trees_on_the_same_window": -0.003199483974138939,
+  "coefficients_last_block": {
+   "xG difference": -0.11296495094045908,
+   "shot difference": 0.03794834688684759,
+   "on-target difference": -0.024576234320086866,
+   "in-box shot difference": 0.0009982332253354758,
+   "goals minus xG": 0.01885891094369073,
+   "constant": -0.013210618691661428
+  }
+ }
+}

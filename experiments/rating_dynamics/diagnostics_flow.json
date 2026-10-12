@@ -1,0 +1,272 @@
+{
+ "points_per_club_per_season": {
+  "Premier League 2020/21": {
+   "European competitions": -25.0,
+   "cups, against a club from another league": -22.9,
+   "cups, against a club with no league": -0.6
+  },
+  "Premier League 2021/22": {
+   "European competitions": -20.6,
+   "cups, against a club from another league": -12.9
+  },
+  "Premier League 2022/23": {
+   "European competitions": -10.2,
+   "cups, against a club from another league": -13.2
+  },
+  "Premier League 2023/24": {
+   "European competitions": -19.8,
+   "cups, against a club from another league": -2.5,
+   "cups, against a club with no league": -0.1
+  },
+  "Championship 2020/21": {
+   "cups, against a club from another league": 5.4
+  },
+  "Championship 2021/22": {
+   "cups, against a club from another league": -1.9
+  },
+  "Championship 2022/23": {
+   "cups, against a club from another league": -11.2
+  },
+  "Championship 2023/24": {
+   "cups, against a club from another league": -3.1
+  },
+  "League One 2020/21": {
+   "cups, against a club from another league": -5.7,
+   "cups, against a club with no league": 1.7
+  },
+  "League One 2021/22": {
+   "cups, against a club from another league": -10.5,
+   "cups, against a club with no league": -2.7
+  },
+  "League One 2022/23": {
+   "cups, against a club from another league": 5.3,
+   "cups, against a club with no league": -1.0
+  },
+  "League One 2023/24": {
+   "cups, against a club from another league": -8.9,
+   "cups, against a club with no league": 1.7
+  },
+  "League Two 2020/21": {
+   "cups, against a club from another league": 11.8,
+   "cups, against a club with no league": 2.5
+  },
+  "League Two 2021/22": {
+   "cups, against a club from another league": 15.5,
+   "cups, against a club with no league": 1.3
+  },
+  "League Two 2022/23": {
+   "cups, against a club from another league": 9.8,
+   "cups, against a club with no league": -3.1
+  },
+  "League Two 2023/24": {
+   "cups, against a club from another league": 9.8,
+   "cups, against a club with no league": -1.2
+  },
+  "La Liga 2020/21": {
+   "European competitions": -1.6
+  },
+  "La Liga 2021/22": {
+   "European competitions": 1.2,
+   "cups, against a club from another league": 0.1
+  },
+  "La Liga 2022/23": {
+   "European competitions": -2.9,
+   "cups, against a club from another league": 0.2
+  },
+  "La Liga 2023/24": {
+   "European competitions": 5.2,
+   "cups, against a club from another league": 0.2
+  },
+  "Serie A 2020/21": {
+   "European competitions": -2.7
+  },
+  "Serie A 2021/22": {
+   "European competitions": -0.5
+  },
+  "Serie A 2022/23": {
+   "European competitions": 8.9
+  },
+  "Serie A 2023/24": {
+   "European competitions": 9.1
+  },
+  "Bundesliga 2020/21": {
+   "European competitions": 2.1,
+   "cups, against a club from another league": -0.5,
+   "cups, against a club with no league": 0.1
+  },
+  "Bundesliga 2021/22": {
+   "European competitions": -4.1
+  },
+  "Bundesliga 2022/23": {
+   "European competitions": 1.0,
+   "cups, against a club from another league": -0.0
+  },
+  "Bundesliga 2023/24": {
+   "European competitions": -4.1
+  },
+  "Ligue 1 2020/21": {
+   "European competitions": -3.2
+  },
+  "Ligue 1 2021/22": {
+   "European competitions": 5.2
+  },
+  "Ligue 1 2022/23": {
+   "European competitions": -4.1
+  },
+  "Ligue 1 2023/24": {
+   "European competitions": 8.8
+  },
+  "Eredivisie 2020/21": {
+   "European competitions": 5.0
+  },
+  "Eredivisie 2021/22": {
+   "European competitions": 11.2
+  },
+  "Eredivisie 2022/23": {
+   "European competitions": 1.8
+  },
+  "Eredivisie 2023/24": {
+   "European competitions": -2.3
+  },
+  "Premiership (Scotland) 2020/21": {
+   "European competitions": 12.4,
+   "cups, against a club from another league": 0.2,
+   "cups, against a club with no league": 2.3
+  },
+  "Premiership (Scotland) 2021/22": {
+   "European competitions": 13.6,
+   "cups, against a club from another league": -1.6,
+   "cups, against a club with no league": 3.8
+  },
+  "Premiership (Scotland) 2022/23": {
+   "European competitions": -3.9,
+   "cups, against a club from another league": -1.6,
+   "cups, against a club with no league": 1.6
+  },
+  "Premiership (Scotland) 2023/24": {
+   "European competitions": 9.6,
+   "cups, against a club from another league": 3.6,
+   "cups, against a club with no league": -7.5
+  },
+  "Jupiler Pro League 2020/21": {
+   "European competitions": -6.3
+  },
+  "Jupiler Pro League 2021/22": {
+   "European competitions": -3.6
+  },
+  "Jupiler Pro League 2022/23": {
+   "European competitions": 1.7
+  },
+  "Jupiler Pro League 2023/24": {
+   "European competitions": 2.3
+  },
+  "Super Lig 2020/21": {
+   "European competitions": 1.4
+  },
+  "Super Lig 2021/22": {
+   "European competitions": -0.6
+  },
+  "Super Lig 2022/23": {
+   "European competitions": 3.5
+  },
+  "Super Lig 2023/24": {
+   "European competitions": -5.9
+  },
+  "Primeira Liga 2020/21": {
+   "European competitions": 6.6
+  },
+  "Primeira Liga 2021/22": {
+   "European competitions": 0.3
+  },
+  "Primeira Liga 2022/23": {
+   "European competitions": 2.9
+  },
+  "Primeira Liga 2023/24": {
+   "European competitions": -5.9
+  }
+ },
+ "changed_league_first_10_matches": {
+  "down, 2021/22, elsewhere": [
+   -0.521,
+   0.105,
+   250
+  ],
+  "down, 2021/22, top two English levels": [
+   -0.489,
+   0.339,
+   30
+  ],
+  "down, 2022/23, elsewhere": [
+   -0.407,
+   0.099,
+   280
+  ],
+  "down, 2022/23, top two English levels": [
+   -0.209,
+   0.222,
+   30
+  ],
+  "down, 2023/24, elsewhere": [
+   -0.346,
+   0.102,
+   300
+  ],
+  "down, 2023/24, top two English levels": [
+   -0.21,
+   0.326,
+   30
+  ],
+  "up, 2021/22, elsewhere": [
+   0.294,
+   0.112,
+   217
+  ],
+  "up, 2021/22, top two English levels": [
+   0.259,
+   0.368,
+   30
+  ],
+  "up, 2022/23, elsewhere": [
+   0.131,
+   0.108,
+   259
+  ],
+  "up, 2022/23, top two English levels": [
+   -0.283,
+   0.365,
+   30
+  ],
+  "up, 2023/24, elsewhere": [
+   0.108,
+   0.1,
+   250
+  ],
+  "up, 2023/24, top two English levels": [
+   -0.739,
+   0.293,
+   30
+  ]
+ },
+ "all_leagues_points_per_club": {
+  "2020/21": {
+   "European competitions": 0.14,
+   "cups, against a club from another league": 0.0,
+   "cups, against a club with no league": 0.19
+  },
+  "2021/22": {
+   "European competitions": -0.08,
+   "cups, against a club from another league": 0.0,
+   "cups, against a club with no league": -0.15
+  },
+  "2022/23": {
+   "European competitions": -0.23,
+   "cups, against a club from another league": 0.0,
+   "cups, against a club with no league": 0.14
+  },
+  "2023/24": {
+   "European competitions": 0.05,
+   "cups, against a club from another league": -0.0,
+   "cups, against a club with no league": -0.19
+  }
+ }
+}

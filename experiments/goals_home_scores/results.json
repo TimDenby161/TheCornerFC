@@ -1,0 +1,131 @@
+{
+ "level": 0.9961538461538462,
+ "family": 13,
+ "final_matches": 44383,
+ "chosen_sha256": "7845718dd6d1deb1a3dde24d404477f7f3368565b34d9907069d3d49ebc18b98",
+ "evaluator_sha256": "002490ff967636765db2fda0982d47911cfdab43583d82414d62c571d05d5e68",
+ "frame_sha256": "dd5a3e1e2973f0574234e8d120b1a9c99187bb1b999a11eaca250fd698671fba",
+ "candidates": {
+  "goal_level": {
+   "setting": {
+    "half_life": 60,
+    "comp": 100
+   },
+   "primary": "mean log loss over the five goal markets",
+   "primary_change": [
+    -0.0006217144964056958,
+    -0.0010393768105809364,
+    -0.0001994917475123546
+   ],
+   "interval_95": [
+    -0.0006217144964056958,
+    -0.0008992322307494234,
+    -0.00033922987610079404
+   ],
+   "by_season": {
+    "2024/25": -0.0006822862554805212,
+    "2025/26": -0.0006169680211843408,
+    "2026/27": -0.00041073976283203547
+   },
+   "competitions_no_worse": [
+    38,
+    62
+   ],
+   "guards": {
+    "result_log_loss": -0.00011189673661092052
+   },
+   "by_market": {
+    "over15": -0.000610445622065885,
+    "over25": -0.00030776608944248576,
+    "over35": -0.0011163079472165753,
+    "over45": -0.000725421117720943,
+    "btts": -0.00034863170558258646
+   },
+   "total_goals_by_season": {
+    "2024/25": {
+     "actual": 2.7290713050554367,
+     "production": 2.820883150318353,
+     "candidate": 2.742245994854817
+    },
+    "2025/26": {
+     "actual": 2.7771970279272353,
+     "production": 2.827541470602965,
+     "candidate": 2.788167969863298
+    },
+    "2026/27": {
+     "actual": 2.9264310411064156,
+     "production": 2.890120830357387,
+     "candidate": 2.8695574478542527
+    }
+   },
+   "verdict": {
+    "conditions": {
+     "primary_better_by_0.002": false,
+     "adjusted_interval_excludes_zero": true,
+     "better_in_2024/25_and_2025/26": true,
+     "no_guard_worse_by_0.0005": true,
+     "60_percent_of_competitions_no_worse": true
+    },
+    "label": "a real gain below the bar"
+   }
+  },
+  "league_home": {
+   "setting": {
+    "half_life": 730,
+    "comp": 300
+   },
+   "primary": "result log loss",
+   "primary_change": [
+    -0.00023923106910523614,
+    -0.0006475294761520263,
+    0.00024397979350670464
+   ],
+   "interval_95": [
+    -0.00023923106910523614,
+    -0.0005323247642423403,
+    6.92656102979423e-05
+   ],
+   "by_season": {
+    "2024/25": -8.301742957345998e-05,
+    "2025/26": -0.00046623972956246596,
+    "2026/27": 2.1737318975643877e-05
+   },
+   "competitions_no_worse": [
+    28,
+    62
+   ],
+   "guards": {
+    "over15": -6.093530640626705e-05,
+    "over25": -3.389724726826232e-05,
+    "over35": -6.937735701490697e-05,
+    "over45": -6.557501449428532e-05,
+    "btts": 2.8335514322139127e-05
+   },
+   "brier": -0.0001764111326121034,
+   "verdict": {
+    "conditions": {
+     "primary_better_by_0.002": false,
+     "adjusted_interval_excludes_zero": false,
+     "better_in_2024/25_and_2025/26": true,
+     "no_guard_worse_by_0.0005": true,
+     "60_percent_of_competitions_no_worse": false
+    },
+    "label": "no gain shown"
+   }
+  },
+  "low_score": {
+   "setting": {
+    "rho": 0.0,
+    "inflation": 1.06
+   },
+   "label": "nothing chosen on development; not scored"
+  },
+  "bivariate": {
+   "setting": {
+    "share": 0.0,
+    "inflation": 1.06
+   },
+   "label": "nothing chosen on development; not scored"
+  }
+ }
+}

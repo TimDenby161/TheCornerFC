@@ -1,0 +1,15 @@
+{
+  "protocol": "P13",
+  "generated_at": "2026-10-12T18:41:32.557940+00:00",
+  "evaluator_sha256": "0d54e221ca3fd922bc1357fbef104eca4e65a01b8a334acf0218aab3ef37fff8",
+  "start": "2026-10-13",
+  "target": 9400,
+  "blinded": true,
+  "accrual": {
+    "database_says": "production",
+    "accrued_upper_bound": 0,
+    "weeks": 0,
+    "target": 9400,
+    "note": "finished fixtures from the start day with a prospective snapshot before kickoff; the few whose snapshot today's probability step does not reproduce are taken out at analysis"
+  }
+}
