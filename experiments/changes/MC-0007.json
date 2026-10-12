@@ -1,0 +1,99 @@
+{
+ "id": "MC-0007",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "Sharpening the result probabilities",
+  "component": "Match probabilities",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Stretch the step from expected margin to result probabilities, so strong favourites get more and outsiders less.",
+  "why": "Diagnostics on July 2024 onwards showed outsiders overrated and strong favourites underrated.",
+  "how": "Three one-number forms were tried on 2023/24. The one chosen raises each of the three probabilities to the power 1.10 and rescales them to add to one.",
+  "hypothesis": "The step from margin to probabilities is too flat for mismatches; stretching it improves the result probabilities.",
+  "expected": {
+   "improves": "Result log loss, and calibration below 20% and from 70% up.",
+   "metrics": [
+    {
+     "metric": "log_loss",
+     "delta": -0.0007,
+     "low": -0.0011,
+     "high": -0.0003,
+     "source": "experiments/ends_and_draws/DESIGN.md: the diagnostic that prompted it (power 1.1 fitted on 2023/24)"
+    }
+   ],
+   "betting": null,
+   "confidence": null,
+   "evidence": "The pattern was found on most of the test period before the test (DESIGN.md says so), so the test confirms rather than discovers; the 2021 to 2023 holdout had not been looked at."
+  },
+  "success_criteria": "The standing bar: result log loss better by at least 0.002 on held-out matches, with the interval excluding zero, Brier agreeing and the same direction in each season. A second, weaker bar for the ends: the ends gap down by a quarter, log loss no worse, and half the competitions no worse.",
+  "code": {
+   "commit": "7d58dfdf5",
+   "experiment": "experiments/ends_and_draws",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Test, July 2024 onwards",
+   "metric": "log_loss",
+   "delta": -0.00076,
+   "n": 44383,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": 0.9936,
+   "after": 0.99284,
+   "interval": [
+    -0.00115,
+    -0.00039
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "Real but small: the interval excludes zero and the ends gap halves, at a third of the bar. The gain is in cups; fewer than half the competitions are no worse.",
+   "source": "experiments/ends_and_draws/REPORT.md"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Holdout, 2021/22 and 2022/23 (never looked at)",
+   "metric": "log_loss",
+   "delta": -1e-05,
+   "n": 38753,
+   "period": [
+    "2021-07-01",
+    "2023-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": [
+    -0.00047,
+    0.00045
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "No. Nothing on the two unseen seasons: the ends were already well calibrated there.",
+   "source": "experiments/ends_and_draws/REPORT.md"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "Meets neither bar: a third of 0.002 on test and nothing on the unseen seasons."
+  }
+ ]
+}

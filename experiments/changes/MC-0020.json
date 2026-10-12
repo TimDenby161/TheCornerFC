@@ -1,0 +1,88 @@
+{
+ "id": "MC-0020",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "The goal total follows recent scoring",
+  "component": "Goal markets",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Scale the projected goal total by how many goals are actually being scored lately, overall and by competition.",
+  "why": "The projected total barely moves between seasons while real scoring moved by a tenth of a goal either way.",
+  "how": "A running figure with a 60-day half-life, each competition shrunk towards the overall one, learned from earlier days only.",
+  "hypothesis": "A goal level that moves improves the goal markets.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "The final period had been looked at by earlier diagnostics, so this is strong historical evidence and not a blind test."
+  },
+  "success_criteria": "The round's bar, on the mean log loss of the five goal markets: better by 0.002 with the corrected interval excluding zero.",
+  "code": {
+   "commit": "277648dd6",
+   "experiment": "experiments/goals_home_scores",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "Selection window, five goal markets",
+   "metric": "goal_markets_log_loss",
+   "delta": -0.00064,
+   "n": 38922,
+   "period": [
+    "2022-07-01",
+    "2024-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "The figure the setting was chosen on.",
+   "source": "experiments/goals_home_scores/chosen.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Final period, mean of the five goal markets",
+   "metric": "goal_markets_log_loss",
+   "delta": -0.00062,
+   "n": 44383,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": [
+    -0.00104,
+    -0.0002
+   ],
+   "interval_level": 0.996,
+   "vs_market": null,
+   "meaningful": "Real, in each season, largest at over 3.5 and 4.5. A third of the bar.",
+   "source": "experiments/goals_home_scores/results.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Inconclusive",
+   "reason": "A real gain below the bar. It is the `calibration` candidate of protocol P14."
+  }
+ ]
+}

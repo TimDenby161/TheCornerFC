@@ -51,7 +51,7 @@ class ManifestTests(unittest.TestCase):
 
     def test_every_writer_of_data_files_rewrites_it(self):
         main = (ROOT / 'thecornerfc/__main__.py').read_text()
-        for call, wrote in (('export.export_nations(conn)', '["nations.json"]'), ('export.export_injuries(conn)', '["bets.json", "injuries.json"]')):
+        for call, wrote in (('export.export_nations(conn)', '["nations.json"]'), ('export.export_injuries(conn)', '["injuries.json"]')):
             after = main.split(call, 1)[1].split('return 0', 1)[0]
             self.assertIn(f'export.write_manifest(conn=conn, only={wrote})', after, call)
             self.assertIn(f'export.mirror_site_docs(conn, only={wrote[:-1]}, ', after, call)       # and writes just those rows

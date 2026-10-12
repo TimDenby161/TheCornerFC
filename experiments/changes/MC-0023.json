@@ -1,0 +1,64 @@
+{
+ "id": "MC-0023",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "A bivariate Poisson score grid",
+  "component": "Match probabilities",
+  "model": "match",
+  "kind": "experiment",
+  "what": "A shared goal component for the two sides, which adds draws at every score.",
+  "why": "The standard way to add dependence between the two sides' goals.",
+  "how": "The term is fitted on the selection window with the draw boost refitted alongside.",
+  "hypothesis": "The term improves the exact-score probabilities.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "The final period had been looked at by earlier diagnostics, so this is strong historical evidence and not a blind test."
+  },
+  "success_criteria": "The round's bar, on the log loss of the exact 90-minute score.",
+  "code": {
+   "commit": "277648dd6",
+   "experiment": "experiments/goals_home_scores",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "The term itself, on the selection window",
+   "metric": "other",
+   "delta": 0.0,
+   "n": 38922,
+   "period": [
+    "2022-07-01",
+    "2024-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "No. Zero was the best value of the term, so it was not scored on the final period.",
+   "source": "experiments/goals_home_scores/chosen.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "The low-score excess is real but is fewer goals in tight games, not dependence between the sides: the standard shapes point the wrong way."
+  }
+ ]
+}

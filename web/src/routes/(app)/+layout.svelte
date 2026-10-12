@@ -8,7 +8,7 @@
 	import AccountBox from '#lib/components/AccountBox.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
 	import { ADS } from '#lib/config.ts';
-	import { MENU, OWNER_MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
+	import { ADMIN_MENU, MENU, OWNER_MENU, methodologyHref, sectionHref, tabFor } from '#lib/menu.ts';
 	import { owner } from '#lib/owner.svelte.ts';
 	import { browserZone, keepUkTime, keepZone } from '#lib/timeChoice.ts';
 
@@ -27,8 +27,9 @@
 	type TabHead = { title: string; intro: string; more: string; key: [string, string][] };
 	const head = $derived(page.data.tabHead as TabHead | undefined);
 	// the Fantasy group: for the owner, known from an earlier visit or as soon as the database says so
-	const menu = $derived((data.owner && owner.status !== 'no') || owner.status === 'ok' ? [...MENU, OWNER_MENU] : MENU);
-	const current = $derived([...MENU, OWNER_MENU].flatMap((g) => g.sections).find((s) => s.path && page.url.pathname.startsWith(s.path)));
+	// the Admin group: for an administrator, as the database answered for this request
+	const menu = $derived([...MENU, ...((data.owner && owner.status !== 'no') || owner.status === 'ok' ? [OWNER_MENU] : []), ...(data.admin ? [ADMIN_MENU] : [])]);
+	const current = $derived([...MENU, OWNER_MENU, ADMIN_MENU].flatMap((g) => g.sections).find((s) => s.path && page.url.pathname.startsWith(s.path)));
 
 	// The server writes <body data-tab>; after a move between pages in the browser it follows here.
 	$effect(() => { document.body.dataset.tab = tab; });

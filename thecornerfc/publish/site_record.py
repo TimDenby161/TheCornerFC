@@ -7,12 +7,13 @@ import logging
 import math
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from .. import config
 from ..models import national_predictions
 from ..models.betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_cautious
 from ..models.predictions import GOAL_LINES, goal_lines
-from .site_files import OUT_DIR, _r, _table_exists, _write_json_file
+from .site_files import OUT_DIR, _r, _read_json, _table_exists, _write_json_file, store_admin_doc
 from .site_matches import market_probabilities, site_freshness
 
 # the export's one log, whichever module writes to it
@@ -469,8 +470,11 @@ BET_STAKE_GBP = 10
 
 
 def export_bets(conn, out_dir=OUT_DIR):
-    """Every paper bet and its result for the site's Bets tab (.export/bets.json), all of them
-    so the bank there runs from the first bet."""
+    """Every paper bet and its result for the two betting pages, all of them so the bank there
+    runs from the first bet. The administrator's only since 2026-10-13: the document goes to
+    admin_docs (store_admin_doc), never into out_dir or site.docs, and the public row it used to
+    be is removed. Returns the document; a run that can't write (a local one, or a database from
+    before the table) stores nothing."""
     rows = conn.execute(
         """select b.bet_id, b.strategy, b.fixture_id, b.kickoff, b.league_id, b.market, b.selection,
                   b.model_prob, b.fair_prob, b.odds_taken, bk.name, b.edge, b.closing_odds, b.clv,
@@ -511,8 +515,90 @@ def export_bets(conn, out_dir=OUT_DIR):
     } for r in rows]
     # Only what the Bets tab reads: it adds up its own totals from the bets (app.js, summarise).
     # No generation timestamp, so the file only changes when bets do
-    _write_json_file(out_dir / "bets.json", {
+    doc = {
         "rules": {"min_edge": MIN_EDGE, "max_odds": MAX_ODDS, "stake": 1, "stake_gbp": BET_STAKE_GBP, "bank": BET_BANK_GBP, "cautious_rule": CAUTIOUS_RULE},
         "bets": bets,
-    })
-    log.info("Exported %d paper bets", len(bets))
+    }
+    _store_admin(conn, "bets", doc)
+    return doc
+
+
+def _store_admin(conn, name, doc):
+    """Store one of the administrator's documents, and take the paper bets out of the public
+    rows. Never fatal: a failure is logged and the last stored document stays."""
+    try:
+        store_admin_doc(conn, name, doc)
+        if name == "bets":
+            conn.execute("delete from site.docs where key = 'bets'")
+            conn.commit()
+        log.info("Stored the administrator's %s document", name)
+        return True
+    except config.SafetyError as exc:
+        log.info("The administrator's %s document was not stored: %s", name, exc)
+    except Exception:
+        log.exception("The administrator's %s document was not stored", name)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    return False
+
+
+def export_model_changes(conn, out_dir=OUT_DIR, now=None):
+    """The administrator's Model Change Tracker (admin_docs 'model_changes'): the register in
+    experiments/changes copied into its append-only tables, then written out as recorded, with
+    the live record's figures from this export's methodology.json and stats.json, the match
+    model's results by month and how each deployed change has done since. Never fatal, and
+    nothing goes to out_dir or site.docs. Returns the document, or None when the register can't
+    be read."""
+    from ..evidence import model_changes
+    now = now or datetime.now(timezone.utc)
+    out_dir = Path(out_dir)
+    try:
+        changes = model_changes.load()
+    except ValueError as exc:
+        log.error("%s", exc)
+        return None
+    stored, differs = True, []
+    try:
+        differs = model_changes.sync(conn, changes)["differs"]
+        rows = model_changes.recorded(conn)
+    except config.SafetyError as exc:
+        log.info("Model changes were not recorded: %s", exc)
+        stored, rows = False, model_changes.from_files(changes)
+    except Exception:
+        log.exception("Model changes were not recorded")
+        conn.rollback()
+        stored, rows = False, model_changes.from_files(changes)
+    for line in differs:
+        log.warning("Model change register: %s", line)
+
+    def part(name):
+        path = out_dir / name
+        return _read_json(path) if path.exists() else {}
+
+    live = part("methodology.json").get("matches") or {}
+    result = (((part("stats.json").get("ranges") or {}).get("365d") or {}).get("all") or {}).get("markets") or {}
+    result = result.get("1X2") or {}
+    current = {
+        "version": (live.get("versions") or [{}])[0].get("name"), "versions": live.get("versions") or [],
+        "n": live.get("n"), "period": live.get("period"), "log_loss": live.get("log_loss"), "brier": live.get("brier"),
+        "accuracy": live.get("accuracy"),
+        # the Stats page's comparison: every finished match of the last 12 months with stored prices
+        "vs_market": {"n": result["n"], "model_log_loss": result["model_ll"], "market_log_loss": result["close_ll"]}
+        if result.get("n") else None,
+    }
+    series, record, environment = [], {}, None
+    try:
+        environment = conn.execute("select site.environment()").fetchone()[0]
+        series = model_changes.monthly(conn)
+        record = model_changes.forward(
+            conn, rows, now,
+            market_for=lambda since: {f: v["close"] for (f, m), v in market_consensus(conn, since).items() if m == "1X2"})
+    except Exception:
+        log.exception("The model change record's live figures were left out")
+        conn.rollback()
+    doc = model_changes.document(rows, environment=environment, generated_at=now.isoformat(), current=current,
+                                 series=series, forward_record=record, differs=differs, stored=stored)
+    _store_admin(conn, "model_changes", doc)
+    return doc

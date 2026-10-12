@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { oldAddress, oldFile, pageHref, tabFor } from './menu';
+import { ADMIN_MENU, MENU, OWNER_MENU, oldAddress, oldFile, pageHref, tabFor } from './menu';
 
 describe('old shared links', () => {
 	it('go to the same page here, with their choices', () => {
@@ -8,7 +8,6 @@ describe('old shared links', () => {
 		expect(oldAddress('#/club/42/matches')).toBe('/club/42/matches');
 		expect(oldAddress('#/league/39/table')).toBe('/league/39/table');
 		expect(oldAddress('#/nation/Korea%20Republic/players')).toBe('/nation/Korea%20Republic/players');
-		expect(oldAddress('#/model-vs-market')).toBe('/model-vs-market');
 		expect(oldAddress('#/matches?c=e:2&d=2026-10-13')).toBe('/matches?c=e:2&d=2026-10-13');
 	});
 	it('drop the first tab\'s name, which has no address of its own here', () => {
@@ -23,6 +22,10 @@ describe('old shared links', () => {
 	it('leave alone anything that isn\'t one of the old site\'s pages', () => {
 		for (const h of ['', '#main', '#/nonsense', '#/club', '#advice', '#//evil.example', '#/clubs#x']) expect(oldAddress(h)).toBeNull();
 	});
+	it('no longer carry the two betting pages, which are the administrator\'s now', () => {
+		expect(oldAddress('#/model-vs-market')).toBeNull();
+		expect(oldAddress('#/simulation')).toBeNull();
+	});
 });
 
 describe('menu', () => {
@@ -32,7 +35,16 @@ describe('menu', () => {
 		expect(tabFor('/players')).toBe('table');
 		expect(tabFor('/club/42/history')).toBe('club');
 		expect(tabFor('/nation/England')).toBe('club');
-		expect(tabFor('/simulation')).toBe('bets');
+		expect(tabFor('/admin/simulation')).toBe('bets');
+		expect(tabFor('/admin/model-vs-market')).toBe('tips');
+		expect(tabFor('/admin/changes/MC-0007')).toBe('changes');
+		expect(tabFor('/simulation')).toBe('home');
+	});
+	it('keeps every Admin page out of the menus anyone else is shown', () => {
+		const shown = [...MENU, OWNER_MENU].flatMap((g) => g.sections);
+		expect(shown.some((s) => (s.path || '').startsWith('/admin') || /Paper Simulation|Model vs Market|Model Change/.test(s.label))).toBe(false);
+		expect(ADMIN_MENU.sections.map((s) => s.label)).toEqual(['Model Change Tracker', 'Model vs Market', 'Paper Simulation']);
+		expect(ADMIN_MENU.sections.every((s) => s.path!.startsWith('/admin/'))).toBe(true);
 	});
 	it('links every kind of page on this site', () => {
 		expect(pageHref('club', 42)).toBe('/club/42');

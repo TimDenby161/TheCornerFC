@@ -6,7 +6,7 @@ import { SITE_ENV, SITE_HOST } from '#lib/config.ts';
 // account, the owner's fantasy pages and the server's own addresses are never for them.
 export function GET({ url }) {
 	const body = SITE_ENV === 'production' && url.hostname === SITE_HOST
-		? ['User-agent: *', 'Disallow: /account', 'Disallow: /fantasy/', 'Disallow: /fpl', 'Disallow: /my-fpl-team', 'Disallow: /efl-fantasy', 'Disallow: /stripe/', 'Disallow: /players/rows', 'Disallow: /players/options', 'Disallow: /players/seasons', '']
+		? ['User-agent: *', 'Disallow: /account', 'Disallow: /admin', 'Disallow: /fantasy/', 'Disallow: /fpl', 'Disallow: /my-fpl-team', 'Disallow: /efl-fantasy', 'Disallow: /stripe/', 'Disallow: /players/rows', 'Disallow: /players/options', 'Disallow: /players/seasons', '']
 		: ['User-agent: *', 'Disallow: /', ''];
 	return new Response(body.join('\n'), { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
 }

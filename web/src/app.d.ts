@@ -15,6 +15,8 @@ declare global {
 			// give a subscriber the paid rows); both undefined when signed out
 			user?: { id: string; email: string };
 			token?: string;
+			// set by the hook on an address under /admin, once the database has said this visitor is an administrator
+			admin?: boolean;
 		}
 	}
 }

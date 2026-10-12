@@ -1,0 +1,61 @@
+{
+ "id": "MC-0005",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-09-27",
+  "title": "Squad strength as an extra input to club forecasts",
+  "component": "Club rank",
+  "model": "club",
+  "kind": "experiment",
+  "what": "A club-neutral measure of squad strength added to forecasts of a club's next 5, 10 and 20 matches.",
+  "why": "A squad can change faster than results show, after a transfer window for instance.",
+  "how": "Squad strength is added on top of current rank, long-term rank and the squad's own club history, and judged on goal difference, points and opponent-adjusted goal difference.",
+  "hypothesis": "Squad strength carries forward information the club ranks do not.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": null
+  },
+  "success_criteria": "At least 1% better squared error beyond club-history controls, on goal difference, points and adjusted goal difference, and consistent across periods.",
+  "code": {
+   "commit": "d27da69ab",
+   "experiment": "experiments/squad_forward",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-09-27",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-09-27",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Opponent-adjusted goal difference over the next 10 matches, share of squared error",
+   "metric": "mse",
+   "delta": -0.0076,
+   "n": null,
+   "period": null,
+   "baseline": null,
+   "after": null,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "No. Raw goal difference and points clear 1% at some horizons, but the adjusted measure stays under 1%, is uncertain at 20 matches and changes sign between periods.",
+   "source": "experiments/STAGE_E_DECISION.md"
+  },
+  {
+   "date": "2026-09-27",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "The pre-set criterion needed adjusted goal difference too, and it failed. Squad strength is not fed into ranks or forecasts."
+  }
+ ]
+}

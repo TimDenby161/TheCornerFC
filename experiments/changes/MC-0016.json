@@ -1,0 +1,88 @@
+{
+ "id": "MC-0016",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "Movers and new clubs together",
+  "component": "Club rank",
+  "model": "match",
+  "kind": "experiment",
+  "what": "The two rank changes that helped, at the setting chosen for them together (move halfway, boost 0.5 fading over 40 matches).",
+  "why": "Each was real and small on its own.",
+  "how": "Both changes in one replay of the rank.",
+  "hypothesis": "The two add up.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "The final period had been looked at by earlier diagnostics, so this is strong historical evidence and not a blind test."
+  },
+  "success_criteria": "The research round's bar (experiments/research_frame/REGISTER.md): better by 0.002 on the final period, the 99.6% interval excluding zero, Brier agreeing, better in 2024/25 and 2025/26, no goal market worse by 0.0005, and 60% of competitions no worse.",
+  "code": {
+   "commit": "277648dd6",
+   "experiment": "experiments/rating_dynamics",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "Selection window",
+   "metric": "log_loss",
+   "delta": -0.0009,
+   "n": 38922,
+   "period": [
+    "2022-07-01",
+    "2024-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "The figure the setting was chosen on.",
+   "source": "experiments/rating_dynamics/chosen.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Final period",
+   "metric": "log_loss",
+   "delta": -0.00079,
+   "n": 44383,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": 0.9936,
+   "after": 0.99281,
+   "interval": [
+    -0.00138,
+    -0.00022
+   ],
+   "interval_level": 0.996,
+   "vs_market": null,
+   "meaningful": "Real: 0.0008, under half the bar.",
+   "source": "experiments/rating_dynamics/results.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Inconclusive",
+   "reason": "A real gain below the bar. It is the `movers` candidate of protocol P14."
+  }
+ ]
+}

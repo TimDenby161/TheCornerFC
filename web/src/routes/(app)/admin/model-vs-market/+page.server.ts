@@ -3,18 +3,20 @@ import { dayName, GROUP_ORDER, localDay } from '#lib/matchday.ts';
 import { matchRows, type MatchesAnswer } from '#lib/matches.ts';
 import { clubs, type RankingsDoc } from '#lib/rankings.ts';
 import { pctText, type StatsDoc } from '#lib/stats.ts';
+import { adminDoc } from '#lib/server/admin.ts';
 import { askAs, keptDoc } from '#lib/server/database.ts';
 import { cardView } from '#lib/server/matches.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 import { compLabel, type Site } from '#lib/site.ts';
 
 // The paper simulation's open selections (where the model and the market disagree enough for it
-// to take one), one per pick, soonest first, grouped by day and competition
-export async function load({ fetch, locals, parent, setHeaders }) {
+// to take one), one per pick, soonest first, grouped by day and competition. The administrator's
+// only: the selections are one of their documents (adminDoc), not a public row.
+export async function load({ fetch, locals, parent }) {
 	const { tz } = await parent();
 	const [site, rankings, doc, stats] = await Promise.all([
 		keptDoc<Site>(fetch, 'site'), keptDoc<RankingsDoc>(fetch, 'rankings'),
-		keptDoc<BetsDoc>(fetch, 'bets').catch(() => null), keptDoc<StatsDoc>(fetch, 'stats', 300_000).catch(() => null)
+		adminDoc<BetsDoc>(fetch, locals.token, 'bets'), keptDoc<StatsDoc>(fetch, 'stats', 300_000).catch(() => null)
 	]);
 	const stake = doc?.rules?.stake_gbp ?? 10;
 	const picks = onePerPick(doc?.bets || []);
@@ -25,7 +27,6 @@ export async function load({ fetch, locals, parent, setHeaders }) {
 	const answer = ids.length ? await askAs<MatchesAnswer>(fetch, locals.token, 'site_matches', { p_ids: ids }).catch(() => null) : null;
 	const ranks = new Map(clubs(rankings).map((c) => [c.team, c]));
 	const cards = new Map((answer ? matchRows(site.match_fields, answer) : []).map((m) => [m.id, cardView(site, ranks, m, !!answer?.paywall)]));
-	if (!locals.token) setHeaders({ 'cache-control': 'public, max-age=60' });
 
 	// How the model has done against the market: accuracy on every market with odds (last 12
 	// months), and the settled paper selections' closing-price record and simulated profit

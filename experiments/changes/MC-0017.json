@@ -1,0 +1,67 @@
+{
+ "id": "MC-0017",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "A hierarchical, time-weighted Poisson model refitted weekly",
+  "component": "Whole model",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Replace the model with the Dixon-Coles family: an attack and a defence for every club, shrunk to a level for its league, with older matches counting less, refitted every week.",
+  "why": "It is the standard published way to build a football model, and it had never been compared with production.",
+  "how": "One fit covers every competition; every seven days it is refitted on all earlier matches and predicts the next seven.",
+  "hypothesis": "A model built on separate attack and defence from the ground up predicts better than the Elo-like rank.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "The final period had been looked at by earlier diagnostics, so this is strong historical evidence and not a blind test."
+  },
+  "success_criteria": "The research round's bar (experiments/research_frame/REGISTER.md): better by 0.002 on the final period, the 99.6% interval excluding zero, Brier agreeing, better in 2024/25 and 2025/26, no goal market worse by 0.0005, and 60% of competitions no worse.",
+  "code": {
+   "commit": "277648dd6",
+   "experiment": "experiments/architectures",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Final period",
+   "metric": "log_loss",
+   "delta": 0.00538,
+   "n": 44383,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": 0.9936,
+   "after": 0.99897,
+   "interval": [
+    0.00368,
+    0.00687
+   ],
+   "interval_level": 0.996,
+   "vs_market": null,
+   "meaningful": "Worse than production, in every season and in 51 of 62 competitions.",
+   "source": "experiments/architectures/results.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "0.0054 worse. The single rank is not the limitation."
+  }
+ ]
+}

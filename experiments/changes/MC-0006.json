@@ -1,0 +1,85 @@
+{
+ "id": "MC-0006",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-09-27",
+  "title": "More weight on line-ups, a goalkeeper line, or better predicted XIs",
+  "component": "Line-ups and injuries",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Changing the weights on the predicted line-up's lines, adding a goalkeeper line, or investing in predicting the XI more accurately.",
+  "why": "Line-ups were a recent addition and their weights had not been checked on held-out matches.",
+  "how": "The same fixtures are scored with no line-up, the predicted line-up and the actual line-up, and the goalkeeper weight is chosen on 2023/24.",
+  "hypothesis": "Line-up information is worth more than the model takes from it.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": null
+  },
+  "success_criteria": "0.002 of log loss a fixture (provisional).",
+  "code": {
+   "commit": "d27da69ab",
+   "experiment": "experiments/lineup_value",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-09-27",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-09-27",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Predicted line-up against none",
+   "metric": "log_loss",
+   "delta": -0.00241,
+   "n": 9601,
+   "period": null,
+   "baseline": null,
+   "after": null,
+   "interval": [
+    -0.00344,
+    -0.00135
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "The existing line-up input clears 0.002 against nothing at all, which supports keeping it.",
+   "source": "experiments/STAGE_E_DECISION.md"
+  },
+  {
+   "date": "2026-09-27",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Actual line-up against the predicted one (the most a perfect prediction could add)",
+   "metric": "log_loss",
+   "delta": -0.00054,
+   "n": 9601,
+   "period": null,
+   "baseline": null,
+   "after": null,
+   "interval": [
+    -0.00087,
+    -0.00018
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "No. A perfect XI adds a quarter of the bar, so better XI prediction is not worth chasing. Validation chose a goalkeeper weight of zero.",
+   "source": "experiments/STAGE_E_DECISION.md"
+  },
+  {
+   "date": "2026-09-27",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "Keep the line-up weights and no goalkeeper line. The line-up-specific gain (0.0013) and the perfect-XI ceiling (0.0005) are both under 0.002."
+  }
+ ]
+}

@@ -1,0 +1,67 @@
+{
+ "id": "MC-0024",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "Shots as a stand-in for xG in the club rank",
+  "component": "Club rank",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Where a match has shot counts and no xG, estimate its xG from shots, shots on target and shots in the box, and use it in the rank as real xG is used.",
+  "why": "xG is the largest single input and exists for 23% of matches; shot counts exist for another 40%.",
+  "how": "A shots-based xG estimate fitted on matches that have both, then the usual blend of goals and xG.",
+  "hypothesis": "Shot information improves the rank where there is no xG.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "Registered after the round's other thirteen comparisons had been scored, and corrected for fourteen."
+  },
+  "success_criteria": "The research round's bar (experiments/research_frame/REGISTER.md): better by 0.002 on the final period, the 99.6% interval excluding zero, Brier agreeing, better in 2024/25 and 2025/26, no goal market worse by 0.0005, and 60% of competitions no worse.",
+  "code": {
+   "commit": "277648dd6",
+   "experiment": "experiments/shots_proxy",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Final period",
+   "metric": "log_loss",
+   "delta": -0.00061,
+   "n": 44383,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": 0.9936,
+   "after": null,
+   "interval": [
+    -0.00114,
+    -5e-05
+   ],
+   "interval_level": 0.996,
+   "vs_market": null,
+   "meaningful": "Real, narrowly: a third of the bar, and only 35 of 62 competitions no worse. Worth 0.0016 on the matches it changes directly.",
+   "source": "experiments/shots_proxy/REPORT.md"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Inconclusive",
+   "reason": "A real gain below the bar. Shot information is followed as a formula in protocols P13 and P14."
+  }
+ ]
+}

@@ -291,8 +291,8 @@ class BetsExportTests(unittest.TestCase):
         conn = Mock()
         conn.execute.side_effect = execute
         with tempfile.TemporaryDirectory() as d:
-            export.export_bets(conn, Path(d))
-            bets = json.loads((Path(d) / "bets.json").read_text())["bets"]
+            bets = export.export_bets(conn, Path(d))["bets"]
+            self.assertEqual(list(Path(d).iterdir()), [])                # the administrator's: never a file
         self.assertEqual([b["id"] for b in bets], [2, 1])                # latest kickoff first
         self.assertEqual((bets[0]["home"], bets[0]["league"], bets[0]["home_id"], bets[0]["intl"]),
                          ("Bosnia & Herzegovina", 5, 1113, 1))

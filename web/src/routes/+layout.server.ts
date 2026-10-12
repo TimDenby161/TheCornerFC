@@ -1,5 +1,6 @@
 import * as env from '$app/env/private';
 import { zoneChoice } from '#lib/matchday.ts';
+import { isAdmin } from '#lib/server/admin.ts';
 import { siteAsk } from '#lib/server/database.ts';
 import { payments } from '#lib/server/payments.ts';
 
@@ -13,9 +14,13 @@ export async function load({ fetch, locals, cookies }) {
 	const { tz, ukTime } = zoneChoice(cookies.get('tz'));
 	// whether subscriptions can be bought yet (the server has Stripe's keys)
 	const pay = !!payments(env);
-	if (!locals.user) return { user: null, sub: null, tz, ukTime, owner: false, pay };
-	const sub = await siteAsk<Subscription>(fetch, 'my_subscription', {}, locals.token).catch(() => null);
+	if (!locals.user) return { user: null, sub: null, tz, ukTime, owner: false, admin: false, pay };
+	// (whether the Admin links are in the menu: the database's answer for this visitor's own token)
+	const [sub, admin] = await Promise.all([
+		siteAsk<Subscription>(fetch, 'my_subscription', {}, locals.token).catch(() => null),
+		locals.admin ? true : isAdmin(fetch, locals.token)
+	]);
 	// the Fantasy links are in the menu from the start for the browser the owner last used them in
 	// (the cookie decides nothing else: the database checks who asks for the pages' data)
-	return { user: { email: locals.user.email }, sub, tz, ukTime, owner: cookies.get('owner') === '1', pay };
+	return { user: { email: locals.user.email }, sub, tz, ukTime, owner: cookies.get('owner') === '1', admin, pay };
 }

@@ -1,0 +1,67 @@
+{
+ "id": "MC-0018",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "Boosted trees correcting production's predictions",
+  "component": "Whole model",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Two boosted-tree regressions predict the error in production's expected margin and goal total from pre-match figures, and their corrections are added before the usual probability step.",
+  "why": "Production ignores shot counts where there is no xG, and its small calibration errors move over time.",
+  "how": "Forty-four features, each from earlier matches only: recent form against the model, shots and xG over the last ten matches, schedule, division changes, managers, injuries. Retrained every half-season on every scored match before it.",
+  "hypothesis": "A learned correction finds what the formulas miss.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "The final period had been looked at by earlier diagnostics, so this is strong historical evidence and not a blind test."
+  },
+  "success_criteria": "The research round's bar (experiments/research_frame/REGISTER.md): better by 0.002 on the final period, the 99.6% interval excluding zero, Brier agreeing, better in 2024/25 and 2025/26, no goal market worse by 0.0005, and 60% of competitions no worse.",
+  "code": {
+   "commit": "277648dd6",
+   "experiment": "experiments/architectures",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Final period",
+   "metric": "log_loss",
+   "delta": -0.0028,
+   "n": 44383,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": 0.9936,
+   "after": 0.9908,
+   "interval": [
+    -0.0041,
+    -0.00147
+   ],
+   "interval_level": 0.996,
+   "vs_market": null,
+   "meaningful": "Yes on this evidence: it meets every condition of the bar, in every season and in 48 of 62 competitions. About half the gain is recent shots.",
+   "source": "experiments/architectures/results.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": "It met the historical bar. The owner chose a prospective test before any change: protocol P13, blinded until 9,400 fixtures from 13 October 2026."
+  }
+ ]
+}

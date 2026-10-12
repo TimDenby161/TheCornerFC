@@ -29,6 +29,23 @@ housekeeping. It is a new model version.
    results exist: an amendment is a dated note in `PROTOCOLS.md`.
 6. Saved inputs (`inputs.json.gz`, pickles) are feed data: gitignored, never committed.
 
+## The change record (`guide/admin-area.md`)
+
+Every proposed change has a file in `experiments/changes/`, which the Admin area's Model Change
+Tracker shows. `python -m thecornerfc changes` checks them.
+
+- **Before any result is looked at:** add the next `MC-0000.json` with the registration only
+  (`retrospective: false`, no events), in the same commit as `DESIGN.md` and the evaluator. An
+  expected number goes in only with the source that records it; otherwise leave `metrics`
+  empty and the text fields `null`. Never fill an expectation in afterwards.
+- **After each evaluation:** add a `result` event naming its source file. Add, never edit: the
+  database keeps the first version, and an edited file shows on the page as a mismatch. A
+  mistake is a `correction` event.
+- **When the owner decides:** add a `decision` event with the reason. A result never accepts or
+  deploys anything.
+- **If it is released:** a separate `production change` file with a `deployed` event dated the
+  day it reaches `main`. An experiment's file never carries one.
+
 ## The model change itself
 
 7. Change the model file. Give the version a new name where the model registers itself

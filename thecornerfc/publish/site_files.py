@@ -22,7 +22,7 @@ OUT_DIR = Path(os.getenv("THECORNERFC_EXPORT_DIR") or Path(__file__).resolve().p
 # Written by other commands, not the export: kept across a full export
 CARRIED_FILES = ()
 CRITICAL_JSON_FILES = (
-    "site.json", "rankings.json", "stats.json", "bets.json", "injuries.json",
+    "site.json", "rankings.json", "stats.json", "injuries.json",
 )
 CRITICAL_DETAIL_DIRS = ("players", "clubs", "leagues")
 MIN_MAJOR_ROWS = {
@@ -176,6 +176,24 @@ def store_owner_doc(conn, name, payload):
     is read-only: callers treat that as a skipped export."""
     config.require_db_write(f"store {name}")
     conn.execute("""insert into fpl_owner_docs (name, doc, updated_at) values (%s, %s::jsonb, now())
+                    on conflict (name) do update set doc = excluded.doc, updated_at = excluded.updated_at""",
+                 [name, json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"))])
+    conn.commit()
+
+
+ADMIN_DOCS = ("bets", "model_changes")
+
+
+def store_admin_doc(conn, name, payload):
+    """The administrator's documents (owner's decision 2026-10-13): the paper bets and the model
+    change record go to admin_docs, never .export or site.docs, and the site reads them through
+    admin_doc(), which answers only a signed-in administrator
+    (db/migrations/20261013_admin_area.sql). Raises if the table is missing or the connection is
+    read-only: callers treat that as a skipped export."""
+    if name not in ADMIN_DOCS:
+        raise ValueError(f"{name} is not an administrator's document")
+    config.require_db_write(f"store {name}")
+    conn.execute("""insert into admin_docs (name, doc, updated_at) values (%s, %s::jsonb, now())
                     on conflict (name) do update set doc = excluded.doc, updated_at = excluded.updated_at""",
                  [name, json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"))])
     conn.commit()

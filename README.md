@@ -38,6 +38,7 @@ The tables and the records they keep:
 - [My FPL team](guide/my-fpl-team.md)
 - [The site's data in the database (step 1)](guide/site-data.md)
 - [Accounts](guide/accounts.md)
+- [The Admin area and the model change record](guide/admin-area.md)
 - [Paid tier (built in part, switched off)](guide/paid-tier.md)
 - [Retention and removing a person](guide/retention.md)
 - [Fantasy expected points (v1.1, evidence only)](guide/fantasy-expected-points.md)

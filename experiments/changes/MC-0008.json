@@ -1,0 +1,97 @@
+{
+ "id": "MC-0008",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "Refitting the draw boost",
+  "component": "Match probabilities",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Lower the draw boost and fade it out sooner (1.07 fading at 1.0 goals, against 1.10 fading at 1.5).",
+  "why": "The predicted draw rate was about a point above the actual rate on the sample used.",
+  "how": "The two numbers of the draw boost are searched on 2023/24 and scored once on the other periods.",
+  "hypothesis": "The draw boost puts too much on the draw; refitting it improves the result probabilities.",
+  "expected": {
+   "improves": "Result log loss and the draw gap.",
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "The pattern was found on most of the test period before the test (DESIGN.md says so), so the test confirms rather than discovers; the 2021 to 2023 holdout had not been looked at."
+  },
+  "success_criteria": "The standing bar: result log loss better by at least 0.002 on held-out matches, with the interval excluding zero, Brier agreeing and the same direction in each season. A second, weaker bar for the ends: the ends gap down by a quarter, log loss no worse, and half the competitions no worse.",
+  "code": {
+   "commit": "7d58dfdf5",
+   "experiment": "experiments/ends_and_draws",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Test, July 2024 onwards",
+   "metric": "log_loss",
+   "delta": -0.00018,
+   "n": 44383,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": 0.9936,
+   "after": 0.99342,
+   "interval": [
+    -0.00034,
+    -2e-05
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "Detectable and negligible: a tenth of the bar.",
+   "source": "experiments/ends_and_draws/REPORT.md"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Holdout, 2021/22 and 2022/23",
+   "metric": "log_loss",
+   "delta": -7e-05,
+   "n": 38753,
+   "period": [
+    "2021-07-01",
+    "2023-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": [
+    -0.00027,
+    0.00011
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "No. The interval straddles zero.",
+   "source": "experiments/ends_and_draws/REPORT.md"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "Meets neither bar."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "correction",
+   "of": "registration",
+   "text": "The premise was partly an artefact. The sample left out cup ties decided after 90 minutes, most of which were level, so it was short of draws. In leagues alone the model predicts 25.4% draws and 25.7% happen. Do not repeat this experiment on a sample of 90-minute finishes only."
+  }
+ ]
+}

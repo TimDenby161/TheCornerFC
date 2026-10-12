@@ -1,0 +1,61 @@
+{
+ "id": "MC-0004",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-09-27",
+  "title": "Player ranks with club strength removed or weakened",
+  "component": "Player ranks",
+  "model": "player",
+  "kind": "experiment",
+  "what": "Three other forms of the player rating: before club scaling, with every club set level, and with club strength taken out by regression.",
+  "why": "Player ratings correlate strongly with club strength (0.60 for strikers to 0.77 for full-backs), which could mean they mostly repeat the club rank.",
+  "how": "Each form is used to predict players' future performance and minutes, and as the line-up input to match predictions, against the production form on the same rows.",
+  "hypothesis": "A rating less tied to club strength predicts players and matches better.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": null
+  },
+  "success_criteria": "At least 1% better on a player target's squared error, or 0.002 on match log loss, supported by intervals and both periods.",
+  "code": {
+   "commit": "d27da69ab",
+   "experiment": "experiments/player_club_strength",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-09-27",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-09-27",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Scaled line-up over club controls, match log loss (the production form)",
+   "metric": "log_loss",
+   "delta": -0.00175,
+   "n": 10995,
+   "period": null,
+   "baseline": null,
+   "after": null,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "The production form is the best of the four for matches; no alternative beats it, and none reaches 0.002.",
+   "source": "experiments/STAGE_E_DECISION.md"
+  },
+  {
+   "date": "2026-09-27",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "Unscaled and residual versions tie with the scaled one (differences of 0.003% of squared error or less). Keep club scaling."
+  }
+ ]
+}

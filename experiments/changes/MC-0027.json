@@ -1,0 +1,64 @@
+{
+ "id": "MC-0027",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": false,
+  "date": "2026-10-12",
+  "title": "Movers, the shot formula and the goal level together",
+  "component": "Whole model",
+  "model": "match",
+  "kind": "experiment",
+  "what": "The three formula improvements applied in turn: the two rank changes, then the shot formula fitted on what is left, then the goal level.",
+  "why": "Each is small alone; together they are the most a set of plain formulas is expected to add.",
+  "how": "Each stage is fitted on the errors the one before leaves, walking forward in time.",
+  "hypothesis": "The three add up to more than the 0.002 bar on matches no one has seen.",
+  "expected": {
+   "improves": "Result log loss, the goal markets, and the distance to the bookmakers' prices.",
+   "metrics": [
+    {
+     "metric": "log_loss",
+     "delta": -0.0028,
+     "source": "experiments/prospective/PROTOCOLS.md (P14): four fifths of its selection-window figure, the planning effect"
+    }
+   ],
+   "betting": "Not expected to produce an edge: the three together are about a sixth of the gap to the bookmakers.",
+   "confidence": "Settings fixed on matches up to June 2024; never scored on a later match.",
+   "evidence": "experiments/relearned_calibration/DESIGN.md"
+  },
+  "success_criteria": "Protocol P14: `combined` better than production by 0.002 with the interval excluding zero, Brier agreeing and the goal markets no worse. An edge is recorded only if it is also not behind the bookmakers' prices and its shadow bets' return and closing-line value both have intervals above zero.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/relearned_calibration",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "Selection window, 2022 to 2024",
+   "metric": "log_loss",
+   "delta": -0.00347,
+   "n": 38922,
+   "period": [
+    "2022-07-01",
+    "2024-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "The years its settings were chosen on; not a test.",
+   "source": "experiments/relearned_calibration/chosen.json"
+  },
+  {
+   "date": "2026-10-13",
+   "type": "status",
+   "status": "Testing",
+   "note": "Accruing under P14 from 14 October 2026: 6,200 fixtures, read once, after P6."
+  }
+ ]
+}

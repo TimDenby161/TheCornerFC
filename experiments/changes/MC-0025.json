@@ -1,0 +1,64 @@
+{
+ "id": "MC-0025",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": false,
+  "date": "2026-10-12",
+  "title": "The shot formula",
+  "component": "Match projection",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Move the expected margin by a formula of five differences between the two sides' last ten matches: xG, shots, shots on target, shots in the box, and goals minus xG.",
+  "why": "About half of what the boosted trees gain is recent shots, and a formula can be written into production and explained on the site where trees cannot.",
+  "how": "A ridge regression of the margin's error on the five differences, refitted every 1 January and 1 July on earlier matches.",
+  "hypothesis": "A plain formula recovers most of the shots part of the trees' gain.",
+  "expected": {
+   "improves": "Result log loss.",
+   "metrics": [
+    {
+     "metric": "log_loss",
+     "delta": -0.00245,
+     "source": "experiments/prospective/PROTOCOLS.md (P13): its figure on the 2022 to 2024 selection window"
+    }
+   ],
+   "betting": null,
+   "confidence": "Never scored on a match after June 2024.",
+   "evidence": "The trees' ablation, the shots-proxy experiment and the selection-window figure."
+  },
+  "success_criteria": "Protocol P13 (secondary) and P14: better by 0.002 on prospective snapshots with the interval excluding zero, Brier agreeing and the goal markets no worse.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/relearned_calibration",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "Selection window, 2022 to 2024",
+   "metric": "log_loss",
+   "delta": -0.00245,
+   "n": 38922,
+   "period": [
+    "2022-07-01",
+    "2024-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "The years it was built on; not a test.",
+   "source": "experiments/relearned_calibration/chosen.json"
+  },
+  {
+   "date": "2026-10-13",
+   "type": "status",
+   "status": "Testing",
+   "note": "Accruing under P13 from 13 October 2026 (9,400 fixtures) and P14 from 14 October (6,200). Blinded until then."
+  }
+ ]
+}

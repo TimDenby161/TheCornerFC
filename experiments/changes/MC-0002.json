@@ -1,0 +1,43 @@
+{
+ "id": "MC-0002",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-09-25",
+  "title": "Paper rule: minimum edge raised from 3% to 10%, Bet365 prices only, more goal lines",
+  "component": "Betting rule",
+  "model": "betting",
+  "kind": "production change",
+  "what": "The paper simulation takes a selection only when the model's chance times the price is at least 1.10 (it was 1.03), takes Bet365's price and no other bookmaker's, and bets on over/under 1.5, 3.5 and 4.5 as well as 2.5.",
+  "why": "At 3% the rule placed about fifty bets on a Saturday. Bet365 is the bookmaker actually bet with. The goal markets were the closest to the bookmakers in the first model-against-market check.",
+  "how": "One threshold and one bookmaker id in the betting rule, and three more goal lines calibrated on 2023/24.",
+  "hypothesis": "Not specified: no hypothesis about returns was recorded.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "thecornerfc/models/betting.py; guide/match-predictions.md"
+  },
+  "success_criteria": "Not specified.",
+  "code": {
+   "commit": null,
+   "experiment": null,
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-09-25",
+   "type": "decision",
+   "status": "Accepted",
+   "reason": "The owner's choice of rule; no evaluation was run before it."
+  },
+  {
+   "date": "2026-09-25",
+   "type": "deployed",
+   "commit": null,
+   "note": "Dated in thecornerfc/models/betting.py. The commit is not recoverable (history rewritten on 9 October 2026)."
+  }
+ ]
+}

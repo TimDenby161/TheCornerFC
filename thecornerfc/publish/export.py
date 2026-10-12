@@ -48,6 +48,7 @@ from .site_files import (
     _table_exists,
     _write_json_file,
     mirror_site_docs,
+    store_admin_doc,
     store_owner_doc,
     validate_export,
     write_manifest,
@@ -87,6 +88,7 @@ from .site_record import (
     export_lineup_history,
     export_lineup_record,
     export_methodology,
+    export_model_changes,
     export_stats,
     market_consensus,
     national_stat_rows,
@@ -310,6 +312,7 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     export_bets(conn, out_dir)
     store_matches(conn, matches, {**match_explanations(conn, now), **national_why})
     export_methodology(conn, out_dir, now)
+    export_model_changes(conn, out_dir, now)
     player_team, listed = export_players(conn, out_dir, rankings)
     export_injuries(conn, out_dir, listed["free"])
     # the players are rows of site.players: the site asks for the ones a view shows, and needs the

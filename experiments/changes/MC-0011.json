@@ -1,0 +1,91 @@
+{
+ "id": "MC-0011",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "Marking down clubs with no league in the data",
+  "component": "Club rank",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Take 25 points off a side that has no league in the database when it meets one that has.",
+  "why": "Clubs known only from cup ties looked overrated in every period.",
+  "how": "One number, chosen on 2023/24, applied to those matches.",
+  "hypothesis": "Sides with no league are overrated by a fixed amount.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": null
+  },
+  "success_criteria": "The standing bar: result log loss better by at least 0.002 on held-out matches, with the interval excluding zero, Brier agreeing and the same direction in each season. Over all matches. A second bar on the changed matches alone asked for the same direction on test and holdout.",
+  "code": {
+   "commit": "dcc71efc2",
+   "experiment": "experiments/level_gaps",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "One-sided matches, July 2024 onwards",
+   "metric": "log_loss",
+   "delta": -0.0074,
+   "n": 1078,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": [
+    -0.0152,
+    0.0003
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "Points the right way; the interval just includes zero.",
+   "source": "experiments/level_gaps/REPORT.md"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "One-sided matches, 2021/22 and 2022/23",
+   "metric": "log_loss",
+   "delta": -0.0002,
+   "n": 763,
+   "period": [
+    "2021-07-01",
+    "2023-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": [
+    -0.0099,
+    0.0092
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "No. Nothing on the unseen seasons.",
+   "source": "experiments/level_gaps/REPORT.md"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Inconclusive",
+   "reason": "The direction is the same in every period but the size is too uncertain to set."
+  }
+ ]
+}

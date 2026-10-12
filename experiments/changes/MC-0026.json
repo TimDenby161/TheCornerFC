@@ -1,0 +1,64 @@
+{
+ "id": "MC-0026",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "A curve relearning the margin's error",
+  "component": "Match probabilities",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Relearn, every half-season, how the expected margin's error depends on the margin itself, so mismatches are no longer too flat.",
+  "why": "A fixed sharpening failed because the error it corrects moves over time; one that relearns might follow it.",
+  "how": "A ridge regression of the margin's error on the margin (straight or curved, with or without a term for cups), on two or four years of matches or all of them.",
+  "hypothesis": "A relearned curve improves the result probabilities where a fixed one could not.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": null
+  },
+  "success_criteria": "Fixed before the grid ran: the best of 24 settings must improve the selection window by 0.0002 over the goal level alone.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/relearned_calibration",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "Best of 24 settings over the goal level alone, selection window",
+   "metric": "log_loss",
+   "delta": -8e-05,
+   "n": 38922,
+   "period": [
+    "2022-07-01",
+    "2024-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "No. Under half of what it needed.",
+   "source": "experiments/relearned_calibration/chosen.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "Not chosen on development. The flat ends are absent before 2024, so nothing fitted on those years can see them. A formula on the model's own recent errors also added nothing."
+  }
+ ]
+}

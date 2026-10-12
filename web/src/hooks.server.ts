@@ -2,6 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit/hooks';
 import { SITE_ENV, SITE_HOST } from '#lib/config.ts';
 import { oldFile, tabFor } from '#lib/menu.ts';
+import { adminGate, isAdminPath } from '#lib/server/admin.ts';
 import { supabaseFor } from '#lib/server/auth.ts';
 
 const LINK_TYPES = new Set(['signup', 'email', 'recovery', 'magiclink', 'invite', 'email_change']);
@@ -53,6 +54,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.locals.token = session.access_token;
 	}
 
+	// The Admin area, every address under /admin (pages, the data behind them, anything added
+	// later): checked here, before any of it runs, and by the database, not by this code. A
+	// visitor who isn't signed in is sent to sign in; one who is and isn't an administrator is
+	// told there is no such page. The documents themselves are refused by the database again.
+	const gate = await adminGate(event.fetch, event.url.pathname, event.locals.token);
+	if (gate === 'signin') redirect(303, '/account');
+	if (gate === 'refuse') error(404, 'Not found');
+	if (gate === 'admin') event.locals.admin = true;
+
 	const response = await resolve(event, {
 		// the stylesheet lays a section out by the name on <body data-tab>, so the server writes it
 		transformPageChunk: ({ html }) => html.replace('%tab%', tabFor(event.url.pathname)),
@@ -63,6 +73,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 	response.headers.append('vary', 'Cookie');
 	// staging is never for search engines, whatever links to it
 	if (SITE_ENV !== 'production') response.headers.set('x-robots-tag', 'noindex, nofollow');
-	if (event.locals.user) response.headers.set('cache-control', 'private, no-store');
+	if (event.locals.user || isAdminPath(event.url.pathname)) response.headers.set('cache-control', 'private, no-store');
 	return response;
 };

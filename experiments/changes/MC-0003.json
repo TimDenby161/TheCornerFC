@@ -1,0 +1,64 @@
+{
+ "id": "MC-0003",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-09-26",
+  "title": "A different blend of current and long-term club rank near kickoff",
+  "component": "Club rank",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Weights other than 60% current rank and 40% long-term rank for a match played today.",
+  "why": "The 60/40 blend had been chosen in an earlier backtest and had not been checked against its neighbours on held-out matches.",
+  "how": "The rank going into each match is rebuilt with weights of 0, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8 and 1.0; 2023/24 chooses, and July 2024 onwards is scored.",
+  "hypothesis": "Some weight other than 0.6 gives better result predictions.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": null
+  },
+  "success_criteria": "The standing bar: result log loss better by at least 0.002 on held-out matches, with the interval excluding zero, Brier agreeing and the same direction in each season.",
+  "code": {
+   "commit": "97acc1c34",
+   "experiment": "experiments/strength_weight",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-09-26",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-09-27",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Best alternative (0.7) against 0.6, July 2024 onwards",
+   "metric": "log_loss",
+   "delta": 0.0001,
+   "n": 43658,
+   "period": null,
+   "baseline": 0.99399,
+   "after": 0.99409,
+   "interval": [
+    -0.00011,
+    0.00029
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "No. Validation and test both choose 0.6. The interval for 0.7 runs from better by 0.0001 to worse by 0.0003.",
+   "source": "experiments/strength_weight/results.json"
+  },
+  {
+   "date": "2026-09-27",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "The production value is itself the validated best. Keep 0.6 / 0.4."
+  }
+ ]
+}

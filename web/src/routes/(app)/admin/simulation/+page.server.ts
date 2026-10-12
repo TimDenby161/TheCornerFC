@@ -2,6 +2,7 @@ import { bankAfter, BET_MARKETS, betProbs, betScope, betTeams, gbp, SEL_LABELS, 
 import { filterMenu } from '#lib/clubTable.ts';
 import { compCountries, filterComps, knownMatchFilter } from '#lib/matchday.ts';
 import { MARKET_LABELS, pctText } from '#lib/stats.ts';
+import { adminDoc } from '#lib/server/admin.ts';
 import { keptDoc } from '#lib/server/database.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 import { compLabel, type Site } from '#lib/site.ts';
@@ -11,13 +12,13 @@ const TITLES = {
 	euro: 'Champions League, Europa League and Conference League bets', cup: (name: string) => `${name} bets`, intl: 'Bets on national team matches'
 };
 
-// A record of the paper selections as if each had been backed with the same paper stake
-export async function load({ fetch, url, locals, setHeaders }) {
-	const [site, doc] = await Promise.all([keptDoc<Site>(fetch, 'site'), keptDoc<BetsDoc>(fetch, 'bets').catch(() => null)]);
+// A record of the paper selections as if each had been backed with the same paper stake. The
+// administrator's only: the bets are one of their documents (adminDoc), not a public row.
+export async function load({ fetch, url, locals }) {
+	const [site, doc] = await Promise.all([keptDoc<Site>(fetch, 'site'), adminDoc<BetsDoc>(fetch, locals.token, 'bets')]);
 	const q = url.searchParams;
 	const pick = <T extends string>(k: string, ok: readonly T[], def: T): T => (ok.includes(q.get(k) as T) ? (q.get(k) as T) : def);
 	const ch: BetChoices = { strategy: pick('s', ['all', 'early', 'late'], 'all'), market: pick('m', ['all', ...BET_MARKETS], 'all'), view: pick('v', ['all', 'cautious'], 'all') };
-	if (!locals.token) setHeaders({ 'cache-control': 'public, max-age=60' });
 	const tabHead = { title: 'Paper Simulation', ...TAB_INFO.bets };
 	if (!doc) return { ...ch, filter: 'all', menu: null, tabHead, any: false as const };
 

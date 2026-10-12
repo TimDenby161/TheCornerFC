@@ -235,17 +235,18 @@ for (let i = 0; i < 30 && (await run('location.search')) !== '?src=history'; i++
 await sleep(1200);
 check('the reconstructed history, with more to list', (await run('location.search')) === '?src=history' && /Reconstructed, not a live record/.test(await run(`document.querySelector('#lineup-body')?.textContent`)) && (await run(`!!document.querySelector('#lineup-body .lr-more')`)), `${await run(`document.querySelector('#lineup-body .stats-value')?.textContent`)} line-ups`);
 
-// The two betting pages
-await open('/model-vs-market');
-check('Model vs Market: the three tiles, the 18+ note and the open selections', (await run(`document.querySelectorAll('#tips-top .kpi').length`)) === 3 && (await run(`!!document.querySelector('#tips-top .age-18')`)) && (await run(`document.querySelectorAll('#tips-body .tip-pick').length`)) > 0, `${await run(`document.querySelectorAll('#tips-body .tip-pick').length`)} selections`);
-await run(`document.querySelector('#tips-body .tip-day')?.click()`); await sleep(300);
-check('a day of selections folds away', await run(`document.querySelector('#tips-body .tip-day-body')?.classList.contains('collapsed')`));
-await open('/simulation');
-const settledAll = await run(`document.querySelectorAll('#bets-body .bet-row').length`);
-await run(`[...document.querySelectorAll('#bet-market a')].find((a) => a.textContent === 'Result')?.click()`); await until(`location.search === '?m=1X2'`); await sleep(500);
-check('Paper Simulation: a market narrows the record', settledAll > 50 && (await run(`document.querySelectorAll('#bets-body .bet-row').length`)) < settledAll && (await run(`!!document.querySelector('#bets-body .age-18')`)), `${settledAll} -> ${await run(`document.querySelectorAll('#bets-body .bet-row').length`)} settled`);
-await run(`document.querySelector('#bets-body .calib-table tbody .team-link')?.click()`); await until(`/c=\\d+/.test(location.search)`); await sleep(500);
-check('tapping a league narrows to it, the market kept', /m=1X2/.test(await run('location.search')) && (await run(`document.querySelectorAll('#bets-body .calib-table')[0]?.querySelectorAll('tbody tr').length`)) === 1, await run('location.search'));
+// The Admin area (the two betting pages and the Model Change Tracker) is the administrator's: a
+// visitor who isn't signed in is sent to sign in from every address under /admin, the pages'
+// old public addresses are gone, the public key can't read the bets, and the menu has no link
+await open('/admin/simulation'); await until(`location.pathname === '/account'`);
+check('a signed-out visitor is sent from the Admin area to sign in', (await run('location.pathname')) === '/account' && !(await run(`!!document.querySelector('#bets-body')`)), await run('location.pathname'));
+const shut = await run(`Promise.all(['/admin', '/admin/changes', '/admin/changes/MC-0001', '/admin/model-vs-market', '/admin/simulation/__data.json', '/admin/changes/__data.json'].map((u) => fetch(u, { redirect: 'manual' }).then(async (r) => r.type === 'opaqueredirect' || r.status === 404 || /^\\{"type":"redirect","status":303,"location":"\\/account"\\}$/.test(await r.text()) ? '' : u + ' ' + r.status))).then((x) => x.filter(Boolean).join(', '))`);
+check('every address under /admin is shut to a signed-out visitor, the data behind the pages too', shut === '', shut);
+const gone = await run(`Promise.all(['/simulation', '/model-vs-market'].map((u) => fetch(u).then((r) => r.status))).then((x) => x.join())`);
+check("the betting pages' old public addresses are gone", gone === '404,404', gone);
+// (those two 404s were asked for: they are not the page going wrong)
+for (let i = errors.length - 1; i >= 0; i--) if (/404 \(Not Found\).*\/(simulation|model-vs-market)$/.test(errors[i])) errors.splice(i, 1);
+check('the menu has no Admin links for a visitor', !(await run(`[...document.querySelectorAll('#main-menu a')].some((a) => /Admin|Paper Simulation|Model vs Market|Model Change/.test(a.textContent) || a.getAttribute('href').startsWith('/admin'))`)));
 
 // the account box: opens from the menu, shows the forms and the bot check, and answers in place
 await open('/clubs?c=39');

@@ -187,6 +187,44 @@ export const TAB_INFO: Record<string, TabInfo> = {
 			]
 		]
 	},
+	"changes": {
+		"intro": "Every change to a model that was proposed: what it was expected to do, what testing showed, what was decided, and how it has done since.",
+		"more": "",
+		"key": [
+			[
+				"Log loss",
+				"How surprised the model was by what happened. Lower is better. A change of 0.002 is the bar a change to the match model has to clear."
+			],
+			[
+				"Brier score",
+				"The squared distance between the chances given and what happened, summed over home, draw and away. Lower is better."
+			],
+			[
+				"Better, Worse, Unclear",
+				"Better or Worse is said only when a result's interval leaves zero out. A figure with no interval, or one whose interval crosses zero, is Unclear whatever its sign."
+			],
+			[
+				"Development figure",
+				"A score on the matches a change was built on. It shows the change runs, not that it works."
+			],
+			[
+				"Historical backtest",
+				"A score on past matches the change's settings were not chosen on. It is still the past, replayed with today's code."
+			],
+			[
+				"Prospective test",
+				"A score on matches played after the change was fixed, read once at a sample size set beforehand."
+			],
+			[
+				"Forward record",
+				"How a change deployed to production has done on matches since, worked out from the predictions stored before each kickoff. It is never typed in."
+			],
+			[
+				"Accepted, Deployed",
+				"Accepted is a decision. Deployed means the change is in production now. An experiment is never shown as deployed."
+			]
+		]
+	},
 	"bets": {
 		"intro": "A record of those selections as if each had been backed with the same paper stake. No real money is involved.",
 		"more": "market",

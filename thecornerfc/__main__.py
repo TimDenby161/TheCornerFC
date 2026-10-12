@@ -49,6 +49,7 @@ def main(argv=None):
     evaluation.add_parser(sub)
     sub.add_parser("health", help="Show recorded dataset and pipeline health (no API calls)")
     sub.add_parser("usage", help="Report persistent API usage without network access")
+    sub.add_parser("changes", help="Check the model change register (experiments/changes); no database")
     preflight = sub.add_parser("preflight", help="Check manual backfill budget against live daily quota")
     preflight.add_argument("--leagues", type=int, nargs="+", required=True)
     preflight.add_argument("--seasons", type=int, nargs="+", required=True)
@@ -93,6 +94,19 @@ def main(argv=None):
 
     if args.command == "evaluate":
         return evaluation.run(evaluation.prepare(args))
+
+    if args.command == "changes":
+        from .evidence import model_changes
+        try:
+            changes = model_changes.load()
+        except ValueError as exc:
+            print(exc)
+            return 1
+        for change in changes:
+            where = model_changes.standing(change["events"])
+            print(f"{change['id']}  {where['stage']:24s} {change['registration']['title']}")
+        print(f"{len(changes)} changes, all recordable")
+        return 0
 
     if args.command == "usage":
         usage.publish()
@@ -200,8 +214,8 @@ def _execute(args):
                 matchday.run_matchday(api, conn)
                 export.export_bets(conn)
                 export.export_injuries(conn)
-                export.write_manifest(conn=conn, only=["bets.json", "injuries.json"])
-                export.mirror_site_docs(conn, only=["bets.json", "injuries.json", export.MANIFEST])
+                export.write_manifest(conn=conn, only=["injuries.json"])
+                export.mirror_site_docs(conn, only=["injuries.json", export.MANIFEST])
                 return 0
             if args.command == "nightly":
                 failures = ingest.sync_nightly(api, conn, args.leagues)

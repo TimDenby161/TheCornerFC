@@ -39,7 +39,7 @@
 
 <section class="panel" data-tab="bets" data-active="true">
 	<div id="bet-side">
-		<div class="side-stick">{#if data.menu}<FilterMenu id="bet-filters" menu={data.menu} action="/simulation" keep={without('c')} />{/if}</div>
+		<div class="side-stick">{#if data.menu}<FilterMenu id="bet-filters" menu={data.menu} action="/admin/simulation" keep={without('c')} />{/if}</div>
 	</div>
 	<div class="filter-row range-row" id="bet-strategy" role="group" aria-label="When the bet was taken"><span class="filter-label" aria-hidden="true">Taken</span>{@render chips('s', data.strategy, STRATEGY)}</div>
 	<div class="filter-row u-mb8" id="bet-view" role="group" aria-label="Which bets"><span class="filter-label" aria-hidden="true">Bets</span>{@render chips('v', data.view, VIEW)}</div>
@@ -81,7 +81,7 @@
 				</div>
 			{/if}
 			{#if data.empty}<div class="empty-state">No bets match this filter yet.</div>{/if}
-			{#if data.pending}<div class="stats-note u-mt12">{data.pending} paper bet{data.pending === 1 ? '' : 's'} still to be played: see <a href="/model-vs-market">Model vs Market</a>.</div>{/if}
+			{#if data.pending}<div class="stats-note u-mt12">{data.pending} paper bet{data.pending === 1 ? '' : 's'} still to be played: see <a href="/admin/model-vs-market">Model vs Market</a>.</div>{/if}
 		{/if}
 	</div>
 </section>

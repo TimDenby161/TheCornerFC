@@ -1,0 +1,88 @@
+{
+ "id": "MC-0021",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "Home advantage by competition",
+  "component": "Match projection",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Learn each competition's home advantage as the seasons go, shrunk hard towards the overall figure.",
+  "why": "Ten of 61 leagues were off by more than two standard errors, where chance gives about three.",
+  "how": "A running home-side error by competition with a two-year half-life.",
+  "hypothesis": "League-level home advantage improves the result probabilities.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "The final period had been looked at by earlier diagnostics, so this is strong historical evidence and not a blind test."
+  },
+  "success_criteria": "The research round's bar (experiments/research_frame/REGISTER.md): better by 0.002 on the final period, the 99.6% interval excluding zero, Brier agreeing, better in 2024/25 and 2025/26, no goal market worse by 0.0005, and 60% of competitions no worse.",
+  "code": {
+   "commit": "277648dd6",
+   "experiment": "experiments/goals_home_scores",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "Selection window",
+   "metric": "log_loss",
+   "delta": -0.00039,
+   "n": 38922,
+   "period": [
+    "2022-07-01",
+    "2024-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "The figure the setting was chosen on.",
+   "source": "experiments/goals_home_scores/chosen.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Final period",
+   "metric": "log_loss",
+   "delta": -0.00024,
+   "n": 44383,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": [
+    -0.00065,
+    0.00024
+   ],
+   "interval_level": 0.996,
+   "vs_market": null,
+   "meaningful": "No. The interval crosses zero and under half the competitions are better.",
+   "source": "experiments/goals_home_scores/results.json"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "Too weak and unstable to predict with."
+  }
+ ]
+}

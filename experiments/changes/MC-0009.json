@@ -1,0 +1,91 @@
+{
+ "id": "MC-0009",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-10-12",
+  "title": "Sharpening and the draw boost searched together",
+  "component": "Match probabilities",
+  "model": "match",
+  "kind": "experiment",
+  "what": "The sharpening power and the two draw-boost numbers chosen jointly (power 1.08, boost 1.09, fade 1.5).",
+  "why": "The two changes overlap: sharpening already takes weight off the draw.",
+  "how": "A joint search on 2023/24, scored once on the other periods.",
+  "hypothesis": "The two together improve the result probabilities by more than either alone.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "The pattern was found on most of the test period before the test (DESIGN.md says so), so the test confirms rather than discovers; the 2021 to 2023 holdout had not been looked at."
+  },
+  "success_criteria": "The standing bar: result log loss better by at least 0.002 on held-out matches, with the interval excluding zero, Brier agreeing and the same direction in each season. A second, weaker bar for the ends: the ends gap down by a quarter, log loss no worse, and half the competitions no worse.",
+  "code": {
+   "commit": "7d58dfdf5",
+   "experiment": "experiments/ends_and_draws",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-12",
+   "type": "status",
+   "status": "Testing",
+   "note": ""
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Test, July 2024 onwards",
+   "metric": "log_loss",
+   "delta": -0.00075,
+   "n": 44383,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": 0.9936,
+   "after": 0.99285,
+   "interval": [
+    -0.00108,
+    -0.00044
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "The same size as sharpening alone: with the ends stretched the draw boost wants to stay near where it is.",
+   "source": "experiments/ends_and_draws/REPORT.md"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Holdout, 2021/22 and 2022/23",
+   "metric": "log_loss",
+   "delta": -0.00013,
+   "n": 38753,
+   "period": [
+    "2021-07-01",
+    "2023-06-30"
+   ],
+   "baseline": null,
+   "after": null,
+   "interval": [
+    -0.00052,
+    0.00026
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "No. The interval straddles zero.",
+   "source": "experiments/ends_and_draws/REPORT.md"
+  },
+  {
+   "date": "2026-10-12",
+   "type": "decision",
+   "status": "Rejected",
+   "reason": "Meets neither bar."
+  }
+ ]
+}

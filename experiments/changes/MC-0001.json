@@ -1,0 +1,80 @@
+{
+ "id": "MC-0001",
+ "registration": {
+  "recorded": "2026-10-13",
+  "retrospective": true,
+  "date": "2026-09-01",
+  "title": "Attack and defence goals, a home edge for each club, and line-ups by line",
+  "component": "Match projection",
+  "model": "match",
+  "kind": "production change",
+  "what": "Three additions to the match projection: the goal total comes mostly from an attack and defence figure for each club; each club has its own home edge on top of the standard one; and the expected margin moves with the difference between the two predicted line-ups in defence, midfield and attack.",
+  "why": "The projection knew how strong each side was but not how open its games are, how much it gains at home, or who was likely to start.",
+  "how": "The base goal total is 75% the attack and defence model's and 25% the twelve-month averages'. The margin moves by the two clubs' home edges, and by 0.005 goals for each point of difference between the predicted line-ups' lines. The goalkeeper line is left out because it made predictions worse.",
+  "hypothesis": "Each addition improves the result and goal markets on its own, and together they improve every market.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "guide/match-predictions.md"
+  },
+  "success_criteria": "Not specified in what survives: the guide records the test, not a bar set beforehand.",
+  "code": {
+   "commit": null,
+   "experiment": null,
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-09-01",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Tuned on 2023/24, tested on 2024/25 onwards, result log loss",
+   "metric": "log_loss",
+   "delta": -0.00113,
+   "n": 44339,
+   "period": null,
+   "baseline": 0.99847,
+   "after": 0.99734,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "Smaller than the 0.002 bar the project uses now, and no interval was recorded.",
+   "source": "guide/match-predictions.md"
+  },
+  {
+   "date": "2026-09-01",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "The same test, over 2.5 goals log loss",
+   "metric": "goal_markets_log_loss",
+   "delta": -0.00208,
+   "n": 44339,
+   "period": null,
+   "baseline": 0.67923,
+   "after": 0.67715,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "The goal market gained more than the result.",
+   "source": "guide/match-predictions.md"
+  },
+  {
+   "date": "2026-09-01",
+   "type": "decision",
+   "status": "Accepted",
+   "reason": "Each part helped on its own and together they helped every market (guide/match-predictions.md)."
+  },
+  {
+   "date": "2026-09-01",
+   "date_known_to": "month",
+   "type": "deployed",
+   "commit": null,
+   "note": "The guide says September 2026. The repository's history was rewritten on 9 October 2026, so the commit and the day are not recoverable."
+  }
+ ]
+}

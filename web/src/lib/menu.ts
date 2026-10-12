@@ -14,12 +14,16 @@ export const MENU: { label: string; sections: Section[] }[] = [
 		{ tab: 'matches', label: 'Matches', path: '/matches' },
 		{ tab: 'stats', label: 'Stats', path: '/stats' },
 		{ tab: 'lineups', label: 'Line-up record', path: '/lineups' }
-	] },
-	{ label: 'Against the market', sections: [
-		{ tab: 'tips', label: 'Model vs Market', path: '/model-vs-market' },
-		{ tab: 'bets', label: 'Paper Simulation', path: '/simulation' }
 	] }
 ];
+// The Admin area is the site administrator's: in the menu for them only, and every address under
+// /admin is refused to anyone else by the server (hooks.server.ts) and by the database. The two
+// betting pages were public until 2026-10-13.
+export const ADMIN_MENU = { label: 'Admin', sections: [
+	{ tab: 'changes', label: 'Model Change Tracker', path: '/admin/changes' },
+	{ tab: 'tips', label: 'Model vs Market', path: '/admin/model-vs-market' },
+	{ tab: 'bets', label: 'Paper Simulation', path: '/admin/simulation' }
+] as Section[] };
 // The fantasy pages are the site owner's: in the menu for the owner only (the pages themselves
 // show anyone else a line saying so).
 export const OWNER_MENU = { label: 'Fantasy', sections: [
@@ -29,7 +33,7 @@ export const OWNER_MENU = { label: 'Fantasy', sections: [
 ] as Section[] };
 export const sectionHref = (s: Section) => s.path ?? OLD_SITE + (s.old ?? '');
 export function tabFor(pathname: string): string {
-	for (const g of [...MENU, OWNER_MENU]) for (const s of g.sections) if (s.path && (pathname === s.path || pathname.startsWith(s.path + '/'))) return s.tab;
+	for (const g of [...MENU, OWNER_MENU, ADMIN_MENU]) for (const s of g.sections) if (s.path && (pathname === s.path || pathname.startsWith(s.path + '/'))) return s.tab;
 	// a club's, player's, competition's or country's page (the stylesheet knows every such page as "club")
 	if (/^\/(club|player|league|country|nation)\//.test(pathname)) return 'club';
 	return 'home';
@@ -46,7 +50,7 @@ export const methodologyHref = (section: string) => `/methodology#${section}`;
 // part after the # isn't one. The pages kept their names and their choices' names; the one
 // difference is that a club's, player's or nation's first tab could be named in the address
 // there ("/overview") and has none here.
-const OLD_PAGES = /^#\/(clubs|players|leagues|nations|matches|stats|lineups|model-vs-market|simulation|fpl|my-fpl-team|efl-fantasy|(?:club|player|league|country|nation)\/[^?#]+)(\?[^#]*)?$/;
+const OLD_PAGES = /^#\/(clubs|players|leagues|nations|matches|stats|lineups|fpl|my-fpl-team|efl-fantasy|(?:club|player|league|country|nation)\/[^?#]+)(\?[^#]*)?$/;
 export function oldAddress(hash: string): string | null {
 	const m = OLD_PAGES.exec(hash);
 	if (!m) return null;
