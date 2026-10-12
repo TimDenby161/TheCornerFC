@@ -102,11 +102,26 @@ branch `main` only and has no reviewer (its jobs run every 30 minutes); `staging
 
 ## What the rules on `main` were seen to do
 
-Tried on a throwaway branch before `main` relied on them (2026-10-12). A commit no check had run
-on was refused, for the missing checks and the missing staging deployment. A commit whose three
-checks were passed by look-alike jobs on another branch was refused too: the look-alike jobs went
-green, but that branch may not use the staging environment, so there was no staging deployment.
-The status checks alone can be imitated; the deployment rule is the one that can't.
+Tried on a throwaway branch, `promotion-test`, before `main` relied on them (2026-10-12):
+
+| Pushed | GitHub's answer |
+|---|---|
+| A commit no check had run on | Refused: no staging deployment, none of the three checks |
+| A commit whose three checks were passed by look-alike jobs on another branch | Refused: the look-alike jobs went green, but there was no staging deployment |
+| The same, with the look-alike check claiming the `Staging` environment | Refused: the job was stopped (that branch may not use the environment), so the check failed too |
+| The commit staging had tested and deployed | Accepted, moving the branch forward to that very commit |
+| A new commit with the same files as the tested one, no checks | Refused: none of the three checks |
+
+Three things learned. The status checks alone can be imitated by a job of the same name on
+another branch; the deployment rule is the one that can't. The deployment rule matches the
+environment's name exactly: the environments are `Production` and `Staging`, and while the
+workflows said `staging` their deployments did not count (`tests/test_workflows.py` holds the
+spelling). And it is the files that must have been deployed: a commit with the same content as
+the deployed one passes that rule, and is then stopped by the checks.
+
+What this does not stop: someone with write access to the repository who sets out to forge a
+deployment record, or who edits the ruleset. That is the owner alone. It stops a mistake, an
+untested push and anything from a fork.
 
 ## Making the staging Worker again
 
