@@ -38,6 +38,16 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # Nothing is fetched or written unless the unit tests pass on the code this job is running.
+      # No secrets are given to this step, and it runs with the local-safe settings whatever the
+      # job's own are.
+      - name: Unit tests
+        env:
+          THECORNERFC_MODE: local
+          THECORNERFC_READ_ONLY: "true"
+          THECORNERFC_NO_API: "true"
+        run: python -m unittest discover -s tests
+
       - name: Restore API usage ledger
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
