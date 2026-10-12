@@ -100,6 +100,14 @@ GitHub environments are under the repository's Settings → Environments. `produ
 branch `main` only and has no reviewer (its jobs run every 30 minutes); `staging` allows
 `staging` only.
 
+## What the rules on `main` were seen to do
+
+Tried on a throwaway branch before `main` relied on them (2026-10-12). A commit no check had run
+on was refused, for the missing checks and the missing staging deployment. A commit whose three
+checks were passed by look-alike jobs on another branch was refused too: the look-alike jobs went
+green, but that branch may not use the staging environment, so there was no staging deployment.
+The status checks alone can be imitated; the deployment rule is the one that can't.
+
 ## Making the staging Worker again
 
 Cloudflare's "import a repository" form has no branch option, so its first build is from `main`.
