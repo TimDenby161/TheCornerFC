@@ -6,7 +6,7 @@ name: Tests
 # the Python tests first (guide/architecture.md, "What gates a deploy").
 on:
   push:
-    branches: [main, sveltekit]     # the two that deploy; other branches are tested by their pull request
+    branches: [main]     # the branch that deploys; other branches are tested by their pull request
   pull_request:
   workflow_dispatch:
 

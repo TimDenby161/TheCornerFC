@@ -70,7 +70,7 @@ Skills: `/new-migration` (any database change), `/model-experiment` (any change 
   calls against it for testing. Test a new function on a local Postgres that holds every table
   it joins at full size, then call it twenty at once live after it is applied.
 - **Push only when the tests have passed**, checked on their own `OK` line, not through a pipe
-  whose last command can succeed on its own. A push to the branch Cloudflare builds from deploys
+  whose last command can succeed on its own. A push to `main` deploys
   the live site.
 - **Fantasy game data is owner-only.** Anything derived from FPL or Fantasy EFL goes only where
   the owner's sign-in can read it (`fpl_owner_data`): never into a public table, file, page or

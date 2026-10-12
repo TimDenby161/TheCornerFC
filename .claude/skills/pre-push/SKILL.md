@@ -5,8 +5,8 @@ description: Run every check The Corner FC needs before a push and report each o
 
 # Before a push
 
-A push to `sveltekit` deploys the live site (Cloudflare builds it). The scheduled jobs run from
-`main`. Never push without being asked, and never force-push: give the owner the command.
+There is one branch, `main`: a push to it deploys the live site (Cloudflare builds it) and is
+what the scheduled jobs run next. Never push without being asked, and never force-push: give the owner the command.
 
 Run each check on its own, not chained through a pipe, and read its own result line.
 

@@ -6,16 +6,16 @@ and what deploys. One screen; the topic pages listed in `README.md` have the det
 ## The parts
 
 ```
-API-Football ──► Python jobs (GitHub Actions, from main) ──► Supabase Postgres ──► SvelteKit site
+API-Football ──► Python jobs (GitHub Actions) ──► Supabase Postgres ──► SvelteKit site
    (the only        thecornerfc/                               db/schema.sql        web/ (Cloudflare
-    match data)     fetch, model, record, export                                    Worker, from sveltekit)
+    match data)     fetch, model, record, export                                    Worker)
 ```
 
 | Part | Where | Runs |
 |---|---|---|
 | Jobs | `thecornerfc/`, started as `python -m thecornerfc <command>` (`__main__.py`) | GitHub Actions, on a schedule, from `main` |
 | Database | `db/schema.sql`, `db/migrations/` | Supabase. The owner applies migrations by hand |
-| Site | `web/` (SvelteKit, `adapter-cloudflare`) | Cloudflare Worker `thecornerfc`, built from the `sveltekit` branch |
+| Site | `web/` (SvelteKit, `adapter-cloudflare`) | Cloudflare Worker `thecornerfc`, built from `main` |
 | Experiments | `experiments/` | By hand, read-only. They judge model changes and are never part of a job |
 
 There is no API server, queue or long-running process of our own: the jobs are batch runs, and
@@ -85,7 +85,7 @@ Conventions: `.claude/rules/web.md`.
 
 | What | Deploys when | Gate |
 |---|---|---|
-| The site | A push to `sveltekit`: Cloudflare runs the build and deploys the Worker | `npm run build` runs the unit tests and the type check before `vite build`. A failure fails the build and the last deployment stays live. **This holds only while Cloudflare's build command is `npm run build`** (Workers & Pages → thecornerfc → Settings → Build) |
+| The site | A push to `main`: Cloudflare runs the build and deploys the Worker | `npm run build` runs the unit tests and the type check before `vite build`. A failure fails the build and the last deployment stays live. This holds while Cloudflare's build command is `npm run build` (Workers & Pages → thecornerfc → Settings → Build; the owner confirmed it on 2026-10-12) |
 | The jobs | Whatever is on `main` when a schedule fires: nightly 01:17 UTC (two later tries), match day every 30 minutes, FPL at 07:00, 13:00 and 19:00, two backfills by hand | Each job runs `python -m unittest discover -s tests` straight after installing, with no secrets, and stops before it fetches or writes anything if a test fails. The site goes on showing the last export |
 | The database | The owner runs a migration in the SQL editor | A test asserts each migration is word for word in `db/schema.sql` |
 
