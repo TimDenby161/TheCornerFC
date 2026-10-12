@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { predictedXi } from '#lib/depth.ts';
-import { averageRank, markPredicted, spots, withAbility, type Starter, type XiRow } from '#lib/lineups.ts';
+import { averageRank, markPredicted, spots, withSlotRank, type Starter, type XiRow } from '#lib/lineups.ts';
 import { FINISHED } from '#lib/matches.ts';
 import { decodeEntities, playerRows, type PlayersAnswer } from '#lib/players.ts';
 import { clubBase, clubSquad } from '#lib/server/club.ts';
@@ -36,18 +36,19 @@ export async function GET({ fetch, params, locals }) {
 	// predicted line-ups are for subscribers
 	if (!finished && (fx?.locked || paywall)) return json({ locked: true }, { headers });
 	let exact = (finished ? fx?.actual : fx?.xi) || {};
-	// a match to come shows each predicted starter's Ability, as his own page does, not the rank
-	// over his recent matches the stored line-up carries: one read for both elevens
+	// a match to come shows each predicted starter's rank in the position he is picked in, as his
+	// own page has it, not the rank over his recent matches the stored line-up carries: one read
+	// for both elevens
 	if (!finished) {
 		const ids = Object.values(exact).flatMap((rows) => rows.map(([pid]) => pid));
 		const answer = ids.length ? await askAs<PlayersAnswer>(fetch, locals.token, 'site_players', { p_ids: ids, p_limit: ids.length }).catch(() => null) : null;
-		const ability = new Map(playerRows(site, answer?.rows || []).map((p) => [p.id, p.rank]));
-		exact = Object.fromEntries(Object.entries(exact).map(([team, rows]) => [team, withAbility(rows, ability)]));
+		const players = new Map(playerRows(site, answer?.rows || []).map((p) => [p.id, p]));
+		exact = Object.fromEntries(Object.entries(exact).map(([team, rows]) => [team, withSlotRank(rows, players)]));
 	}
 	const side = async (teamId: number, home: boolean) => {
 		const rating = home ? m.home_xi : m.away_xi, recent = home ? m.home_recent_xi : m.away_recent_xi;
 		// the heading's number is the average of the ranks on the pitch under it: the stored XI
-		// rating for a finished match, the eleven's average Ability for one to come
+		// rating for a finished match, the eleven's average rank in their positions for one to come
 		const heading = (average: number | null) => `${teamName(site, teamId)}${finished
 			? rating != null ? ` · rating ${Math.round(rating)}${recent != null ? ` (recent ${Math.round(recent)})` : ''}` : ''
 			: average != null ? ` · average rank ${average}` : ''}`;
@@ -64,8 +65,8 @@ export async function GET({ fetch, params, locals }) {
 		// no stored prediction: the one the squad model gives for a match in this competition
 		const xi = base ? predictedXi((await clubSquad(fetch, base, locals.token, m.league)).depth) : null;
 		return {
-			label: heading(averageRank((xi || []).map((c) => c.p.rank))), kit, ranks: true, score: null, note: xi ? '' : 'No predicted XI for this team.',
-			spots: xi ? spots(xi.map((c) => ({ id: c.p.id, name: c.p.name, label: c.box.label, rank: c.p.rank, chance: c.chance, mins: c.mins }))) : null
+			label: heading(averageRank((xi || []).map((c) => c.rank))), kit, ranks: true, score: null, note: xi ? '' : 'No predicted XI for this team.',
+			spots: xi ? spots(xi.map((c) => ({ id: c.p.id, name: c.p.name, label: c.box.label, rank: c.rank, chance: c.chance, mins: c.mins }))) : null
 		};
 	};
 	const sides = await Promise.all([side(m.home, true), side(m.away, false)]);

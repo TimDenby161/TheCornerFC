@@ -37,7 +37,7 @@ export type Depth = {
 	lasts: (p: SquadPlayer) => number; benchRate: (p: SquadPlayer) => number;
 };
 
-const NEAR_GROUP: Record<string, string> = { FB: 'WB', WB: 'FB' }; // a full-back with no wing-back rank is shown there on his full-back one, and the other way round
+export const NEAR_GROUP: Record<string, string> = { FB: 'WB', WB: 'FB' }; // a full-back with no wing-back rank is shown there on his full-back one, and the other way round
 const DEPTH_MINUTES = 180;
 const ABILITY_PULL = 0.2;
 // a squad player with no box goes in the nearest one the club uses

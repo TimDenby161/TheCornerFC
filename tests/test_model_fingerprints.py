@@ -33,7 +33,7 @@ FINGERPRINTS = {
     "nations.py": ("models", "57b803e6546c12bba962619659bf635d8161ff542da611197a5da7f62b70dce9"),
     "paper_evidence.py": ("evidence", "606da6f0c20f9a94837cea89635c853abae916b60e80935883a1dda92ed7178a"),
     "player_history.py": ("evidence", "cc3481b2aa6d8c553c01b3685724dfaa18d1e7508dd4e1da42acaf8fa38836d0"),
-    "player_ratings.py": ("models", "01914fea926d946632b5b14bf2d7a8dcef8479b3510fa7393b71fa8cc3bde5be"),
+    "player_ratings.py": ("models", "73f8e45028493eae12ddbc566360795e09a6fa08cb1789f6bb7017e55d3fd898"),
     "positions.py": ("models", "9b048895007339ed68de0dadb2e1736f3aa8d0bd7a29ab4c6965d3e4f42a0dde"),
     "predictions.py": ("models", "462dd8ca22d49df66c1716d12cf68665ee8f8a3eeb9104be98dccab1cc1601a0"),
     "ranking.py": ("models", "2694a1777da8d4353960a4a130ba71c758bb5da6a76989ab506f8e1c29fb0832"),

@@ -1,7 +1,7 @@
 // A match's line-ups as its card shows them: each side's eleven on a pitch. For a finished match
 // the eleven that started, each marked as predicted or not against the model's pre-match XI.
 import { shortName } from './club.ts';
-import { xiSpots } from './depth.ts';
+import { NEAR_GROUP, xiSpots } from './depth.ts';
 import { GROUP_OF } from './playerFilters.ts';
 
 // a line-up row from the database: [player, name, role, rank (null where it is for subscribers)]
@@ -28,11 +28,17 @@ export function markPredicted(xi: Starter[], predicted: XiRow[]): number {
 	return xi.length - missed.length;
 }
 
-// A match to come: each predicted starter with his Ability, the number his own page shows (the
-// stored line-up carries his rank over his recent matches, which it doesn't); none where he has
-// no Ability or it is for subscribers
-export const withAbility = (rows: XiRow[], ability: Map<number, number | null>): XiRow[] =>
-	rows.map(([pid, name, role]) => [pid, name, role, ability.get(pid) ?? null]);
+// A match to come: each predicted starter with his rank in the position he is picked in, the
+// number his own page shows for it (the stored line-up carries his rank over his recent matches,
+// which it doesn't). His Ability where he has no rank there (a keeper, a player with no seasons
+// to rank him on); none where he has no ranks or they are for subscribers
+export type Ranked = { rank: number | null; position_ranks: Record<string, number> | null };
+export const rankIn = (p: Ranked | undefined, role: string | null): number | null => {
+	const group = GROUP_OF[role ?? ''];
+	return p?.position_ranks?.[group] ?? p?.position_ranks?.[NEAR_GROUP[group]] ?? p?.rank ?? null;
+};
+export const withSlotRank = (rows: XiRow[], players: Map<number, Ranked>): XiRow[] =>
+	rows.map(([pid, name, role]) => [pid, name, role, rankIn(players.get(pid), role)]);
 // The average of an eleven's ranks to a whole number, those without one left out
 export function averageRank(ranks: (number | null)[]): number | null {
 	const known = ranks.filter((r): r is number => r != null);

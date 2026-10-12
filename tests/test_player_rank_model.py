@@ -112,16 +112,35 @@ class PositionLevels(unittest.TestCase):
                                position_ranks=ranks)
         return rows, ranks
 
-    def test_only_positions_he_has_started_in(self):
-        _, ranks = self.model()
-        self.assertEqual(set(ranks[5]), {"CM"})
-        self.assertEqual(set(ranks[30]), {"W"})
+    def test_each_position_moves_with_this_season(self):
+        # player 30, a winger, with one start in central midfield: his rank in each is pulled
+        # towards this season, as his own rank is, and not at all with no pull
+        one = [app(999, 30, "CM", 2025, goals=1, key_passes=0, passes=60)]
+        _, ranks = self.model(one)
+        with patch.object(pr, "DEVIATION_MINUTES", 1e12):
+            _, level = self.model(one)
+        self.assertNotEqual(ranks[30]["CM"], level[30]["CM"])
+        self.assertNotEqual(ranks[30]["W"], level[30]["W"])
+
+    def test_every_outfield_position_played_or_not(self):
+        rows, ranks = self.model()
+        self.assertEqual(set(ranks), set(range(1, 41)))          # no keeper
+        for player in (5, 30):
+            self.assertEqual(set(ranks[player]), set(pr.OUTFIELD_GROUPS))
+        # one he has never started in pays the whole penalty for how far it is from his own: a
+        # winger is nearer an attacking mid than a centre-back
+        with patch.object(pr, "FAMILIARITY_PENALTY", 0.0):
+            _, free = self.model()
+        full = lambda a, b: pr.FAMILIARITY_PENALTY * min(2 * (1 - pr.GROUP_FIT.get(frozenset((a, b)), pr.OFF_ROLE_FIT)), pr.UNRELATED_MAX)
+        self.assertAlmostEqual(free[30]["AM"] - ranks[30]["AM"], full("W", "AM"), delta=0.11)
+        self.assertAlmostEqual(free[30]["CB"] - ranks[30]["CB"], full("W", "CB"), delta=0.11)
+        self.assertLess(ranks[30]["CB"], ranks[30]["AM"])
 
     def test_a_position_he_rarely_plays_is_marked_down(self):
         # player 30, a winger, with one start in central midfield
         one = [app(999, 30, "CM", 2025, goals=1, key_passes=0, passes=60)]
         _, ranks = self.model(one)
-        self.assertEqual(set(ranks[30]), {"W", "CM"})
+        self.assertEqual(set(ranks[30]), set(pr.OUTFIELD_GROUPS))
         with patch.object(pr, "FAMILIARITY_PENALTY", 0.0):
             _, free = self.model(one)
         # a winger in central midfield (fit 0.4) pays 1.2 times the penalty, less the little he has played there

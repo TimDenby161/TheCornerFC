@@ -21,6 +21,22 @@ def by_name(rows):
     return {r["player_id"]: dict(zip(SITE_PLAYER_FIELDS, r["data"])) for r in rows}
 
 
+class ShownPositionRanks(unittest.TestCase):
+    def test_the_position_he_is_listed_in_carries_his_ability(self):
+        from thecornerfc.publish.site_players import shown_position_ranks
+        ranks = {"FB": 81.8, "CM": 90.6}
+        # a midfielder filling in at right-back: his chip there is his Ability, the rest as the model has them
+        self.assertEqual(shown_position_ranks("RB", 91.8, ranks), {"FB": 91.8, "CM": 90.6})
+        self.assertEqual(ranks, {"FB": 81.8, "CM": 90.6})
+        self.assertEqual(shown_position_ranks("LM", 70.0, {}), {"W": 70.0})
+
+    def test_a_keeper_or_a_player_with_no_ability_is_left_alone(self):
+        from thecornerfc.publish.site_players import shown_position_ranks
+        self.assertEqual(shown_position_ranks("GK", 88.0, {}), {})
+        self.assertEqual(shown_position_ranks("ST", None, {"ST": 80.0}), {"ST": 80.0})
+        self.assertEqual(shown_position_ranks(None, 80.0, {"ST": 79.0}), {"ST": 79.0})
+
+
 class SitePlayerRows(unittest.TestCase):
     def test_places_are_counted_as_the_site_counted_them(self):
         rows = site_player_rows([

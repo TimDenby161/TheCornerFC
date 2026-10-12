@@ -194,7 +194,7 @@
 							{@render sortTh('ga', 'col-ga', 'Goals and assists this season, all his clubs (7G 4A). Sorts by the two added together. Click to sort.', 'G/A')}
 							{#each shown.map((y, i) => [y, i]).reverse() as [y, i] (y)}
 								{#if i === 0 && data.groups.length}
-									{@render sortTh('pos', 'col-posrank', `How good he is now as ${data.groupNames.join(' / ')}: his recent stats scored as that position against its players, with up to 6 points off for a position he hasn't played much (none once it's 40% of his starts). Only positions he has started in get a number. With several positions picked, his best of them. Click to sort.`, data.groups.length === 1 ? `As ${data.groups[0]}` : 'In pos', true)}
+									{@render sortTh('pos', 'col-posrank', `How good he is now as ${data.groupNames.join(' / ')}: his recent stats scored as that position against its players, with points off for a position he hasn't played much (none once it's 40% of his starts). With several positions picked, his best of them. Click to sort.`, data.groups.length === 1 ? `As ${data.groups[0]}` : 'In pos', true)}
 								{:else}
 									{@render sortTh(`s${y}`, `col-season col-s${i}${i === 0 ? ' col-now' : ''}`, seasonTip(y, i), i === 0 ? 'Ability' : short(y), i === 0 && (data.future.length > 0 || data.seasons.length > 1))}
 								{/if}

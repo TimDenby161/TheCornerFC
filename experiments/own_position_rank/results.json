@@ -1,0 +1,60 @@
+{
+ "database": "production",
+ "base": "07363e9c9",
+ "season": 2026,
+ "checks": {
+  "season_ranks_untouched": true,
+  "projected_ranks_untouched": true,
+  "every_position_ranked_none_lost": true,
+  "listed_position_is_ability": true
+ },
+ "passed": true,
+ "counts": {
+  "season_rows": 165122,
+  "position_ranks": 187112,
+  "players_listed": 8309,
+  "listed_outfield": 7724,
+  "listed_position_not_ability": 0,
+  "listed_with_no_model_rank_there": 0
+ },
+ "listed_position_rounds_to_ability": {
+  "base": 0.2945,
+  "model": 0.6482,
+  "published": 1.0
+ },
+ "model_rank_against_ability_in_listed_position": {
+  "n": 7724,
+  "mean": 0.92,
+  "p95": 4.4,
+  "largest": 22.4,
+  "two_or_more": 0.1299,
+  "five_or_more": 336,
+  "ten_or_more": 113
+ },
+ "moves": {
+  "positions_the_base_ranked": {
+   "n": 39537,
+   "mean": 2.3,
+   "p95": 14.0,
+   "largest": 14.6,
+   "two_or_more": 0.2351
+  }
+ },
+ "unplayed_positions": {
+  "n": 147575,
+  "mean_below_ability": 12.1,
+  "p5": 0.0,
+  "p95": 22.0,
+  "above_ability": 2217
+ },
+ "top_10_kept": {
+  "CB": 8,
+  "FB": 8,
+  "WB": 7,
+  "DM": 8,
+  "CM": 7,
+  "AM": 10,
+  "W": 7,
+  "ST": 9
+ }
+}

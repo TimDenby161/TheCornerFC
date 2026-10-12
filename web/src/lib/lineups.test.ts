@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { averageRank, markPredicted, spots, withAbility, type Starter, type XiRow } from './lineups';
+import { averageRank, markPredicted, spots, withSlotRank, type Ranked, type Starter, type XiRow } from './lineups';
 
 const starter = (id: number, label: string): Starter => ({ id, name: `A. Player${id}`, label, rank: 70 });
 describe('markPredicted', () => {
@@ -41,10 +41,17 @@ describe('spots', () => {
 	});
 });
 
-describe('withAbility', () => {
-	it('swaps each stored rank for the player\'s Ability, and leaves none where he has none', () => {
-		const rows: XiRow[] = [[1, 'A', 'AM', 94.2], [2, 'B', 'ST', 64], [3, 'C', 'GK', 87]];
-		expect(withAbility(rows, new Map([[1, 84.3], [2, null]]))).toEqual([[1, 'A', 'AM', 84.3], [2, 'B', 'ST', null], [3, 'C', 'GK', null]]);
+describe('withSlotRank', () => {
+	it('swaps each stored rank for the player\'s rank in the position he is picked in', () => {
+		const rows: XiRow[] = [[1, 'Striker', 'LW', 94.2], [2, 'Full-back', 'RWB', 70]];
+		const players = new Map<number, Ranked>([[1, { rank: 95, position_ranks: { ST: 95, W: 81.4 } }], [2, { rank: 77, position_ranks: { FB: 77 } }]]);
+		// a full-back with no wing-back rank is shown there on his full-back one, as on the club's page
+		expect(withSlotRank(rows, players)).toEqual([[1, 'Striker', 'LW', 81.4], [2, 'Full-back', 'RWB', 77]]);
+	});
+	it('falls back to his Ability where he has no rank there, and leaves none where he has none', () => {
+		const rows: XiRow[] = [[1, 'A', 'AM', 94.2], [2, 'B', 'ST', 64], [3, 'C', 'GK', 87], [4, 'D', 'GK', 80]];
+		const players = new Map<number, Ranked>([[1, { rank: 84.3, position_ranks: { W: 86 } }], [2, { rank: null, position_ranks: null }], [4, { rank: 82, position_ranks: null }]]);
+		expect(withSlotRank(rows, players)).toEqual([[1, 'A', 'AM', 84.3], [2, 'B', 'ST', null], [3, 'C', 'GK', null], [4, 'D', 'GK', 82]]);
 	});
 });
 

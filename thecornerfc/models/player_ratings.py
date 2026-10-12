@@ -69,10 +69,12 @@ and only leaves it where he has the minutes to (season_model)
                (retired_players, ingest.check_retired) get no current rank, so they leave the
                players list, and no estimated seasons after their last one
 
-    positions = how good he is in each outfield position he has started in (player_position_ranks):
+    positions = how good he is, or would be, in each outfield position (player_position_ranks):
                a level per position, his seasons elsewhere counted by how well that position
                fits it (GROUP_FIT) and scored on its weights, less for one he rarely starts in
-               (season_model step 6). It needn't equal his rank, even in his own position
+               (season_model step 6), each pulled towards this season as his rank is. It
+               needn't equal his rank, even in his own position: the site shows his rank as the
+               rank of the position it lists him in (site_players.py)
     backups  = a keeper with no minutes this season once his club has played BACKUP_GAMES, and
                not injured, is marked down by SQUAD_MARKDOWN (compute_player_ratings)
 
@@ -754,12 +756,14 @@ def season_model(norms, apps, team_rank, born, team_level, careers, covered, tea
     # 5. Season rank = level + curve, plus the season's own difference from that, kept in
     #    proportion minutes / (minutes + DEVIATION_MINUTES): thin seasons stay on the curve
     rows = []
+    own = {}                             # player -> his role group
     for player, have in by_player.items():
         mins_in = Counter()              # his role group: the one he's played most minutes in
         for _, w, pos, team in have.values():
             if team is None:
                 mins_in[pos] += w
         g = mins_in.most_common(1)[0][0] if mins_in else next(iter(have.values()))[2]   # unrated: broad position
+        own[player] = g
         kind = "GK" if g == "GK" else "OUT"
         off = {y: (ev - curve(player, y, g), w) for y, (ev, w, _, _) in have.items() if w > 0}
         for season, (ev, w, pos, team) in have.items():
@@ -788,7 +792,7 @@ def season_model(norms, apps, team_rank, born, team_level, careers, covered, tea
                     for y in range(last_season + 1, last_season + FUTURE_SEASONS + 1)
                     for d in [curve(player, y, g) - c]}
 
-    # 6. How good he is in each outfield position he has started in, not how good he is: a
+    # 6. How good he is in each outfield position, played or not, not how good he is: a
     #    level per position, as in step 4, where each season's stats are scored with that
     #    position's weights against its players and a season played in another position counts
     #    by how well it fits (GROUP_FIT: a winger's seasons count 0.4 towards his level as a
@@ -797,19 +801,22 @@ def season_model(norms, apps, team_rank, born, team_level, careers, covered, tea
     #    his last POSITION_RANK_SEASONS seasons, none once it's FAMILIAR_SHARE of his
     #    (recency-weighted) starting minutes, times 2 x (1 - how well his usual position fits
     #    it), at most UNRELATED_MAX: a full-back at wing-back pays 0.3 of it, a winger there all
-    #    of it, an attacking mid 1.4 times it. So the rank in his own position needn't equal his
-    #    current rank: Foden, a winger who moved into midfield, is rated lower as a centre mid
-    #    than overall, on the one season he has played there
+    #    of it, an attacking mid 1.4 times it.
+    #    Each position is then pulled towards this season's evidence scored as it, as step 5
+    #    pulls his rank: by w / (w + DEVIATION_MINUTES), w being the season's weight in that
+    #    position's level. So the rank in his own position needn't equal his current rank:
+    #    Foden, a winger who moved into midfield, is rated lower as a centre mid than overall,
+    #    on the one season he has played there.
+    #    A position he has never started in is ranked the same way and pays the whole penalty
+    #    for its fit: Haaland on the wing is his seasons as a striker scored as a winger's, at
+    #    the weight a striker's count there, less what a striker pays for never playing there
     if position_ranks is not None:
-        ever = defaultdict(set)              # player -> groups he has ever started in
         started = defaultdict(Counter)       # player -> {group: recency-weighted starting minutes}
         for (player, season), e in seasons.items():
             for role, rm in e["roles"].items():
                 g = role_group(role)
-                if rm > 0 and g:
-                    ever[player].add(g)
-                    if season > last_season - POSITION_RANK_SEASONS:
-                        started[player][g] += rm * LEVEL_DECAY ** (last_season - season)
+                if rm > 0 and g and season > last_season - POSITION_RANK_SEASONS:
+                    started[player][g] += rm * LEVEL_DECAY ** (last_season - season)
         now = {p for p, y, _, _, _ in rows if y == last_season}
         mine = defaultdict(dict)             # player -> {season: (evidence, minutes, group)}
         for (player, season), (ev, mins, pos) in evidence.items():
@@ -817,10 +824,11 @@ def season_model(norms, apps, team_rank, born, team_level, careers, covered, tea
                 mine[player][season] = (ev, mins, pos)
         for player, have in mine.items():
             starts = sum(started[player].values())
-            usual = started[player].most_common(1)[0][0] if starts else None
+            usual = started[player].most_common(1)[0][0] if starts else own[player]   # no recent starts: his own
             out = {}
-            for g in ever[player] & set(OUTFIELD_GROUPS):
+            for g in OUTFIELD_GROUPS:
                 total, wsum = PRIOR_LEVEL["OUT"] * PRIOR_MINUTES, PRIOR_MINUTES
+                this = None                          # this season as a g: (evidence, weight)
                 for season, (ev, mins, pos) in have.items():
                     key = (player, season)
                     if pos != g and key in raw:      # his stats that season, had a g produced them
@@ -831,12 +839,16 @@ def season_model(norms, apps, team_rank, born, team_level, careers, covered, tea
                     w = mins * LEVEL_DECAY ** (last_season - season) * fit
                     total += (ev - curve(player, season, g)) * w
                     wsum += w
+                    if season == last_season:
+                        this = (ev, w)
                 fam = min(started[player][g] / starts / FAMILIAR_SHARE, 1) if starts else 0.0
-                fit = 1.0 if usual in (g, None) else GROUP_FIT.get(frozenset((usual, g)), OFF_ROLE_FIT)
+                fit = 1.0 if usual == g else GROUP_FIT.get(frozenset((usual, g)), OFF_ROLE_FIT)
                 penalty = FAMILIARITY_PENALTY * (1 - fam) * min(2 * (1 - fit), UNRELATED_MAX)
-                out[g] = round(min(max(total / wsum + curve(player, last_season, g) - penalty, 0), 100), 1)
-            if out:
-                position_ranks[player] = out
+                r = total / wsum + curve(player, last_season, g)
+                if this:
+                    r += (this[0] - r) * this[1] / (this[1] + DEVIATION_MINUTES)
+                out[g] = round(min(max(r - penalty, 0), 100), 1)
+            position_ranks[player] = out
     return rows
 
 

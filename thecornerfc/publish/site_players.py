@@ -246,7 +246,8 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
     rows = [[r[0], r[1], main_pos.get(r[0], r[2]), float(r[3]), r[4], r[5], r[6],
              [season_ranks[r[0]].get(y) for y in PLAYER_SEASONS], r[7],
              [i for i, y in enumerate(PLAYER_SEASONS) if y in estimated[r[0]]], r[8],
-             pos_12m.get(r[0], []), pos_ranks.get(r[0], {}),
+             pos_12m.get(r[0], []),
+             shown_position_ranks(main_pos.get(r[0], r[2]), season_ranks[r[0]].get(PLAYER_SEASONS[0]), pos_ranks.get(r[0], {})),
              [future[r[0]].get(y) for y in future_seasons], season_stats.get(r[0])] for r in players]
     # names of players' clubs outside the club rankings (a move out of our leagues)
     teams = {t: n for t, n in conn.execute(
@@ -257,6 +258,19 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
     # {player: his club}, for the club files' positions
     return {r[0]: r[5] for r in players}, {"stored": stored, "future_seasons": future_seasons, "teams": teams,
                                            "free": {p["player_id"] for p in site_rows if p["free"]}}
+
+
+def shown_position_ranks(position, ability, ranks):
+    """His position ranks as the site shows them: in the position it lists him in (where he has
+    started most over the last 12 months), his rank is his Ability, the number the Players tab
+    is ordered by (owner, 2026-10-12). The model's own rank for him there can differ, most for a
+    player filling in away from the position his seasons were played in; it stays in
+    player_position_ranks. Keepers have no position ranks."""
+    from ..models.positions import GROUPS
+    group = GROUPS.get(position)
+    if ability is None or group in (None, "GK"):
+        return ranks
+    return {**ranks, group: ability}
 
 
 # A player as the site draws him: the order of his row in site.players.data (SITE_PLAYER_FIELDS):
