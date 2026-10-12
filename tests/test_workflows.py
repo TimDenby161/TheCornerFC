@@ -53,15 +53,18 @@ class WorkflowIsolationTests(unittest.TestCase):
                 with self.subTest(workflow=name, job=job):
                     body = code(body)
                     self.assertRegex(body, r"(?m)^    if: github\.ref == 'refs/heads/main'( &&|$)")
-                    self.assertRegex(body, r"(?m)^    environment: production$")
+                    self.assertRegex(body, r"(?m)^    environment: Production$")
                     self.assertIn("THECORNERFC_ENV: production", body)
         self.assertGreaterEqual(seen, 6)        # nightly, match day, FPL, two backfills, removing a person
 
+    # The names are GitHub's own, capitals and all (Settings > Environments): a job runs under
+    # either spelling, but the rule on main that asks for a staging deployment matches the name
+    # exactly, and did not count deployments recorded as "staging" (seen 2026-10-12).
     def test_every_job_given_a_staging_secret_is_held_to_the_staging_environment(self):
         for name in STAGING:
             for job, body in jobs(WORKFLOWS[name]).items():
                 with self.subTest(workflow=name, job=job):
-                    self.assertRegex(code(body), r"(?m)^    environment: staging$")
+                    self.assertRegex(code(body), r"(?m)^    environment: Staging$")
         pipeline = code(WORKFLOWS["staging-pipeline.yml"])
         self.assertRegex(pipeline, r"(?m)^    if: github\.ref == 'refs/heads/staging'$")
         self.assertIn("THECORNERFC_ENV: staging", pipeline)

@@ -30,7 +30,7 @@ jobs:
   staging:
     # Staging's branch only, said here and by the staging environment's own branch rule
     if: github.ref == 'refs/heads/staging'
-    environment: staging
+    environment: Staging
     permissions:
       contents: read
     runs-on: ubuntu-latest

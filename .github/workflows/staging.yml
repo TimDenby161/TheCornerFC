@@ -23,7 +23,7 @@ jobs:
       contents: read
     # Only the staging branch may use this environment (its branch rule says the same), and a run
     # in it is the "deployed to staging" that main's rules ask for.
-    environment: staging
+    environment: Staging
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:

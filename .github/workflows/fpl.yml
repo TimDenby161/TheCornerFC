@@ -23,7 +23,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: read       # the data goes to the database, nothing is committed
-    environment: production
+    environment: Production
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
