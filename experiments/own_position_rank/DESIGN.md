@@ -95,3 +95,45 @@ drawn, so there are no intervals.
 identity includes it, although only the position ranks change: `current-player-rating`,
 `match-prediction`, `formation-minutes-lineup` and `national-recent-minutes-lineup`. The
 prospective protocols select rows by what a snapshot reproduces, not by version id, and carry on.
+
+## Amendment 1, 2026-10-12: Ability belongs to the position the site lists him in
+
+**Made after the first results were seen** (`results_first.json`, production, from the evaluator
+as committed at `7440a0923`). All four checks passed, and the numbers showed a fault in the
+design, not in the code.
+
+What was seen: the first design pinned Ability to the role group a player has played most
+minutes in over all his seasons. For a player who has changed position that is a position he no
+longer plays: Marcos Llorente, a full-back now, became an 83.5 winger where the model's own
+winger rank for him was 60.2 (Sallai as an attacking mid 55.2 to 78.4, Styles as a striker 51.3
+to 73.5). 1,420 of 7,724 listed outfield players had a different own group from the position
+the site lists them in, and the listed position's rank rounded to Ability for 87% (29% before).
+Named players' ranks before and after were read (Haaland, Thiaw, Foden, Botman, Wissa, Saka,
+Rice, Salah, Alexander-Arnold, Hall, and the eight highest-rated players still mismatched).
+
+The owner was shown this and three ways to say which position Ability belongs to, with the cost
+of each, and chose (2026-10-12): **the position the site lists him in, always** (most started
+minutes over the last 12 months), knowing that a midfielder filling in at full-back then shows
+his Ability there (Valverde: Ability 91.8, the model's full-back rank 81.8).
+
+What changes from the design above:
+
+- **The model no longer pins any position.** Every outfield position, his own included, is his
+  level in it, pulled towards this season, less the familiarity penalty. The rest of "The
+  change" stands: the pull, a rank in every outfield position, and a player with no starts in
+  his last three seasons taking his own group as his usual position.
+- **The export applies the rule** (`shown_position_ranks` in
+  `thecornerfc/publish/site_players.py`): in the position the site lists a player in, the rank
+  it publishes is his Ability. The site's position is decided there, from the last 12 months'
+  starts, so that is the one place the two can be made the same number for every player. The
+  model's own rank for him there stays in `player_position_ranks`.
+- **Check 4 becomes: the listed position is Ability.** For every listed outfield player with an
+  Ability, the rank published for the role group of the position the site lists him in equals
+  his Ability exactly. No exceptions. Checks 1 to 3 are unchanged.
+- **Reported instead of the own-group counts:** how far the model's own rank in the listed
+  position sits from Ability (what the rule covers over: mean, 95th percentile, largest, and how
+  many are 5 or 10 points apart); how far the ranks the base gave move; the unplayed positions
+  as before; the top 10 per role group, base against published.
+
+`run.py` is rewritten to this amendment; its first version and its answer are kept as
+`7440a0923` and `results_first.json`.
