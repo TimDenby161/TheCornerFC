@@ -12,6 +12,7 @@ nothing of production's.
 | Jobs | The scheduled workflows, GitHub environment `production` | `Staging pipeline`, by hand only, GitHub environment `staging` |
 | API-Football | The key, in the `production` environment | Off unless a run is given a call budget |
 | Sign-in, mail, payment | As the site has them | Email sign-in only, no mail service, Turnstile's test key, Stripe test keys only |
+| Data | Every competition | England's four divisions and their cups, copied once (`scripts/staging_copy.py`), then built by staging's own runs. The paywall is on, as production's is |
 
 ## How each part knows which it is
 
