@@ -36,6 +36,7 @@ These were tested and not adopted:
 - A faster rank K for the first games after the summer break. It was worse.
 - Pulling ranks towards the league level after the summer. It made no difference.
 - Variations on the injury weighting: 5 or 20 recent matches, rating-weighted, or goalkeepers and attackers weighted more. They made no real difference.
+- Sharpening the result probabilities and refitting the draw boost (`experiments/ends_and_draws`, October 2026). With every setting chosen on 2023/24, raising each probability to the power 1.08 with a draw boost of 1.09 improved log loss by 0.0008 from 2024/25 onwards (0.99360 → 0.99285, 44,383 matches) and by nothing on 2021/22 and 2022/23. The gain was in cups (0.0030) and close to nil in leagues, and half the competitions got worse. It is a third of the 0.002 bar, so it isn't used.
 - Blending in bookmaker odds. On the first 506 finished matches with odds (16–24 September 2026), the bookmakers alone scored best. Blending still didn't help: the best weight fitted on the first half gave the model 10%, and that blend scored slightly worse than the odds alone on the second half. Re-test once there are a few thousand matches. Scores, with the model recomputed as it stood before each match:
 
   | | Log loss | Brier | Favourite won |
