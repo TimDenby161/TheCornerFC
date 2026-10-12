@@ -26,12 +26,24 @@ LOCAL_OVERRIDE_TOKEN = "I_UNDERSTAND_THIS_CAN_WRITE_PRODUCTION_DATA_AND_USE_API_
 API_BASE_URL = "https://v3.football.api-sports.io"
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 READ_ONLY_DATABASE_URL = os.getenv("READ_ONLY_DATABASE_URL")
-DATABASE_URL = READ_ONLY_DATABASE_URL if READ_ONLY else os.getenv("DATABASE_URL")
 API_DAILY_RESERVE = int(os.getenv("API_DAILY_RESERVE", "200"))
 
 
 def _local_override_allowed():
     return LOCAL_OVERRIDE == LOCAL_OVERRIDE_TOKEN
+
+
+def writes_allowed():
+    """Whether this run may write to the database at all: read-only mode is off, and it is either
+    a GitHub Actions job or a local run carrying the override token. The same test as
+    require_db_write, for choosing the connection."""
+    return not READ_ONLY and (GITHUB_ACTIONS or _local_override_allowed())
+
+
+# The write address is only ever picked up where a write is meant. Turning THECORNERFC_READ_ONLY
+# off on its own (no Actions run, no override token) still connects with the read-only address,
+# and connect() still opens a read-only session (guide/local-safety.md).
+DATABASE_URL = os.getenv("DATABASE_URL") if writes_allowed() else READ_ONLY_DATABASE_URL
 
 
 def require_db_write(action):
@@ -62,7 +74,7 @@ def require_api_access(action):
 
 # Fantasy Premier League endpoints are undocumented browser endpoints with no published licence,
 # and the Premier League's terms restrict building databases from its sites. Off until the owner
-# decides the use is acceptable (README: Fantasy Premier League evidence).
+# decides the use is acceptable (guide/fpl-evidence.md).
 FPL_CAPTURE_ENABLED = _bool_env("FPL_CAPTURE_ENABLED", False)
 # The owner's FPL entry, read by `fpl team` for the My FPL team page (owner's decision, 2026-09-30)
 FPL_TEAM_ENTRY = int(os.getenv("FPL_TEAM_ENTRY", "3996593"))
@@ -73,7 +85,7 @@ def require_fpl_access(action):
         raise SafetyError(
             f"{action} reads Fantasy Premier League endpoints, which have no published licence. "
             "Set FPL_CAPTURE_ENABLED=true only after deciding that use is acceptable "
-            "(README: Fantasy Premier League evidence)."
+            "(guide/fpl-evidence.md)."
         )
     if NO_API:
         raise SafetyError(f"{action} is an external data request, but THECORNERFC_NO_API is enabled.")

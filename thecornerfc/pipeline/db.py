@@ -27,7 +27,8 @@ def connect():
         raise RuntimeError("DATABASE_URL or READ_ONLY_DATABASE_URL is not set (see .env.example)")
     # prepare_threshold=None keeps it compatible with Supabase's pgbouncer poolers.
     conn = psycopg.connect(database_url, prepare_threshold=None, **_tls(database_url))
-    if config.READ_ONLY:
+    # read-only unless this run is one that is meant to write (config.writes_allowed)
+    if not config.writes_allowed():
         try:
             conn.read_only = True
         except AttributeError:
