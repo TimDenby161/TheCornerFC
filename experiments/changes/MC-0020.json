@@ -83,6 +83,14 @@
    "type": "decision",
    "status": "Inconclusive",
    "reason": "A real gain below the bar. It is the `calibration` candidate of protocol P14."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P14",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }
