@@ -1,4 +1,4 @@
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-13, to staging and to production.
 -- The Admin area (owner's decision 2026-10-13): Model vs Market and Paper Simulation become the
 -- administrator's only, and a Model Change Tracker joins them. Until now the paper bets were a
 -- row of site.docs ('bets'), which the public key can read; from this migration the export
