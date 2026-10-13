@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-	NO_CHOICES, choicesFrom, counts, cumulative, deltaRows, expectedRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
+	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, expectedRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
 	gain, reach, scale, shortId, signed, ticks, tone, type Change, type Result
 } from './changes';
 
@@ -135,6 +135,37 @@ describe('the charts', () => {
 		expect(ticks(1, 1)).toEqual([1]);
 		expect(reach([-0.003, 0.001, null, undefined])).toBe(0.003);
 		expect(reach([])).toBe(1);
+	});
+});
+
+describe('how the model is doing', () => {
+	const month = (m: string, source: 'live' | 'backfill', n: number, log_loss: number, home: number, draw: number, away: number) => ({ month: m, source, n, log_loss, brier: 0.59, home, draw, away });
+	it('is set beside guessing the base rates of the months before the live record', () => {
+		const got = againstBaseRates([month('2026-08', 'backfill', 1000, 0.99, 440, 250, 310), month('2026-09', 'backfill', 1000, 1.0, 460, 230, 310),
+			month('2026-09', 'live', 200, 0.96, 100, 40, 60), month('2026-10', 'live', 600, 0.98, 270, 140, 190), month('2026-10', 'backfill', 50, 1.2, 0, 50, 0)]);
+		// rates from August only, the one month wholly before the live record: a month the live record
+		// shares, or a later one, is never learned from
+		expect(got?.rates.map((r) => +r.toFixed(3))).toEqual([0.44, 0.25, 0.31]);
+		expect(got?.n).toBe(800);
+		expect(got?.model).toBeCloseTo((200 * 0.96 + 600 * 0.98) / 800, 9);
+		expect(got?.base).toBeCloseTo(-(370 * Math.log(0.44) + 180 * Math.log(0.25) + 250 * Math.log(0.31)) / 800, 9);
+		expect(got!.model).toBeLessThan(got!.base);
+	});
+	it('is not compared where the months carry no outcomes, or nothing came before', () => {
+		expect(againstBaseRates([{ month: '2026-10', source: 'live', n: 600, log_loss: 0.98, brier: 0.58 }])).toBeNull();
+		expect(againstBaseRates([month('2026-10', 'live', 600, 0.98, 270, 140, 190)])).toBeNull();
+		expect(againstBaseRates([])).toBeNull();
+	});
+	it('names the largest proven gain that is not in production yet', () => {
+		const best = bestWaiting([
+			change('MC-0001', { status: 'Testing', stage: 'Being tested', results: [result({ delta: -0.0028, interval: [-0.0041, -0.0015] })] }),
+			change('MC-0002', { status: 'Inconclusive', stage: 'Tested, not deployed', results: [result({ delta: -0.0008, interval: [-0.0014, -0.0002] })] }),
+			change('MC-0003', { status: 'Testing', stage: 'Being tested', results: [result({ delta: -0.009, interval: null, evaluation: 'development' })] }),   // not a test
+			change('MC-0004', { status: 'Accepted', stage: 'Deployed to production', deployed: true, deployed_on: '2026-09-01', results: [result({ delta: -0.02 })] }),
+			change('MC-0005', { status: 'Rejected', results: [result({ delta: -0.03 })] })
+		]);
+		expect(best).toMatchObject({ id: 'MC-0001', gain: 0.0028 });
+		expect(bestWaiting([change('MC-0005', { status: 'Rejected' })])).toBeNull();
 	});
 });
 

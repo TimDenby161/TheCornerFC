@@ -21,7 +21,7 @@ export type Change = {
 	recorded_at: string | null; status: string; stage: string; deployed: boolean; deployed_on: string | null; deployed_day_known: boolean | null;
 	reverted_on: string | null; decided_on: string | null; events: ChangeEvent[]; results: Result[]; forward: Forward | null;
 };
-export type SeriesPoint = { month: string; source: 'live' | 'backfill'; n: number; log_loss: number; brier: number };
+export type SeriesPoint = { month: string; source: 'live' | 'backfill'; n: number; log_loss: number; brier: number; home?: number; draw?: number; away?: number };
 export type Current = { version: string | null; versions: { name: string; n: number }[]; n: number | null; period: { from: string; to: string } | null; log_loss: number | null; brier: number | null; accuracy: number | null; vs_market: { n: number; model_log_loss: number; market_log_loss: number } | null };
 export type ChangesDoc = { generated_at: string; environment: string | null; stored: boolean; differs: string[]; not_specified: string; statuses: string[]; components: string[]; current: Current | null; series: SeriesPoint[]; changes: Change[] };
 
@@ -150,6 +150,33 @@ export function cumulative(changes: Change[], metric = 'log_loss', model = 'matc
 export type Line = { source: 'live' | 'backfill'; points: { month: string; value: number; n: number }[] };
 export function monthLines(series: SeriesPoint[], metric: 'log_loss' | 'brier', floor = 200): Line[] {
 	return (['backfill', 'live'] as const).map((source) => ({ source, points: series.filter((s) => s.source === source && s.n >= floor).map((s) => ({ month: s.month, value: s[metric], n: s.n })) })).filter((l) => l.points.length);
+}
+
+// The model beside the simplest forecaster there is: one that gives every match the same three
+// chances, the shares of home wins, draws and away wins in the months before the live record
+// began. Both are scored on the live record's matches (the predictions stored before kickoff).
+// null where the months don't carry what happened, or there is no earlier month to learn from.
+export function againstBaseRates(series: SeriesPoint[]): { n: number; model: number; base: number; rates: [number, number, number] } | null {
+	const counted = (s: SeriesPoint) => s.home != null && s.draw != null && s.away != null;
+	const live = series.filter((s) => s.source === 'live' && counted(s));
+	if (!live.length) return null;
+	const first = live.map((s) => s.month).sort()[0];
+	const past = series.filter((s) => s.source === 'backfill' && counted(s) && s.month < first);
+	const sum = (rows: SeriesPoint[], k: 'home' | 'draw' | 'away' | 'n') => rows.reduce((t, s) => t + (s[k] ?? 0), 0);
+	const before = sum(past, 'home') + sum(past, 'draw') + sum(past, 'away'), n = sum(live, 'n');
+	if (!before || !n) return null;
+	const rates = (['home', 'draw', 'away'] as const).map((k) => sum(past, k) / before) as [number, number, number];
+	if (rates.some((r) => r <= 0)) return null;
+	const base = -(['home', 'draw', 'away'] as const).reduce((t, k, i) => t + sum(live, k) * Math.log(rates[i]), 0) / n;
+	const model = live.reduce((t, s) => t + s.n * s.log_loss, 0) / n;
+	return { n, model, base, rates };
+}
+
+// The largest gain on a measure that a change not yet in production has proven (its interval
+// leaves zero out), or null where none has
+export function bestWaiting(changes: Change[], metric = 'log_loss'): { id: string; title: string; gain: number; n: number | null; stage: string } | null {
+	const rows = deltaRows(changes.filter((c) => !c.deployed && c.status !== 'Rejected'), metric).filter((r) => r.tone === 'better' && r.evaluation !== 'development');
+	return rows.length ? { id: rows[0].id, title: rows[0].title, gain: rows[0].gain, n: rows[0].n, stage: rows[0].stage } : null;
 }
 
 // Where figures sit on a chart: a straight scale from a domain to a range, and round steps for

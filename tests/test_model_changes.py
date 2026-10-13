@@ -375,7 +375,7 @@ class ExportTests(unittest.TestCase):
 
     def test_the_tracker_s_document_is_stored_privately_and_says_which_database_it_is(self):
         for environment in ('staging', 'production'):
-            conn = Conn(environment=environment, months=[('2026-10', 'live', 700, 0.97, 0.58)])
+            conn = Conn(environment=environment, months=[('2026-10', 'live', 700, 0.97, 0.58, 310, 170, 220)])
             with tempfile.TemporaryDirectory() as d, writable():
                 (Path(d) / 'methodology.json').write_text(json.dumps({"matches": {"n": 740, "log_loss": 0.9867, "brier": 0.5885,
                                                                                   "versions": [{"name": "match-prediction", "n": 740}]}}))
@@ -386,7 +386,8 @@ class ExportTests(unittest.TestCase):
             self.assertEqual((doc['environment'], doc['stored'], doc['differs']), (environment, True, []))
             self.assertEqual(len(doc['changes']), len(conn.changes))
             self.assertEqual((doc['current']['version'], doc['current']['n'], doc['current']['vs_market']['n']), ('match-prediction', 740, 1147))
-            self.assertEqual(doc['series'][0]['month'], '2026-10')
+            self.assertEqual(doc['series'][0], {"month": "2026-10", "source": "live", "n": 700, "log_loss": 0.97, "brier": 0.58,
+                                                "home": 310, "draw": 170, "away": 220})
 
     def test_a_local_run_builds_the_document_from_the_files_and_stores_nothing(self):
         conn = Conn()

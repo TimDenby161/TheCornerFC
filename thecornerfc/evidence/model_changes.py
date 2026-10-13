@@ -288,17 +288,22 @@ _BRIER = """power(p.p_home - (f.ft_home > f.ft_away)::int, 2) + power(p.p_draw -
 
 
 def monthly(conn, since="2021-07-01"):
-    """The match model's result predictions by month: [{month, source, n, log_loss, brier}].
-    source is "live" (stored before kickoff) or "backfill" (reconstructed afterwards with the
-    code of the day it was made). A tie decided after 90 minutes counts as the draw it was."""
+    """The match model's result predictions by month: [{month, source, n, log_loss, brier, home,
+    draw, away}]. source is "live" (stored before kickoff) or "backfill" (reconstructed afterwards
+    with the code of the day it was made). home, draw and away count what happened, so the page
+    can set the model beside guessing the base rates. A tie decided after 90 minutes counts as
+    the draw it was."""
     rows = conn.execute(
         f"""select to_char(f.kickoff at time zone 'UTC', 'YYYY-MM'), p.source, count(*),
-                   avg(-ln(greatest({_HAPPENED}, 1e-15))), avg({_BRIER})
+                   avg(-ln(greatest({_HAPPENED}, 1e-15))), avg({_BRIER}),
+                   count(*) filter (where f.ft_home > f.ft_away), count(*) filter (where f.ft_home = f.ft_away),
+                   count(*) filter (where f.ft_home < f.ft_away)
             from fixture_predictions p join fixtures f using (fixture_id)
             where {_SCORED} and f.kickoff >= %s
             group by 1, 2 order by 1, 2""", [since]).fetchall()
-    return [{"month": m, "source": s, "n": int(n), "log_loss": round(float(ll), 5), "brier": round(float(b), 5)}
-            for m, s, n, ll, b in rows]
+    return [{"month": m, "source": s, "n": int(n), "log_loss": round(float(ll), 5), "brier": round(float(b), 5),
+             "home": int(h), "draw": int(d), "away": int(a)}
+            for m, s, n, ll, b, h, d, a in rows]
 
 
 def _window(conn, start, end):
