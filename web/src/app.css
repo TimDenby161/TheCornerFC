@@ -223,6 +223,9 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-gain { display: inline-block; min-width: 86px; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; color: var(--text-secondary); }
 .mc-gain.better { background: var(--status-good); color: #fff; }
 .mc-gain.worse { background: var(--status-critical); color: #fff; }
+.mc-versus tr.mc-ready td { background: color-mix(in srgb, var(--status-good) 22%, transparent); border-bottom-color: var(--status-good); }
+.mc-versus tr.mc-ready td:first-child { box-shadow: inset 4px 0 0 var(--status-good); }
+.mc-ready-note { color: var(--good-text); font-weight: 700; }
 .mc-versus tr.better .mc-no { color: var(--good-text); } .mc-versus tr.worse .mc-no { color: var(--critical-text); }
 .mc-sub { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; margin-top: 2px; }
 .mc-sub.mc-inline { display: inline; margin: 0; }

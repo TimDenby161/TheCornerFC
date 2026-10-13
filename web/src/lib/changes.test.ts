@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, expectedRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
-	gain, reach, scale, shortId, signed, ticks, tone, type Change, type Result
+	gain, reach, ready, scale, shortId, signed, ticks, tone, type Change, type Result
 } from './changes';
 
 const result = (over: Partial<Result> = {}): Result => ({
@@ -87,6 +87,26 @@ describe('the charts', () => {
 		], 'log_loss');
 		expect(rows.map((r) => r.id)).toEqual(['MC-0004', 'MC-0003', 'MC-0002', 'MC-0005', 'MC-0001']);
 		expect(rows.map((r) => r.tone)).toEqual(['better', 'better', 'unclear', 'unclear', 'worse']);
+	});
+	it('mark a change ready only when a test proves a gain of at least the bar, and list those first', () => {
+		const proven = (delta: number, more: Partial<Result> = {}) => result({ delta, interval: [delta - 0.0005, delta + 0.0005], ...more });
+		const testing = { status: 'Testing', stage: 'Being tested' };
+		expect(ready(change('x', testing), proven(-0.0028))).toBe(true);
+		expect(ready(change('x', testing), proven(-0.0019))).toBe(false);                               // proven, under the bar
+		expect(ready(change('x', testing), result({ delta: -0.0074, interval: [-0.0152, 0.0003] }))).toBe(false);   // big, not proven
+		expect(ready(change('x', testing), proven(-0.0035, { evaluation: 'development' }))).toBe(false);  // the matches it was built on
+		expect(ready(change('x', testing), result({ delta: -0.0035, interval: null }))).toBe(false);     // no interval, no proof
+		expect(ready(change('x'), proven(-0.0028))).toBe(false);                                        // rejected
+		expect(ready(change('x', { status: 'Accepted', deployed: true }), proven(-0.0028))).toBe(false); // already in production
+		expect(ready(change('x', testing), proven(-0.01, { metric: 'brier' }))).toBe(false);             // no bar for the measure
+		const rows = deltaRows([
+			change('MC-0001', { status: 'Inconclusive', stage: 'Tested, not deployed', results: [proven(-0.0008)] }),
+			change('MC-0002', { ...testing, results: [proven(-0.0028)] }),
+			change('MC-0003', { status: 'Inconclusive', stage: 'Tested, not deployed', results: [proven(-0.0031, { evaluation: 'prospective' })] }),
+			change('MC-0004', { results: [proven(-0.02)] })
+		], 'log_loss');
+		expect(rows.map((r) => [r.id, r.ready])).toEqual([['MC-0003', true], ['MC-0002', true], ['MC-0004', false], ['MC-0001', false]]);
+		expect(rows.map((r) => r.readyNote)).toEqual(['Ready: proven on new matches', 'Ready on the historical test; being confirmed on new matches', '', '']);
 	});
 	it('name a change shortly and count a gain as positive whichever way the measure runs', () => {
 		expect(shortId('MC-0007')).toBe('A7');

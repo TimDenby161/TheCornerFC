@@ -60,13 +60,13 @@
 				{#if data.deltas.length}
 					<table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Matches tested</th><th>Current → with the change</th><th>Gain</th></tr></thead>
 						<tbody>{#each data.deltas as d (d.id)}
-							<tr class={d.tone}><td class="mc-no">{shortId(d.id)}</td>
-								<td><a class="team-link" href="/admin/changes/{d.id}">{d.title}</a></td>
+							<tr class={d.tone} class:mc-ready={d.ready}><td class="mc-no">{shortId(d.id)}</td>
+								<td><a class="team-link" href="/admin/changes/{d.id}">{d.title}</a>{#if d.ready}<span class="mc-sub mc-ready-note">{d.readyNote}</span>{/if}</td>
 								<td>{d.n != null ? d.n.toLocaleString('en-GB') : '–'}</td>
 								<td>{d.before != null && d.after != null ? `${d.before.toFixed(5)} → ${d.after.toFixed(5)}` : 'Not recorded'}</td>
 								<td><span class="mc-gain {d.tone}">{signed(d.gain)}</span></td></tr>
 						{/each}</tbody></table>
-					<div class="stats-note">Best first. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Green: enough data to show it is better (its interval leaves zero out). Red: enough to show it is worse. Uncoloured: not proven either way, however large the figure. Proven gains are listed first, then the unproven, then the proven losses. Each figure is that change's own test on its own matches, never a production result.</div>
+					<div class="stats-note"><b>A whole row in green is ready to implement</b>: a test, not the matches it was built on, has enough data to prove a gain of at least the 0.002 bar, and it has been neither rejected nor deployed. Releasing it is still your decision. Those rows come first. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Green: enough data to show it is better (its interval leaves zero out). Red: enough to show it is worse. Uncoloured: not proven either way, however large the figure. Proven gains are listed first, then the unproven, then the proven losses. Each figure is that change's own test on its own matches, never a production result.</div>
 				{:else}<div class="stats-note">No change in this selection has a result on {data.metricLabel.toLowerCase()}.</div>{/if}
 			</div>
 			<div class="stats-card"><div class="stats-label">3 · Expected against actual</div>

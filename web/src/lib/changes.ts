@@ -110,13 +110,27 @@ export const gain = (metric: string, delta: number) => (HIGHER_IS_BETTER.has(met
 // measure, best first. Changes proven better (their interval leaves zero out) lead, by gain; then
 // the ones not proven either way, by gain; then the ones proven worse. So a large figure on a
 // handful of matches never sits above a smaller one that is proven.
-export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null };
+export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string };
+
+// The bar a change has to clear before it can be put forward for production: a gain of this
+// much on the measure (experiments/STAGE_E_DECISION.md). Measures with no bar are never "ready".
+export const BAR: Record<string, number> = { log_loss: 0.002, goal_markets_log_loss: 0.002 };
+// Ready to implement: a test (not the matches it was built on) has enough data to prove the
+// change better, by at least the bar, and it has been neither rejected nor already deployed.
+// It says the evidence is there; releasing it is still the owner's decision.
+export function ready(c: Pick<Change, 'status' | 'deployed'>, r: Pick<Result, 'metric' | 'delta' | 'interval' | 'evaluation'>): boolean {
+	return !c.deployed && c.status !== 'Rejected' && c.status !== 'Reverted' && r.evaluation !== 'development' && tone(r) === 'better' && BAR[r.metric] != null && gain(r.metric, r.delta) >= BAR[r.metric];
+}
 const ORDER: Record<Tone, number> = { better: 0, unclear: 1, worse: 2 };
 export function deltaRows(changes: Change[], metric: string): DeltaRow[] {
 	return changes.flatMap((c) => {
 		const r = headline(c, metric);
-		return r ? [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n }] : [];
-	}).sort((a, b) => ORDER[a.tone] - ORDER[b.tone] || b.gain - a.gain || (a.id < b.id ? -1 : 1));
+		if (!r) return [];
+		const ok = ready(c, r);
+		// a change that is ready on a historical test and is being confirmed on new matches says so
+		const readyNote = !ok ? '' : r.evaluation === 'prospective' ? 'Ready: proven on new matches' : c.status === 'Testing' ? 'Ready on the historical test; being confirmed on new matches' : 'Ready on the historical test';
+		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n, ready: ok, readyNote }];
+	}).sort((a, b) => Number(b.ready) - Number(a.ready) || ORDER[a.tone] - ORDER[b.tone] || b.gain - a.gain || (a.id < b.id ? -1 : 1));
 }
 
 // Chart 3, expected against actual: every change that recorded a number beforehand, with what a
