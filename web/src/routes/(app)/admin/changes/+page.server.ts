@@ -1,6 +1,6 @@
 import {
 	EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows,
-	expectedRows, filterChanges, headline, intervalText, monthLines, shortId, signed, tone
+	expectedRows, filterChanges, headline, intervalText, markOf, monthLines, ready, shortId, signed, tone
 } from '#lib/changes.ts';
 import { changesDoc } from '#lib/server/changes.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
@@ -45,7 +45,7 @@ export async function load({ fetch, locals, url }) {
 		return {
 			id: x.id, date: x.date, title: x.title, component: x.component, stage: x.stage, status: x.status, kind: x.kind,
 			expected: hoped ? `${signed(hoped.delta)}${hoped.metric !== metric ? ` ${METRIC_LABELS[hoped.metric].toLowerCase()}` : ''}` : NOT_SPECIFIED,
-			result: r ? { text: signed(r.delta), tone: tone(r), word: TONE_WORDS[tone(r)], interval: intervalText(r), kind: EVALUATION_LABELS[r.evaluation], metric: METRIC_LABELS[r.metric], n: r.n } : null,
+			result: r ? { text: signed(r.delta), tone: tone(r), mark: markOf(ready(x, r), tone(r)), word: ready(x, r) ? 'Ready to implement' : tone(r) === 'better' ? 'Proven, not ready' : TONE_WORDS[tone(r)], interval: intervalText(r), kind: EVALUATION_LABELS[r.evaluation], metric: METRIC_LABELS[r.metric], n: r.n } : null,
 			forward: x.forward?.verdict ?? null
 		};
 	});

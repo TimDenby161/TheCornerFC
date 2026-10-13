@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, UNSEEN_LABELS, forwardSummary, intervalText, liveText, percent, signed, tone, type Result } from '#lib/changes.ts';
+import { EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, UNSEEN_LABELS, forwardSummary, headline, intervalText, liveText, markOf, notReadyNote, ready, percent, signed, tone, type Result } from '#lib/changes.ts';
 import { changesDoc } from '#lib/server/changes.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 
@@ -12,9 +12,12 @@ export async function load({ fetch, locals, params }) {
 	const said = (text: string | null | undefined) => (text && text.trim() ? text : NOT_SPECIFIED);
 	const places = (r: Pick<Result, 'metric'>) => (r.metric === 'mse' || r.metric === 'accuracy' || r.metric === 'roi' ? 4 : 5);
 	const fwd = forwardSummary(c);
+	const main = headline(c);
 	return {
 		tabHead: { title: 'Model Change Tracker', ...TAB_INFO.changes }, environment: doc.environment, stored: doc.stored,
 		differs: doc.differs.filter((line) => line.startsWith(c.id)),
+		// green on this page, as on the list, only for a change with enough evidence to implement
+		ready: !!main && ready(c, main), why: main ? notReadyNote(c, main) : '',
 		change: {
 			id: c.id, title: c.title, date: c.date, recorded: c.recorded, recorded_at: c.recorded_at, retrospective: c.retrospective, component: c.component,
 			kind: c.kind, status: c.status, stage: c.stage, deployed: c.deployed, deployed_on: c.deployed_on, deployed_day_known: c.deployed_day_known,
@@ -27,7 +30,7 @@ export async function load({ fetch, locals, params }) {
 			label: r.label, date: r.date, kind: EVALUATION_LABELS[r.evaluation], unseen: UNSEEN_LABELS[r.unseen], metric: METRIC_LABELS[r.metric],
 			before: r.baseline != null ? r.baseline.toFixed(5) : NOT_SPECIFIED, after: r.after != null ? r.after.toFixed(5) : NOT_SPECIFIED,
 			delta: signed(r.delta, places(r)), percent: percent(r), interval: intervalText(r, places(r)), n: r.n != null ? r.n.toLocaleString('en-GB') : NOT_SPECIFIED,
-			period: r.period ? `${r.period[0]} to ${r.period[1]}` : NOT_SPECIFIED, tone: tone(r), word: TONE_WORDS[tone(r)], meaningful: r.meaningful, source: r.source,
+			period: r.period ? `${r.period[0]} to ${r.period[1]}` : NOT_SPECIFIED, tone: tone(r), mark: markOf(r === main && ready(c, r), tone(r)), word: TONE_WORDS[tone(r)], meaningful: r.meaningful, source: r.source,
 			market: r.vs_market ? `${signed(r.vs_market.model_minus_market, 4)} against the market on ${r.vs_market.n.toLocaleString('en-GB')} matches${r.vs_market.note ? `. ${r.vs_market.note}` : ''}` : 'Not measured against bookmakers'
 		})),
 		events: c.events.map((e, i) => ({

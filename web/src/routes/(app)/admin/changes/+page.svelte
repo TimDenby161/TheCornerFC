@@ -60,14 +60,14 @@
 				{#if data.deltas.length}
 					<table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Past matches tested</th><th>Live matches tested</th><th>Current → with the change</th><th>Gain</th></tr></thead>
 						<tbody>{#each data.deltas as d (d.id)}
-							<tr class={d.tone} class:mc-ready={d.ready}><td class="mc-no">{shortId(d.id)}</td>
-								<td><a class="team-link" href="/admin/changes/{d.id}">{d.title}</a>{#if d.ready}<span class="mc-sub mc-ready-note">{d.readyNote}</span>{/if}</td>
+							<tr class="mark-{d.mark}" class:mc-ready={d.ready}><td class="mc-no">{shortId(d.id)}</td>
+								<td><a class="team-link" href="/admin/changes/{d.id}">{d.title}</a>{#if d.readyNote}<span class="mc-sub" class:mc-ready-note={d.ready}>{d.readyNote}</span>{/if}</td>
 								<td>{d.n != null ? d.n.toLocaleString('en-GB') : '–'}</td>
 								<td class="mc-live">{#each d.live as t (t.protocol)}<span class="mc-line-item">{liveText(t)}</span>{:else}Not in a live test{/each}</td>
 								<td>{d.before != null && d.after != null ? `${d.before.toFixed(5)} → ${d.after.toFixed(5)}` : 'Not recorded'}</td>
-								<td><span class="mc-gain {d.tone}">{signed(d.gain)}</span></td></tr>
+								<td><span class="mc-gain mark-{d.mark}">{signed(d.gain)}</span></td></tr>
 						{/each}</tbody></table>
-					<div class="stats-note"><b>A whole row in green is ready to implement</b>: a test, not the matches it was built on, has enough data to prove a gain of at least the 0.002 bar, and it has been neither rejected nor deployed. Releasing it is still your decision. Those rows come first. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Green: enough data to show it is better (its interval leaves zero out). Red: enough to show it is worse. Uncoloured: not proven either way, however large the figure. Proven gains are listed first, then the unproven, then the proven losses. Each figure is that change's own test on its own matches, never a production result. Past matches are the historical test the gain comes from. Live matches are finished matches, played after the change was fixed, with a prediction stored before kickoff, out of the number its registered test will be read at; the live result itself stays unread until then, so the gain shown is still the historical one.</div>
+					<div class="stats-note"><b>Green means one thing: implement this.</b> A row is green only when a test, not the matches the change was built on, has statistically enough evidence that it is an improvement (its interval leaves zero out), the gain is at least the 0.002 bar, and it has been neither rejected nor deployed. No other change is marked green anywhere on this page. A gain that is proven but too small, large but unproven, or rejected has no colour and says why under its name. Red is a change a test has proven worse. Releasing a green change is still your decision. Green rows come first, then proven gains, then the unproven, then the proven losses. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Each figure is that change's own test on its own matches, never a production result. Past matches are the historical test the gain comes from. Live matches are finished matches, played after the change was fixed, with a prediction stored before kickoff, out of the number its registered test will be read at; the live result itself stays unread until then, so the gain shown is still the historical one.</div>
 				{:else}<div class="stats-note">No change in this selection has a result on {data.metricLabel.toLowerCase()}.</div>{/if}
 			</div>
 			<div class="stats-card"><div class="stats-label">3 · Expected against actual</div>
@@ -92,7 +92,7 @@
 							<td>{r.date}</td><td>{r.component}</td>
 							<td><span class="mc-stage {STAGE[r.stage] ?? 'other'}">{r.stage}</span>{#if r.status !== r.stage}<span class="mc-sub">{r.status}</span>{/if}</td>
 							<td>{r.expected}</td>
-							<td>{#if r.result}<span class="mc-pill {r.result.tone}">{r.result.word} {r.result.text}</span><span class="mc-sub">{r.result.kind}{r.result.metric !== data.metricLabel ? ` · ${r.result.metric}` : ''}{r.result.n ? ` · ${r.result.n.toLocaleString('en-GB')} matches` : ''}</span>{:else}No result recorded{/if}</td>
+							<td>{#if r.result}<span class="mc-pill mark-{r.result.mark}">{r.result.word} {r.result.text}</span><span class="mc-sub">{r.result.kind}{r.result.metric !== data.metricLabel ? ` · ${r.result.metric}` : ''}{r.result.n ? ` · ${r.result.n.toLocaleString('en-GB')} matches` : ''}</span>{:else}No result recorded{/if}</td>
 							<td>{r.forward ?? '–'}</td></tr>
 					{/each}</tbody></table></div>
 			{:else}<div class="stats-note">No change matches these choices.</div>{/if}

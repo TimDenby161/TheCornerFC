@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, expectedRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
-	gain, liveText, reach, ready, scale, shortId, signed, ticks, tone, type Change, type Result
+	gain, liveText, markOf, notReadyNote, reach, ready, scale, shortId, signed, ticks, tone, type Change, type Result
 } from './changes';
 
 const result = (over: Partial<Result> = {}): Result => ({
@@ -106,7 +106,21 @@ describe('the charts', () => {
 			change('MC-0004', { results: [proven(-0.02)] })
 		], 'log_loss');
 		expect(rows.map((r) => [r.id, r.ready])).toEqual([['MC-0003', true], ['MC-0002', true], ['MC-0004', false], ['MC-0001', false]]);
-		expect(rows.map((r) => r.readyNote)).toEqual(['Ready: proven on new matches', 'Ready on the historical test; being confirmed on new matches', '', '']);
+		expect(rows.map((r) => r.readyNote)).toEqual(['Ready: proven on new matches', 'Ready on the historical test; being confirmed on new matches',
+			'Proven on this test, but rejected: see why on its page', 'Proven, but under the 0.002 bar']);
+		expect(rows.map((r) => r.mark)).toEqual(['ready', 'ready', 'none', 'none']);
+	});
+	it('use green for a change that is ready and for nothing else', () => {
+		expect(markOf(true, 'better')).toBe('ready');
+		expect(markOf(false, 'better')).toBe('none');           // proven but small, or rejected: no colour
+		expect(markOf(false, 'unclear')).toBe('none');
+		expect(markOf(false, 'worse')).toBe('worse');
+		const small = result({ delta: -0.0008, interval: [-0.0014, -0.0002] });
+		expect(notReadyNote(change('x', { status: 'Inconclusive' }), small)).toBe('Proven, but under the 0.002 bar');
+		expect(notReadyNote(change('x', { status: 'Accepted', deployed: true }), small)).toBe('Already in production');
+		expect(notReadyNote(change('x', { status: 'Testing' }), result({ delta: -0.003, interval: [-0.004, -0.002], evaluation: 'development' }))).toBe('Only measured on the matches it was built on');
+		expect(notReadyNote(change('x', { status: 'Testing' }), result({ delta: -0.003, interval: [-0.006, 0.001] }))).toBe('');   // not proven: nothing to explain
+		expect(notReadyNote(change('x', { status: 'Testing' }), result({ delta: -0.003, interval: [-0.004, -0.002] }))).toBe('');  // ready
 	});
 	it('carry how many live matches each registered test has reached', () => {
 		const live = [{ protocol: 'P13', start: '2026-10-13', target: 9400, matches: 1312 }];

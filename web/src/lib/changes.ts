@@ -116,7 +116,22 @@ export const gain = (metric: string, delta: number) => (HIGHER_IS_BETTER.has(met
 // measure, best first. Changes proven better (their interval leaves zero out) lead, by gain; then
 // the ones not proven either way, by gain; then the ones proven worse. So a large figure on a
 // handful of matches never sits above a smaller one that is proven.
-export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; live: LiveTest[] };
+export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; mark: Mark; live: LiveTest[] };
+
+// The one colour rule of the page. Green means one thing only: there is statistically enough
+// evidence that the change is an improvement worth implementing (ready, below). Red means a test
+// has proven it worse. Everything else has no colour, including a gain that is proven but too
+// small, a gain that is large but unproven, and a change that was rejected.
+export type Mark = 'ready' | 'worse' | 'none';
+export const markOf = (isReady: boolean, t: Tone): Mark => (isReady ? 'ready' : t === 'worse' ? 'worse' : 'none');
+// Why a proven gain is not green, in a few words; '' where there is nothing to explain
+export function notReadyNote(c: Pick<Change, 'status' | 'deployed'>, r: Pick<Result, 'metric' | 'delta' | 'interval' | 'evaluation'>): string {
+	if (ready(c, r) || tone(r) !== 'better') return '';
+	if (c.deployed) return 'Already in production';
+	if (c.status === 'Rejected' || c.status === 'Reverted') return 'Proven on this test, but rejected: see why on its page';
+	if (r.evaluation === 'development') return 'Only measured on the matches it was built on';
+	return BAR[r.metric] != null ? `Proven, but under the ${BAR[r.metric]} bar` : 'Proven, but this measure has no bar';
+}
 
 // The bar a change has to clear before it can be put forward for production: a gain of this
 // much on the measure (experiments/STAGE_E_DECISION.md). Measures with no bar are never "ready".
@@ -134,8 +149,8 @@ export function deltaRows(changes: Change[], metric: string): DeltaRow[] {
 		if (!r) return [];
 		const ok = ready(c, r);
 		// a change that is ready on a historical test and is being confirmed on new matches says so
-		const readyNote = !ok ? '' : r.evaluation === 'prospective' ? 'Ready: proven on new matches' : c.status === 'Testing' ? 'Ready on the historical test; being confirmed on new matches' : 'Ready on the historical test';
-		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n, ready: ok, readyNote, live: c.live ?? [] }];
+		const readyNote = !ok ? notReadyNote(c, r) : r.evaluation === 'prospective' ? 'Ready: proven on new matches' : c.status === 'Testing' ? 'Ready on the historical test; being confirmed on new matches' : 'Ready on the historical test';
+		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n, ready: ok, readyNote, mark: markOf(ok, tone(r)), live: c.live ?? [] }];
 	}).sort((a, b) => Number(b.ready) - Number(a.ready) || ORDER[a.tone] - ORDER[b.tone] || b.gain - a.gain || (a.id < b.id ? -1 : 1));
 }
 
