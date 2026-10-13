@@ -1,0 +1,19 @@
+# What the Live tracking workflow installs on top of requirements.txt: the packages of
+# requirements-p13.txt and everything they need, pinned by hash as requirements.txt is, for the
+# job's own platform (Linux x86-64, Python 3.13). Rebuild with `pip download --only-binary=:all:
+# --platform manylinux_2_28_x86_64 --python-version 3.13 -r requirements-p13.txt` and the files' SHA-256.
+# For a local run on another machine, install requirements-p13.txt itself.
+cloudpickle==3.1.2 \
+    --hash=sha256:9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a
+joblib==1.6.0 \
+    --hash=sha256:3dbbf9f6e4b592a2357b854608e980fe6390d131d7a82f011a377ef2ebef7aba
+narwhals==2.27.1 \
+    --hash=sha256:d057df13f5852b8e157596e82eb5e955fad267425df5e420e0ee9863da483b31
+numpy==2.5.4 \
+    --hash=sha256:6ffa07666f8da0eef81d149934a626d0d95fbd6838432a33e66245423a9062c0
+scikit-learn==1.9.1 \
+    --hash=sha256:55e79d6e9b0923f1a978179822bd43d7f5543f45e970a00fe861f43486380aba
+scipy==1.18.1 \
+    --hash=sha256:fdaf5ea890a6183d0565f51a61799d67081bd5b1cf03c5f4b3fd3732108625c9
+threadpoolctl==3.7.0 \
+    --hash=sha256:cd8b60b5641b45c67bbf73c64c843235fc2d8a480c87389f52f5dbee893b86be

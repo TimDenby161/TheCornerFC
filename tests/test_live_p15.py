@@ -117,10 +117,24 @@ class RegistrationTests(unittest.TestCase):
     def test_its_workflow_runs_it_on_production_and_stores_one_document(self):
         text = (ROOT / '.github/workflows/live-tracking.yml').read_text()
         self.assertIn('python experiments/prospective/live_p15.py --store', text)
-        self.assertIn('experiments/prospective/requirements-p13.txt', text)
+        self.assertIn('pip install -r experiments/prospective/requirements-live.txt', text)
+        self.assertNotIn('-r requirements.txt -r', text)        # pip refuses a hashed file and an unhashed one together
         self.assertIn('group: db-sync', text)
         self.assertIn('THECORNERFC_NO_API: "true"', text)
         self.assertNotIn('API_FOOTBALL_KEY', text)
+
+
+    def test_what_the_job_installs_is_pinned_by_hash_at_the_registered_versions(self):
+        folder = ROOT / 'experiments/prospective'
+        registered = dict(line.split('==') for line in (folder / 'requirements-p13.txt').read_text().split())
+        lines = [l for l in (folder / 'requirements-live.txt').read_text().splitlines() if l and not l.startswith('#')]
+        pins = dict(l.rstrip(' \\').split('==') for l in lines if '==' in l)
+        for name, version in registered.items():
+            self.assertEqual(pins.get(name), version, name)
+        hashes = [l for l in lines if l.strip().startswith('--hash=sha256:')]
+        self.assertEqual(len(hashes), len(pins))               # every package, the ones they pull in too
+        for l in hashes:
+            self.assertRegex(l.strip(), r'^--hash=sha256:[0-9a-f]{64}$')
 
 
 if __name__ == '__main__':

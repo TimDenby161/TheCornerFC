@@ -44,8 +44,11 @@ jobs:
           python-version: "3.13"
           cache: pip
 
-      # the candidates need numpy, scipy and scikit-learn at the versions they were registered with
-      - run: pip install -r requirements.txt -r experiments/prospective/requirements-p13.txt
+      - run: pip install -r requirements.txt
+
+      # the candidates need numpy, scipy and scikit-learn at the versions they were registered with:
+      # the same pins as requirements-p13.txt with everything they need, each checked by its hash
+      - run: pip install -r experiments/prospective/requirements-live.txt
 
       # Nothing is read or written unless the unit tests pass on the code this job is running.
       # No secrets are given to this step, and it runs with the local-safe settings whatever the
