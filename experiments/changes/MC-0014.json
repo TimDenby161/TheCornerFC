@@ -83,6 +83,14 @@
    "type": "decision",
    "status": "Inconclusive",
    "reason": "A real gain below the bar. Slowing the opponent's step, which a fuller uncertainty model would do, made things worse."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P15",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }

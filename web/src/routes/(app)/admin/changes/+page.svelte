@@ -2,7 +2,7 @@
 	import ChangeBar from '#lib/components/ChangeBar.svelte';
 	import ChangeLines from '#lib/components/ChangeLines.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
-	import { METRIC_LABELS, liveText, reach, shortId, signed } from '#lib/changes.ts';
+	import { METRIC_LABELS, reach, shortId, signed } from '#lib/changes.ts';
 
 	let { data } = $props();
 	const STAGE: Record<string, string> = { 'Deployed to production': 'deployed', 'Tested and rejected': 'rejected', 'Being tested': 'testing', Reverted: 'reverted' };
@@ -58,16 +58,19 @@
 			</div>
 			<div class="stats-card"><div class="stats-label">2 · Each change against the current version, {data.metricLabel.toLowerCase()}</div>
 				{#if data.deltas.length}
-					<table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Past matches tested</th><th>Live matches tested</th><th>Current → with the change</th><th>Gain</th></tr></thead>
+					<table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Past matches</th><th>Past gain</th><th>Current → with the change</th><th>Live matches</th><th>Live gain</th><th>On live matches</th></tr></thead>
 						<tbody>{#each data.deltas as d (d.id)}
 							<tr class="mark-{d.mark}" class:mc-ready={d.ready}><td class="mc-no">{shortId(d.id)}</td>
 								<td><a class="team-link" href="/admin/changes/{d.id}">{d.title}</a>{#if d.readyNote}<span class="mc-sub" class:mc-ready-note={d.ready}>{d.readyNote}</span>{/if}</td>
 								<td>{d.n != null ? d.n.toLocaleString('en-GB') : '–'}</td>
-								<td class="mc-live">{#each d.live as t (t.protocol)}<span class="mc-line-item">{liveText(t)}</span>{:else}Not in a live test{/each}</td>
+								<td><span class="mc-gain mark-{d.mark}">{signed(d.gain)}</span></td>
 								<td>{d.before != null && d.after != null ? `${d.before.toFixed(5)} → ${d.after.toFixed(5)}` : 'Not recorded'}</td>
-								<td><span class="mc-gain mark-{d.mark}">{signed(d.gain)}</span></td></tr>
+								<td>{d.liveRecord ? d.liveRecord.n.toLocaleString('en-GB') : '–'}</td>
+								<td class="mc-live">{#if d.liveRecord?.gain != null}{signed(d.liveRecord.gain)}{#if d.liveRecord.low != null && d.liveRecord.high != null}<span class="mc-sub">{signed(d.liveRecord.low)} to {signed(d.liveRecord.high)}</span>{/if}{:else}–{/if}</td>
+								<td class="mc-live-say" title={d.liveWhy}>{d.liveText}{#if d.liveWhy}<span class="mc-sub">{d.liveWhy}</span>{/if}</td></tr>
 						{/each}</tbody></table>
-					<div class="stats-note"><b>Green means one thing: implement this.</b> A row is green only when a test, not the matches the change was built on, has statistically enough evidence that it is an improvement (its interval leaves zero out), the gain is at least the 0.002 bar, and it has been neither rejected nor deployed. No other change is marked green anywhere on this page. A gain that is proven but too small, large but unproven, or rejected has no colour and says why under its name. Red is a change a test has proven worse. Releasing a green change is still your decision. Green rows come first, then proven gains, then the unproven, then the proven losses. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Each figure is that change's own test on its own matches, never a production result. Past matches are the historical test the gain comes from. Live matches are finished matches, played after the change was fixed, with a prediction stored before kickoff, out of the number its registered test will be read at; the live result itself stays unread until then, so the gain shown is still the historical one.</div>
+					<div class="stats-note">{#if data.live}Live matches: {data.live.n.toLocaleString('en-GB')} finished since {data.live.start}{#if data.live.to} (to {data.live.to}){/if}, over {data.live.weeks} week{data.live.weeks === 1 ? '' : 's'}, for the {data.live.tracked} changes that can be run. Updated <LocalTime iso={data.live.generated} show="short" />. Nothing is called on live matches before {data.live.matches} matches and {data.live.minWeeks} weeks.{:else}The live record has not been stored yet: it is written by the Live tracking job, on Mondays and Thursdays.{/if} The live gain is the candidate against the current model on the same live matches, with the range it could still lie in; it is judged by a method that allows looking at any time, which is why its range is wide and a call takes many matches.</div>
+					<div class="stats-note"><b>Green means one thing: implement this.</b> A row is green only when there is statistically enough evidence that the change is an improvement of at least the 0.002 bar: on live matches, or on a test that was not the matches it was built on, and it has been neither rejected nor deployed. No other change is marked green anywhere on this page. A gain that is proven but too small, large but unproven, or rejected has no colour and says why under its name. Red is a change a test has proven worse. Releasing a green change is still your decision. Green rows come first, then proven gains, then the unproven, then the proven losses. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Past figures are each change's own historical test on its own matches, never a production result.</div>
 				{:else}<div class="stats-note">No change in this selection has a result on {data.metricLabel.toLowerCase()}.</div>{/if}
 			</div>
 			<div class="stats-card"><div class="stats-label">3 · Expected against actual</div>

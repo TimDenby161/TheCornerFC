@@ -62,6 +62,14 @@
    "type": "decision",
    "status": "Rejected",
    "reason": "0.0054 worse. The single rank is not the limitation."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P15",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }

@@ -62,6 +62,14 @@
    "type": "decision",
    "status": "Inconclusive",
    "reason": "A real gain below the bar. Shot information is followed as a formula in protocols P13 and P14."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P15",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }

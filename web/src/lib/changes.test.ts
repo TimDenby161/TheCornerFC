@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, expectedRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
-	gain, liveText, markOf, notReadyNote, reach, ready, scale, shortId, signed, ticks, tone, type Change, type Result
+	gain, liveStanding, liveText, markOf, notReadyNote, reach, ready, scale, shortId, signed, ticks, tone, type Change, type LiveDoc, type LiveRecord, type Result
 } from './changes';
 
 const result = (over: Partial<Result> = {}): Result => ({
@@ -128,6 +128,29 @@ describe('the charts', () => {
 		expect(rows.find((r) => r.id === 'MC-0001')?.live).toEqual(live);
 		expect(rows.find((r) => r.id === 'MC-0002')?.live).toEqual([]);
 		expect(liveText(live[0])).toBe('1,312 of 9,400 (P13)');
+	});
+	it('add the live record: matches, gain and a call made only by the watching method', () => {
+		const rec = (over: Partial<LiveRecord>): LiveRecord => ({ n: 3000, weeks: 14, gain: 0.001, low: -0.002, high: 0.004, verdict: null, called: null, ready: false, series: [], ...over });
+		const live: LiveDoc = { protocol: 'P15', generated_at: 't', environment: 'production', start: '2026-10-14', planned: 6200, minimum: { matches: 500, weeks: 8 }, bar: 0.002, n: 3000, weeks: 14, to: '2027-01-20',
+			changes: { 'MC-0001': rec({ gain: 0.0031, low: 0.0004, high: 0.0058, verdict: 'better', ready: true }), 'MC-0002': rec({}), 'MC-0003': rec({ gain: -0.004, low: -0.007, high: -0.001, verdict: 'worse' }),
+				'MC-0004': rec({ n: 120, weeks: 1 }), 'MC-0005': rec({ gain: 0.0006, low: 0.0001, high: 0.0011, verdict: 'better' }) },
+			not_run: { 'MC-0006': 'Testing chose no setting, so there is nothing to run' } };
+		const open = { status: 'Inconclusive', stage: 'Tested, not deployed' };
+		const unproven = result({ delta: -0.0005, interval: [-0.001, 0.0002] });
+		const rows = deltaRows(['MC-0001', 'MC-0002', 'MC-0003', 'MC-0004', 'MC-0005', 'MC-0006'].map((id) => change(id, { ...open, results: [unproven] })), 'log_loss', live);
+		const by = Object.fromEntries(rows.map((r) => [r.id, r]));
+		expect([by['MC-0001'].ready, by['MC-0001'].mark, by['MC-0001'].readyNote]).toEqual([true, 'ready', 'Ready: proven on live matches']);
+		expect([by['MC-0002'].mark, by['MC-0002'].liveText]).toEqual(['none', 'Not proven either way yet']);
+		expect([by['MC-0003'].mark, by['MC-0003'].liveText]).toEqual(['worse', 'Proven worse on live matches']);
+		expect(by['MC-0004'].liveText).toBe('Too early: needs 500 matches and 8 weeks');
+		expect([by['MC-0005'].mark, by['MC-0005'].liveText]).toEqual(['none', 'Proven better live, under the bar']);   // proven, small: no green
+		expect([by['MC-0006'].liveText, by['MC-0006'].liveWhy]).toEqual(['Not run live', 'Testing chose no setting, so there is nothing to run']);
+		expect(rows[0].id).toBe('MC-0001');                                                                      // the ready change leads
+		// with no live record at all, nothing changes
+		expect(deltaRows([change('MC-0001', { ...open, results: [unproven] })], 'log_loss')[0]).toMatchObject({ ready: false, liveText: 'No live record yet' });
+		expect(liveStanding(live, 'MC-0001').record?.n).toBe(3000);
+		// a change already in production is never marked ready by its live record
+		expect(deltaRows([change('MC-0001', { status: 'Accepted', deployed: true, deployed_on: '2026-09-01', results: [unproven] })], 'log_loss', live)[0].ready).toBe(false);
 	});
 	it('name a change shortly and count a gain as positive whichever way the measure runs', () => {
 		expect(shortId('MC-0007')).toBe('A7');

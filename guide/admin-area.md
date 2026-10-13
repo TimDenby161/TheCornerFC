@@ -66,6 +66,17 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   protocol, its first day and its target. The export counts the finished matches since then
   that have a prediction stored before kickoff, and the page shows that count beside the
   historical matches. No result of a blinded protocol is read to do it.
+- **Every runnable change is scored on live matches** (protocol P15,
+  `experiments/prospective/live_p15.py`). The Live tracking workflow runs it on Mondays and
+  Thursdays, and by hand: it reads the database once, works out each of the 17 candidates with
+  the setting its experiment fixed, and stores the document `live_tracking`. The page shows each
+  change's live matches, live gain and range. It is judged by a confidence sequence, which holds
+  however often it is looked at, so its range is wide: a call takes many more matches than one
+  blind read would. The other ten changes say why there is nothing to run.
+- **Green means implement.** A row is green only when there is statistically enough evidence
+  of a gain of at least 0.002, on live matches or on a test that was not the matches it was
+  built on, and the change is neither rejected nor deployed. Nothing else about a change is
+  green. Releasing it is still a model release of its own, decided by the owner.
 - **Check the files** with `python -m thecornerfc changes` (no database). The unit tests check
   them on every push.
 

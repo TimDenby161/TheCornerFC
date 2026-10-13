@@ -358,7 +358,8 @@ class LiveTestTests(unittest.TestCase):
                     self.assertIn(f"## {e['protocol']}:", text)
                     self.assertIn(f"{e['target']:,}", text)
                     self.assertIn(e['start'], text)
-        self.assertEqual(found, {'P13': {('2026-10-13', 9400, False)}, 'P14': {('2026-10-14', 6200, True)}})
+        self.assertEqual(found, {'P13': {('2026-10-13', 9400, False)}, 'P14': {('2026-10-14', 6200, True)},
+                                 'P15': {('2026-10-14', 6200, True)}})          # P15 has no target: 6,200 is where its interval is tightest
 
     def test_the_document_carries_the_count_for_the_changes_that_have_one(self):
         doc = mc.document(mc.from_files([change('MC-0001', events=[self.P13]), change('MC-0002')]), environment='staging', generated_at='t',
@@ -412,7 +413,7 @@ class ExportTests(unittest.TestCase):
         self.assertNotIn('bets.json', site_files.CRITICAL_JSON_FILES)
         main = (ROOT / 'thecornerfc/__main__.py').read_text()
         self.assertNotIn('"bets.json"', main)
-        self.assertEqual(site_files.ADMIN_DOCS, ('bets', 'model_changes'))
+        self.assertEqual(site_files.ADMIN_DOCS, ('bets', 'model_changes', 'live_tracking'))
 
     def test_only_the_administrator_s_two_documents_can_be_stored_there(self):
         with writable(), self.assertRaises(ValueError):
@@ -483,6 +484,13 @@ class MigrationTests(unittest.TestCase):
     def test_no_address_is_kept_in_the_repository(self):
         self.assertNotRegex(self.sql, r'[\w.+-]+@[\w-]+\.[a-z]{2,}')
         self.assertNotRegex(self.sql, r'INSERT INTO (public\.)?site_admins')
+
+    def test_the_live_tracking_document_is_let_in_by_its_own_migration(self):
+        later = (ROOT / 'db/migrations/20261013_admin_live_tracking.sql').read_text()
+        self.assertIn(later, (ROOT / 'db/schema.sql').read_text())
+        self.assertIn("CHECK (name IN ('bets', 'model_changes', 'live_tracking'))", later)
+        self.assertIn('DROP CONSTRAINT IF EXISTS admin_docs_name_check', later)
+        self.assertNotRegex(later, r'(?i)\bgrant\b')              # it opens nothing: the same table, one more name
 
     def test_it_can_be_run_twice(self):
         self.assertEqual(self.sql.count('CREATE TABLE'), self.sql.count('CREATE TABLE IF NOT EXISTS'))

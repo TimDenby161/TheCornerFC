@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ChangeLines from '#lib/components/ChangeLines.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
 	import { shortId } from '#lib/changes.ts';
 
@@ -45,11 +46,30 @@
 		{:else}<div class="stats-note">No result has been recorded for this change.</div>{/if}
 	</div>
 
+	{#if data.tracking}
+		<div class="stats-card" id="mc-tracking"><div class="stats-label">On live matches</div>
+			{#if data.tracking.why}
+				<p class="stats-note"><b>{data.tracking.text}.</b> {data.tracking.why}.</p>
+			{:else}
+				<table class="calib-table"><thead><tr><th></th><th>Live matches</th><th>Weeks</th><th>Gain on them</th><th>Range it could still lie in</th><th>Standing</th></tr></thead>
+					<tbody><tr><td>Log loss</td><td>{data.tracking.n.toLocaleString('en-GB')}</td><td>{data.tracking.weeks}</td><td>{data.tracking.gain ?? '–'}</td><td>{data.tracking.range ?? '–'}</td><td>{data.tracking.text}</td></tr></tbody></table>
+				{#if data.tracking.called}<p class="stats-note"><b>{data.tracking.called}.</b> A call stands once made.</p>{/if}
+				{#if data.tracking.series.length >= 2}
+					<ChangeLines label="Gain on live matches by week, with its range" zero places={4} series={[
+						{ name: 'Gain so far', cls: 'live', points: data.tracking.series.map((p) => ({ x: p.week, value: p.gain, note: `${p.n.toLocaleString('en-GB')} matches` })) },
+						{ name: 'Range: lowest', cls: 'recon', points: data.tracking.series.map((p) => ({ x: p.week, value: p.low })) },
+						{ name: 'Range: highest', cls: 'recon', points: data.tracking.series.map((p) => ({ x: p.week, value: p.high })) }]} />
+				{/if}
+				<p class="stats-note">Scored against the current model on every finished match since {data.tracking.start}{#if data.tracking.to} (to {data.tracking.to}){/if} that has a prediction stored before kickoff, with the setting its experiment fixed. Plus is better. The range is the kind that stays valid however often it is looked at, so it is wide; the change is proven when the whole range is on one side of zero, and nothing is called before {data.tracking.minMatches} matches and {data.tracking.minWeeks} weeks. Updated <LocalTime iso={data.tracking.generated} show="short" />.</p>
+			{/if}
+		</div>
+	{/if}
+
 	{#if data.live.length}
-		<div class="stats-card" id="mc-live"><div class="stats-label">Live test</div>
-			<table class="calib-table"><thead><tr><th>Protocol</th><th>Counting from</th><th>Live matches so far</th><th>Read at</th><th>Reached</th></tr></thead>
+		<div class="stats-card" id="mc-live"><div class="stats-label">Registered live tests</div>
+			<table class="calib-table"><thead><tr><th>Protocol</th><th>Counting from</th><th>Live matches so far</th><th>Read or planned at</th><th>Reached</th></tr></thead>
 				<tbody>{#each data.live as t (t.protocol)}<tr><td>{t.protocol}</td><td>{t.start}</td><td>{t.matches.toLocaleString('en-GB')}</td><td>{t.target.toLocaleString('en-GB')}</td><td>{t.share}%</td></tr>{/each}</tbody></table>
-			<p class="stats-note">Finished matches played since the test began that have a prediction stored before kickoff. The test is read once, at its target: until then only the count is known, and no result from it is shown here or anywhere.</p>
+			<p class="stats-note">Finished matches played since each test began that have a prediction stored before kickoff. P13 and P14 are each read once, at their targets, which is the quicker route to a verdict; P15 is the running record above, which has no target.</p>
 		</div>
 	{/if}
 

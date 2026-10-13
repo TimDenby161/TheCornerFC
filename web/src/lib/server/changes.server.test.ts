@@ -23,7 +23,9 @@ const doc: ChangesDoc = {
 			forward: { from: null, to: null, after: null, before: null, verdict: 'Cannot be judged', why: 'The day it went live was not recorded.', deployed_with: [] } }
 	]
 };
-const database = (answer: unknown) => vi.fn(async () => new Response(JSON.stringify(answer))) as unknown as typeof fetch;
+// (the live record is a second document; here the database has none stored)
+const database = (answer: unknown) => vi.fn(async (_url: unknown, init?: RequestInit) => new Response(JSON.stringify(
+	String(init?.body).includes('live_tracking') && (answer as { ok?: boolean })?.ok ? { ok: true, doc: null } : answer))) as unknown as typeof fetch;
 const event = (answer: unknown, search = '', token = 'tok-admin', id = '') => ({ fetch: database(answer), locals: { token }, url: new URL(`https://x/admin/changes${search}`), params: { id } }) as never;
 const status = async (run: () => Promise<unknown>) => { try { await run(); } catch (e) { return isHttpError(e) ? e.status : String(e); } return 200; };
 
@@ -60,6 +62,7 @@ describe('the Model Change Tracker', () => {
 		expect(d.forward).toMatchObject({ verdict: 'Cannot be judged', expected: 'Not specified', backtest: '−0.00113', observed: null });
 		expect(d.events[0]).toMatchObject({ month: true, type: 'deployed' });
 		expect(d.live).toEqual([]);
+		expect(d.tracking).toBeNull();
 		expect(await status(() => one(event({ ok: true, doc }, '', 'tok-admin', 'MC-9999')))).toBe(404);
 		expect(await status(() => one(event({ ok: false }, '', 'tok-visitor', 'MC-0001')))).toBe(404);
 	});

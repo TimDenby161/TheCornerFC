@@ -86,6 +86,14 @@
    "type": "decision",
    "status": "Rejected",
    "reason": "The error moves over time: the higher-league side did 0.17 goals worse than projected before 2023 and 0.10 better since."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P15",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }

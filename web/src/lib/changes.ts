@@ -24,6 +24,27 @@ export type Change = {
 	recorded_at: string | null; status: string; stage: string; deployed: boolean; deployed_on: string | null; deployed_day_known: boolean | null;
 	reverted_on: string | null; decided_on: string | null; events: ChangeEvent[]; results: Result[]; forward: Forward | null; live?: LiveTest[];
 };
+// Protocol P15's running record (experiments/prospective/live_p15.py): each runnable change scored
+// on every finished match since it began, judged by a confidence sequence, so it can be looked
+// at as often as anyone likes. gain is production's log loss minus the candidate's (plus is
+// better); low and high are its interval; verdict is set from the first week the whole interval
+// was on one side of zero, and stays.
+export type LivePoint = { week: number; n: number; gain: number; low: number | null; high: number | null };
+export type LiveRecord = { n: number; weeks: number; gain: number | null; low: number | null; high: number | null; verdict: 'better' | 'worse' | null;
+	called: { verdict: 'better' | 'worse'; week: number; n: number; gain: number } | null; ready: boolean; series: LivePoint[] };
+export type LiveDoc = { protocol: string; generated_at: string; environment: string | null; start: string; planned: number; minimum: { matches: number; weeks: number };
+	bar: number; n: number; weeks: number; to: string | null; changes: Record<string, LiveRecord>; not_run: Record<string, string> };
+// Where a change stands on live matches, in a few words
+export function liveStanding(doc: LiveDoc | null, id: string): { record: LiveRecord | null; text: string; why: string } {
+	if (!doc) return { record: null, text: 'No live record yet', why: '' };
+	const r = doc.changes[id];
+	if (!r) return { record: null, text: 'Not run live', why: doc.not_run[id] ?? 'There is nothing to run' };
+	if (!r.n) return { record: r, text: 'No live matches yet', why: '' };
+	const enough = r.n >= doc.minimum.matches && r.weeks >= doc.minimum.weeks;
+	return { record: r, text: r.verdict === 'better' ? (r.ready ? 'Proven better on live matches' : 'Proven better live, under the bar') : r.verdict === 'worse' ? 'Proven worse on live matches'
+		: enough ? 'Not proven either way yet' : `Too early: needs ${doc.minimum.matches} matches and ${doc.minimum.weeks} weeks`, why: '' };
+}
+
 export type SeriesPoint = { month: string; source: 'live' | 'backfill'; n: number; log_loss: number; brier: number; home?: number; draw?: number; away?: number };
 export type Current = { version: string | null; versions: { name: string; n: number }[]; n: number | null; period: { from: string; to: string } | null; log_loss: number | null; brier: number | null; accuracy: number | null; vs_market: { n: number; model_log_loss: number; market_log_loss: number } | null };
 export type ChangesDoc = { generated_at: string; environment: string | null; stored: boolean; differs: string[]; not_specified: string; statuses: string[]; components: string[]; current: Current | null; series: SeriesPoint[]; changes: Change[] };
@@ -116,7 +137,8 @@ export const gain = (metric: string, delta: number) => (HIGHER_IS_BETTER.has(met
 // measure, best first. Changes proven better (their interval leaves zero out) lead, by gain; then
 // the ones not proven either way, by gain; then the ones proven worse. So a large figure on a
 // handful of matches never sits above a smaller one that is proven.
-export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; mark: Mark; live: LiveTest[] };
+export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; mark: Mark; live: LiveTest[];
+	liveRecord: LiveRecord | null; liveText: string; liveWhy: string };
 
 // The one colour rule of the page. Green means one thing only: there is statistically enough
 // evidence that the change is an improvement worth implementing (ready, below). Red means a test
@@ -143,14 +165,19 @@ export function ready(c: Pick<Change, 'status' | 'deployed'>, r: Pick<Result, 'm
 	return !c.deployed && c.status !== 'Rejected' && c.status !== 'Reverted' && r.evaluation !== 'development' && tone(r) === 'better' && BAR[r.metric] != null && gain(r.metric, r.delta) >= BAR[r.metric];
 }
 const ORDER: Record<Tone, number> = { better: 0, unclear: 1, worse: 2 };
-export function deltaRows(changes: Change[], metric: string): DeltaRow[] {
+export function deltaRows(changes: Change[], metric: string, liveDoc: LiveDoc | null = null): DeltaRow[] {
 	return changes.flatMap((c) => {
 		const r = headline(c, metric);
 		if (!r) return [];
-		const ok = ready(c, r);
-		// a change that is ready on a historical test and is being confirmed on new matches says so
-		const readyNote = !ok ? notReadyNote(c, r) : r.evaluation === 'prospective' ? 'Ready: proven on new matches' : c.status === 'Testing' ? 'Ready on the historical test; being confirmed on new matches' : 'Ready on the historical test';
-		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n, ready: ok, readyNote, mark: markOf(ok, tone(r)), live: c.live ?? [] }];
+		const past = ready(c, r);
+		// the live record speaks for log loss only, and never for a change that is already in production
+		const now = liveStanding(metric === 'log_loss' ? liveDoc : null, c.id);
+		const liveReady = !!now.record?.ready && !c.deployed, liveWorse = now.record?.verdict === 'worse';
+		const ok = past || liveReady;
+		const readyNote = liveReady ? 'Ready: proven on live matches' : !past ? notReadyNote(c, r) : r.evaluation === 'prospective' ? 'Ready: proven on new matches'
+			: c.status === 'Testing' ? 'Ready on the historical test; being confirmed on new matches' : 'Ready on the historical test';
+		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n,
+			ready: ok, readyNote, mark: ok ? 'ready' as Mark : liveWorse ? 'worse' as Mark : markOf(false, tone(r)), live: c.live ?? [], liveRecord: now.record, liveText: now.text, liveWhy: now.why }];
 	}).sort((a, b) => Number(b.ready) - Number(a.ready) || ORDER[a.tone] - ORDER[b.tone] || b.gain - a.gain || (a.id < b.id ? -1 : 1));
 }
 

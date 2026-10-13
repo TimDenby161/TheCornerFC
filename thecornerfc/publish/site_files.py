@@ -181,12 +181,13 @@ def store_owner_doc(conn, name, payload):
     conn.commit()
 
 
-ADMIN_DOCS = ("bets", "model_changes")
+ADMIN_DOCS = ("bets", "model_changes", "live_tracking")
 
 
 def store_admin_doc(conn, name, payload):
-    """The administrator's documents (owner's decision 2026-10-13): the paper bets and the model
-    change record go to admin_docs, never .export or site.docs, and the site reads them through
+    """The administrator's documents (owner's decision 2026-10-13): the paper bets, the model
+    change record and its live tracking (written by experiments/prospective/live_p15.py) go to
+    admin_docs, never .export or site.docs, and the site reads them through
     admin_doc(), which answers only a signed-in administrator
     (db/migrations/20261013_admin_area.sql). Raises if the table is missing or the connection is
     read-only: callers treat that as a skipped export."""

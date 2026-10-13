@@ -91,6 +91,14 @@
    "start": "2026-10-14",
    "target": 6200,
    "extra_time": true
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P15",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }

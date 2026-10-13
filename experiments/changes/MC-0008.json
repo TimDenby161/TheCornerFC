@@ -92,6 +92,14 @@
    "type": "correction",
    "of": "registration",
    "text": "The premise was partly an artefact. The sample left out cup ties decided after 90 minutes, most of which were level, so it was short of draws. In leagues alone the model predicts 25.4% draws and 25.7% happen. Do not repeat this experiment on a sample of 90-minute finishes only."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P15",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }

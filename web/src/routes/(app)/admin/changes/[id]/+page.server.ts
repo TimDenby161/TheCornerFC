@@ -1,23 +1,33 @@
 import { error } from '@sveltejs/kit';
-import { EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, UNSEEN_LABELS, forwardSummary, headline, intervalText, liveText, markOf, notReadyNote, ready, percent, signed, tone, type Result } from '#lib/changes.ts';
-import { changesDoc } from '#lib/server/changes.ts';
+import { EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, UNSEEN_LABELS, forwardSummary, headline, intervalText, liveStanding, liveText, markOf, notReadyNote, ready, percent, signed, tone, type Result } from '#lib/changes.ts';
+import { changesDoc, liveDoc } from '#lib/server/changes.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 
 // One change in full: what was registered, what was expected, each result, the decision and, for
 // a change deployed to production, how it has done since. The administrator's only.
 export async function load({ fetch, locals, params }) {
-	const doc = await changesDoc(fetch, locals.token);
+	const [doc, running] = await Promise.all([changesDoc(fetch, locals.token), liveDoc(fetch, locals.token)]);
 	const c = doc?.changes.find((x) => x.id === params.id);
 	if (!doc || !c) error(404, 'No such change');
 	const said = (text: string | null | undefined) => (text && text.trim() ? text : NOT_SPECIFIED);
 	const places = (r: Pick<Result, 'metric'>) => (r.metric === 'mse' || r.metric === 'accuracy' || r.metric === 'roi' ? 4 : 5);
 	const fwd = forwardSummary(c);
 	const main = headline(c);
+	const now = liveStanding(running, c.id), rec = now.record;
+	const liveReady = !!rec?.ready && !c.deployed;
 	return {
 		tabHead: { title: 'Model Change Tracker', ...TAB_INFO.changes }, environment: doc.environment, stored: doc.stored,
 		differs: doc.differs.filter((line) => line.startsWith(c.id)),
 		// green on this page, as on the list, only for a change with enough evidence to implement
-		ready: !!main && ready(c, main), why: main ? notReadyNote(c, main) : '',
+		ready: (!!main && ready(c, main)) || liveReady, why: liveReady ? '' : main ? notReadyNote(c, main) : '',
+		// protocol P15's running record of this change on live matches
+		tracking: running ? {
+			text: now.text, why: now.why, start: running.start, to: running.to, generated: running.generated_at, minMatches: running.minimum.matches, minWeeks: running.minimum.weeks,
+			n: rec?.n ?? 0, weeks: rec?.weeks ?? 0, gain: rec?.gain != null ? signed(rec.gain) : null,
+			range: rec?.low != null && rec?.high != null ? `${signed(rec.low)} to ${signed(rec.high)}` : null,
+			called: rec?.called ? `${rec.called.verdict === 'better' ? 'Proven better' : 'Proven worse'} from week ${String(rec.called.week).slice(4)} of ${String(rec.called.week).slice(0, 4)}, at ${rec.called.n.toLocaleString('en-GB')} matches` : null,
+			series: (rec?.series ?? []).filter((p) => p.low != null && p.high != null).map((p) => ({ week: `${String(p.week).slice(0, 4)}-W${String(p.week).slice(4)}`, gain: p.gain, low: p.low as number, high: p.high as number, n: p.n }))
+		} : null,
 		change: {
 			id: c.id, title: c.title, date: c.date, recorded: c.recorded, recorded_at: c.recorded_at, retrospective: c.retrospective, component: c.component,
 			kind: c.kind, status: c.status, stage: c.stage, deployed: c.deployed, deployed_on: c.deployed_on, deployed_day_known: c.deployed_day_known,
