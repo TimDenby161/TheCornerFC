@@ -99,13 +99,24 @@ export function counts(changes: Change[]) {
 	};
 }
 
-// Chart 2, before and after each change: a row for each change with a result on the measure
-export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null };
+// A change's short name on the page: A7 for MC-0007. The record's own id stays in addresses.
+export const shortId = (id: string) => `A${Number(id.replace(/^MC-/, '')) || id}`;
+
+// How much better the measure is with the change: positive is an improvement, whichever way
+// the measure itself runs
+export const gain = (metric: string, delta: number) => (HIGHER_IS_BETTER.has(metric) ? delta : -delta || 0);
+
+// Table 2, each change against the current version: a row for each change with a result on the
+// measure, best first. Changes proven better (their interval leaves zero out) lead, by gain; then
+// the ones not proven either way, by gain; then the ones proven worse. So a large figure on a
+// handful of matches never sits above a smaller one that is proven.
+export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null };
+const ORDER: Record<Tone, number> = { better: 0, unclear: 1, worse: 2 };
 export function deltaRows(changes: Change[], metric: string): DeltaRow[] {
 	return changes.flatMap((c) => {
 		const r = headline(c, metric);
-		return r ? [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n }] : [];
-	});
+		return r ? [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n }] : [];
+	}).sort((a, b) => ORDER[a.tone] - ORDER[b.tone] || b.gain - a.gain || (a.id < b.id ? -1 : 1));
 }
 
 // Chart 3, expected against actual: every change that recorded a number beforehand, with what a

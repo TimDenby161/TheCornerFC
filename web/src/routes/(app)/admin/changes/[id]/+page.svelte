@@ -1,5 +1,6 @@
 <script lang="ts">
 	import LocalTime from '#lib/components/LocalTime.svelte';
+	import { shortId } from '#lib/changes.ts';
 
 	let { data } = $props();
 	const c = $derived(data.change);
@@ -7,12 +8,12 @@
 </script>
 
 <svelte:head>
-	<title>{c.id}: {c.title} · The Corner FC</title>
+	<title>{shortId(c.id)}: {c.title} · The Corner FC</title>
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
 <section class="panel mc mc-detail" data-tab="changes" data-active="true">
-	<p class="mc-env">{data.environment === 'production' ? 'Production' : data.environment === 'staging' ? 'Staging: test data, not the live record' : 'Environment not named'} · {c.id} · {c.component} · {c.kind}</p>
+	<p class="mc-env">{data.environment === 'production' ? 'Production' : data.environment === 'staging' ? 'Staging: test data, not the live record' : 'Environment not named'} · {shortId(c.id)} ({c.id}) · {c.component} · {c.kind}</p>
 	<h2 class="mc-title" id="mc-title">{c.title}</h2>
 	<p><span class="mc-stage {STAGE[c.stage] ?? 'other'}">{c.stage}</span> <span class="mc-sub mc-inline">Status: {c.status} · proposed {c.date}{#if c.deployed_on} · deployed {c.deployed_day_known ? c.deployed_on : c.deployed_on.slice(0, 7)}{/if}</span></p>
 	{#if c.kind === 'experiment'}<div class="sim-banner">An experiment. Its results are tests on past or held-out matches and were never production results; nothing here was deployed.</div>{/if}

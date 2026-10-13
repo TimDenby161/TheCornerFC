@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	NO_CHOICES, choicesFrom, counts, cumulative, deltaRows, expectedRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
-	reach, scale, signed, ticks, tone, type Change, type Result
+	gain, reach, scale, shortId, signed, ticks, tone, type Change, type Result
 } from './changes';
 
 const result = (over: Partial<Result> = {}): Result => ({
@@ -75,7 +75,25 @@ describe('the charts', () => {
 	it('give each change with a result on the measure a row', () => {
 		const rows = deltaRows([change('MC-0001'), change('MC-0002', { results: [] }), change('MC-0003', { results: [result({ metric: 'brier' })] })], 'log_loss');
 		expect(rows.map((r) => r.id)).toEqual(['MC-0001']);
-		expect(rows[0]).toMatchObject({ delta: -0.00076, tone: 'better', before: 0.9936, after: 0.99284 });
+		expect(rows[0]).toMatchObject({ delta: -0.00076, gain: 0.00076, tone: 'better', before: 0.9936, after: 0.99284 });
+	});
+	it('put the best change first: proven gains, then the unproven, then the proven losses', () => {
+		const rows = deltaRows([
+			change('MC-0001', { results: [result({ delta: 0.0054, interval: [0.0037, 0.0069] })] }),          // proven worse
+			change('MC-0002', { results: [result({ delta: -0.0074, interval: [-0.0152, 0.0003], n: 1078 })] }), // big, not proven
+			change('MC-0003', { results: [result({ delta: -0.00076 })] }),                                    // proven better
+			change('MC-0004', { results: [result({ delta: -0.0028, interval: [-0.0041, -0.0015] })] }),        // proven better, bigger
+			change('MC-0005', { results: [result({ delta: 0.0001, interval: [-0.0001, 0.0003] })] })
+		], 'log_loss');
+		expect(rows.map((r) => r.id)).toEqual(['MC-0004', 'MC-0003', 'MC-0002', 'MC-0005', 'MC-0001']);
+		expect(rows.map((r) => r.tone)).toEqual(['better', 'better', 'unclear', 'unclear', 'worse']);
+	});
+	it('name a change shortly and count a gain as positive whichever way the measure runs', () => {
+		expect(shortId('MC-0007')).toBe('A7');
+		expect(shortId('MC-0027')).toBe('A27');
+		expect(gain('log_loss', -0.00076)).toBe(0.00076);
+		expect(gain('accuracy', 0.01)).toBe(0.01);
+		expect(gain('log_loss', 0)).toBe(0);
 	});
 	it('set an expectation beside a test, never beside the figure a change was built on', () => {
 		const hoped = { improves: 'log loss', metrics: [{ metric: 'log_loss', delta: -0.0007, low: -0.0011, high: -0.0003, source: 'DESIGN.md' }], betting: null, confidence: null, evidence: null };

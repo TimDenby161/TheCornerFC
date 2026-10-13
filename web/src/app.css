@@ -183,7 +183,8 @@ a.crest { text-decoration: none; }
 }
 
 /* The Model Change Tracker (the Admin area). Charts are SVG with positions as attributes. */
-body[data-tab="changes"] main { max-width: 1180px; }
+/* the tracker uses the whole width of the screen */
+body[data-tab="changes"] main { max-width: none; }
 .mc .stats-card { margin-bottom: 14px; }
 .mc-env { margin: 0 0 10px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; }
 .mc-alert { border-left: 3px solid var(--status-critical); }
@@ -216,6 +217,13 @@ body[data-tab="changes"] main { max-width: 1180px; }
 .mc-stage { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 11px; font-weight: 700; white-space: nowrap; border: 1px solid var(--border); color: var(--text-secondary); }
 .mc-stage.deployed { color: var(--good-text); border-color: currentColor; } .mc-stage.rejected { color: var(--critical-text); border-color: currentColor; }
 .mc-stage.testing { color: var(--blue-text); border-color: currentColor; } .mc-stage.reverted { color: var(--warn-text); border-color: currentColor; }
+.mc-versus th:nth-child(2), .mc-versus td:nth-child(2) { text-align: left; white-space: normal; }
+.mc-versus td:first-child, .mc-versus th:first-child { min-width: 0; width: 1%; white-space: nowrap; }
+.mc-no { font-weight: 800; color: var(--text-secondary); }
+.mc-gain { display: inline-block; min-width: 86px; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; color: var(--text-secondary); }
+.mc-gain.better { background: var(--status-good); color: #fff; }
+.mc-gain.worse { background: var(--status-critical); color: #fff; }
+.mc-versus tr.better .mc-no { color: var(--good-text); } .mc-versus tr.worse .mc-no { color: var(--critical-text); }
 .mc-sub { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; margin-top: 2px; }
 .mc-sub.mc-inline { display: inline; margin: 0; }
 .mc .calib-table td { vertical-align: top; }

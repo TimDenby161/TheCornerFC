@@ -2,7 +2,7 @@
 	import ChangeBar from '#lib/components/ChangeBar.svelte';
 	import ChangeLines from '#lib/components/ChangeLines.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
-	import { METRIC_LABELS, reach, signed } from '#lib/changes.ts';
+	import { METRIC_LABELS, reach, shortId, signed } from '#lib/changes.ts';
 
 	let { data } = $props();
 	const STAGE: Record<string, string> = { 'Deployed to production': 'deployed', 'Tested and rejected': 'rejected', 'Being tested': 'testing', Reverted: 'reverted' };
@@ -53,20 +53,20 @@
 					<ChangeLines label="Cumulative change in log loss across deployed changes" zero places={4} series={[{ name: 'Sum of each deployed change’s own backtest', cls: 'live', points: data.steps.map((s) => ({ x: s.on.slice(0, 7), value: s.total, note: s.title })) }]} />
 				{/if}
 				<table class="calib-table mc-steps"><thead><tr><th>Deployed</th><th>Change</th><th>Its backtest</th><th>Total</th></tr></thead>
-					<tbody>{#each data.steps as s (s.id)}<tr><td>{s.on.slice(0, 7)}</td><td><a class="team-link" href="/admin/changes/{s.id}">{s.title}</a></td><td>{s.delta != null ? signed(s.delta) : 'No test recorded'}</td><td>{signed(s.total)}</td></tr>{/each}</tbody></table>
+					<tbody>{#each data.steps as s (s.id)}<tr><td>{s.on.slice(0, 7)}</td><td><a class="team-link" href="/admin/changes/{s.id}">{shortId(s.id)} · {s.title}</a></td><td>{s.delta != null ? signed(s.delta) : 'No test recorded'}</td><td>{signed(s.total)}</td></tr>{/each}</tbody></table>
 				<div class="stats-note">Match-model changes that are in production, in the order they went live. Each figure comes from that change's own test on its own sample, so the total is a sum of separate tests and not a measurement. Changes made before this record began were never dated and are not here.</div>
 			</div>
-			<div class="stats-card"><div class="stats-label">2 · Before and after each change, {data.metricLabel.toLowerCase()}</div>
+			<div class="stats-card"><div class="stats-label">2 · Each change against the current version, {data.metricLabel.toLowerCase()}</div>
 				{#if data.deltas.length}
-					{@const widest = reach(data.deltas.flatMap((d) => [d.delta, ...(d.interval ?? [])]))}
-					<table class="calib-table mc-rows"><thead><tr><th>Change</th><th>Before → after</th><th>Change in the measure</th><th></th></tr></thead>
+					<table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Matches tested</th><th>Current → with the change</th><th>Gain</th></tr></thead>
 						<tbody>{#each data.deltas as d (d.id)}
-							<tr><td><a class="team-link" href="/admin/changes/{d.id}">{d.title}</a><span class="mc-sub">{d.stage} · {d.evaluation === 'development' ? 'development figure' : d.evaluation === 'backtest' ? 'backtest' : 'prospective test'}</span></td>
-								<td>{d.before != null && d.after != null ? `${d.before.toFixed(5)} → ${d.after.toFixed(5)}` : '–'}</td>
-								<td><ChangeBar delta={d.delta} interval={d.interval} reach={widest} tone={d.tone} label="{d.title}: {signed(d.delta)}" /></td>
-								<td><span class="mc-pill {d.tone}">{signed(d.delta)}</span></td></tr>
+							<tr class={d.tone}><td class="mc-no">{shortId(d.id)}</td>
+								<td><a class="team-link" href="/admin/changes/{d.id}">{d.title}</a></td>
+								<td>{d.n != null ? d.n.toLocaleString('en-GB') : '–'}</td>
+								<td>{d.before != null && d.after != null ? `${d.before.toFixed(5)} → ${d.after.toFixed(5)}` : 'Not recorded'}</td>
+								<td><span class="mc-gain {d.tone}">{signed(d.gain)}</span></td></tr>
 						{/each}</tbody></table>
-					<div class="stats-note">Left of the line is a fall in the measure. Green and red are used only where the interval (the thin line) leaves zero out; amber is everything else. These are experiments' own tests, never production results.</div>
+					<div class="stats-note">Best first. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Green: enough data to show it is better (its interval leaves zero out). Red: enough to show it is worse. Uncoloured: not proven either way, however large the figure. Proven gains are listed first, then the unproven, then the proven losses. Each figure is that change's own test on its own matches, never a production result.</div>
 				{:else}<div class="stats-note">No change in this selection has a result on {data.metricLabel.toLowerCase()}.</div>{/if}
 			</div>
 			<div class="stats-card"><div class="stats-label">3 · Expected against actual</div>
@@ -74,7 +74,7 @@
 					{@const widest = reach(data.expected.flatMap((e) => [e.expected, e.actual]))}
 					<table class="calib-table mc-rows"><thead><tr><th>Change</th><th>Expected</th><th>Actual</th><th>Expected (top) and actual</th></tr></thead>
 						<tbody>{#each data.expected as e (e.id + e.metric)}
-							<tr><td><a class="team-link" href="/admin/changes/{e.id}">{e.title}</a><span class="mc-sub">{METRIC_LABELS[e.metric]}</span></td>
+							<tr><td><a class="team-link" href="/admin/changes/{e.id}">{shortId(e.id)} · {e.title}</a><span class="mc-sub">{METRIC_LABELS[e.metric]}</span></td>
 								<td>{signed(e.expected)}</td><td>{e.actual != null ? signed(e.actual) : 'Not tested yet'}</td>
 								<td><ChangeBar delta={e.expected} second={e.actual} reach={widest} tone="plain" label="{e.title}: expected {signed(e.expected)}, actual {e.actual != null ? signed(e.actual) : 'not tested yet'}" /></td></tr>
 						{/each}</tbody></table>
@@ -87,7 +87,7 @@
 			{#if data.rows.length}
 				<div class="mc-scroll"><table class="calib-table mc-table"><thead><tr><th>Change</th><th>Date</th><th>Part of the model</th><th>Where it stands</th><th>Expected</th><th>Result</th><th>Since deployment</th></tr></thead>
 					<tbody>{#each data.rows as r (r.id)}
-						<tr><td><a class="team-link" href="/admin/changes/{r.id}">{r.title}</a><span class="mc-sub">{r.id} · {r.kind}</span></td>
+						<tr><td><a class="team-link" href="/admin/changes/{r.id}">{r.title}</a><span class="mc-sub">{shortId(r.id)} · {r.kind}</span></td>
 							<td>{r.date}</td><td>{r.component}</td>
 							<td><span class="mc-stage {STAGE[r.stage] ?? 'other'}">{r.stage}</span>{#if r.status !== r.stage}<span class="mc-sub">{r.status}</span>{/if}</td>
 							<td>{r.expected}</td>
