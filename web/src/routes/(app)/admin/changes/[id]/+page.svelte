@@ -44,6 +44,14 @@
 		{:else}<div class="stats-note">No result has been recorded for this change.</div>{/if}
 	</div>
 
+	{#if data.live.length}
+		<div class="stats-card" id="mc-live"><div class="stats-label">Live test</div>
+			<table class="calib-table"><thead><tr><th>Protocol</th><th>Counting from</th><th>Live matches so far</th><th>Read at</th><th>Reached</th></tr></thead>
+				<tbody>{#each data.live as t (t.protocol)}<tr><td>{t.protocol}</td><td>{t.start}</td><td>{t.matches.toLocaleString('en-GB')}</td><td>{t.target.toLocaleString('en-GB')}</td><td>{t.share}%</td></tr>{/each}</tbody></table>
+			<p class="stats-note">Finished matches played since the test began that have a prediction stored before kickoff. The test is read once, at its target: until then only the count is known, and no result from it is shown here or anywhere.</p>
+		</div>
+	{/if}
+
 	{#if data.forward}
 		<div class="stats-card" id="mc-forward"><div class="stats-label">Since deployment</div>
 			<table class="calib-table"><thead><tr><th></th><th>Expected</th><th>Backtest</th><th>Seen since</th><th>Seen less expected</th><th>Matches since</th></tr></thead>

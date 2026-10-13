@@ -39,7 +39,7 @@ COMPONENTS = ("Club rank", "Match projection", "Match probabilities", "Goal mark
               "Player ranks", "National teams", "Betting rule", "Fantasy points", "Whole model")
 MODELS = ("club", "player", "lineup", "match", "betting", "fantasy", "national")
 KINDS = ("experiment", "production change")
-EVENTS = ("status", "result", "decision", "deployed", "reverted", "correction")
+EVENTS = ("status", "result", "decision", "deployed", "reverted", "correction", "live_test")
 EVALUATIONS = ("development", "backtest", "prospective")
 METRICS = ("log_loss", "brier", "rps", "accuracy", "calibration_error", "goal_markets_log_loss", "mse", "mae", "roi", "other")
 UNSEEN = ("yes", "partly", "no")
@@ -181,6 +181,15 @@ def problems(change):
                 out.append(f"{where}: only a deployed change can be reverted")
             if not isinstance(e.get("reason"), str) or not e["reason"].strip():
                 out.append(f"{where}: a reversal gives its reason")
+        elif kind == "live_test":
+            if not isinstance(e.get("protocol"), str) or not re.match(r"^P[0-9]+$", e.get("protocol") or ""):
+                out.append(f"{where}: a live test names its protocol (P13)")
+            if not _day(e.get("start")):
+                out.append(f"{where}: a live test gives the first kickoff day that counts (start)")
+            if not (isinstance(e.get("target"), int) and e["target"] > 0):
+                out.append(f"{where}: a live test gives the number of matches it is read at (target)")
+            if not isinstance(e.get("extra_time"), bool):
+                out.append(f"{where}: extra_time says whether ties decided after 90 minutes count (true or false)")
         elif kind == "correction":
             if not isinstance(e.get("text"), str) or not e["text"].strip():
                 out.append(f"{where}: a correction says what is corrected")
@@ -389,6 +398,33 @@ def forward(conn, changes, now=None, market_for=None):
     return {**undated, **out}
 
 
+_LIVE_SQL = """
+    select count(*) from fixtures f
+    where f.status_short = any(%s) and f.ft_home is not null and f.ft_away is not null and f.kickoff >= %s
+      and exists (select 1 from match_prediction_snapshots s
+                  where s.fixture_id = f.fixture_id and s.source = 'prospective'
+                    and s.captured_at < f.kickoff and s.created_at < f.kickoff)"""
+
+
+def live_tests(conn, changes):
+    """How far each registered live test has got: {change id: [{protocol, start, target,
+    matches}]}. matches is the number of finished fixtures from the protocol's start day that
+    have a prediction stored before kickoff, which is how the protocols count themselves. It is a
+    count and nothing else: no result is read, so a blinded protocol stays blinded."""
+    counted, out = {}, {}
+    for c in changes:
+        for e in c["events"]:
+            if e["type"] != "live_test":
+                continue
+            key = (e["start"], e["extra_time"])
+            if key not in counted:
+                statuses = ["FT", "AET", "PEN"] if e["extra_time"] else ["FT"]
+                counted[key] = int(conn.execute(_LIVE_SQL, [statuses, e["start"]]).fetchone()[0])
+            out.setdefault(c["id"], []).append({"protocol": e["protocol"], "start": e["start"], "target": e["target"],
+                                                "matches": counted[key]})
+    return out
+
+
 # ---- the document the site reads -------------------------------------------------------------
 
 def from_files(changes):
@@ -398,16 +434,17 @@ def from_files(changes):
 
 
 def document(changes, *, environment, generated_at, current=None, series=None, forward_record=None,
-             differs=(), stored=True):
+             differs=(), stored=True, live=None):
     """The administrator's model_changes document. changes are as recorded (recorded()), or
     from the files when nothing could be stored (stored=False, and the page says so)."""
-    forward_record = forward_record or {}
+    forward_record, live = forward_record or {}, live or {}
     out = []
     for c in changes:
         where = standing(c["events"])
         results = [{**e, "experimental": True} for e in c["events"] if e["type"] == "result"]
         out.append({"id": c["id"], **c["registration"], "recorded_at": c["recorded_at"], **where,
-                    "events": c["events"], "results": results, "forward": forward_record.get(c["id"])})
+                    "events": c["events"], "results": results, "forward": forward_record.get(c["id"]),
+                    "live": live.get(c["id"], [])})
     return {"generated_at": generated_at, "environment": environment, "stored": stored, "differs": list(differs),
             "not_specified": NOT_SPECIFIED, "statuses": list(STATUSES), "components": list(COMPONENTS),
             "current": current, "series": series or [], "changes": out}

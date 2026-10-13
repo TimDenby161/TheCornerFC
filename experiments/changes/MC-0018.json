@@ -62,6 +62,22 @@
    "type": "status",
    "status": "Testing",
    "note": "It met the historical bar. The owner chose a prospective test before any change: protocol P13, blinded until 9,400 fixtures from 13 October 2026."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P13",
+   "start": "2026-10-13",
+   "target": 9400,
+   "extra_time": false
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P14",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }

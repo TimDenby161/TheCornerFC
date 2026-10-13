@@ -2,7 +2,7 @@
 	import ChangeBar from '#lib/components/ChangeBar.svelte';
 	import ChangeLines from '#lib/components/ChangeLines.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
-	import { METRIC_LABELS, reach, shortId, signed } from '#lib/changes.ts';
+	import { METRIC_LABELS, liveText, reach, shortId, signed } from '#lib/changes.ts';
 
 	let { data } = $props();
 	const STAGE: Record<string, string> = { 'Deployed to production': 'deployed', 'Tested and rejected': 'rejected', 'Being tested': 'testing', Reverted: 'reverted' };
@@ -58,15 +58,16 @@
 			</div>
 			<div class="stats-card"><div class="stats-label">2 · Each change against the current version, {data.metricLabel.toLowerCase()}</div>
 				{#if data.deltas.length}
-					<table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Matches tested</th><th>Current → with the change</th><th>Gain</th></tr></thead>
+					<table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Past matches tested</th><th>Live matches tested</th><th>Current → with the change</th><th>Gain</th></tr></thead>
 						<tbody>{#each data.deltas as d (d.id)}
 							<tr class={d.tone} class:mc-ready={d.ready}><td class="mc-no">{shortId(d.id)}</td>
 								<td><a class="team-link" href="/admin/changes/{d.id}">{d.title}</a>{#if d.ready}<span class="mc-sub mc-ready-note">{d.readyNote}</span>{/if}</td>
 								<td>{d.n != null ? d.n.toLocaleString('en-GB') : '–'}</td>
+								<td class="mc-live">{#each d.live as t (t.protocol)}<span class="mc-line-item">{liveText(t)}</span>{:else}Not in a live test{/each}</td>
 								<td>{d.before != null && d.after != null ? `${d.before.toFixed(5)} → ${d.after.toFixed(5)}` : 'Not recorded'}</td>
 								<td><span class="mc-gain {d.tone}">{signed(d.gain)}</span></td></tr>
 						{/each}</tbody></table>
-					<div class="stats-note"><b>A whole row in green is ready to implement</b>: a test, not the matches it was built on, has enough data to prove a gain of at least the 0.002 bar, and it has been neither rejected nor deployed. Releasing it is still your decision. Those rows come first. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Green: enough data to show it is better (its interval leaves zero out). Red: enough to show it is worse. Uncoloured: not proven either way, however large the figure. Proven gains are listed first, then the unproven, then the proven losses. Each figure is that change's own test on its own matches, never a production result.</div>
+					<div class="stats-note"><b>A whole row in green is ready to implement</b>: a test, not the matches it was built on, has enough data to prove a gain of at least the 0.002 bar, and it has been neither rejected nor deployed. Releasing it is still your decision. Those rows come first. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Green: enough data to show it is better (its interval leaves zero out). Red: enough to show it is worse. Uncoloured: not proven either way, however large the figure. Proven gains are listed first, then the unproven, then the proven losses. Each figure is that change's own test on its own matches, never a production result. Past matches are the historical test the gain comes from. Live matches are finished matches, played after the change was fixed, with a prediction stored before kickoff, out of the number its registered test will be read at; the live result itself stays unread until then, so the gain shown is still the historical one.</div>
 				{:else}<div class="stats-note">No change in this selection has a result on {data.metricLabel.toLowerCase()}.</div>{/if}
 			</div>
 			<div class="stats-card"><div class="stats-label">3 · Expected against actual</div>

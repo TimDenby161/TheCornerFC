@@ -45,7 +45,7 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
 | Part | Holds | After it is recorded |
 |---|---|---|
 | `registration` | What, why, how, the hypothesis, the expected improvement (numbers only with the source that recorded them before the test, otherwise empty and shown as "Not specified"), the success criteria, the code | Never edited |
-| `events` | In order: a status, a result, a decision, a deployment, a reversal, a correction | Only added to |
+| `events` | In order: a status, a result, a decision, a deployment, a reversal, a correction, a live test | Only added to |
 
 - **Immutable where it counts.** The export copies both into `model_changes` and
   `model_change_events`, whose triggers refuse any update, delete or truncate
@@ -62,6 +62,10 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   against the bookmakers' prices on its own matches. The verdict compares the distance from
   the market, not the raw scores (the fixtures differ), says "too early" under 1,000 matches,
   and never credits a change alone. A deployment known only to the month is not measured.
+- **A live test is counted, not read.** A `live_test` event names a registered prospective
+  protocol, its first day and its target. The export counts the finished matches since then
+  that have a prediction stored before kickoff, and the page shows that count beside the
+  historical matches. No result of a blinded protocol is read to do it.
 - **Check the files** with `python -m thecornerfc changes` (no database). The unit tests check
   them on every push.
 

@@ -59,6 +59,14 @@
    "type": "status",
    "status": "Testing",
    "note": "Accruing under P14 from 14 October 2026: 6,200 fixtures, read once, after P6."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P14",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }

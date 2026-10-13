@@ -588,10 +588,11 @@ def export_model_changes(conn, out_dir=OUT_DIR, now=None):
         "vs_market": {"n": result["n"], "model_log_loss": result["model_ll"], "market_log_loss": result["close_ll"]}
         if result.get("n") else None,
     }
-    series, record, environment = [], {}, None
+    series, record, environment, live = [], {}, None, {}
     try:
         environment = conn.execute("select site.environment()").fetchone()[0]
         series = model_changes.monthly(conn)
+        live = model_changes.live_tests(conn, rows)
         record = model_changes.forward(
             conn, rows, now,
             market_for=lambda since: {f: v["close"] for (f, m), v in market_consensus(conn, since).items() if m == "1X2"})
@@ -599,6 +600,6 @@ def export_model_changes(conn, out_dir=OUT_DIR, now=None):
         log.exception("The model change record's live figures were left out")
         conn.rollback()
     doc = model_changes.document(rows, environment=environment, generated_at=now.isoformat(), current=current,
-                                 series=series, forward_record=record, differs=differs, stored=stored)
+                                 series=series, forward_record=record, differs=differs, stored=stored, live=live)
     _store_admin(conn, "model_changes", doc)
     return doc

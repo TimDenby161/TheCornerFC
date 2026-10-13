@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, UNSEEN_LABELS, forwardSummary, intervalText, percent, signed, tone, type Result } from '#lib/changes.ts';
+import { EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, UNSEEN_LABELS, forwardSummary, intervalText, liveText, percent, signed, tone, type Result } from '#lib/changes.ts';
 import { changesDoc } from '#lib/server/changes.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 
@@ -37,8 +37,10 @@ export async function load({ fetch, locals, params }) {
 				: e.type === 'decision' ? `Decision: ${e.status}. ${e.reason}`
 				: e.type === 'deployed' ? `Deployed to production${e.commit ? ` (${e.commit})` : ''}${e.note ? `. ${e.note}` : ''}`
 				: e.type === 'reverted' ? `Reverted. ${e.reason}`
+				: e.type === 'live_test' ? `Live test registered: protocol ${e.protocol}, on matches from ${e.start}, read once at ${e.target?.toLocaleString('en-GB')}`
 				: `Correction of ${e.of === 'registration' ? 'the registration' : `event ${e.of}`}: ${e.text}`
 		})),
+		live: (c.live ?? []).map((t) => ({ ...t, text: liveText(t), share: Math.min(100, Math.round((100 * t.matches) / t.target)) })),
 		forward: c.forward ? {
 			...c.forward, expected: fwd.expected != null ? signed(fwd.expected) : NOT_SPECIFIED, backtest: fwd.backtest != null ? signed(fwd.backtest) : NOT_SPECIFIED,
 			observed: fwd.observed != null ? signed(fwd.observed) : null, gap: fwd.gap != null ? signed(fwd.gap) : null

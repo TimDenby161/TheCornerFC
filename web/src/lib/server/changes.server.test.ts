@@ -58,6 +58,7 @@ describe('the Model Change Tracker', () => {
 		expect(d.results[0]).toMatchObject({ delta: '−0.00113', interval: null, word: 'Unclear', market: 'Not measured against bookmakers' });
 		expect(d.forward).toMatchObject({ verdict: 'Cannot be judged', expected: 'Not specified', backtest: '−0.00113', observed: null });
 		expect(d.events[0]).toMatchObject({ month: true, type: 'deployed' });
+		expect(d.live).toEqual([]);
 		expect(await status(() => one(event({ ok: true, doc }, '', 'tok-admin', 'MC-9999')))).toBe(404);
 		expect(await status(() => one(event({ ok: false }, '', 'tok-visitor', 'MC-0001')))).toBe(404);
 	});

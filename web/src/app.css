@@ -219,6 +219,7 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-stage.testing { color: var(--blue-text); border-color: currentColor; } .mc-stage.reverted { color: var(--warn-text); border-color: currentColor; }
 .mc-versus th:nth-child(2), .mc-versus td:nth-child(2) { text-align: left; white-space: normal; }
 .mc-versus td:first-child, .mc-versus th:first-child { min-width: 0; width: 1%; white-space: nowrap; }
+.mc-live { white-space: nowrap; }
 .mc-no { font-weight: 800; color: var(--text-secondary); }
 .mc-gain { display: inline-block; min-width: 86px; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; color: var(--text-secondary); }
 .mc-gain.better { background: var(--status-good); color: #fff; }

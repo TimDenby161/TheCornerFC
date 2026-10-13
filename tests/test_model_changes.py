@@ -43,6 +43,7 @@ class Conn:
     def __init__(self, environment='staging', live=(), months=()):
         self.changes, self.events, self.admin, self.site_docs = {}, {}, {}, {'bets': 'public', 'stats': 'x'}
         self.environment, self.live, self.months = environment, list(live), list(months)
+        self.live_count = {}
         self.sql, self.commits, self.rollbacks = [], 0, 0
 
     def execute(self, sql, params=None):
@@ -73,6 +74,8 @@ class Conn:
             rows = [(c, v[0], v[2]) for c, v in sorted(self.changes.items())]
         elif text.startswith('select change_id, body, recorded_at from model_change_events'):
             rows = [(c, v[0], v[2]) for (c, s), v in sorted(self.events.items())]
+        elif text.startswith('select count(*) from fixtures f'):
+            rows = [(self.live_count.get((params[1], tuple(params[0])), 0),)]
         elif text.startswith('select site.environment()'):
             rows = [(self.environment,)]
         elif 'group by 1, 2' in text and 'fixture_predictions' in text:
@@ -317,6 +320,50 @@ class ForwardTests(unittest.TestCase):
         self.assertEqual(verdict, 'Still appears beneficial')
         self.assertIn('could also explain it', why)             # never credited to the change alone
         self.assertEqual(mc.forward_verdict(side(5000, 0.021), side(5000, 0.019))[0], 'No benefit visible')
+
+
+class LiveTestTests(unittest.TestCase):
+    """How many live matches a registered prospective test has reached."""
+    P13 = {"date": "2026-10-13", "type": "live_test", "protocol": "P13", "start": "2026-10-13", "target": 9400, "extra_time": False}
+    P14 = {"date": "2026-10-13", "type": "live_test", "protocol": "P14", "start": "2026-10-14", "target": 6200, "extra_time": True}
+
+    def test_a_live_test_names_its_protocol_start_and_target(self):
+        self.assertEqual(mc.problems(change(events=[self.P13, self.P14])), [])
+        for missing in ("protocol", "start", "target", "extra_time"):
+            self.assertTrue(mc.problems(change(events=[{k: v for k, v in self.P13.items() if k != missing}])), missing)
+
+    def test_each_test_is_counted_from_its_own_start_and_only_counted(self):
+        conn = Conn()
+        conn.live_count = {("2026-10-13", ("FT",)): 310, ("2026-10-14", ("FT", "AET", "PEN")): 255}
+        rows = [change('MC-0001', events=[self.P13, self.P14]), change('MC-0002', events=[self.P14]), change('MC-0003')]
+        got = mc.live_tests(conn, rows)
+        self.assertEqual(got, {'MC-0001': [{"protocol": "P13", "start": "2026-10-13", "target": 9400, "matches": 310},
+                                           {"protocol": "P14", "start": "2026-10-14", "target": 6200, "matches": 255}],
+                               'MC-0002': [{"protocol": "P14", "start": "2026-10-14", "target": 6200, "matches": 255}]})
+        asked = [s for s in conn.sql if s.startswith('select count(*) from fixtures f')]
+        self.assertEqual(len(asked), 2)                         # one count for each start, shared between changes
+        for sql in asked:                                       # a count of matches and nothing about how they went
+            for word in ('p_home', 'odds', 'goals', 'p.p_', 'ft_home >', 'ft_home ='):
+                self.assertNotIn(word, sql)
+            self.assertIn("s.source = 'prospective'", sql)
+            self.assertIn('s.captured_at < f.kickoff', sql)
+
+    def test_the_register_s_live_tests_are_the_registered_protocols(self):
+        text = (ROOT / 'experiments/prospective/PROTOCOLS.md').read_text()
+        found = {}
+        for c in mc.load():
+            for e in c['events']:
+                if e['type'] == 'live_test':
+                    found.setdefault(e['protocol'], set()).add((e['start'], e['target'], e['extra_time']))
+                    self.assertIn(f"## {e['protocol']}:", text)
+                    self.assertIn(f"{e['target']:,}", text)
+                    self.assertIn(e['start'], text)
+        self.assertEqual(found, {'P13': {('2026-10-13', 9400, False)}, 'P14': {('2026-10-14', 6200, True)}})
+
+    def test_the_document_carries_the_count_for_the_changes_that_have_one(self):
+        doc = mc.document(mc.from_files([change('MC-0001', events=[self.P13]), change('MC-0002')]), environment='staging', generated_at='t',
+                          live={'MC-0001': [{"protocol": "P13", "start": "2026-10-13", "target": 9400, "matches": 310}]})
+        self.assertEqual([c['live'] for c in doc['changes']], [[{"protocol": "P13", "start": "2026-10-13", "target": 9400, "matches": 310}], []])
 
 
 class DocumentTests(unittest.TestCase):

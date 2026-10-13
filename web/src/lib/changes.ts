@@ -11,7 +11,10 @@ export type Result = {
 	interval: [number, number] | null; interval_level: number | null; vs_market: MarketGap | null; meaningful: string; source: string;
 	experimental?: boolean; recorded_at?: string | null;
 };
-export type ChangeEvent = Result | { type: 'status' | 'decision' | 'deployed' | 'reverted' | 'correction'; date: string; date_known_to?: 'day' | 'month'; status?: string; note?: string; reason?: string; commit?: string | null; model_version?: string | null; of?: 'registration' | number; text?: string; recorded_at?: string | null };
+// A registered test on matches played after the change was fixed: how many it has reached of the
+// number it will be read at. A count only: its results stay unread until the target.
+export type LiveTest = { protocol: string; start: string; target: number; matches: number };
+export type ChangeEvent = Result | { type: 'status' | 'decision' | 'deployed' | 'reverted' | 'correction' | 'live_test'; date: string; protocol?: string; start?: string; target?: number; extra_time?: boolean; date_known_to?: 'day' | 'month'; status?: string; note?: string; reason?: string; commit?: string | null; model_version?: string | null; of?: 'registration' | number; text?: string; recorded_at?: string | null };
 export type Window = { n: number; log_loss: number | null; brier: number | null; vs_market: { n: number; model_log_loss: number; market_log_loss: number; model_minus_market: number } | null };
 export type Forward = { from: string | null; to: string | null; after: Window | null; before: Window | null; verdict: string; why: string; deployed_with: string[] };
 export type Change = {
@@ -19,7 +22,7 @@ export type Change = {
 	what: string; why: string; how: string; hypothesis: string; expected: Expected; success_criteria: string;
 	code: { commit: string | null; experiment: string | null; model_version: string | null };
 	recorded_at: string | null; status: string; stage: string; deployed: boolean; deployed_on: string | null; deployed_day_known: boolean | null;
-	reverted_on: string | null; decided_on: string | null; events: ChangeEvent[]; results: Result[]; forward: Forward | null;
+	reverted_on: string | null; decided_on: string | null; events: ChangeEvent[]; results: Result[]; forward: Forward | null; live?: LiveTest[];
 };
 export type SeriesPoint = { month: string; source: 'live' | 'backfill'; n: number; log_loss: number; brier: number; home?: number; draw?: number; away?: number };
 export type Current = { version: string | null; versions: { name: string; n: number }[]; n: number | null; period: { from: string; to: string } | null; log_loss: number | null; brier: number | null; accuracy: number | null; vs_market: { n: number; model_log_loss: number; market_log_loss: number } | null };
@@ -99,6 +102,9 @@ export function counts(changes: Change[]) {
 	};
 }
 
+// A live test's progress in words: "312 of 9,400 (P13)"
+export const liveText = (t: LiveTest) => `${t.matches.toLocaleString('en-GB')} of ${t.target.toLocaleString('en-GB')} (${t.protocol})`;
+
 // A change's short name on the page: A7 for MC-0007. The record's own id stays in addresses.
 export const shortId = (id: string) => `A${Number(id.replace(/^MC-/, '')) || id}`;
 
@@ -110,7 +116,7 @@ export const gain = (metric: string, delta: number) => (HIGHER_IS_BETTER.has(met
 // measure, best first. Changes proven better (their interval leaves zero out) lead, by gain; then
 // the ones not proven either way, by gain; then the ones proven worse. So a large figure on a
 // handful of matches never sits above a smaller one that is proven.
-export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string };
+export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; live: LiveTest[] };
 
 // The bar a change has to clear before it can be put forward for production: a gain of this
 // much on the measure (experiments/STAGE_E_DECISION.md). Measures with no bar are never "ready".
@@ -129,7 +135,7 @@ export function deltaRows(changes: Change[], metric: string): DeltaRow[] {
 		const ok = ready(c, r);
 		// a change that is ready on a historical test and is being confirmed on new matches says so
 		const readyNote = !ok ? '' : r.evaluation === 'prospective' ? 'Ready: proven on new matches' : c.status === 'Testing' ? 'Ready on the historical test; being confirmed on new matches' : 'Ready on the historical test';
-		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n, ready: ok, readyNote }];
+		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n, ready: ok, readyNote, live: c.live ?? [] }];
 	}).sort((a, b) => Number(b.ready) - Number(a.ready) || ORDER[a.tone] - ORDER[b.tone] || b.gain - a.gain || (a.id < b.id ? -1 : 1));
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, expectedRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
-	gain, reach, ready, scale, shortId, signed, ticks, tone, type Change, type Result
+	gain, liveText, reach, ready, scale, shortId, signed, ticks, tone, type Change, type Result
 } from './changes';
 
 const result = (over: Partial<Result> = {}): Result => ({
@@ -107,6 +107,13 @@ describe('the charts', () => {
 		], 'log_loss');
 		expect(rows.map((r) => [r.id, r.ready])).toEqual([['MC-0003', true], ['MC-0002', true], ['MC-0004', false], ['MC-0001', false]]);
 		expect(rows.map((r) => r.readyNote)).toEqual(['Ready: proven on new matches', 'Ready on the historical test; being confirmed on new matches', '', '']);
+	});
+	it('carry how many live matches each registered test has reached', () => {
+		const live = [{ protocol: 'P13', start: '2026-10-13', target: 9400, matches: 1312 }];
+		const rows = deltaRows([change('MC-0001', { live }), change('MC-0002')], 'log_loss');
+		expect(rows.find((r) => r.id === 'MC-0001')?.live).toEqual(live);
+		expect(rows.find((r) => r.id === 'MC-0002')?.live).toEqual([]);
+		expect(liveText(live[0])).toBe('1,312 of 9,400 (P13)');
 	});
 	it('name a change shortly and count a gain as positive whichever way the measure runs', () => {
 		expect(shortId('MC-0007')).toBe('A7');

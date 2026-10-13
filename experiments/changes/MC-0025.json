@@ -59,6 +59,22 @@
    "type": "status",
    "status": "Testing",
    "note": "Accruing under P13 from 13 October 2026 (9,400 fixtures) and P14 from 14 October (6,200). Blinded until then."
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P13",
+   "start": "2026-10-13",
+   "target": 9400,
+   "extra_time": false
+  },
+  {
+   "date": "2026-10-13",
+   "type": "live_test",
+   "protocol": "P14",
+   "start": "2026-10-14",
+   "target": 6200,
+   "extra_time": true
   }
  ]
 }
