@@ -3747,7 +3747,7 @@ COMMIT;
 --   select count(*) from site.docs where key = 'bets';                                      -- 0 after the next export
 --   update model_changes set sha256 = sha256;                                               -- refused once it has rows
 
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-13, to production and to staging.
 -- The Admin area's third document (owner's decision 2026-10-13): how every change in the model
 -- change record that can be run is doing on live matches, written by the Live tracking workflow
 -- (experiments/prospective/live_p15.py --store, protocol P15) as 'live_tracking'. admin_docs

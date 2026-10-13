@@ -1,4 +1,4 @@
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-13, to production and to staging.
 -- The Admin area's third document (owner's decision 2026-10-13): how every change in the model
 -- change record that can be run is doing on live matches, written by the Live tracking workflow
 -- (experiments/prospective/live_p15.py --store, protocol P15) as 'live_tracking'. admin_docs
