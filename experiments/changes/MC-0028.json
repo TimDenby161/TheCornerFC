@@ -1,0 +1,38 @@
+{
+ "id": "MC-0028",
+ "registration": {
+  "recorded": "2026-10-14",
+  "retrospective": false,
+  "date": "2026-10-14",
+  "title": "Movers, new clubs and shots for xG, released in the club rank",
+  "component": "Club rank",
+  "model": "match",
+  "kind": "production change",
+  "what": "Production's club rank takes A16 and A24 together: a club changing division in its own country is moved halfway to its new division's average, new clubs move faster, and a match with shot counts but no xG moves the rank on half goals and half xG estimated from the shots.",
+  "why": "Both were proven better than production on the final period, and the owner's rule from 2026-10-14 is that a proven gain is implemented whatever its size.",
+  "how": "The settings their experiments fixed (rating_dynamics combined: pull 0.5, boost 0.5 over 40 matches; shots_proxy: goals weight 0.5, K 10), in ranking.py, as one new match-model version. Nothing else in the model changes.",
+  "hypothesis": "On live matches the released version has lower result log loss than the version it replaced would have had.",
+  "expected": {
+   "improves": "Result log loss.",
+   "metrics": [
+    {
+     "metric": "log_loss",
+     "delta": -0.00118,
+     "low": -0.00176,
+     "high": -0.0006,
+     "source": "experiments/shots_proxy/results.json: descriptive_stack, the two together on the final period at 95% (already seen, not a registered test)"
+    }
+   ],
+   "betting": null,
+   "confidence": "Each part was chosen on 2022-07 to 2024-06 and proven on 2024-07 to 2026-10; that period had been looked at before, and the stack of the two was run after both results were known.",
+   "evidence": "experiments/club_rank_release/DESIGN.md"
+  },
+  "success_criteria": "Protocol P16: the confidence sequence of released minus re-created old log loss on live matches. Proven better: it stands. Proven worse: the owner decides whether to revert.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/club_rank_release",
+   "model_version": null
+  }
+ },
+ "events": []
+}

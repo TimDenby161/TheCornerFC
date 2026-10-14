@@ -79,7 +79,8 @@ class JudgementTests(unittest.TestCase):
 
 class RegistrationTests(unittest.TestCase):
     def test_every_change_in_the_register_is_either_run_or_says_why_not(self):
-        ids = [c['id'] for c in model_changes.load()]
+        # the changes recorded after P15 (MC-0028 on, the release P16 tracks) are not P15's to list
+        ids = [c['id'] for c in model_changes.load() if c['id'] <= 'MC-0027']
         self.assertFalse(set(p15.CANDIDATES) & set(p15.NOT_RUN))
         self.assertEqual(sorted(set(p15.CANDIDATES) | set(p15.NOT_RUN)), ids)
         self.assertEqual(len(p15.CANDIDATES), 17)
