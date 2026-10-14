@@ -44,8 +44,10 @@ class LiveP17Test(unittest.TestCase):
 
     def test_its_workflow_runs_it_and_stores_one_document(self):
         text = (ROOT / '.github/workflows/live-tracking.yml').read_text()
-        self.assertIn('python experiments/prospective/live_p17.py --store', text)
+        # P18 joined it: the job runs the three through live_tracking.py, which stores the one document
+        self.assertIn('python experiments/prospective/live_tracking.py --store', text)
         self.assertNotIn('live_p16.py --store', text)
+        self.assertNotIn('live_p17.py --store', text)
 
 
 if __name__ == '__main__':

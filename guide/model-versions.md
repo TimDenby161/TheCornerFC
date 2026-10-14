@@ -95,7 +95,7 @@ DB creation time and preservation of unrelated history, then rolls back its sche
 
 ## Changing a fingerprinted file
 
-Sixteen files are part of a model version's identity. Each model registers itself with
+Seventeen files are part of a model version's identity. Each model registers itself with
 `source_digests((...))`, the sha256 of the files that make its numbers, inside its
 `configuration`; the version id is a hash of that. So one changed byte in one of these files,
 a comment included, is a new model version on the next run, and that model's evidence record
@@ -103,7 +103,7 @@ starts again under the new id:
 
 `player_ratings.py`, `predictions.py`, `injuries.py`, `ranking.py`, `betting.py`,
 `positions.py`, `availability.py`, `nations.py`, `national_predictions.py`,
-`national_lineups.py` (in `models/`); `fantasy.py`, `fantasy_snapshots.py` (in
+`national_lineups.py`, `match_trees.py` (in `models/`); `fantasy.py`, `fantasy_snapshots.py` (in
 `fantasy_games/`); `match_snapshots.py`, `lineup_snapshots.py`, `player_history.py`,
 `paper_evidence.py` (in `evidence/`).
 

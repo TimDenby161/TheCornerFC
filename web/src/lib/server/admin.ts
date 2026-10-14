@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { siteAsk } from '#lib/server/database.ts';
+import { isMatchModel, type MatchModelName } from '#lib/matchModels.ts';
 
 // The Admin area is the site administrator's only. Who that is, the database decides: its
 // am_admin() and admin_doc() answer for the visitor whose own token the request carries, from a
@@ -35,4 +36,20 @@ export async function adminDoc<T>(fetch: Fetch, token: string | undefined, name:
 	const answer = await siteAsk<{ ok?: boolean; doc?: T | null }>(fetch, 'admin_doc', { p_name: name }, token);
 	if (answer?.ok !== true) error(404, 'Not found');
 	return answer.doc ?? null;
+}
+
+// Which match model is live and the last switches (db/migrations/20261014_challenger_model.sql), for
+// an administrator; null for anyone else, or before that migration is applied.
+export type MatchModel = { live: MatchModelName; switches: { at: string; live: MatchModelName }[] };
+type MatchModelAnswer = { ok?: boolean; live?: unknown; switches?: { at: string; live: MatchModelName }[] };
+const asMatchModel = (answer: MatchModelAnswer | null): MatchModel | null =>
+	answer?.ok === true && isMatchModel(answer.live) ? { live: answer.live, switches: answer.switches ?? [] } : null;
+export async function matchModel(fetch: Fetch, token: string | undefined): Promise<MatchModel | null> {
+	if (!token) return null;
+	return asMatchModel(await siteAsk<MatchModelAnswer>(fetch, 'admin_match_model', {}, token).catch(() => null));
+}
+// Switch the live model; the database checks the caller is an administrator. From the next run.
+export async function switchMatchModel(fetch: Fetch, token: string | undefined, live: MatchModelName): Promise<MatchModel | null> {
+	if (!token) return null;
+	return asMatchModel(await siteAsk<MatchModelAnswer>(fetch, 'admin_set_match_model', { p_live: live }, token).catch(() => null));
 }

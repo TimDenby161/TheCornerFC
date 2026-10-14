@@ -1,9 +1,10 @@
 name: Live tracking
 
 # How the club-rank release (MC-0028) is doing on live matches against the version it replaced
-# (protocol P16, live_p16.py), and every idea that can be run on top of the live model (P17,
-# experiments/prospective/live_p17.py, which runs P16 with it; guide/admin-area.md). It reads the
-# database once, works everything out offline and stores one document for the Admin area.
+# (protocol P16), every idea that can be run on top of the live model (P17), and the stored
+# challenger against the live model (P18): experiments/prospective/live_tracking.py runs the three
+# (guide/admin-area.md). It reads the database once, works everything out offline and stores one
+# document for the Admin area.
 # No API-Football calls, no odds, and nothing a model or the public site reads.
 on:
   schedule:
@@ -64,4 +65,4 @@ jobs:
       - name: Score the release and every runnable idea on the live matches and store the record
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python experiments/prospective/live_p17.py --store
+        run: python experiments/prospective/live_tracking.py --store

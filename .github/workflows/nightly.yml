@@ -74,6 +74,10 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # A18 beside the base match model (thecornerfc/models/match_trees.py) needs numpy, scipy and
+      # scikit-learn: the hash-pinned set the Live tracking job installs
+      - run: pip install -r experiments/prospective/requirements-live.txt
+
       # Nothing is fetched or written unless the unit tests pass on the code this job is running.
       # No secrets are given to this step, and it runs with the local-safe settings whatever the
       # job's own are.

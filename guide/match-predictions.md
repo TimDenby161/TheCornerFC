@@ -102,3 +102,22 @@ These were tested and not adopted:
 ```bash
 python -m thecornerfc predict   # the nightly job runs this after the rankings
 ```
+
+## A18 beside the base model (MC-0029, October 2026)
+
+Every run of the predictions also works out **A18**: the base model's projected goals corrected
+by two gradient-boosted trees, one for the margin and one for the total, trained on the base
+model's own errors from 1 July 2021 up to the start of the half-season (1 January, 1 July) and
+retrained at the next. Their 44 inputs are pre-match figures: the projection and ranks, each
+side's recent results against the model, xG, shots and luck over its last 10 matches, rest and
+fixture load, a change of division, matches under its manager, missing players, home and away
+form, and a weekly-refitted Poisson model's margin and total (`thecornerfc/models/match_trees.py`,
+a port of `experiments/research_frame/features.py` and `experiments/architectures/run.py`, checked
+against them on every past fixture). On 2024-07 to 2026-10 it was 0.0019 better in log loss than
+the base model (`experiments/a18_on_release`).
+
+Which model the site shows is the administrator's switch (`guide/admin-area.md`). Both models'
+last predictions before each kickoff are kept in `challenger_predictions`, and protocol P18
+compares them on live matches. The jobs install numpy, scipy and scikit-learn for it
+(`experiments/prospective/requirements-live.txt`); if it fails, the base model's predictions
+stand.

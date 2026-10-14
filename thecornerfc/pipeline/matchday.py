@@ -10,7 +10,7 @@ projections are the nightly run's (national_predictions.py: nothing they use cha
 import logging
 from datetime import datetime, timedelta, timezone
 
-from ..models import betting, predictions
+from ..models import betting, match_trees, predictions
 from .. import config
 from ..fantasy_games import fantasy_snapshots
 from .db import upsert
@@ -59,6 +59,7 @@ def run_matchday(api, conn):
         sync_injuries_fixtures(api, conn, injury_fixtures)
     if upcoming:
         predictions.update_predictions(conn, [f for f, _ in upcoming])
+        match_trees.update_safely(conn, [f for f, _ in upcoming])          # before anything reads them
         fantasy_snapshots.capture_safely(conn, [f for f, _ in upcoming])   # evidence only
     if upcoming or national:      # a national match keeps the nightly run's projection
         betting.place_late(conn)

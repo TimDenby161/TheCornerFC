@@ -73,7 +73,7 @@ Skills: `/new-migration` (any database change), `/model-experiment` (any change 
   (`guide/environments.md`, `guide/local-safety.md`).
 - **`main` moves only by promotion** of the commit `staging` tested
   (`git push origin origin/staging:main`). Work is pushed to `staging`.
-- **Sixteen model files are fingerprinted**: their bytes are part of each model version's
+- **Seventeen model files are fingerprinted**: their bytes are part of each model version's
   identity, so any edit, even a comment, starts a new model version. Never touch one to tidy,
   rename or reformat it; change one only as a deliberate model release (`/model-experiment`,
   `guide/model-versions.md`). The list is in `tests/test_model_fingerprints.py`. No two `.py`

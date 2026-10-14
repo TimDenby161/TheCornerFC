@@ -5,7 +5,7 @@ description: Change or test a model in The Corner FC (club rank, player ranks, l
 
 # A model change or experiment
 
-Sixteen files are fingerprinted: `source_digests()` in
+Seventeen files are fingerprinted: `source_digests()` in
 `thecornerfc/evidence/model_versions.py` hashes their bytes into the model version id. The list
 is in `.claude/rules/python.md` and in `tests/test_model_fingerprints.py`. Editing one is never
 housekeeping. It is a new model version.

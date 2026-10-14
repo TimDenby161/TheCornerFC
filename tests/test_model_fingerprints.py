@@ -28,6 +28,7 @@ FINGERPRINTS = {
     "injuries.py": ("models", "3d96c474df0b6d7980484f9d874e0bbca9ee1a3fc65060f68466f770b6e9f35f"),
     "lineup_snapshots.py": ("evidence", "25cc36cb99773158a45d523ba1b159cd65f802d61e36c1bedb8c965bd829a0ba"),
     "match_snapshots.py": ("evidence", "c4ce9c7df94d9c9f9f030c9dbb14ef2e0c558548ebeb2b3fba20de7b921ca566"),
+    "match_trees.py": ("models", "a773961a8c0a8cf80143754aea61998639f8bc3d2fd26197a3723b41bc489ea7"),
     "national_lineups.py": ("models", "64cb75452ccc4958b6a423b3de5ff9753ef1fb8b8870eb2eec39a615d8a41d99"),
     "national_predictions.py": ("models", "2fc2db665b77c9196eff33513453289c661669fef3e600ade78401f06e4a1a7f"),
     "nations.py": ("models", "57b803e6546c12bba962619659bf635d8161ff542da611197a5da7f62b70dce9"),

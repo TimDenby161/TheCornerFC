@@ -2,14 +2,17 @@ import {
 	EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows,
 	expectedRows, filterChanges, headline, intervalText, markOf, monthLines, ready, shortId, signed, tone
 } from '#lib/changes.ts';
+import { fail } from '@sveltejs/kit';
+import { matchModel, switchMatchModel } from '#lib/server/admin.ts';
 import { changesDoc, liveDoc } from '#lib/server/changes.ts';
+import { isMatchModel } from '#lib/matchModels.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 
 // The Model Change Tracker: the figures at the top, four charts and the list, for the choices in
 // the address. The administrator's only (hooks.server.ts, and the database again for the document).
 export async function load({ fetch, locals, url }) {
 	const tabHead = { title: 'Model Change Tracker', ...TAB_INFO.changes };
-	const [doc, live] = await Promise.all([changesDoc(fetch, locals.token), liveDoc(fetch, locals.token)]);
+	const [doc, live, model] = await Promise.all([changesDoc(fetch, locals.token), liveDoc(fetch, locals.token), matchModel(fetch, locals.token)]);
 	if (!doc) return { tabHead, ready: false as const };
 
 	const ch = choicesFrom(url.searchParams, doc);
@@ -56,6 +59,19 @@ export async function load({ fetch, locals, url }) {
 		tiles, rows, all: doc.changes.length, metric, metricLabel: METRIC_LABELS[metric],
 		lines: monthLines(doc.series, lineMetric), lineLabel: METRIC_LABELS[lineMetric],
 		deltas: deltaRows(shown, metric, live), expected: expectedRows(shown), steps,
+		model,
 		live: live ? { n: live.n, weeks: live.weeks, start: live.start, to: live.to, generated: live.generated_at, tracked: Object.keys(live.changes).length, protocol: live.protocol, matches: live.minimum.matches, minWeeks: live.minimum.weeks } : null
 	};
 }
+
+export const actions = {
+	// The switch: which match model the site and the paper bets use, from the next run of the
+	// predictions. The database checks the caller is an administrator and logs every switch.
+	switch: async ({ request, fetch, locals }) => {
+		const live = (await request.formData()).get('live');
+		if (!isMatchModel(live)) return fail(400, { message: 'That is not one of the two models.' });
+		const model = await switchMatchModel(fetch, locals.token, live);
+		if (!model) return fail(403, { message: 'The switch was refused, or is not there yet.' });
+		return { switched: model.live };
+	}
+};

@@ -3,8 +3,10 @@
 	import ChangeLines from '#lib/components/ChangeLines.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
 	import { METRIC_LABELS, reach, shortId, signed } from '#lib/changes.ts';
+	import { MATCH_MODEL_LABELS, otherModel } from '#lib/matchModels.ts';
 
-	let { data } = $props();
+	let { data, form } = $props();
+	const refused = $derived((form as { message?: string } | null)?.message ?? '');
 	const STAGE: Record<string, string> = { 'Deployed to production': 'deployed', 'Tested and rejected': 'rejected', 'Being tested': 'testing', Reverted: 'reverted' };
 	const SOURCE = { live: ['Stored before kickoff', 'live'], backfill: ['Reconstructed history', 'recon'] } as const;
 </script>
@@ -19,6 +21,14 @@
 		<div class="empty-state">The model change record has not been stored yet. It is written by the next export after the Admin migration is applied.</div>
 	{:else}
 		<p class="mc-env" id="mc-env">{data.environment === 'production' ? 'Production' : data.environment === 'staging' ? 'Staging: test data, not the live record' : 'Environment not named'} · updated <LocalTime iso={data.generated} show="short" /> <LocalTime iso={data.generated} show="time" /></p>
+		{#if data.model}
+			<div class="stats-card mc-switch" id="mc-switch"><div class="stats-label">Live match model</div>
+				<div class="stats-value mc-value">{MATCH_MODEL_LABELS[data.model.live]}</div>
+				<form method="POST" action="?/switch"><input type="hidden" name="live" value={otherModel(data.model.live)} />
+					<button type="submit" class="mt-btn">Make live: {MATCH_MODEL_LABELS[otherModel(data.model.live)]}</button></form>
+				{#if refused}<div class="sim-banner mc-alert" role="alert">{refused}</div>{/if}
+				<div class="stats-note">The live model is the one the site, the paper bets and the fantasy models use, from the next run of the predictions (several a day). Both models' predictions are stored before every kickoff whichever is live, and compared on the same matches (P18).{#if data.model.switches.length} Last switched <LocalTime iso={data.model.switches[0].at} show="short" /> <LocalTime iso={data.model.switches[0].at} show="time" />.{/if}</div></div>
+		{/if}
 		{#if !data.stored}<div class="sim-banner mc-alert" role="alert">This copy was read from the register's files and could not be recorded in the database, so nothing here is yet protected from later edits.</div>{/if}
 		{#if data.differs.length}
 			<div class="sim-banner mc-alert" role="alert">A file in the register no longer matches what was first recorded. The record below is the first version; put a mistake right with a correction, not an edit.

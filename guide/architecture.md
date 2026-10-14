@@ -36,7 +36,7 @@ Six folders, with `config.py` (settings and the safety guards) beside them.
 
 Boundaries that are enforced:
 
-- **Sixteen model files are fingerprinted.** Their bytes are part of each model version's
+- **Seventeen model files are fingerprinted.** Their bytes are part of each model version's
   identity, so they change only as a deliberate, evaluated model release
   ([Model versions](model-versions.md), `tests/test_model_fingerprints.py`). No two `.py` files
   in the package may share a name.

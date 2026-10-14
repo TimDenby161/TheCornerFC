@@ -118,7 +118,7 @@ class RegistrationTests(unittest.TestCase):
     def test_its_workflow_runs_it_on_production_and_stores_one_document(self):
         # P15 closed with the club-rank release (PROTOCOLS.md, amendment 11): the job runs P16 and P17 now
         text = (ROOT / '.github/workflows/live-tracking.yml').read_text()
-        self.assertIn('python experiments/prospective/live_p17.py --store', text)
+        self.assertIn('python experiments/prospective/live_tracking.py --store', text)
         self.assertNotIn('live_p15.py --store', text)
         self.assertIn('pip install -r experiments/prospective/requirements-live.txt', text)
         self.assertNotIn('-r requirements.txt -r', text)        # pip refuses a hashed file and an unhashed one together

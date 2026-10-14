@@ -15,6 +15,7 @@ from ..privacy import suppression
 from .api import QuotaExhausted
 from .db import upsert
 from ..models.player_ratings import compute_player_ratings
+from ..models import match_trees
 from ..models.predictions import backfill_predictions, update_predictions
 from ..models.ranking import update_rankings
 from ..models.rating import rate_fixtures
@@ -586,6 +587,8 @@ def sync_nightly(api, conn, league_ids):
     step("player ratings", lambda api, conn: compute_player_ratings(conn))
     step("player careers", sync_player_careers)
     step("predictions", lambda api, conn: update_predictions(conn))
+    # A18 beside the base model, before anything reads the predictions (the switch may make it live)
+    step("match trees", lambda api, conn: match_trees.update(conn))
     if config.NATIONAL_SYNC:
         national_predictions.update_safely(conn)     # never counts as a failure
         national_lineups.update_safely(conn)         # nor this

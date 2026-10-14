@@ -12,7 +12,7 @@ paths:
 - API-Football is the only match data source. A new data source needs the owner's yes first.
 - The jobs run on Python 3.13 (`.github/workflows/`). `requirements.txt` is compiled from
   `requirements.in` with hashes; the experiments also need numpy and scipy, which are not in it.
-- Tests are `unittest` with stand-in connections: no network, no database. Seventeen skip when
+- Tests are `unittest` with stand-in connections: no network, no database. Twenty-one skip when
   numpy and scipy are missing.
 
 ## Fingerprinted model files: do not touch in passing
@@ -23,7 +23,7 @@ model version** on the next run and breaks that model's evidence record.
 
 `player_ratings.py`, `predictions.py`, `injuries.py`, `ranking.py`, `betting.py`,
 `positions.py`, `availability.py`, `nations.py`, `national_predictions.py`,
-`national_lineups.py`, `fantasy.py`, `fantasy_snapshots.py`, `match_snapshots.py`,
+`national_lineups.py`, `match_trees.py`, `fantasy.py`, `fantasy_snapshots.py`, `match_snapshots.py`,
 `lineup_snapshots.py`, `player_history.py`, `paper_evidence.py`.
 
 - Change one only as a deliberate model change: versioned, judged by an evaluator written

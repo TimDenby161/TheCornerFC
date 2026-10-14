@@ -20,7 +20,7 @@ Run each check on its own, not chained through a pipe, and read its own result l
    (`inputs.json.gz`, pickles), no FPL-derived data in a public file. This repository is public.
 3. **Python** (the venv is `.venv`, made from `requirements.txt`):
    `python -m unittest discover -s tests`
-   The line to read is `OK` (or `OK (skipped=17)` without numpy and scipy), with the count on
+   The line to read is `OK` (or `OK (skipped=21)` without numpy and scipy), with the count on
    the `Ran N tests` line above it. Log lines printed after it are not the result.
 4. **Site unit tests**, from `web/`: `npm test`. Read `Test Files  N passed` and
    `Tests  N passed`.
