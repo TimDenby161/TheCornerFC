@@ -769,15 +769,19 @@ def _sync_team_coaches(api, conn, teams, lineup_rows, label):
 
 
 RETIRED_RECHECK_DAYS = 7
+# At most this many checks a night, the longest unchecked first: about 3,850 players fell due on
+# the same night each week, and spread out they keep a night's API-Football calls well under
+# 7,500 a day (guide/costs.md). Above a seventh of the players due, so no backlog builds.
+RETIRED_CHECKS_PER_NIGHT = 600
 
 
 def check_retired(api, conn):
     """Look up the current club (/players/squads) of players who played in the last 18 months
-    but not yet this season, at most every RETIRED_RECHECK_DAYS, into player_career_checks
-    (team_id null: in no club squad; national and youth sides don't count). A check made after
-    his last season that finds him in no squad marks him retired (player_ratings.retired_players),
-    and he leaves the players list. /players/teams is no use for this: early in a season it
-    often doesn't list the new season yet, even for regulars."""
+    but not yet this season, at most every RETIRED_RECHECK_DAYS and RETIRED_CHECKS_PER_NIGHT,
+    into player_career_checks (team_id null: in no club squad; national and youth sides don't
+    count). A check made after his last season that finds him in no squad marks him retired
+    (player_ratings.retired_players), and he leaves the players list. /players/teams is no use
+    for this: early in a season it often doesn't list the new season yet, even for regulars."""
     (current,) = conn.execute(
         "select max(season) from fixtures where league_id = any(%s) and status_short = any(%s)",
         [config.MATCH_PLAYER_LEAGUES, list(config.FINISHED_STATUSES)]).fetchone()
@@ -786,10 +790,12 @@ def check_retired(api, conn):
                select fp.player_id, max(f.season) as last_season, max(f.kickoff) as last_kickoff
                from fixture_players fp join fixtures f using (fixture_id)
                where fp.minutes > 0 group by 1) l
+           left join player_career_checks c on c.player_id = l.player_id and c.season = %(s)s
            where l.last_season < %(s)s and l.last_kickoff > now() - interval '540 days'
-             and not exists (select 1 from player_career_checks c where c.player_id = l.player_id
-                             and c.season = %(s)s and c.checked_at > now() - %(d)s * interval '1 day')""",
-        {"s": current, "d": RETIRED_RECHECK_DAYS})]
+             and (c.checked_at is null or c.checked_at <= now() - %(d)s * interval '1 day')
+           order by c.checked_at nulls first, l.player_id
+           limit %(n)s""",
+        {"s": current, "d": RETIRED_RECHECK_DAYS, "n": RETIRED_CHECKS_PER_NIGHT})]
     countries = {c for (c,) in conn.execute(
         "select country from teams where country is not null union select nationality from players "
         "where nationality is not null")}
