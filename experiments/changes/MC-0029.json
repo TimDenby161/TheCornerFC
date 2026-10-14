@@ -34,5 +34,14 @@
    "model_version": null
   }
  },
- "events": []
+ "events": [
+  {
+   "date": "2026-10-14",
+   "type": "live_test",
+   "protocol": "P18",
+   "start": "2026-10-15",
+   "target": 26000,
+   "extra_time": true
+  }
+ ]
 }

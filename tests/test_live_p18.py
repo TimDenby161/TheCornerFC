@@ -43,9 +43,8 @@ class PairsTest(unittest.TestCase):
         self.assertAlmostEqual(-track['gain'], -math.log(0.6) + math.log(0.5))
         self.assertEqual(out['live_counts'], {'base': 1, 'a18': 0})
 
-    def test_nothing_is_read_before_the_release_sets_its_start(self):
-        self.assertIsNone(p18.START)
-        self.assertEqual(p18.extract(None), {'fixtures': [], 'challenger': [], 'switches': []})
+    def test_it_counts_from_the_day_after_the_release(self):
+        self.assertEqual(p18.START, '2026-10-15')
 
 
 class RunnerTest(unittest.TestCase):

@@ -16,7 +16,7 @@ HERE = Path(__file__).parent
 
 # Registered in PROTOCOLS.md; change only by a dated amendment there.
 CHANGE = "MC-0029"
-START = None                         # the first kickoff day after the release reaches main, set by that amendment
+START = "2026-10-15"                 # the first kickoff day after the release reaches main (amendment 15)
 ALPHA = 0.05
 MODELS = ("base", "a18")
 STATUSES = ("FT", "AET", "PEN")
