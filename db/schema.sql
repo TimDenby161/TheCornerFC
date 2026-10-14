@@ -3255,7 +3255,7 @@ UPDATE site.players p SET
 -- Check afterwards:
 --   select count(*) filter (where free), count(*) from site.players;      -- about 90 of 7,500
 
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-07 (the owner's report; checked from outside 2026-10-08).
 -- The player ranks behind the paywall (owner, 2026-10-07): every list is in the order a
 -- subscriber sees, with the ranks outside the free slice hidden; and the free slice is the top 50
 -- overall, the top 10 of every league again, and the top 10 of each position.
