@@ -78,6 +78,23 @@ def finished_fixtures(conn):
         [list(config.FINISHED_STATUSES)], order_by="kickoff, fixture_id")
 
 
+def fixture_shots(conn):
+    """{fixture_id: (home shots inside the box, home shots, home shots on target, the same away)}
+    for finished fixtures with all six counts (ranking.py's xG from shots)."""
+    rows = cached_rows(conn, "fixture_shots", f"""
+        select {WEEK.format('f.kickoff')} as part, f.fixture_id,
+               hx.shots_inside_box, hx.total_shots, hx.shots_on_goal,
+               ax.shots_inside_box, ax.total_shots, ax.shots_on_goal
+        from fixtures f
+        join fixture_team_stats hx on hx.fixture_id = f.fixture_id and hx.is_home
+        join fixture_team_stats ax on ax.fixture_id = f.fixture_id and not ax.is_home
+        where f.status_short = any(%s) and f.home_goals is not null and f.away_goals is not null
+          and hx.shots_inside_box is not null and hx.total_shots is not null and hx.shots_on_goal is not null
+          and ax.shots_inside_box is not null and ax.total_shots is not null and ax.shots_on_goal is not null""",
+        [list(config.FINISHED_STATUSES)], order_by="fixture_id")
+    return {r[0]: tuple(float(v) for v in r[1:]) for r in rows}
+
+
 def rank_history(conn):
     """team_rank_history joined to the result, in partition (week) order - sort before use:
     (fixture_id, team_id, match_no, kickoff, is_home, opponent_id, rank_before, rank_after,

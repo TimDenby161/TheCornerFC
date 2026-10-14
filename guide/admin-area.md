@@ -66,13 +66,16 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   protocol, its first day and its target. The export counts the finished matches since then
   that have a prediction stored before kickoff, and the page shows that count beside the
   historical matches. No result of a blinded protocol is read to do it.
-- **Every runnable change is scored on live matches** (protocol P15,
-  `experiments/prospective/live_p15.py`). The Live tracking workflow runs it on Mondays and
-  Thursdays, and by hand: it reads the database once, works out each of the 17 candidates with
-  the setting its experiment fixed, and stores the document `live_tracking`. The page shows each
-  change's live matches, live gain and range. It is judged by a confidence sequence, which holds
-  however often it is looked at, so its range is wide: a call takes many more matches than one
-  blind read would. The other ten changes say why there is nothing to run.
+- **Live matches** (protocols P15 and P16). Until the club-rank release (MC-0028) every runnable
+  change was scored on live matches against production by P15 (`experiments/prospective/live_p15.py`).
+  The release changed the model they were compared with, so P13, P14 and P15 closed that day
+  (`experiments/prospective/PROTOCOLS.md`, amendment 11). From then the Live tracking workflow runs
+  P16 (`live_p16.py`) on Mondays and Thursdays, and by hand: it scores the release against the
+  version it replaced, re-created from each stored snapshot, and stores the document
+  `live_tracking` in P15's shape, so the page shows the release's live matches, gain and range and
+  says of every other change that its live tracking closed. It is judged by a confidence sequence,
+  which holds however often it is looked at, so its range is wide: a call is expected at about
+  27,000 matches, and a release that is worse is called as quickly as a better one.
 - **Green means implement.** A row is green when there is statistical evidence that the change
   makes the model better, however small the gain (the owner's rule, 2026-10-14; the 0.002 bar no
   longer holds a proven gain back), on live matches or on a test that was not the matches it was

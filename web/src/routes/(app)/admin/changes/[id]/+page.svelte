@@ -60,7 +60,7 @@
 						{ name: 'Range: lowest', cls: 'recon', points: data.tracking.series.map((p) => ({ x: p.week, value: p.low })) },
 						{ name: 'Range: highest', cls: 'recon', points: data.tracking.series.map((p) => ({ x: p.week, value: p.high })) }]} />
 				{/if}
-				<p class="stats-note">Scored against the current model on every finished match since {data.tracking.start}{#if data.tracking.to} (to {data.tracking.to}){/if} that has a prediction stored before kickoff, with the setting its experiment fixed. Plus is better. The range is the kind that stays valid however often it is looked at, so it is wide; the change is proven when the whole range is on one side of zero, and nothing is called before {data.tracking.minMatches} matches and {data.tracking.minWeeks} weeks. Updated <LocalTime iso={data.tracking.generated} show="short" />.</p>
+				<p class="stats-note">{#if data.tracking.protocol === 'P16'}Released, and scored against the model it replaced, re-created on the same snapshot, on every finished match since{:else}Scored against the current model on every finished match since{/if} {data.tracking.start}{#if data.tracking.to} (to {data.tracking.to}){/if} that has a prediction stored before kickoff, with the setting its experiment fixed. Plus is better. The range is the kind that stays valid however often it is looked at, so it is wide; the change is proven when the whole range is on one side of zero, and nothing is called before {data.tracking.minMatches} matches and {data.tracking.minWeeks} weeks. Updated <LocalTime iso={data.tracking.generated} show="short" />.</p>
 			{/if}
 		</div>
 	{/if}
@@ -69,7 +69,7 @@
 		<div class="stats-card" id="mc-live"><div class="stats-label">Registered live tests</div>
 			<table class="calib-table"><thead><tr><th>Protocol</th><th>Counting from</th><th>Live matches so far</th><th>Read or planned at</th><th>Reached</th></tr></thead>
 				<tbody>{#each data.live as t (t.protocol)}<tr><td>{t.protocol}</td><td>{t.start}</td><td>{t.matches.toLocaleString('en-GB')}</td><td>{t.target.toLocaleString('en-GB')}</td><td>{t.share}%</td></tr>{/each}</tbody></table>
-			<p class="stats-note">Finished matches played since each test began that have a prediction stored before kickoff. P13 and P14 are each read once, at their targets, which is the quicker route to a verdict; P15 is the running record above, which has no target.</p>
+			<p class="stats-note">Finished matches played since each test began that have a prediction stored before kickoff. P13 and P14 were each to be read once, at their targets, and P15 was the running record of every candidate; all three closed when the club-rank release (MC-0028) changed the model they were compared with. P16 is the running record of that release, which has no target: the figure is where its call is expected.</p>
 		</div>
 	{/if}
 

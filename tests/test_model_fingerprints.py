@@ -36,7 +36,7 @@ FINGERPRINTS = {
     "player_ratings.py": ("models", "73f8e45028493eae12ddbc566360795e09a6fa08cb1789f6bb7017e55d3fd898"),
     "positions.py": ("models", "9b048895007339ed68de0dadb2e1736f3aa8d0bd7a29ab4c6965d3e4f42a0dde"),
     "predictions.py": ("models", "462dd8ca22d49df66c1716d12cf68665ee8f8a3eeb9104be98dccab1cc1601a0"),
-    "ranking.py": ("models", "2694a1777da8d4353960a4a130ba71c758bb5da6a76989ab506f8e1c29fb0832"),
+    "ranking.py": ("models", "bb5ab55a959fbfcaf048ee6c577e151555600e4d6bcbe2206550c021f2ee4069"),
 }
 
 

@@ -91,6 +91,12 @@
    "start": "2026-10-14",
    "target": 6200,
    "extra_time": true
+  },
+  {
+   "date": "2026-10-14",
+   "type": "status",
+   "status": "Testing",
+   "note": "Not released at its own setting: it is part of MC-0016, whose setting for the two together was released as MC-0028 on the owner's decision of 2026-10-14. Its live tracking (P15) closed with that release."
   }
  ]
 }

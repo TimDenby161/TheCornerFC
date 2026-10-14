@@ -56,6 +56,6 @@ export async function load({ fetch, locals, url }) {
 		tiles, rows, all: doc.changes.length, metric, metricLabel: METRIC_LABELS[metric],
 		lines: monthLines(doc.series, lineMetric), lineLabel: METRIC_LABELS[lineMetric],
 		deltas: deltaRows(shown, metric, live), expected: expectedRows(shown), steps,
-		live: live ? { n: live.n, weeks: live.weeks, start: live.start, to: live.to, generated: live.generated_at, tracked: Object.keys(live.changes).length, matches: live.minimum.matches, minWeeks: live.minimum.weeks } : null
+		live: live ? { n: live.n, weeks: live.weeks, start: live.start, to: live.to, generated: live.generated_at, tracked: Object.keys(live.changes).length, protocol: live.protocol, matches: live.minimum.matches, minWeeks: live.minimum.weeks } : null
 	};
 }

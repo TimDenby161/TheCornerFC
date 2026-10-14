@@ -151,6 +151,13 @@ describe('the charts', () => {
 		expect(liveStanding(live, 'MC-0001').record?.n).toBe(3000);
 		// a change already in production is never marked ready by its live record
 		expect(deltaRows([change('MC-0001', { status: 'Accepted', deployed: true, deployed_on: '2026-09-01', results: [unproven] })], 'log_loss', live)[0].ready).toBe(false);
+		// a change with no past result is listed for its live record alone (the release P16 tracks), after those with a past
+		const release = deltaRows([change('MC-0001', { status: 'Accepted', deployed: true, deployed_on: '2026-10-14', results: [] }),
+			change('MC-0002', { ...open, results: [unproven] }), change('MC-0007', { results: [] })], 'log_loss', live);
+		expect(release.map((r) => r.id)).toEqual(['MC-0002', 'MC-0001']);
+		expect(release[1]).toMatchObject({ gain: null, n: null, ready: false, mark: 'none', readyNote: 'In production: checked on live matches', liveText: 'Proven better on live matches' });
+		expect(deltaRows([change('MC-0001', { ...open, results: [] })], 'log_loss', live)[0]).toMatchObject({ ready: true, mark: 'ready', readyNote: 'Ready: proven on live matches' });
+		expect(deltaRows([change('MC-0001', { ...open, results: [] })], 'brier', live)).toEqual([]);   // the live record is log loss only
 	});
 	it('name a change shortly and count a gain as positive whichever way the measure runs', () => {
 		expect(shortId('MC-0007')).toBe('A7');

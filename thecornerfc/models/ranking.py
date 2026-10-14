@@ -4,10 +4,13 @@ Per match:
     exp_diff    = (home_rank - away_rank + HOME_ADVANTAGE_POINTS) / 100
     act_diff    = home_goals - away_goals, capped at +/- MAX_GOAL_DIFF
                   when both sides have xG: GOALS_WEIGHT * that + (1 - GOALS_WEIGHT) * (home xG - away xG)
-    rank_change = (act_diff - exp_diff) * K * weight
-                  K: K_FACTOR, or K_FACTOR_XG for matches with xG
+                  with shot counts and no xG: SHOTS_GOALS_WEIGHT * that + (1 - SHOTS_GOALS_WEIGHT) *
+                  (xG estimated from shots, home - away)
+    rank_change = (act_diff - exp_diff) * weight * K * new-club factor (each side its own)
+                  K: K_FACTOR, K_FACTOR_XG for matches with xG, K_FACTOR_SHOTS with shots only
                   weight: COMPETITION_WEIGHT (1/3 for the Community Shield and UEFA Super Cup, else 1)
-    home_rank  += rank_change;  away_rank -= rank_change
+                  new-club factor: 1 + NEW_CLUB_BOOST * exp(-matches the club has played / NEW_CLUB_MATCHES)
+    home_rank  += home rank_change;  away_rank -= away rank_change
 
 Differences from the sheet (exp_diff = (home*1.09 - away)/100, K = 10, no cap), chosen by
 backtesting 2023-26 predictions: the x1.09 multiplier gave 0.4-1.1 goals of home advantage
@@ -18,6 +21,16 @@ Blending in xG (backtest of the full prediction pipeline, 2024/25 onwards): log 
 0.99834 overall and 1.00446 -> 0.99993 on matches with xG; better in each season from 2023/24.
 30% goals / 70% xG beat xG alone (0.99889) and goals alone. xG differences are far less noisy
 than goal differences, so those matches take a bigger K. Capping the xG difference made it worse.
+
+Movers, new clubs and shots (MC-0028, released 2026-10; experiments/rating_dynamics `combined`,
+experiments/shots_proxy, judged on live matches by protocol P16). A club that plays a league match
+in a different division of its own country, having played a league match in its old one within
+MOVER_WINDOW_DAYS, is first moved MOVER_PULL of the way to the average rank of the clubs in the
+division it joins, and its whole history moves with it. A club's step is bigger while it has
+played few matches (the new-club factor above), so a step is no longer the same size on both
+sides. A match with shot counts on both sides and no xG uses xG estimated from the shots
+(SHOTS_XG, least squares on matches with both, 2020-2024). Together, on 2024-07 to 2026-10: log
+loss 0.0012 better (95% 0.0006 to 0.0018), better in each season.
 
 Every team starts from a Starting Rank: leagues.starting_rank of the first
 league (type 'League') it plays in, else that of the first competition it
@@ -56,11 +69,11 @@ import logging
 import math
 import statistics
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timezone
 
 from ..pipeline.health import monitored
 from .. import config
-from ..pipeline.cache import finished_fixtures
+from ..pipeline.cache import finished_fixtures, fixture_shots
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +87,17 @@ ATTACK_K = 1.0               # attack/defence split learning rate (tuned with th
 GOAL_CAP = 5                 # goals a side counted for the split
 LEAGUE_GOALS_PRIOR = 50      # games of the 1.45 / 1.15 prior in a competition's goal averages
 HOME_EDGE_K = 0.2            # club home edge learning rate (0.1-0.3 scored about the same)
+# Movers and new clubs (MC-0028, experiments/rating_dynamics/chosen.json: combined)
+MOVER_PULL = 0.5             # share of the way to the new division's average rank
+MOVER_WINDOW_DAYS = 400      # the club's last league match in its old division was this recent
+NEW_CLUB_BOOST = 0.5         # K is multiplied by 1 + this * exp(-played / NEW_CLUB_MATCHES)
+NEW_CLUB_MATCHES = 40
+# Shots for xG where a match has no xG (MC-0028, experiments/shots_proxy/chosen.json)
+SHOTS_GOALS_WEIGHT = 0.5
+K_FACTOR_SHOTS = 10
+# xG of a side from its shots: per shot inside the box, per shot outside it, per shot on target,
+# and a constant; never below 0
+SHOTS_XG = (0.10846386180966687, -0.005184228874232763, 0.1091888003326247, 0.028447322642816665)
 # One-off curtain-raisers count for less than a league or cup match: their rank change is
 # scaled by this. Sides rest players and treat them as pre-season, so a result says less.
 # 1/3 is World Football Elo's friendly-to-World-Cup ratio (K 20 against 60). Too few of
@@ -102,37 +126,89 @@ class Match:
     away_xg: float = None
     weight: float = 1.0  # COMPETITION_WEIGHT of its competition
     league: int = None
+    is_league: bool = False  # its competition is of type League (a division)
+    country: str = None      # its competition's country
+    day: int = None          # kickoff day (UTC), as date.toordinal()
+    shots: tuple = None      # (inside the box, all shots, on target) home, then the same away
 
 
-def actual_diff(m):
+class Step(tuple):
+    """One match of run(), unpacked as (match, home rank, away rank, exp_diff, goal difference,
+    home rank change). Also: away_change (the away rank's change, a fall when positive),
+    miss (result - exp_diff) and shift_home / shift_away (the move each side was given on
+    changing division before the match; 0 otherwise)."""
+
+
+def shots_xg(inside, shots, on_target):
+    """A side's xG estimated from its shots (SHOTS_XG)."""
+    b_in, b_out, b_on, b0 = SHOTS_XG
+    return max(inside * b_in + (shots - inside) * b_out + on_target * b_on + b0, 0.0)
+
+
+def actual_diff(m, shots=True):
     """(result used for the rank change, K): capped goal difference, blended with the xG
-    difference when both sides have xG."""
+    difference when both sides have xG, else (shots) with the difference in xG estimated from
+    shot counts when both sides have them."""
     capped = max(-MAX_GOAL_DIFF, min(MAX_GOAL_DIFF, m.home_goals - m.away_goals))
-    if m.home_xg is None or m.away_xg is None:
-        return capped, K_FACTOR
-    return GOALS_WEIGHT * capped + (1 - GOALS_WEIGHT) * (m.home_xg - m.away_xg), K_FACTOR_XG
+    if m.home_xg is not None and m.away_xg is not None:
+        return GOALS_WEIGHT * capped + (1 - GOALS_WEIGHT) * (m.home_xg - m.away_xg), K_FACTOR_XG
+    if shots and m.shots is not None and None not in m.shots:
+        estimate = shots_xg(*m.shots[:3]) - shots_xg(*m.shots[3:])
+        return SHOTS_GOALS_WEIGHT * capped + (1 - SHOTS_GOALS_WEIGHT) * estimate, K_FACTOR_SHOTS
+    return capped, K_FACTOR
+
+
+def new_club_factor(played):
+    """How much bigger a club's step is after `played` matches."""
+    return 1 + NEW_CLUB_BOOST * math.exp(-played / NEW_CLUB_MATCHES)
 
 
 def run(matches, starting_rank):
     """Replay matches in the given order.
 
-    starting_rank(team) -> float. Returns (per-match rows, {team: history list}).
+    starting_rank(team) -> float. Returns (per-match Steps, {team: history list}).
     """
     current, history, rows = {}, {}, []
+    played, division, last_league_day, members, country = {}, {}, {}, {}, {}
     for m in matches:
         for team in (m.home, m.away):
             if team not in current:
                 current[team] = starting_rank(team)
                 history[team] = [current[team]]
+                played[team] = 0
+        shift = {m.home: 0.0, m.away: 0.0}
+        if m.is_league:
+            country[m.league] = m.country
+            for team in (m.home, m.away):
+                was = division.get(team)
+                if was == m.league:
+                    continue
+                if was is not None:
+                    members[was].discard(team)
+                    joined = members.get(m.league)
+                    if joined and m.day - last_league_day[team] <= MOVER_WINDOW_DAYS and country.get(was) == m.country:
+                        by = MOVER_PULL * (sum(current[c] for c in joined) / len(joined) - current[team])
+                        current[team] += by
+                        history[team] = [v + by for v in history[team]]
+                        shift[team] = by
+                members.setdefault(m.league, set()).add(team)
+                division[team] = m.league
+            last_league_day[m.home] = last_league_day[m.away] = m.day
         h, a = current[m.home], current[m.away]
         exp_diff = (h - a + HOME_ADVANTAGE_POINTS) / 100
         act_diff = m.home_goals - m.away_goals
         result, k = actual_diff(m)
-        change = (result - exp_diff) * k * m.weight
-        current[m.home], current[m.away] = h + change, a - change
-        history[m.home].append(current[m.home])
-        history[m.away].append(current[m.away])
-        rows.append((m, h, a, exp_diff, act_diff, change))
+        surprise = (result - exp_diff) * m.weight
+        change = surprise * (k * new_club_factor(played[m.home]))
+        away_change = surprise * (k * new_club_factor(played[m.away]))
+        current[m.home], current[m.away] = h + change, a - away_change
+        for team in (m.home, m.away):
+            history[team].append(current[team])
+            played[team] += 1
+        step = Step((m, h, a, exp_diff, act_diff, change))
+        step.away_change, step.miss = away_change, result - exp_diff
+        step.shift_home, step.shift_away = shift[m.home], shift[m.away]
+        rows.append(step)
     return rows, history
 
 
@@ -165,7 +241,7 @@ def side_ratings(rows):
         yh, ya = _capped(m.home_goals, m.home_xg), _capped(m.away_goals, m.away_xg)
         step = ATTACK_K * ((yh + ya) - (mu_h + mu_a)) / 2 * m.weight
         s[m.home], s[m.away] = sh + step, sa + step
-        edge = HOME_EDGE_K * (actual_diff(m)[0] - exp_diff - (eh + ea) / 100) * m.weight
+        edge = HOME_EDGE_K * (actual_diff(m, shots=False)[0] - exp_diff - (eh + ea) / 100) * m.weight
         e[m.home], e[m.away] = eh + edge, ea + edge
         goals[m.league] = (gh + yh, ga + ya, n + 1)
         out.append(((sh, sa, eh, ea), (s[m.home], s[m.away], e[m.home], e[m.away]), (base_h, base_a)))
@@ -223,6 +299,7 @@ def update_rankings(conn):
     rows = finished_fixtures(conn)
     fixtures = [r[:9] for r in rows]
     xg = {r[0]: (r[9], r[10]) for r in rows}
+    shots = fixture_shots(conn)
 
     first_league, first_comp = {}, {}
     for _, _, league_id, ltype, home, away, _, _, _ in fixtures:
@@ -235,21 +312,29 @@ def update_rankings(conn):
         league_id = first_league.get(team, first_comp.get(team))
         return float(levels.get(league_id, DEFAULT_STARTING_RANK))
 
-    replayed = _replay(conn, fixtures, xg, starting_rank)
+    replayed = _replay(conn, fixtures, xg, starting_rank, shots)
     _rebuild_summary(conn, fixtures, first_league, first_comp, *replayed)
     conn.commit()
 
 
-def _replay(conn, fixtures, xg, starting_rank):
-    """Rebuild team_rank_history. xg: {fixture_id: (home xG, away xG)}.
+def utc_day(kickoff):
+    """The kickoff's day in UTC, as date.toordinal()."""
+    return (kickoff.astimezone(timezone.utc) if kickoff.tzinfo else kickoff).date().toordinal()
+
+
+def _replay(conn, fixtures, xg, starting_rank, shots=None):
+    """Rebuild team_rank_history. xg: {fixture_id: (home xG, away xG)}; shots: {fixture_id:
+    Match.shots} (cache.fixture_shots).
 
     Returns ({team: history}, {team: last kickoff}, {team: rank changes in K_FACTOR units}).
-    The last is for the volatility: matches with xG move ranks by K_FACTOR_XG, and weighted
-    competitions by less, so their changes are scaled back, and volatility measures how
-    surprising a team's results are rather than the step size. Also returns
+    The last is for the volatility: a match's miss (result - exp_diff) times K_FACTOR, so it
+    measures how surprising a team's results are rather than the step size, which depends on
+    the match's K, its weight and how new the club is. Also returns
     {team: (split s, home edge e) after its latest match} (side_ratings)."""
     conn.execute("truncate team_rank_history")
-    matches = [Match(f[0], f[4], f[5], f[6], f[7], *xg[f[0]], COMPETITION_WEIGHT.get(f[2], 1.0), f[2])
+    shots = shots or {}
+    matches = [Match(f[0], f[4], f[5], f[6], f[7], *xg[f[0]], COMPETITION_WEIGHT.get(f[2], 1.0), f[2],
+                     f[3] == "League", f[8], utc_day(f[1]), shots.get(f[0]))
                for f in fixtures]
     kickoffs = {f[0]: f[1] for f in fixtures}
     rows, history = run(matches, starting_rank)
@@ -261,19 +346,21 @@ def _replay(conn, fixtures, xg, starting_rank):
     vol_changes = {}
 
     buf = io.StringIO()
-    for (m, h, a, exp_diff, act_diff, change), (pre, (sh, sa, eh, ea), base) in zip(rows, sides):
-        scale = K_FACTOR / (actual_diff(m)[1] * m.weight)
-        for team, opp, is_home, before, delta, s_t, e_t, s0, e0, gb in (
-            (m.home, m.away, True, h, change, sh, eh, pre[0], pre[2], base[0]),
-            (m.away, m.home, False, a, -change, sa, ea, pre[1], pre[3], base[1]),
+    for step, (pre, (sh, sa, eh, ea), base) in zip(rows, sides):
+        m, h, a, exp_diff, act_diff, change = step
+        for team, opp, is_home, before, delta, moved, sign, s_t, e_t, s0, e0, gb in (
+            (m.home, m.away, True, h, change, step.shift_home, 1, sh, eh, pre[0], pre[2], base[0]),
+            (m.away, m.home, False, a, -step.away_change, step.shift_away, -1, sa, ea, pre[1], pre[3], base[1]),
         ):
             match_no[team] = match_no.get(team, 0) + 1
             hist = recent.setdefault(team, [before])
+            if moved:                  # changed division: its history moved with it (run)
+                hist[:] = [v + moved for v in hist]
             s = summarise(hist)
             lt_before = s["lt_algo"] if s else before
             hist.append(before + delta)
             del hist[:-101]            # LT ALGO only looks at the last 100 values
-            vol_changes.setdefault(team, []).append(delta * scale)
+            vol_changes.setdefault(team, []).append(sign * step.miss * K_FACTOR)
             last_match[team] = kickoffs[m.key]
             split[team] = (s_t, e_t)
             buf.write("\t".join(map(str, (

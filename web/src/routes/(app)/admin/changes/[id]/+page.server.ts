@@ -14,15 +14,15 @@ export async function load({ fetch, locals, params }) {
 	const fwd = forwardSummary(c);
 	const main = headline(c);
 	const now = liveStanding(running, c.id), rec = now.record;
-	const liveReady = !!rec?.ready && !c.deployed;
+	const liveReady = rec?.verdict === 'better' && !c.deployed;
 	return {
 		tabHead: { title: 'Model Change Tracker', ...TAB_INFO.changes }, environment: doc.environment, stored: doc.stored,
 		differs: doc.differs.filter((line) => line.startsWith(c.id)),
 		// green on this page, as on the list, only for a change with enough evidence to implement
 		ready: (!!main && ready(c, main)) || liveReady, why: liveReady ? '' : main ? notReadyNote(c, main) : '',
-		// protocol P15's running record of this change on live matches
+		// the running record of this change on live matches (P15; from the club-rank release, P16)
 		tracking: running ? {
-			text: now.text, why: now.why, start: running.start, to: running.to, generated: running.generated_at, minMatches: running.minimum.matches, minWeeks: running.minimum.weeks,
+			protocol: running.protocol, text: now.text, why: now.why, start: running.start, to: running.to, generated: running.generated_at, minMatches: running.minimum.matches, minWeeks: running.minimum.weeks,
 			n: rec?.n ?? 0, weeks: rec?.weeks ?? 0, gain: rec?.gain != null ? signed(rec.gain) : null,
 			range: rec?.low != null && rec?.high != null ? `${signed(rec.low)} to ${signed(rec.high)}` : null,
 			called: rec?.called ? `${rec.called.verdict === 'better' ? 'Proven better' : 'Proven worse'} from week ${String(rec.called.week).slice(4)} of ${String(rec.called.week).slice(0, 4)}, at ${rec.called.n.toLocaleString('en-GB')} matches` : null,

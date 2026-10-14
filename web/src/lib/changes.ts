@@ -24,7 +24,8 @@ export type Change = {
 	recorded_at: string | null; status: string; stage: string; deployed: boolean; deployed_on: string | null; deployed_day_known: boolean | null;
 	reverted_on: string | null; decided_on: string | null; events: ChangeEvent[]; results: Result[]; forward: Forward | null; live?: LiveTest[];
 };
-// Protocol P15's running record (experiments/prospective/live_p15.py): each runnable change scored
+// The live running record: P15's (experiments/prospective/live_p15.py), then from the club-rank
+// release P16's (live_p16.py) in the same shape, of that release alone. Each change is scored
 // on every finished match since it began, judged by a confidence sequence, so it can be looked
 // at as often as anyone likes. gain is production's log loss minus the candidate's (plus is
 // better); low and high are its interval; verdict is set from the first week the whole interval
@@ -137,7 +138,7 @@ export const gain = (metric: string, delta: number) => (HIGHER_IS_BETTER.has(met
 // measure, best first. Changes proven better (their interval leaves zero out) lead, by gain; then
 // the ones not proven either way, by gain; then the ones proven worse. So a large figure on a
 // handful of matches never sits above a smaller one that is proven.
-export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; mark: Mark; live: LiveTest[];
+export type DeltaRow = { id: string; title: string; stage: string; evaluation: string | null; delta: number | null; gain: number | null; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; mark: Mark; live: LiveTest[];
 	liveRecord: LiveRecord | null; liveText: string; liveWhy: string };
 
 // The one colour rule of the page. Green means one thing only: there is statistical evidence
@@ -163,20 +164,26 @@ export function ready(c: Pick<Change, 'status' | 'deployed'>, r: Pick<Result, 'm
 }
 const ORDER: Record<Tone, number> = { better: 0, unclear: 1, worse: 2 };
 export function deltaRows(changes: Change[], metric: string, liveDoc: LiveDoc | null = null): DeltaRow[] {
-	return changes.flatMap((c) => {
+	return changes.flatMap((c): DeltaRow[] => {
 		const r = headline(c, metric);
-		if (!r) return [];
-		const past = ready(c, r);
 		// the live record speaks for log loss only, and never for a change that is already in production.
-		// Its own ready flag holds the 0.002 bar (live_p15.py, pinned with P15), so the verdict decides here
+		// Its own ready flag holds the 0.002 bar (live_p15.py, pinned), so the verdict decides here
 		const now = liveStanding(metric === 'log_loss' ? liveDoc : null, c.id);
 		const liveReady = now.record?.verdict === 'better' && !c.deployed, liveWorse = now.record?.verdict === 'worse';
+		if (!r) {
+			// a change with no past result is listed only for its live record (the club-rank release, P16)
+			if (!now.record) return [];
+			const note = c.deployed ? 'In production: checked on live matches' : liveReady ? 'Ready: proven on live matches' : '';
+			return [{ id: c.id, title: c.title, stage: c.stage, evaluation: null, delta: null, gain: null, interval: null, tone: 'unclear' as Tone, before: null, after: null, n: null,
+				ready: liveReady, readyNote: note, mark: liveReady ? 'ready' as Mark : liveWorse ? 'worse' as Mark : 'none' as Mark, live: c.live ?? [], liveRecord: now.record, liveText: now.text, liveWhy: now.why }];
+		}
+		const past = ready(c, r);
 		const ok = past || liveReady;
 		const readyNote = liveReady ? 'Ready: proven on live matches' : !past ? notReadyNote(c, r) : r.evaluation === 'prospective' ? 'Ready: proven on new matches'
 			: c.status === 'Testing' ? 'Ready on the historical test; being confirmed on new matches' : 'Ready on the historical test';
 		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n,
 			ready: ok, readyNote, mark: ok ? 'ready' as Mark : liveWorse ? 'worse' as Mark : markOf(false, tone(r)), live: c.live ?? [], liveRecord: now.record, liveText: now.text, liveWhy: now.why }];
-	}).sort((a, b) => Number(b.ready) - Number(a.ready) || ORDER[a.tone] - ORDER[b.tone] || b.gain - a.gain || (a.id < b.id ? -1 : 1));
+	}).sort((a, b) => Number(b.ready) - Number(a.ready) || ORDER[a.tone] - ORDER[b.tone] || (b.gain ?? -Infinity) - (a.gain ?? -Infinity) || (a.id < b.id ? -1 : 1));
 }
 
 // Chart 3, expected against actual: every change that recorded a number beforehand, with what a
@@ -236,7 +243,7 @@ export function againstBaseRates(series: SeriesPoint[]): { n: number; model: num
 // leaves zero out), or null where none has
 export function bestWaiting(changes: Change[], metric = 'log_loss'): { id: string; title: string; gain: number; n: number | null; stage: string } | null {
 	const rows = deltaRows(changes.filter((c) => !c.deployed && c.status !== 'Rejected'), metric).filter((r) => r.tone === 'better' && r.evaluation !== 'development');
-	return rows.length ? { id: rows[0].id, title: rows[0].title, gain: rows[0].gain, n: rows[0].n, stage: rows[0].stage } : null;
+	return rows.length ? { id: rows[0].id, title: rows[0].title, gain: rows[0].gain ?? 0, n: rows[0].n, stage: rows[0].stage } : null;
 }
 
 // Where figures sit on a chart: a straight scale from a domain to a range, and round steps for

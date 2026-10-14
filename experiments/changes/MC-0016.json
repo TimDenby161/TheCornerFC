@@ -99,6 +99,12 @@
    "start": "2026-10-14",
    "target": 6200,
    "extra_time": true
+  },
+  {
+   "date": "2026-10-14",
+   "type": "decision",
+   "status": "Accepted",
+   "reason": "Proven better on the final period, and the owner's rule is that a proven gain is implemented whatever its size. Released together with MC-0024 as MC-0028, checked on live matches by P16."
   }
  ]
 }
