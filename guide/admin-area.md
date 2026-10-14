@@ -70,12 +70,15 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   change was scored on live matches against production by P15 (`experiments/prospective/live_p15.py`).
   The release changed the model they were compared with, so P13, P14 and P15 closed that day
   (`experiments/prospective/PROTOCOLS.md`, amendment 11). From then the Live tracking workflow runs
-  P16 (`live_p16.py`) on Mondays and Thursdays, and by hand: it scores the release against the
-  version it replaced, re-created from each stored snapshot, and stores the document
-  `live_tracking` in P15's shape, so the page shows the release's live matches, gain and range and
-  says of every other change that its live tracking closed. It is judged by a confidence sequence,
-  which holds however often it is looked at, so its range is wide: a call is expected at about
-  27,000 matches, and a release that is worse is called as quickly as a better one.
+  `live_p17.py` on Mondays and Thursdays, and by hand, which reads the database once and runs two
+  protocols: P16 scores the release against the version it replaced, re-created from each stored
+  snapshot (a call is expected at about 27,000 matches, and a worse release is called as quickly
+  as a better one); P17 scores the 13 ideas that can be run on top of the live model, on paper
+  from the stored predictions, with nothing extra in production. Both go into the one document
+  `live_tracking`, in P15's shape, so the page shows each change's live matches, gain and range,
+  and says of the rest why they are not run. Both are judged by a confidence sequence, which holds
+  however often it is looked at, so the ranges are wide. A future release rebases P17 by a dated
+  amendment in the same commit instead of closing it.
 - **Green means implement.** A row is green when there is statistical evidence that the change
   makes the model better, however small the gain (the owner's rule, 2026-10-14; the 0.002 bar no
   longer holds a proven gain back), on live matches or on a test that was not the matches it was

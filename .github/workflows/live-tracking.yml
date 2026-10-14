@@ -1,9 +1,9 @@
 name: Live tracking
 
-# How the club-rank release (MC-0028) is doing on live matches against the version it replaced:
-# protocol P16 (experiments/prospective/live_p16.py; guide/admin-area.md), which took over from
-# P15's record of every candidate when the release changed production. It reads the database
-# once, works both versions out offline and stores one document for the Admin area.
+# How the club-rank release (MC-0028) is doing on live matches against the version it replaced
+# (protocol P16, live_p16.py), and every idea that can be run on top of the live model (P17,
+# experiments/prospective/live_p17.py, which runs P16 with it; guide/admin-area.md). It reads the
+# database once, works everything out offline and stores one document for the Admin area.
 # No API-Football calls, no odds, and nothing a model or the public site reads.
 on:
   schedule:
@@ -47,7 +47,7 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      # the evaluator needs numpy (and its P15 imports scipy and scikit-learn) at the registered versions:
+      # the candidates need numpy, scipy and scikit-learn at the versions they were registered with:
       # the same pins as requirements-p13.txt with everything they need, each checked by its hash
       - run: pip install -r experiments/prospective/requirements-live.txt
 
@@ -61,7 +61,7 @@ jobs:
           THECORNERFC_NO_API: "true"
         run: python -m unittest discover -s tests
 
-      - name: Score the club-rank release on the live matches and store the record
+      - name: Score the release and every runnable idea on the live matches and store the record
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python experiments/prospective/live_p16.py --store
+        run: python experiments/prospective/live_p17.py --store

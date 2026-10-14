@@ -6,6 +6,6 @@ import type { ChangesDoc, LiveDoc } from '#lib/changes.ts';
 // reach anyone the database wouldn't give it to.
 export const changesDoc = (fetch: typeof globalThis.fetch, token: string | undefined) => adminDoc<ChangesDoc>(fetch, token, 'model_changes');
 // The running record on live matches (P15's of every runnable change; from the club-rank release,
-// P16's of that release), or null before the
+// P16's of that release with P17's of every idea on the live model), or null before the
 // Live tracking workflow has stored one. The same rules: the visitor's own token, never kept.
 export const liveDoc = (fetch: typeof globalThis.fetch, token: string | undefined) => adminDoc<LiveDoc>(fetch, token, 'live_tracking');

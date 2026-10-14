@@ -20,7 +20,7 @@ export async function load({ fetch, locals, params }) {
 		differs: doc.differs.filter((line) => line.startsWith(c.id)),
 		// green on this page, as on the list, only for a change with enough evidence to implement
 		ready: (!!main && ready(c, main)) || liveReady, why: liveReady ? '' : main ? notReadyNote(c, main) : '',
-		// the running record of this change on live matches (P15; from the club-rank release, P16)
+		// the running record of this change on live matches (P15; from the club-rank release, P16 and P17)
 		tracking: running ? {
 			protocol: running.protocol, text: now.text, why: now.why, start: running.start, to: running.to, generated: running.generated_at, minMatches: running.minimum.matches, minWeeks: running.minimum.weeks,
 			n: rec?.n ?? 0, weeks: rec?.weeks ?? 0, gain: rec?.gain != null ? signed(rec.gain) : null,

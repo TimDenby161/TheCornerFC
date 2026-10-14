@@ -25,7 +25,8 @@ export type Change = {
 	reverted_on: string | null; decided_on: string | null; events: ChangeEvent[]; results: Result[]; forward: Forward | null; live?: LiveTest[];
 };
 // The live running record: P15's (experiments/prospective/live_p15.py), then from the club-rank
-// release P16's (live_p16.py) in the same shape, of that release alone. Each change is scored
+// release P16's and P17's together (live_p17.py) in the same shape: the release, and every idea on
+// top of the live model. Each change is scored
 // on every finished match since it began, judged by a confidence sequence, so it can be looked
 // at as often as anyone likes. gain is production's log loss minus the candidate's (plus is
 // better); low and high are its interval; verdict is set from the first week the whole interval

@@ -360,7 +360,8 @@ class LiveTestTests(unittest.TestCase):
                     self.assertIn(e['start'], text)
         self.assertEqual(found, {'P13': {('2026-10-13', 9400, False)}, 'P14': {('2026-10-14', 6200, True)},
                                  'P15': {('2026-10-14', 6200, True)},           # P15 has no target: 6,200 is where its interval is tightest
-                                 'P16': {('2026-10-15', 27000, True)}})         # nor P16: 27,000 is where its call is expected
+                                 'P16': {('2026-10-15', 27000, True)},          # nor P16: 27,000 is where its call is expected
+                                 'P17': {('2026-10-15', 6200, True)}})          # nor P17: 6,200 is where its interval is tightest
 
     def test_the_document_carries_the_count_for_the_changes_that_have_one(self):
         doc = mc.document(mc.from_files([change('MC-0001', events=[self.P13]), change('MC-0002')]), environment='staging', generated_at='t',
