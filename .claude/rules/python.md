@@ -9,6 +9,8 @@ paths:
 
 - A page asks the database for what it shows. Don't add whole-list files or prepared copies of
   whole datasets.
+- **No added cost** (`guide/costs.md`): count the API-Football calls a change adds to each run
+  and the rows it adds to the database; reuse what a response or table already holds.
 - API-Football is the only match data source. A new data source needs the owner's yes first.
 - The jobs run on Python 3.13 (`.github/workflows/`). `requirements.txt` is compiled from
   `requirements.in` with hashes; the experiments also need numpy and scipy, which are not in it.

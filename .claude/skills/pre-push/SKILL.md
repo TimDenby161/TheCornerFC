@@ -39,6 +39,10 @@ Run each check on its own, not chained through a pipe, and read its own result l
 8. **If a migration is waiting**: say so, whether it has been applied to staging, and whether
    the Python it needs is on `main`.
 
+9. **Cost** (`guide/costs.md`): for each service the diff touches (API-Football, Supabase,
+   Cloudflare, GitHub), say what it adds or saves. If it adds cost the owner has not agreed to,
+   say so and stop.
+
 Then report: each check with its result line, anything skipped and why, and what the push will
 do (Cloudflare builds the staging site; the Staging workflow waits for that build and checks
 it). Stop there. Push only if the owner has asked for this push; a general go-ahead from earlier

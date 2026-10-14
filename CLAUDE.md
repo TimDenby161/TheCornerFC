@@ -67,6 +67,11 @@ Skills: `/new-migration` (any database change), `/model-experiment` (any change 
 
 ## Rules that must not be broken
 
+- **Never add cost.** Before building any change, work out what it costs on each service it
+  touches: API-Football (calls a day), Supabase (storage, Disk IO, egress, compute), Cloudflare
+  (Worker requests, CPU, builds) and GitHub (free only while public). Pick the design that adds
+  nothing; if a change would raise a bill or need a higher plan, ask the owner first and say the
+  cost. Each plan's limits are in `guide/costs.md`.
 - **Production is never written from this machine**, and no local run calls API-Football.
   Staging is the copy to write to. Don't set the override flag, name the environment by hand or
   work around a guard, and don't read `.env` or `~/.config/thecornerfc/`

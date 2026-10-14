@@ -15,6 +15,8 @@ paths:
   security). A function the site calls has fixed SQL and a pinned `search_path`.
 - **Fantasy game data is owner-only**: anything derived from FPL or Fantasy EFL goes only where
   the owner's sign-in can read it (`fpl_owner_data`).
+- **No added cost** (`guide/costs.md`): say what a change adds in storage, Disk IO and egress
+  before writing it; anything that could need a higher Supabase plan goes to the owner first.
 - **Go easy on the live database.** No repeated full exports, whole-table copies or looped
   heavy calls for testing. Test a new function on a local Postgres that holds every table it
   joins at full size, then call it twenty at once live after it is applied.

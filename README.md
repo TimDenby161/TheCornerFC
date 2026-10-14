@@ -27,6 +27,7 @@ Each topic has its own page in `guide/`. A note elsewhere that says "README: Acc
 The tables and the records they keep:
 
 - [Tables](guide/tables.md)
+- [Running costs](guide/costs.md): what each service charges for and the check before any change
 - [API usage and quota protection](guide/api-usage.md)
 - [Pipeline and dataset health](guide/pipeline-health.md)
 - [Shared model versions and snapshot conventions](guide/model-versions.md)

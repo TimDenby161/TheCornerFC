@@ -28,10 +28,14 @@ connect to the database to change it.
 5. **Test a new function before it goes live**: on a local Postgres that holds every table it
    joins at full size. There is usually none on this machine: say so, and give the owner the
    query to try in the SQL editor instead. Never loop heavy calls against the live database.
-6. **Check the order.** If Python on `main` must change first (the jobs run from `main`), say
+6. **Check the cost** (`guide/costs.md`): the rows and megabytes a new table, column or index
+   adds a season, what each call of a new function reads, and any job that now rewrites a table
+   whole. If it could push the database toward a higher plan or more Disk IO, stop and ask the
+   owner first.
+7. **Check the order.** If Python on `main` must change first (the jobs run from `main`), say
    which commit has to be there before the migration is applied.
-7. **Run** `python -m unittest discover -s tests` and read its own `OK` line.
-8. **Tell the owner** the file is waiting, in one line, with anything they must do after it
+8. **Run** `python -m unittest discover -s tests` and read its own `OK` line.
+9. **Tell the owner** the file is waiting, in one line, with anything they must do after it
    (a workflow to run, a setting to switch).
-9. **Once the owner says it is applied**: change the first line to
+10. **Once the owner says it is applied**: change the first line to
    `-- Repeatable. Applied YYYY-MM-DD.` in the migration and in its copy in `db/schema.sql`.

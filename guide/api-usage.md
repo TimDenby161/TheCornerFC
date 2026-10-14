@@ -35,9 +35,8 @@ IDs; the optional budget check is designed for sequential execution, as in Actio
 
 `API_QUOTA_WARN_THRESHOLDS=2000,1000,500` configures absolute daily remaining-call
 warnings. The existing `API_DAILY_RESERVE=200` still applies and is now checked before
-retries too. Retry counts and backoff delays are unchanged. The approximately 75,000
-subscription allowance has **no confirmed period** in repository configuration;
-no monthly or subscription-period reset is assumed or enforced. Quota protection
+retries too. Retry counts and backoff delays are unchanged. The subscription is API-Football's Ultra plan, 75,000 calls a day,
+reset daily; the aim is to fit under Pro's 7,500 a day ([Running costs](costs.md)). Quota protection
 uses the observed daily remaining header only. A displayed quota may be stale;
 the report always includes its observation time.
 

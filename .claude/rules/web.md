@@ -13,6 +13,8 @@ paths:
   `LocalTime.svelte`.
 - Keep `#ad-top` and `#ad-rail` free when laying out a page. Adverts never go on Home, the two
   betting pages, the fantasy pages or the text pages.
+- **No added cost** (`guide/costs.md`): count the database calls and Worker CPU a page adds;
+  keep requests within the free plan and don't turn off caching.
 - Heavy sums run in the browser, not the Worker (the free plan allows about 10 ms of CPU a
   request).
 - Redirects to another site must name it: `redirect(..., { external: [...] })`.

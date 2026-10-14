@@ -25,10 +25,13 @@ be refused, and so the owner sees what is going live.
    to production before the push; one that needs the new Python, after. Say which.
 6. **Model versions.** If a fingerprinted file is in the diff, say which model versions will be
    new on the next run.
-7. **Report and stop.** The commits, the checks, the migrations in order, and what the push
+7. **Cost.** Say what going live adds to each service (`guide/costs.md`): API-Football calls a
+   day, database size and reads, Worker requests and CPU. Anything that would raise a bill the
+   owner has not agreed to holds the promotion.
+8. **Report and stop.** The commits, the checks, the migrations in order, the cost, and what the push
    does. Push only if the owner asks for this promotion now.
-8. **The push**, exactly: `git push origin origin/staging:main`. No other form reaches `main`.
-9. **Afterwards.** `https://thecornerfc.com/version` names the commit once Cloudflare has built
+9. **The push**, exactly: `git push origin origin/staging:main`. No other form reaches `main`.
+10. **Afterwards.** `https://thecornerfc.com/version` names the commit once Cloudflare has built
    it (a few minutes). Tell the owner to watch the next Match day run. If the site is wrong:
    Cloudflare → Workers → thecornerfc → Deployments → Rollback, then fix through `staging`. If
    a job is wrong: revert on `staging` and promote the revert.
