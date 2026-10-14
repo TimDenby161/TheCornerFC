@@ -115,6 +115,13 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
    by the record or by a result.
 4. If the owner releases it: that is its own `production change` file, with a `deployed` event
    on the day it reaches `main`. Its forward record then builds by itself.
+5. Each experiment whose idea went live in that release, at its own setting or inside a combined
+   one, gets a `released` event naming the release (`"as": "MC-0028"`) and saying how it went
+   in. The check refuses one that names a change not deployed by then. While the release is in
+   production the experiment shows as "In production through MC-0028": the table of changes
+   against the current version and the best gain waiting leave it out, and it is never itself
+   deployed (no forward record, not in the running total). A16 and A24 (MC-0016, MC-0024) and
+   their parts (MC-0013, MC-0014) were marked so on 2026-10-14.
 
 What was imported on 2026-10-13: 27 changes, every one marked as written after its test except
 the two formula candidates still blinded under P13 and P14. Three earlier production changes

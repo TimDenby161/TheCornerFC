@@ -102,9 +102,9 @@ def main(argv=None):
         except ValueError as exc:
             print(exc)
             return 1
-        for change in changes:
-            where = model_changes.standing(change["events"])
-            print(f"{change['id']}  {where['stage']:24s} {change['registration']['title']}")
+        doc = model_changes.document(model_changes.from_files(changes), environment=None, generated_at=None)
+        for change in doc["changes"]:
+            print(f"{change['id']}  {change['stage']:32s} {change['title']}")
         print(f"{len(changes)} changes, all recordable")
         return 0
 

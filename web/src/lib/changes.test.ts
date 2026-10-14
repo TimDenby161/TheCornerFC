@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
+	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, filterChanges, forwardSummary, inProduction, headline, intervalText, monthLines, percent,
 	gain, liveStanding, liveText, markOf, notReadyNote, ready, scale, shortId, signed, ticks, tone, type Change, type LiveDoc, type LiveRecord, type Result
 } from './changes';
 
@@ -68,6 +68,16 @@ describe('choices and counts', () => {
 	});
 	it('count an accepted change and a deployed one apart', () => {
 		expect(counts(all)).toMatchObject({ proposed: 5, accepted: 2, deployed: 1, rejected: 1, reverted: 1, testing: 1 });
+	});
+});
+
+describe('changes released inside another', () => {
+	it('count as in production, never as waiting or being tested', () => {
+		const idea = change('MC-0016', { status: 'Testing', released_in: 'MC-0028', results: [result({ interval: [-0.002, -0.0005] })] });
+		expect(inProduction(idea)).toBe(true);
+		expect(inProduction(change('MC-0001'))).toBe(false);
+		expect(counts([idea]).testing).toBe(0);
+		expect(bestWaiting([idea])).toBeNull();
 	});
 });
 

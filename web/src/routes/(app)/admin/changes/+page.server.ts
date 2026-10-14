@@ -1,6 +1,6 @@
 import {
 	EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows,
-	filterChanges, headline, intervalText, markOf, monthLines, ready, shortId, signed, tone
+	filterChanges, headline, inProduction, intervalText, markOf, monthLines, ready, shortId, signed, tone
 } from '#lib/changes.ts';
 import { fail } from '@sveltejs/kit';
 import { matchModel, matchModelCompare, switchMatchModel } from '#lib/server/admin.ts';
@@ -76,8 +76,9 @@ export async function load({ fetch, locals, url }) {
 		choices: ch, statuses: doc.statuses, components: doc.components, metrics: Object.entries(METRIC_LABELS).filter(([k]) => doc.changes.some((x) => x.results.some((r) => r.metric === k))),
 		tiles, rows, all: doc.changes.length, metric, metricLabel: METRIC_LABELS[metric],
 		lines: monthLines(doc.series, lineMetric), lineLabel: METRIC_LABELS[lineMetric],
-		// Table 2 is for deciding what to add, so changes already in production are left out of it
-		deltas: deltaRows(shown.filter((x) => !x.deployed), metric, live), steps,
+		// Table 2 is for deciding what to add, so changes already in production, themselves or inside
+		// a release, are left out of it
+		deltas: deltaRows(shown.filter((x) => !inProduction(x)), metric, live), steps,
 		model, versus,
 		live: live ? { n: live.n, weeks: live.weeks, start: live.start, to: live.to, generated: live.generated_at, tracked: Object.keys(live.changes).length, protocol: live.protocol, matches: live.minimum.matches, minWeeks: live.minimum.weeks } : null
 	};

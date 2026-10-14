@@ -203,6 +203,48 @@ class RulesTests(unittest.TestCase):
         self.assertEqual((back['status'], back['stage'], back['deployed'], back['deployed_on']), ('Reverted', 'Reverted', False, None))
 
 
+released = lambda as_='MC-0002', date='2026-10-21': {"date": date, "type": "released", "as": as_, "note": "went in at its setting"}
+
+
+class ReleaseTests(unittest.TestCase):
+    """An experiment whose idea went live inside a production change."""
+    def write(self, *changes):
+        folder = Path(tempfile.mkdtemp())
+        for c in changes:
+            (folder / f"{c['id']}.json").write_text(json.dumps(c))
+        return folder
+
+    def test_only_an_experiment_is_released_and_it_names_the_change_and_how(self):
+        self.assertEqual(mc.problems(change(events=[decision('Accepted'), released()])), [])
+        self.assertTrue(any('only an experiment' in p for p in mc.problems(change(kind='production change', events=[released()]))))
+        self.assertTrue(any('names the production change' in p for p in mc.problems(change(events=[released('MC-0001')]))))
+        self.assertTrue(any('says how' in p for p in mc.problems(change(events=[{**released(), "note": " "}]))))
+
+    def test_the_change_it_names_was_deployed_by_then(self):
+        idea = change('MC-0001', events=[decision('Accepted'), released(date='2026-10-21')])
+        carrier = lambda on: change('MC-0002', kind='production change', events=[deployed(on)] if on else [])
+        mc.load(self.write(idea, carrier('2026-10-20')))
+        for later in ('2026-10-22', None):
+            with self.assertRaisesRegex(ValueError, 'MC-0002 is not a production change deployed by 2026-10-21'):
+                mc.load(self.write(idea, carrier(later)))
+
+    def test_it_is_in_production_while_the_change_that_carried_it_is(self):
+        idea = change('MC-0001', events=[decision('Accepted'), released()])
+        carrier = change('MC-0002', kind='production change', events=[deployed('2026-10-20')])
+        doc = mc.document(mc.from_files([idea, carrier]), environment='staging', generated_at='t')
+        first = doc['changes'][0]
+        self.assertEqual((first['released_in'], first['stage'], first['deployed'], first['status']),
+                         ('MC-0002', 'In production through MC-0002', False, 'Accepted'))
+        self.assertIsNone(doc['changes'][1]['released_in'])
+        gone = {**carrier, "events": carrier['events'] + [{"date": "2026-11-01", "type": "reverted", "reason": "worse"}]}
+        back = mc.document(mc.from_files([idea, gone]), environment='staging', generated_at='t')['changes'][0]
+        self.assertEqual((back['released_in'], back['stage']), (None, 'Tested, not deployed'))
+
+    def test_the_register_marks_a16_and_a24_and_their_parts_as_live_in_mc_0028(self):
+        doc = mc.document(mc.from_files(mc.load()), environment='staging', generated_at='t')
+        live = {c['id'] for c in doc['changes'] if c['released_in'] == 'MC-0028'}
+        self.assertEqual(live, {'MC-0013', 'MC-0014', 'MC-0016', 'MC-0024'})
+
 class RecordTests(unittest.TestCase):
     """What was recorded stays as it was recorded."""
     def setUp(self):

@@ -97,6 +97,12 @@
    "type": "status",
    "status": "Testing",
    "note": "Not released at its own setting: it is part of MC-0016, whose setting for the two together was released as MC-0028 on the owner's decision of 2026-10-14. Its live tracking (P15) closed with that release."
+  },
+  {
+   "date": "2026-10-14",
+   "type": "released",
+   "as": "MC-0028",
+   "note": "Live at MC-0016's setting for movers and new clubs together (pull 0.5), released in the club rank as MC-0028 on 2026-10-14; not at its own setting."
   }
  ]
 }

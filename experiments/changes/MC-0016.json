@@ -105,6 +105,12 @@
    "type": "decision",
    "status": "Accepted",
    "reason": "Proven better on the final period, and the owner's rule is that a proven gain is implemented whatever its size. Released together with MC-0024 as MC-0028, checked on live matches by P16."
+  },
+  {
+   "date": "2026-10-14",
+   "type": "released",
+   "as": "MC-0028",
+   "note": "Released at its tested setting (pull 0.5, boost 0.5 over 40 matches) in the club rank as MC-0028 on 2026-10-14, with MC-0024."
   }
  ]
 }

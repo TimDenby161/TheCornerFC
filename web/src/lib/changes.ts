@@ -14,7 +14,7 @@ export type Result = {
 // A registered test on matches played after the change was fixed: how many it has reached of the
 // number it will be read at. A count only: its results stay unread until the target.
 export type LiveTest = { protocol: string; start: string; target: number; matches: number };
-export type ChangeEvent = Result | { type: 'status' | 'decision' | 'deployed' | 'reverted' | 'correction' | 'live_test'; date: string; protocol?: string; start?: string; target?: number; extra_time?: boolean; date_known_to?: 'day' | 'month'; status?: string; note?: string; reason?: string; commit?: string | null; model_version?: string | null; of?: 'registration' | number; text?: string; recorded_at?: string | null };
+export type ChangeEvent = Result | { type: 'status' | 'decision' | 'deployed' | 'released' | 'reverted' | 'correction' | 'live_test'; date: string; as?: string; protocol?: string; start?: string; target?: number; extra_time?: boolean; date_known_to?: 'day' | 'month'; status?: string; note?: string; reason?: string; commit?: string | null; model_version?: string | null; of?: 'registration' | number; text?: string; recorded_at?: string | null };
 export type Window = { n: number; log_loss: number | null; brier: number | null; vs_market: { n: number; model_log_loss: number; market_log_loss: number; model_minus_market: number } | null };
 export type Forward = { from: string | null; to: string | null; after: Window | null; before: Window | null; verdict: string; why: string; deployed_with: string[] };
 export type Change = {
@@ -22,6 +22,8 @@ export type Change = {
 	what: string; why: string; how: string; hypothesis: string; expected: Expected; success_criteria: string;
 	code: { commit: string | null; experiment: string | null; model_version: string | null };
 	recorded_at: string | null; status: string; stage: string; deployed: boolean; deployed_on: string | null; deployed_day_known: boolean | null;
+	// the production change an experiment went live inside, while that change is in production
+	released_in?: string | null;
 	reverted_on: string | null; decided_on: string | null; events: ChangeEvent[]; results: Result[]; forward: Forward | null; live?: LiveTest[];
 };
 // The live running record: P15's (experiments/prospective/live_p15.py), then from the club-rank
@@ -116,12 +118,15 @@ export function filterChanges(changes: Change[], ch: Choices): Change[] {
 
 // The counts at the top of the page. "Accepted" is a decision; "deployed" is a change that is
 // in production now. They are counted apart so that one is never read as the other.
+// In production: deployed itself, or an experiment released inside a change that is
+export const inProduction = (c: Pick<Change, 'deployed' | 'released_in'>) => c.deployed || !!c.released_in;
+
 export function counts(changes: Change[]) {
 	const n = (f: (c: Change) => boolean) => changes.filter(f).length;
 	return {
 		proposed: changes.length, accepted: n((c) => c.status === 'Accepted'), deployed: n((c) => c.deployed),
 		rejected: n((c) => c.status === 'Rejected'), reverted: n((c) => c.status === 'Reverted'),
-		testing: n((c) => c.status === 'Testing'), inconclusive: n((c) => c.status === 'Inconclusive'), waiting: n((c) => c.status === 'Proposed')
+		testing: n((c) => c.status === 'Testing' && !c.released_in), inconclusive: n((c) => c.status === 'Inconclusive'), waiting: n((c) => c.status === 'Proposed')
 	};
 }
 
@@ -235,7 +240,7 @@ export function againstBaseRates(series: SeriesPoint[]): { n: number; model: num
 // The largest gain on a measure that a change not yet in production has proven (its interval
 // leaves zero out), or null where none has
 export function bestWaiting(changes: Change[], metric = 'log_loss'): { id: string; title: string; gain: number; n: number | null; stage: string } | null {
-	const rows = deltaRows(changes.filter((c) => !c.deployed && c.status !== 'Rejected'), metric).filter((r) => r.tone === 'better' && r.evaluation !== 'development');
+	const rows = deltaRows(changes.filter((c) => !inProduction(c) && c.status !== 'Rejected'), metric).filter((r) => r.tone === 'better' && r.evaluation !== 'development');
 	return rows.length ? { id: rows[0].id, title: rows[0].title, gain: rows[0].gain ?? 0, n: rows[0].n, stage: rows[0].stage } : null;
 }
 

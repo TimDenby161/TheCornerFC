@@ -109,7 +109,7 @@
 					<tbody>{#each data.rows as r (r.id)}
 						<tr><td><a class="team-link" href="/admin/changes/{r.id}">{r.title}</a><span class="mc-sub">{shortId(r.id)} · {r.kind}</span></td>
 							<td>{r.date}</td><td>{r.component}</td>
-							<td><span class="mc-stage {STAGE[r.stage] ?? 'other'}">{r.stage}</span>{#if r.status !== r.stage}<span class="mc-sub">{r.status}</span>{/if}</td>
+							<td><span class="mc-stage {STAGE[r.stage] ?? (r.stage.startsWith('In production') ? 'deployed' : 'other')}">{r.stage}</span>{#if r.status !== r.stage}<span class="mc-sub">{r.status}</span>{/if}</td>
 							<td>{r.expected}</td>
 							<td>{#if r.result}<span class="mc-pill mark-{r.result.mark}">{r.result.word} {r.result.text}</span><span class="mc-sub">{r.result.kind}{r.result.metric !== data.metricLabel ? ` · ${r.result.metric}` : ''}{r.result.n ? ` · ${r.result.n.toLocaleString('en-GB')} matches` : ''}</span>{:else}No result recorded{/if}</td>
 							<td>{r.forward ?? '–'}</td></tr>

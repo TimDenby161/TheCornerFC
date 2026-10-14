@@ -49,6 +49,7 @@ export async function load({ fetch, locals, params }) {
 				: e.type === 'status' ? `Status: ${e.status}${e.note ? `. ${e.note}` : ''}`
 				: e.type === 'decision' ? `Decision: ${e.status}. ${e.reason}`
 				: e.type === 'deployed' ? `Deployed to production${e.commit ? ` (${e.commit})` : ''}${e.note ? `. ${e.note}` : ''}`
+				: e.type === 'released' ? `Released inside ${e.as}${e.note ? `. ${e.note}` : ''}`
 				: e.type === 'reverted' ? `Reverted. ${e.reason}`
 				: e.type === 'live_test' ? `Live test registered: protocol ${e.protocol}, on matches from ${e.start}, read once at ${e.target?.toLocaleString('en-GB')}`
 				: `Correction of ${e.of === 'registration' ? 'the registration' : `event ${e.of}`}: ${e.text}`

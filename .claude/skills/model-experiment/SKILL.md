@@ -47,7 +47,9 @@ Tracker shows. `python -m thecornerfc changes` checks them.
 - **When the owner decides:** add a `decision` event with the reason. A result never accepts or
   deploys anything.
 - **If it is released:** a separate `production change` file with a `deployed` event dated the
-  day it reaches `main`. An experiment's file never carries one.
+  day it reaches `main`. An experiment's file never carries one: instead add a `released` event
+  to each experiment that went in (`"as"`: the production change's id, and a note on how), so
+  the tracker stops listing it as a change still to add.
 
 ## The model change itself
 

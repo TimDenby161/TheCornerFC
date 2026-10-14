@@ -6,7 +6,7 @@ A change is a file, experiments/changes/MC-0000.json, with two parts:
     registration   what was written down before the test: what, why, how, the hypothesis, the
                    expected improvement and the success criteria. Never edited afterwards.
     events         what happened next, in order: a status, a result, a decision, a deployment,
-                   a reversal, a correction. Only ever added to.
+                   a release inside another change, a reversal, a correction. Only ever added to.
 
 The export copies both into the database (model_changes, model_change_events), which refuses any
 update or delete, so the first version recorded is the one that stands: a file edited later is
@@ -39,7 +39,7 @@ COMPONENTS = ("Club rank", "Match projection", "Match probabilities", "Goal mark
               "Player ranks", "National teams", "Betting rule", "Fantasy points", "Whole model")
 MODELS = ("club", "player", "lineup", "match", "betting", "fantasy", "national")
 KINDS = ("experiment", "production change")
-EVENTS = ("status", "result", "decision", "deployed", "reverted", "correction", "live_test")
+EVENTS = ("status", "result", "decision", "deployed", "released", "reverted", "correction", "live_test")
 EVALUATIONS = ("development", "backtest", "prospective")
 METRICS = ("log_loss", "brier", "rps", "accuracy", "calibration_error", "goal_markets_log_loss", "mse", "mae", "roi", "other")
 UNSEEN = ("yes", "partly", "no")
@@ -176,6 +176,14 @@ def problems(change):
             if not isinstance(e.get("commit"), str) and e.get("commit") is not None:
                 out.append(f"{where}: commit is text or null")
             deployed = True
+        elif kind == "released":
+            # an experiment whose idea went live inside a production change: names that change
+            if reg.get("kind") != "experiment":
+                out.append(f"{where}: only an experiment is released inside another change; a production change is deployed")
+            if not isinstance(e.get("as"), str) or not _ID.match(e.get("as") or "") or e.get("as") == cid:
+                out.append(f"{where}: a release names the production change that carried it (as: MC-0000)")
+            if not isinstance(e.get("note"), str) or not e["note"].strip():
+                out.append(f"{where}: a release says how the idea went in")
         elif kind == "reverted":
             if not deployed:
                 out.append(f"{where}: only a deployed change can be reverted")
@@ -215,6 +223,15 @@ def load(folder=None):
             found.append("the file is named after its id")
         wrong += [f"{path.name}: {p}" for p in found]
         changes.append(change)
+    # a release must name a production change that was deployed by the day of the release
+    deployed_on = {c.get("id"): min((e["date"] for e in c.get("events", []) if isinstance(e, dict) and e.get("type") == "deployed"), default=None)
+                   for c in changes if isinstance(c, dict) and isinstance(c.get("events"), list)}
+    for c in changes:
+        for i, e in enumerate(c.get("events", []) if isinstance(c, dict) and isinstance(c.get("events"), list) else [], 1):
+            if isinstance(e, dict) and e.get("type") == "released" and isinstance(e.get("as"), str):
+                on = deployed_on.get(e["as"])
+                if on is None or (_day(e.get("date")) and e["date"] < on):
+                    wrong.append(f"{c['id']}.json: event {i}: {e['as']} is not a production change deployed by {e.get('date')}")
     if wrong:
         raise ValueError("The model change register has problems:\n  " + "\n  ".join(wrong))
     return changes
@@ -224,12 +241,15 @@ def standing(events):
     """Where a change stands after its events: its status, whether it is deployed to production
     now, and the dates that matter."""
     status, deployed_on, reverted_on, decided_on, day_known = "Proposed", None, None, None, True
+    released_as = None
     for e in events:
         if e["type"] in ("status", "decision"):
             status = e["status"]
             decided_on = e["date"] if e["type"] == "decision" else decided_on
         elif e["type"] == "deployed":
             deployed_on, reverted_on, day_known = e["date"], None, e.get("date_known_to", "day") == "day"
+        elif e["type"] == "released":
+            released_as = e["as"]
         elif e["type"] == "reverted":
             status, reverted_on = "Reverted", e["date"]
     live = deployed_on is not None and reverted_on is None
@@ -237,7 +257,8 @@ def standing(events):
         "Proposed" if status == "Proposed" else "Being tested" if status == "Testing" else \
         "Tested and rejected" if status == "Rejected" else "Tested, not deployed"
     return {"status": status, "stage": stage, "deployed": live, "deployed_on": deployed_on if live else None,
-            "deployed_day_known": day_known if live else None, "reverted_on": reverted_on, "decided_on": decided_on}
+            "deployed_day_known": day_known if live else None, "reverted_on": reverted_on, "decided_on": decided_on,
+            "released_as": released_as}
 
 
 # ---- the database ----------------------------------------------------------------------------
@@ -438,9 +459,17 @@ def document(changes, *, environment, generated_at, current=None, series=None, f
     """The administrator's model_changes document. changes are as recorded (recorded()), or
     from the files when nothing could be stored (stored=False, and the page says so)."""
     forward_record, live = forward_record or {}, live or {}
+    standings = {c["id"]: standing(c["events"]) for c in changes}
     out = []
     for c in changes:
-        where = standing(c["events"])
+        where = dict(standings[c["id"]])
+        # an experiment released inside a production change is in production while that change is.
+        # It is never itself deployed: it has no forward record and is not in the running total
+        released_as = where.pop("released_as")
+        carrier = standings.get(released_as or "")
+        where["released_in"] = released_as if carrier and carrier["deployed"] else None
+        if where["released_in"]:
+            where["stage"] = f"In production through {released_as}"
         results = [{**e, "experimental": True} for e in c["events"] if e["type"] == "result"]
         out.append({"id": c["id"], **c["registration"], "recorded_at": c["recorded_at"], **where,
                     "events": c["events"], "results": results, "forward": forward_record.get(c["id"]),
