@@ -1,9 +1,8 @@
 # From an idea to the live model
 
 The path every change to the match model takes, from an idea on the Model Change Tracker to the
-model the site shows. Written 2026-10-14 as step 4 of the owner's plan; the owner's own rules in it
-are marked as such, and the rest (one challenger at a time, the largest proven gain first) are
-working defaults until the owner changes them. The parts it uses are in
+model the site shows. Written 2026-10-14 as step 4 of the owner's plan, and confirmed by the owner
+the same day, including one challenger at a time and the largest proven gain first. The parts it uses are in
 `guide/admin-area.md` (the tracker, the switch), `experiments/prospective/PROTOCOLS.md` (P17, P18)
 and `guide/model-versions.md` (releasing a model file).
 
