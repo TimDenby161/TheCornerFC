@@ -84,7 +84,7 @@
 					<tbody>{#each data.steps as s (s.id)}<tr><td>{s.on.slice(0, 7)}</td><td><a class="team-link" href="/admin/changes/{s.id}">{shortId(s.id)} · {s.title}</a></td><td>{s.delta != null ? signed(s.delta) : 'No test recorded'}</td><td>{signed(s.total)}</td></tr>{/each}</tbody></table>
 				<div class="stats-note">Match-model changes that are in production, in the order they went live. Each figure comes from that change's own test on its own sample, so the total is a sum of separate tests and not a measurement. Changes made before this record began were never dated and are not here.</div>
 			</div>
-			<div class="stats-card"><div class="stats-label">2 · Each change against the current version, {data.metricLabel.toLowerCase()}</div>
+			<div class="stats-card mc-wide"><div class="stats-label">2 · Each change against the current version, {data.metricLabel.toLowerCase()}</div>
 				{#if data.deltas.length}
 					<table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Past matches</th><th>Past gain</th><th>Current → with the change</th><th>Live matches</th><th>Live gain</th><th>On live matches</th></tr></thead>
 						<tbody>{#each data.deltas as d (d.id)}
@@ -99,7 +99,7 @@
 						{/each}</tbody></table>
 					<div class="stats-note">{#if data.live}Live matches: {data.live.n.toLocaleString('en-GB')} finished since {data.live.start}{#if data.live.to} (to {data.live.to}){/if}, over {data.live.weeks} week{data.live.weeks === 1 ? '' : 's'}, for the {data.live.tracked} change{data.live.tracked === 1 ? '' : 's'} tracked ({data.live.protocol}). Updated <LocalTime iso={data.live.generated} show="short" />. Nothing is called on live matches before {data.live.matches} matches and {data.live.minWeeks} weeks.{:else}The live record has not been stored yet: it is written by the Live tracking job, on Mondays and Thursdays.{/if} The live gain is the candidate against the current model on the same live matches, with the range it could still lie in; it is judged by a method that allows looking at any time, which is why its range is wide and a call takes many matches.</div>
 					<div class="stats-note"><b>Green means one thing: implement this.</b> A row is green when there is statistical evidence that the change makes the model better, however small the gain: on live matches, or on a test that was not the matches it was built on, and it has been neither rejected nor deployed. No other change is marked green anywhere on this page. A gain that is large but unproven, or rejected, has no colour and says why under its name. Red is a change a test has proven worse. Releasing a green change is still your decision. Green rows come first, then proven gains, then the unproven, then the proven losses. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Past figures are each change's own historical test on its own matches, never a production result.</div>
-				{:else}<div class="stats-note">No change in this selection has a result on {data.metricLabel.toLowerCase()}.</div>{/if}
+				{:else}<div class="stats-note">No change outside production in this selection has a result on {data.metricLabel.toLowerCase()}.</div>{/if}
 			</div>
 		</div>
 

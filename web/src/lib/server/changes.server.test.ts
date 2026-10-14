@@ -40,7 +40,8 @@ describe('the Model Change Tracker', () => {
 		expect(d.tiles[0].note).toBe('2 changes proposed · 1 in production · 0 being tested');
 		expect(d.rows.map((r) => [r.id, r.stage, r.expected, r.result?.word])).toEqual([['MC-0001', 'Tested and rejected', '−0.00070', 'Proven, not ready'], ['MC-0002', 'Deployed to production', 'Not specified', 'Unclear']]);
 		expect(d.rows.map((r) => r.result?.mark)).toEqual(['none', 'none']);                 // a rejected gain and an unproven one: no green
-		expect(d.deltas.find((x) => x.id === 'MC-0001')?.expected).toBe(0.0007);   // written down before the test, shown beside its result
+		expect(d.deltas.find((x) => x.id === 'MC-0001')?.expected).toBe(0.0007);
+		expect(d.deltas.map((x) => x.id)).not.toContain('MC-0002');        // already in production: not a choice to make   // written down before the test, shown beside its result
 		expect(d.steps.map((s) => s.id)).toEqual(['MC-0002']);       // the experiment is never in the production total
 		expect(d.environment).toBe('staging');
 	});

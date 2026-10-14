@@ -76,7 +76,8 @@ export async function load({ fetch, locals, url }) {
 		choices: ch, statuses: doc.statuses, components: doc.components, metrics: Object.entries(METRIC_LABELS).filter(([k]) => doc.changes.some((x) => x.results.some((r) => r.metric === k))),
 		tiles, rows, all: doc.changes.length, metric, metricLabel: METRIC_LABELS[metric],
 		lines: monthLines(doc.series, lineMetric), lineLabel: METRIC_LABELS[lineMetric],
-		deltas: deltaRows(shown, metric, live), steps,
+		// Table 2 is for deciding what to add, so changes already in production are left out of it
+		deltas: deltaRows(shown.filter((x) => !x.deployed), metric, live), steps,
 		model, versus,
 		live: live ? { n: live.n, weeks: live.weeks, start: live.start, to: live.to, generated: live.generated_at, tracked: Object.keys(live.changes).length, protocol: live.protocol, matches: live.minimum.matches, minWeeks: live.minimum.weeks } : null
 	};

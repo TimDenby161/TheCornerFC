@@ -198,6 +198,7 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-clear { align-self: center; color: var(--blue-text); }
 .mc-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 24px; }
 .mc-chart { margin: 6px 0 0; }
+.mc-wide { grid-column: 1 / -1; }
 .mc-chart svg { width: 100%; height: auto; display: block; }
 .mc-line { fill: none; stroke-width: 2; }
 .mc-line.live, .mc-dot.live, .mc-key.live { stroke: var(--series-blue); }
