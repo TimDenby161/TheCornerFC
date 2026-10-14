@@ -94,6 +94,30 @@
    "start": "2026-10-15",
    "target": 6200,
    "extra_time": true
+  },
+  {
+   "date": "2026-10-14",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Final period, refitted on the released club rank",
+   "metric": "log_loss",
+   "delta": -0.00189,
+   "n": 45089,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "baseline": 0.99856,
+   "after": 0.99667,
+   "interval": [
+    -0.00254,
+    -0.00124
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "Yes: still a real gain on top of the club-rank release (MC-0028), two thirds of its 0.0028 on the old model, in every season, every goal market, leagues and cups. Scored on every 90-minute score, ties after extra time counted as draws; on matches finished in 90 minutes only, 0.00199. Seen period: P17 is the unseen test.",
+   "source": "experiments/a18_on_release/results.json"
   }
  ]
 }
