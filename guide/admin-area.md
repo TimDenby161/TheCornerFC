@@ -79,13 +79,19 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   and says of the rest why they are not run. Both are judged by a confidence sequence, which holds
   however often it is looked at, so the ranges are wide. A future release rebases P17 by a dated
   amendment in the same commit instead of closing it.
-- **The live match model** (MC-0029, `db/migrations/20261014_challenger_model.sql`; how an idea
+- **The live match model** (MC-0029, `db/migrations/20261014_challenger_model.sql`, with
+  `20261014_match_model_switch_fix.sql` mending the switch card's answer, and
+  `20261014_match_model_compare.sql` the comparison above the button; how an idea
   gets here is `guide/idea-to-live.md`). Two match
   models run side by side in every run of the predictions: the base model and the same with A18's
   boosted trees (`thecornerfc/models/match_trees.py`). The card at the top of the Model Change
   Tracker names the live one and has the one button that switches it, through
-  `admin_set_match_model()`, which only an administrator can call and which logs every switch
-  (`match_model_switches`). The live model is the one the site, the paper bets and the fantasy
+  `admin_set_match_model()`, which only an administrator can call and which logs every switch.
+  Above the button the card compares the two (`admin_match_model_compare()`): A18's test on past
+  matches, each model's log loss, Brier and right results on the same finished matches since
+  P18's start, P18's verdict and range, and the twenty upcoming fixtures where they differ most;
+  every gap is A18 minus base. The log of switches is
+  `match_model_switches`. The live model is the one the site, the paper bets and the fantasy
   models use, from the next run. Both models' last predictions before each kickoff are kept in
   `challenger_predictions` whichever is live, and P18 compares them on the same matches; the
   prospective snapshots, and so P6, P16 and P17, stay the base model's. While A18 is live, a

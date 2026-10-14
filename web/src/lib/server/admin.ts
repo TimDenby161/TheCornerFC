@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { siteAsk } from '#lib/server/database.ts';
-import { isMatchModel, type MatchModelName } from '#lib/matchModels.ts';
+import { asModelCompare, isMatchModel, type MatchModelName, type ModelCompare } from '#lib/matchModels.ts';
 
 // The Admin area is the site administrator's only. Who that is, the database decides: its
 // am_admin() and admin_doc() answer for the visitor whose own token the request carries, from a
@@ -52,4 +52,10 @@ export async function matchModel(fetch: Fetch, token: string | undefined): Promi
 export async function switchMatchModel(fetch: Fetch, token: string | undefined, live: MatchModelName): Promise<MatchModel | null> {
 	if (!token) return null;
 	return asMatchModel(await siteAsk<MatchModelAnswer>(fetch, 'admin_set_match_model', { p_live: live }, token).catch(() => null));
+}
+// Both match models compared on the same finished and upcoming matches, for an administrator; null
+// for anyone else, or before db/migrations/20261014_match_model_compare.sql is applied.
+export async function matchModelCompare(fetch: Fetch, token: string | undefined): Promise<ModelCompare | null> {
+	if (!token) return null;
+	return asModelCompare(await siteAsk<Partial<ModelCompare> & { ok?: boolean }>(fetch, 'admin_match_model_compare', {}, token).catch(() => null));
 }

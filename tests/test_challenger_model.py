@@ -27,5 +27,53 @@ class MigrationTest(unittest.TestCase):
         self.assertIn("IF NOT site.is_admin() OR p_live IS NULL OR p_live NOT IN ('base', 'a18') THEN", body)
 
 
+FIX = ROOT / 'db/migrations/20261014_match_model_switch_fix.sql'
+# COALESCE, NULLIF, GREATEST and LEAST are SQL grammar, not functions: pg_catalog.coalesce(...)
+# fails on every call. The challenger migration had it and is mended by FIX.
+GRAMMAR = ('pg_catalog.coalesce', 'pg_catalog.nullif', 'pg_catalog.greatest', 'pg_catalog.least')
+
+
+class SwitchFixTest(unittest.TestCase):
+    def test_it_is_in_the_schema_word_for_word(self):
+        self.assertIn(FIX.read_text(), (ROOT / 'db/schema.sql').read_text())
+
+    def test_it_mends_the_switch_answer(self):
+        text = FIX.read_text()
+        self.assertIn('CREATE OR REPLACE FUNCTION public.admin_match_model() RETURNS jsonb', text)
+        self.assertIn('IF NOT site.is_admin() THEN', text)
+        self.assertIn("SELECT COALESCE(pg_catalog.jsonb_agg(", text)
+
+    def test_no_later_migration_calls_grammar_as_a_function(self):
+        for path in sorted((ROOT / 'db/migrations').glob('*.sql')):
+            if path == MIGRATION:
+                continue
+            text = path.read_text().lower()
+            for word in GRAMMAR:
+                self.assertNotIn(word + '(', text, f'{path.name}: {word}')
+
+
+COMPARE = ROOT / 'db/migrations/20261014_match_model_compare.sql'
+
+
+class CompareTest(unittest.TestCase):
+    def test_it_is_in_the_schema_word_for_word(self):
+        self.assertIn(COMPARE.read_text(), (ROOT / 'db/schema.sql').read_text())
+
+    def test_it_answers_an_administrator_only_and_reads_only(self):
+        text = COMPARE.read_text()
+        self.assertIn('LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = \'\' AS $$', text)
+        self.assertIn('IF NOT site.is_admin() THEN', text)
+        self.assertIn("EXECUTE format('REVOKE ALL ON FUNCTION public.admin_match_model_compare() FROM %I', r);", text)
+        self.assertIn('GRANT EXECUTE ON FUNCTION public.admin_match_model_compare() TO authenticated;', text)
+        body = text.split('BEGIN;', 1)[1].split('COMMIT;', 1)[0].upper()
+        for write in ('INSERT ', 'UPDATE ', 'DELETE ', 'CREATE TABLE', 'CREATE TEMP'):
+            self.assertNotIn(write, body)
+
+    def test_it_scores_p18s_population(self):
+        text = COMPARE.read_text()
+        self.assertIn("f.kickoff >= '2026-10-15'::timestamptz AND f.status_short IN ('FT', 'AET', 'PEN')", text)
+        self.assertIn('c.captured_at < f.kickoff AND c.written_at < f.kickoff', text)
+
+
 if __name__ == '__main__':
     unittest.main()

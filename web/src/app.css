@@ -236,6 +236,12 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-sub { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; margin-top: 2px; }
 .mc-sub.mc-inline { display: inline; margin: 0; }
 .mc .calib-table td { vertical-align: top; }
+.mc-compare { margin: 12px 0 14px; }
+.mc-para { margin: 6px 0 10px; font-size: 14px; line-height: 1.45; }
+.mc-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.mc-two td, .mc-two th, .mc-apart td, .mc-apart th { font-variant-numeric: tabular-nums; }
+.mc-apart td { white-space: nowrap; } .mc-apart td:nth-child(2) { white-space: normal; min-width: 160px; }
+.mc-apart tr.mc-differ td { background: color-mix(in srgb, var(--status-warning) 14%, transparent); }
 .mc-rows td:first-child, .mc-table td:first-child { min-width: 180px; white-space: normal; }
 .mc-scroll { overflow-x: auto; }
 .mc-table { min-width: 860px; }
