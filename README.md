@@ -39,6 +39,7 @@ The tables and the records they keep:
 - [The site's data in the database (step 1)](guide/site-data.md)
 - [Accounts](guide/accounts.md)
 - [The Admin area and the model change record](guide/admin-area.md)
+- [From an idea to the live model](guide/idea-to-live.md)
 - [Paid tier (built in part, switched off)](guide/paid-tier.md)
 - [Retention and removing a person](guide/retention.md)
 - [Fantasy expected points (v1.1, evidence only)](guide/fantasy-expected-points.md)

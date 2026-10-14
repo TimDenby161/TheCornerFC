@@ -79,7 +79,8 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   and says of the rest why they are not run. Both are judged by a confidence sequence, which holds
   however often it is looked at, so the ranges are wide. A future release rebases P17 by a dated
   amendment in the same commit instead of closing it.
-- **The live match model** (MC-0029, `db/migrations/20261014_challenger_model.sql`). Two match
+- **The live match model** (MC-0029, `db/migrations/20261014_challenger_model.sql`; how an idea
+  gets here is `guide/idea-to-live.md`). Two match
   models run side by side in every run of the predictions: the base model and the same with A18's
   boosted trees (`thecornerfc/models/match_trees.py`). The card at the top of the Model Change
   Tracker names the live one and has the one button that switches it, through
