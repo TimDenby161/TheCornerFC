@@ -103,7 +103,7 @@
 			</div>
 		</div>
 
-		<div class="stats-card" id="mc-list"><div class="stats-label">{data.rows.length} of {data.all} changes</div>
+		<details class="stats-card mc-list" id="mc-list"><summary class="stats-label">Every change ({data.rows.length} of {data.all}): deployed, rejected and still to decide</summary>
 			{#if data.rows.length}
 				<div class="mc-scroll"><table class="calib-table mc-table"><thead><tr><th>Change</th><th>Date</th><th>Part of the model</th><th>Where it stands</th><th>Expected</th><th>Result</th><th>Since deployment</th></tr></thead>
 					<tbody>{#each data.rows as r (r.id)}
@@ -115,6 +115,6 @@
 							<td>{r.forward ?? '–'}</td></tr>
 					{/each}</tbody></table></div>
 			{:else}<div class="stats-note">No change matches these choices.</div>{/if}
-		</div>
+		</details>
 	{/if}
 </section>

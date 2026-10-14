@@ -199,6 +199,9 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 24px; }
 .mc-chart { margin: 6px 0 0; }
 .mc-wide { grid-column: 1 / -1; }
+.mc-list summary { cursor: pointer; color: var(--blue-text); width: fit-content; }
+.mc-list summary:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
+.mc-list[open] summary { margin-bottom: 8px; }
 .mc-chart svg { width: 100%; height: auto; display: block; }
 .mc-line { fill: none; stroke-width: 2; }
 .mc-line.live, .mc-dot.live, .mc-key.live { stroke: var(--series-blue); }
