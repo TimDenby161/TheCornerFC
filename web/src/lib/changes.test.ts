@@ -88,35 +88,35 @@ describe('the charts', () => {
 		expect(rows.map((r) => r.id)).toEqual(['MC-0004', 'MC-0003', 'MC-0002', 'MC-0005', 'MC-0001']);
 		expect(rows.map((r) => r.tone)).toEqual(['better', 'better', 'unclear', 'unclear', 'worse']);
 	});
-	it('mark a change ready only when a test proves a gain of at least the bar, and list those first', () => {
+	it('mark a change ready when a test proves it better by any amount, and list those first', () => {
 		const proven = (delta: number, more: Partial<Result> = {}) => result({ delta, interval: [delta - 0.0005, delta + 0.0005], ...more });
 		const testing = { status: 'Testing', stage: 'Being tested' };
 		expect(ready(change('x', testing), proven(-0.0028))).toBe(true);
-		expect(ready(change('x', testing), proven(-0.0019))).toBe(false);                               // proven, under the bar
+		expect(ready(change('x', testing), proven(-0.0008))).toBe(true);                                // proven, however small
 		expect(ready(change('x', testing), result({ delta: -0.0074, interval: [-0.0152, 0.0003] }))).toBe(false);   // big, not proven
 		expect(ready(change('x', testing), proven(-0.0035, { evaluation: 'development' }))).toBe(false);  // the matches it was built on
 		expect(ready(change('x', testing), result({ delta: -0.0035, interval: null }))).toBe(false);     // no interval, no proof
 		expect(ready(change('x'), proven(-0.0028))).toBe(false);                                        // rejected
 		expect(ready(change('x', { status: 'Accepted', deployed: true }), proven(-0.0028))).toBe(false); // already in production
-		expect(ready(change('x', testing), proven(-0.01, { metric: 'brier' }))).toBe(false);             // no bar for the measure
+		expect(ready(change('x', testing), proven(-0.01, { metric: 'brier' }))).toBe(true);              // any measure
 		const rows = deltaRows([
 			change('MC-0001', { status: 'Inconclusive', stage: 'Tested, not deployed', results: [proven(-0.0008)] }),
 			change('MC-0002', { ...testing, results: [proven(-0.0028)] }),
 			change('MC-0003', { status: 'Inconclusive', stage: 'Tested, not deployed', results: [proven(-0.0031, { evaluation: 'prospective' })] }),
 			change('MC-0004', { results: [proven(-0.02)] })
 		], 'log_loss');
-		expect(rows.map((r) => [r.id, r.ready])).toEqual([['MC-0003', true], ['MC-0002', true], ['MC-0004', false], ['MC-0001', false]]);
+		expect(rows.map((r) => [r.id, r.ready])).toEqual([['MC-0003', true], ['MC-0002', true], ['MC-0001', true], ['MC-0004', false]]);
 		expect(rows.map((r) => r.readyNote)).toEqual(['Ready: proven on new matches', 'Ready on the historical test; being confirmed on new matches',
-			'Proven on this test, but rejected: see why on its page', 'Proven, but under the 0.002 bar']);
-		expect(rows.map((r) => r.mark)).toEqual(['ready', 'ready', 'none', 'none']);
+			'Ready on the historical test', 'Proven on this test, but rejected: see why on its page']);
+		expect(rows.map((r) => r.mark)).toEqual(['ready', 'ready', 'ready', 'none']);
 	});
 	it('use green for a change that is ready and for nothing else', () => {
 		expect(markOf(true, 'better')).toBe('ready');
-		expect(markOf(false, 'better')).toBe('none');           // proven but small, or rejected: no colour
+		expect(markOf(false, 'better')).toBe('none');           // proven but rejected or deployed: no colour
 		expect(markOf(false, 'unclear')).toBe('none');
 		expect(markOf(false, 'worse')).toBe('worse');
 		const small = result({ delta: -0.0008, interval: [-0.0014, -0.0002] });
-		expect(notReadyNote(change('x', { status: 'Inconclusive' }), small)).toBe('Proven, but under the 0.002 bar');
+		expect(notReadyNote(change('x', { status: 'Inconclusive' }), small)).toBe('');                  // ready, however small
 		expect(notReadyNote(change('x', { status: 'Accepted', deployed: true }), small)).toBe('Already in production');
 		expect(notReadyNote(change('x', { status: 'Testing' }), result({ delta: -0.003, interval: [-0.004, -0.002], evaluation: 'development' }))).toBe('Only measured on the matches it was built on');
 		expect(notReadyNote(change('x', { status: 'Testing' }), result({ delta: -0.003, interval: [-0.006, 0.001] }))).toBe('');   // not proven: nothing to explain
@@ -143,7 +143,7 @@ describe('the charts', () => {
 		expect([by['MC-0002'].mark, by['MC-0002'].liveText]).toEqual(['none', 'Not proven either way yet']);
 		expect([by['MC-0003'].mark, by['MC-0003'].liveText]).toEqual(['worse', 'Proven worse on live matches']);
 		expect(by['MC-0004'].liveText).toBe('Too early: needs 500 matches and 8 weeks');
-		expect([by['MC-0005'].mark, by['MC-0005'].liveText]).toEqual(['none', 'Proven better live, under the bar']);   // proven, small: no green
+		expect([by['MC-0005'].mark, by['MC-0005'].liveText]).toEqual(['ready', 'Proven better on live matches']);     // proven, small: green all the same
 		expect([by['MC-0006'].liveText, by['MC-0006'].liveWhy]).toEqual(['Not run live', 'Testing chose no setting, so there is nothing to run']);
 		expect(rows[0].id).toBe('MC-0001');                                                                      // the ready change leads
 		// with no live record at all, nothing changes

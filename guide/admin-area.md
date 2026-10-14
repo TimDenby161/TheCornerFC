@@ -73,8 +73,9 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   change's live matches, live gain and range. It is judged by a confidence sequence, which holds
   however often it is looked at, so its range is wide: a call takes many more matches than one
   blind read would. The other ten changes say why there is nothing to run.
-- **Green means implement.** A row is green only when there is statistically enough evidence
-  of a gain of at least 0.002, on live matches or on a test that was not the matches it was
+- **Green means implement.** A row is green when there is statistical evidence that the change
+  makes the model better, however small the gain (the owner's rule, 2026-10-14; the 0.002 bar no
+  longer holds a proven gain back), on live matches or on a test that was not the matches it was
   built on, and the change is neither rejected nor deployed. Nothing else about a change is
   green. Releasing it is still a model release of its own, decided by the owner.
 - **Check the files** with `python -m thecornerfc changes` (no database). The unit tests check

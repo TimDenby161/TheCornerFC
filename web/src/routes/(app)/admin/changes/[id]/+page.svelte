@@ -17,7 +17,7 @@
 	<p class="mc-env">{data.environment === 'production' ? 'Production' : data.environment === 'staging' ? 'Staging: test data, not the live record' : 'Environment not named'} · {shortId(c.id)} ({c.id}) · {c.component} · {c.kind}</p>
 	<h2 class="mc-title" id="mc-title">{c.title}</h2>
 	<p><span class="mc-stage {STAGE[c.stage] ?? 'other'}">{c.stage}</span> <span class="mc-sub mc-inline">Status: {c.status} · proposed {c.date}{#if c.deployed_on} · deployed {c.deployed_day_known ? c.deployed_on : c.deployed_on.slice(0, 7)}{/if}</span></p>
-	{#if data.ready}<div class="sim-banner mc-ready-banner">Ready to implement: a test has statistically enough evidence that this is an improvement of at least the bar. Releasing it is your decision.</div>{:else if data.why}<div class="sim-banner">Not marked ready. {data.why}.</div>{/if}
+	{#if data.ready}<div class="sim-banner mc-ready-banner">Ready to implement: a test has statistical evidence that this makes the model better, however small the gain. Releasing it is your decision.</div>{:else if data.why}<div class="sim-banner">Not marked ready. {data.why}.</div>{/if}
 	{#if c.kind === 'experiment'}<div class="sim-banner">An experiment. Its results are tests on past or held-out matches and were never production results; nothing here was deployed.</div>{/if}
 	{#if c.retrospective}<div class="sim-banner">Recorded on {c.recorded}, after the test had been run: the hypothesis and expectation below were taken from the experiment's own files, not written here beforehand.</div>{/if}
 	{#if data.differs.length}<div class="sim-banner mc-alert" role="alert">The register's file no longer matches this record: {data.differs.join('; ')}</div>{/if}

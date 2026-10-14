@@ -193,7 +193,7 @@ export const TAB_INFO: Record<string, TabInfo> = {
 		"key": [
 			[
 				"Log loss",
-				"How surprised the model was by what happened. Lower is better. A change of 0.002 is the bar a change to the match model has to clear."
+				"How surprised the model was by what happened. Lower is better."
 			],
 			[
 				"Brier score",

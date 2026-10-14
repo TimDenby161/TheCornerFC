@@ -41,7 +41,7 @@ export function liveStanding(doc: LiveDoc | null, id: string): { record: LiveRec
 	if (!r) return { record: null, text: 'Not run live', why: doc.not_run[id] ?? 'There is nothing to run' };
 	if (!r.n) return { record: r, text: 'No live matches yet', why: '' };
 	const enough = r.n >= doc.minimum.matches && r.weeks >= doc.minimum.weeks;
-	return { record: r, text: r.verdict === 'better' ? (r.ready ? 'Proven better on live matches' : 'Proven better live, under the bar') : r.verdict === 'worse' ? 'Proven worse on live matches'
+	return { record: r, text: r.verdict === 'better' ? 'Proven better on live matches' : r.verdict === 'worse' ? 'Proven worse on live matches'
 		: enough ? 'Not proven either way yet' : `Too early: needs ${doc.minimum.matches} matches and ${doc.minimum.weeks} weeks`, why: '' };
 }
 
@@ -140,10 +140,10 @@ export const gain = (metric: string, delta: number) => (HIGHER_IS_BETTER.has(met
 export type DeltaRow = { id: string; title: string; stage: string; evaluation: string; delta: number; gain: number; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; mark: Mark; live: LiveTest[];
 	liveRecord: LiveRecord | null; liveText: string; liveWhy: string };
 
-// The one colour rule of the page. Green means one thing only: there is statistically enough
-// evidence that the change is an improvement worth implementing (ready, below). Red means a test
-// has proven it worse. Everything else has no colour, including a gain that is proven but too
-// small, a gain that is large but unproven, and a change that was rejected.
+// The one colour rule of the page. Green means one thing only: there is statistical evidence
+// that the change makes the model better, however small the gain (ready, below; the owner's rule,
+// 2026-10-14). Red means a test has proven it worse. Everything else has no colour, including a
+// gain that is large but unproven, and a change that was rejected.
 export type Mark = 'ready' | 'worse' | 'none';
 export const markOf = (isReady: boolean, t: Tone): Mark => (isReady ? 'ready' : t === 'worse' ? 'worse' : 'none');
 // Why a proven gain is not green, in a few words; '' where there is nothing to explain
@@ -151,18 +151,15 @@ export function notReadyNote(c: Pick<Change, 'status' | 'deployed'>, r: Pick<Res
 	if (ready(c, r) || tone(r) !== 'better') return '';
 	if (c.deployed) return 'Already in production';
 	if (c.status === 'Rejected' || c.status === 'Reverted') return 'Proven on this test, but rejected: see why on its page';
-	if (r.evaluation === 'development') return 'Only measured on the matches it was built on';
-	return BAR[r.metric] != null ? `Proven, but under the ${BAR[r.metric]} bar` : 'Proven, but this measure has no bar';
+	return r.evaluation === 'development' ? 'Only measured on the matches it was built on' : '';
 }
 
-// The bar a change has to clear before it can be put forward for production: a gain of this
-// much on the measure (experiments/STAGE_E_DECISION.md). Measures with no bar are never "ready".
-export const BAR: Record<string, number> = { log_loss: 0.002, goal_markets_log_loss: 0.002 };
 // Ready to implement: a test (not the matches it was built on) has enough data to prove the
-// change better, by at least the bar, and it has been neither rejected nor already deployed.
+// change better, by any amount, and it has been neither rejected nor already deployed. The
+// 0.002 bar of experiments/STAGE_E_DECISION.md no longer holds a proven gain back from green.
 // It says the evidence is there; releasing it is still the owner's decision.
 export function ready(c: Pick<Change, 'status' | 'deployed'>, r: Pick<Result, 'metric' | 'delta' | 'interval' | 'evaluation'>): boolean {
-	return !c.deployed && c.status !== 'Rejected' && c.status !== 'Reverted' && r.evaluation !== 'development' && tone(r) === 'better' && BAR[r.metric] != null && gain(r.metric, r.delta) >= BAR[r.metric];
+	return !c.deployed && c.status !== 'Rejected' && c.status !== 'Reverted' && r.evaluation !== 'development' && tone(r) === 'better';
 }
 const ORDER: Record<Tone, number> = { better: 0, unclear: 1, worse: 2 };
 export function deltaRows(changes: Change[], metric: string, liveDoc: LiveDoc | null = null): DeltaRow[] {
@@ -170,9 +167,10 @@ export function deltaRows(changes: Change[], metric: string, liveDoc: LiveDoc | 
 		const r = headline(c, metric);
 		if (!r) return [];
 		const past = ready(c, r);
-		// the live record speaks for log loss only, and never for a change that is already in production
+		// the live record speaks for log loss only, and never for a change that is already in production.
+		// Its own ready flag holds the 0.002 bar (live_p15.py, pinned with P15), so the verdict decides here
 		const now = liveStanding(metric === 'log_loss' ? liveDoc : null, c.id);
-		const liveReady = !!now.record?.ready && !c.deployed, liveWorse = now.record?.verdict === 'worse';
+		const liveReady = now.record?.verdict === 'better' && !c.deployed, liveWorse = now.record?.verdict === 'worse';
 		const ok = past || liveReady;
 		const readyNote = liveReady ? 'Ready: proven on live matches' : !past ? notReadyNote(c, r) : r.evaluation === 'prospective' ? 'Ready: proven on new matches'
 			: c.status === 'Testing' ? 'Ready on the historical test; being confirmed on new matches' : 'Ready on the historical test';
