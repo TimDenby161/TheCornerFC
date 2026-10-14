@@ -2,14 +2,15 @@
 -- Two match models side by side, with a switch (owner's decision 2026-10-14, step 3 of the plan
 -- after P17 and the A18 refit): the jobs run the club-rank model ('base', MC-0028) and the same
 -- model with A18's boosted trees on top ('a18'). The one the switch names writes
--- fixture_predictions, which the site, the paper bets and everything else read; the other's last
--- prediction before each kickoff is kept in challenger_predictions, so the two can be compared on
--- the same matches (protocol P18).
+-- fixture_predictions, which the site, the paper bets and everything else read; each model's last
+-- prediction before each kickoff is kept in challenger_predictions, whichever is live, so the two
+-- can be compared on the same matches (protocol P18) and A18 always learns from the base model's
+-- own history.
 --
 --   match_model_switch       one row: which model is live. Changed only through
 --                            admin_set_match_model(), by an administrator (site_admins).
 --   match_model_switches     every change of it, in order: when, which way, by whom. Append only.
---   challenger_predictions   the model that is not live: one row per fixture and model, rewritten
+--   challenger_predictions   every model, live or not: one row per fixture and model, rewritten
 --                            by each run until kickoff and never after it, so it keeps the last
 --                            prediction made before the match.
 --   admin_match_model()      {"ok": true, "live": ..., "switches": [...]} for an administrator,

@@ -13,12 +13,15 @@ code run before kickoffs.
   `base`'s own errors, as `experiments/a18_on_release` measured it: log loss 0.0019 better on the
   final period (95% 0.0012 to 0.0025), a seen period.
 
-Every run of the jobs works out both for every upcoming fixture. The switch
-(`match_model_switch`, set from the Admin area) names the live one, which writes
-`fixture_predictions` and its prospective snapshots as now, so the site, the paper bets, the
-fantasy models and the records all follow it. The other's prediction goes to
-`challenger_predictions`, rewritten by each run until kickoff and never after. Each snapshot's
-inputs say which model made it (`match_model`). Migration `20261014_challenger_model.sql`.
+Every run of the jobs works out both for every upcoming fixture. `base` is made as now
+(`predictions.update_predictions`, unchanged, with its prospective snapshots, so P16 and P17 go
+on reading it). A new step after it, in its own model file, works out `a18` on top of `base`'s
+projections and writes both models' predictions to `challenger_predictions`, rewritten by each run
+until kickoff and never after, whichever is live: so `a18` always learns from `base`'s own history.
+When the switch (`match_model_switch`, set from the Admin area) names `a18`, that step also
+writes `a18`'s predictions over `base`'s in `fixture_predictions`, which the site, the paper bets
+and the fantasy models read. The prospective snapshots stay `base`'s either way (amendment 14).
+Migration `20261014_challenger_model.sql`.
 
 ## Built into production, checked against the experiment
 
@@ -31,10 +34,9 @@ A18's three parts (the features, the weekly Poisson model and the trees) are por
 - **Hypothesis.** `a18`'s predictions have lower result log loss than `base`'s on the same live
   fixtures.
 - **Population.** Finished fixtures with a 90-minute score (ties after extra time count as the
-  draws they were) kicking off from the first day after the release reaches `main`, whose latest
-  prospective snapshot before kickoff says which model made it, and whose other model's row in
-  `challenger_predictions` was written before kickoff. Whichever model was live, both
-  predictions were made before the match.
+  draws they were) kicking off from the first day after the release reaches `main`, with both
+  models' rows in `challenger_predictions` captured and written before kickoff. Whichever model
+  was live, both predictions were made before the match; the switch log says which was.
 - **Comparison.** Mean paired log loss, `a18` minus `base`.
 - **The method.** P15's confidence sequence (`live_p15.track`, imported), the whole 5% on this
   one comparison, nothing called before 500 fixtures and 8 weeks, a call standing once made.
