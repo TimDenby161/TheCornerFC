@@ -42,6 +42,12 @@
    "start": "2026-10-15",
    "target": 27000,
    "extra_time": true
+  },
+  {
+   "date": "2026-10-14",
+   "type": "deployed",
+   "commit": "b0bacc0e3",
+   "note": "Promoted to main on 2026-10-14; the new match-model version is registered by the first scheduled run after it."
   }
  ]
 }
