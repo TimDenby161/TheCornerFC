@@ -42,6 +42,12 @@
    "start": "2026-10-15",
    "target": 26000,
    "extra_time": true
+  },
+  {
+   "date": "2026-10-14",
+   "type": "deployed",
+   "commit": "f98c0d10a",
+   "note": "Promoted to main on 2026-10-14 with the base model live; a18 is worked out beside it from the first scheduled run after it, and the switch is the owner's."
   }
  ]
 }

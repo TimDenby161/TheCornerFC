@@ -1,4 +1,4 @@
--- Repeatable. Applied 2026-10-14 to staging; not yet to production.
+-- Repeatable. Applied 2026-10-14, to staging and to production.
 -- Two match models side by side, with a switch (owner's decision 2026-10-14, step 3 of the plan
 -- after P17 and the A18 refit): the jobs run the club-rank model ('base', MC-0028) and the same
 -- model with A18's boosted trees on top ('a18'). The one the switch names writes
