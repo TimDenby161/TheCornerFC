@@ -1,0 +1,38 @@
+{
+ "id": "MC-0029",
+ "registration": {
+  "recorded": "2026-10-14",
+  "retrospective": false,
+  "date": "2026-10-14",
+  "title": "A18 as the stored challenger beside the live model, with a switch",
+  "component": "Whole model",
+  "model": "match",
+  "kind": "production change",
+  "what": "Every run works out two match models: the club-rank model ('base') and the same with A18's boosted trees on top ('a18'). A switch in the Admin area names the live one, which the site and the paper bets use; the other's prediction is stored before each kickoff.",
+  "why": "The owner wants models side by side, switchable with a button, each tracked on the same live matches from predictions made before kickoff, rather than re-created afterwards.",
+  "how": "A18's features, weekly Poisson model and trees ported into the production code and checked against the experiment on every past fixture; the trees retrained each half-season on the base model's errors. Migration 20261014_challenger_model.sql: the switch, its log and the challenger's predictions.",
+  "hypothesis": "On live matches, 'a18' has lower result log loss than 'base'.",
+  "expected": {
+   "improves": "Result log loss and the goal markets.",
+   "metrics": [
+    {
+     "metric": "log_loss",
+     "delta": -0.00189,
+     "low": -0.00254,
+     "high": -0.00124,
+     "source": "experiments/a18_on_release/results.json: A18 refitted on the released club rank, final period at 95% (a seen period)"
+    }
+   ],
+   "betting": null,
+   "confidence": "The final period had been looked at before; P17 and P18 are the tests on unseen matches.",
+   "evidence": "experiments/challenger/DESIGN.md"
+  },
+  "success_criteria": "Protocol P18: the confidence sequence of a18 minus base log loss on live matches, both stored before kickoff. Proven better: the owner may switch to a18. Proven worse: the owner is told.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/challenger",
+   "model_version": null
+  }
+ },
+ "events": []
+}
