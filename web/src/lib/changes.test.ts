@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, expectedRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
-	gain, liveStanding, liveText, markOf, notReadyNote, reach, ready, scale, shortId, signed, ticks, tone, type Change, type LiveDoc, type LiveRecord, type Result
+	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, filterChanges, forwardSummary, headline, intervalText, monthLines, percent,
+	gain, liveStanding, liveText, markOf, notReadyNote, ready, scale, shortId, signed, ticks, tone, type Change, type LiveDoc, type LiveRecord, type Result
 } from './changes';
 
 const result = (over: Partial<Result> = {}): Result => ({
@@ -75,7 +75,12 @@ describe('the charts', () => {
 	it('give each change with a result on the measure a row', () => {
 		const rows = deltaRows([change('MC-0001'), change('MC-0002', { results: [] }), change('MC-0003', { results: [result({ metric: 'brier' })] })], 'log_loss');
 		expect(rows.map((r) => r.id)).toEqual(['MC-0001']);
-		expect(rows[0]).toMatchObject({ delta: -0.00076, gain: 0.00076, tone: 'better', before: 0.9936, after: 0.99284 });
+		expect(rows[0]).toMatchObject({ delta: -0.00076, gain: 0.00076, tone: 'better', before: 0.9936, after: 0.99284, expected: null });
+	});
+	it('carry the gain a change wrote down before it was tested, on the same measure, as a gain', () => {
+		const hoped = { improves: 'log loss', metrics: [{ metric: 'log_loss', delta: -0.0007, source: 'DESIGN.md' }], betting: null, confidence: null, evidence: null };
+		expect(deltaRows([change('MC-0001', { expected: hoped })], 'log_loss')[0].expected).toBe(0.0007);
+		expect(deltaRows([change('MC-0001', { expected: hoped, results: [result({ metric: 'brier' })] })], 'brier')[0].expected).toBeNull();
 	});
 	it('put the best change first: proven gains, then the unproven, then the proven losses', () => {
 		const rows = deltaRows([
@@ -166,18 +171,6 @@ describe('the charts', () => {
 		expect(gain('accuracy', 0.01)).toBe(0.01);
 		expect(gain('log_loss', 0)).toBe(0);
 	});
-	it('set an expectation beside a test, never beside the figure a change was built on', () => {
-		const hoped = { improves: 'log loss', metrics: [{ metric: 'log_loss', delta: -0.0007, low: -0.0011, high: -0.0003, source: 'DESIGN.md' }], betting: null, confidence: null, evidence: null };
-		const rows = expectedRows([
-			change('MC-0001', { expected: hoped }),
-			change('MC-0002', { expected: hoped, results: [result({ evaluation: 'development', delta: -0.0035 })] }),
-			change('MC-0003')
-		]);
-		expect(rows.map((r) => r.id)).toEqual(['MC-0001', 'MC-0002']);
-		expect(rows[0]).toMatchObject({ expected: -0.0007, range: [-0.0011, -0.0003], actual: -0.00076, actualFrom: 'backtest' });
-		expect(rows[0].gap).toBeCloseTo(-0.00006, 6);
-		expect(rows[1]).toMatchObject({ actual: null, gap: null });
-	});
 	it('add up only the changes that are in production, in the order they went live', () => {
 		const steps = cumulative([
 			change('MC-0003', { deployed: true, deployed_on: '2026-11-01', results: [result({ delta: -0.002 })] }),
@@ -204,8 +197,6 @@ describe('the charts', () => {
 		expect(ticks(0.97, 1.01)).toEqual([0.98, 1]);
 		expect(ticks(-0.004, 0)).toEqual([-0.004, -0.003, -0.002, -0.001, 0]);
 		expect(ticks(1, 1)).toEqual([1]);
-		expect(reach([-0.003, 0.001, null, undefined])).toBe(0.003);
-		expect(reach([])).toBe(1);
 	});
 });
 

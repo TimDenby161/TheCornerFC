@@ -1,6 +1,6 @@
 import {
 	EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows,
-	expectedRows, filterChanges, headline, intervalText, markOf, monthLines, ready, shortId, signed, tone
+	filterChanges, headline, intervalText, markOf, monthLines, ready, shortId, signed, tone
 } from '#lib/changes.ts';
 import { fail } from '@sveltejs/kit';
 import { matchModel, matchModelCompare, switchMatchModel } from '#lib/server/admin.ts';
@@ -8,7 +8,7 @@ import { changesDoc, liveDoc } from '#lib/server/changes.ts';
 import { apartRow, isMatchModel, scoreRows, upcomingSummary } from '#lib/matchModels.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 
-// The Model Change Tracker: the figures at the top, four charts and the list, for the choices in
+// The Model Change Tracker: the figures at the top, three charts and the list, for the choices in
 // the address. The administrator's only (hooks.server.ts, and the database again for the document).
 const CHALLENGER = 'MC-0029';
 
@@ -76,7 +76,7 @@ export async function load({ fetch, locals, url }) {
 		choices: ch, statuses: doc.statuses, components: doc.components, metrics: Object.entries(METRIC_LABELS).filter(([k]) => doc.changes.some((x) => x.results.some((r) => r.metric === k))),
 		tiles, rows, all: doc.changes.length, metric, metricLabel: METRIC_LABELS[metric],
 		lines: monthLines(doc.series, lineMetric), lineLabel: METRIC_LABELS[lineMetric],
-		deltas: deltaRows(shown, metric, live), expected: expectedRows(shown), steps,
+		deltas: deltaRows(shown, metric, live), steps,
 		model, versus,
 		live: live ? { n: live.n, weeks: live.weeks, start: live.start, to: live.to, generated: live.generated_at, tracked: Object.keys(live.changes).length, protocol: live.protocol, matches: live.minimum.matches, minWeeks: live.minimum.weeks } : null
 	};

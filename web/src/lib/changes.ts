@@ -139,7 +139,7 @@ export const gain = (metric: string, delta: number) => (HIGHER_IS_BETTER.has(met
 // measure, best first. Changes proven better (their interval leaves zero out) lead, by gain; then
 // the ones not proven either way, by gain; then the ones proven worse. So a large figure on a
 // handful of matches never sits above a smaller one that is proven.
-export type DeltaRow = { id: string; title: string; stage: string; evaluation: string | null; delta: number | null; gain: number | null; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; mark: Mark; live: LiveTest[];
+export type DeltaRow = { id: string; title: string; stage: string; evaluation: string | null; delta: number | null; gain: number | null; expected: number | null; interval: [number, number] | null; tone: Tone; before: number | null; after: number | null; n: number | null; ready: boolean; readyNote: string; mark: Mark; live: LiveTest[];
 	liveRecord: LiveRecord | null; liveText: string; liveWhy: string };
 
 // The one colour rule of the page. Green means one thing only: there is statistical evidence
@@ -167,6 +167,9 @@ const ORDER: Record<Tone, number> = { better: 0, unclear: 1, worse: 2 };
 export function deltaRows(changes: Change[], metric: string, liveDoc: LiveDoc | null = null): DeltaRow[] {
 	return changes.flatMap((c): DeltaRow[] => {
 		const r = headline(c, metric);
+		// the gain the change wrote down before it was tested, on this measure, as a gain
+		const hoped = c.expected.metrics.find((m) => m.metric === metric);
+		const expected = hoped ? gain(metric, hoped.delta) : null;
 		// the live record speaks for log loss only, and never for a change that is already in production.
 		// Its own ready flag holds the 0.002 bar (live_p15.py, pinned), so the verdict decides here
 		const now = liveStanding(metric === 'log_loss' ? liveDoc : null, c.id);
@@ -175,30 +178,19 @@ export function deltaRows(changes: Change[], metric: string, liveDoc: LiveDoc | 
 			// a change with no past result is listed only for its live record (the club-rank release, P16)
 			if (!now.record) return [];
 			const note = c.deployed ? 'In production: checked on live matches' : liveReady ? 'Ready: proven on live matches' : '';
-			return [{ id: c.id, title: c.title, stage: c.stage, evaluation: null, delta: null, gain: null, interval: null, tone: 'unclear' as Tone, before: null, after: null, n: null,
+			return [{ id: c.id, title: c.title, stage: c.stage, evaluation: null, delta: null, gain: null, expected, interval: null, tone: 'unclear' as Tone, before: null, after: null, n: null,
 				ready: liveReady, readyNote: note, mark: liveReady ? 'ready' as Mark : liveWorse ? 'worse' as Mark : 'none' as Mark, live: c.live ?? [], liveRecord: now.record, liveText: now.text, liveWhy: now.why }];
 		}
 		const past = ready(c, r);
 		const ok = past || liveReady;
 		const readyNote = liveReady ? 'Ready: proven on live matches' : !past ? notReadyNote(c, r) : r.evaluation === 'prospective' ? 'Ready: proven on new matches'
 			: c.status === 'Testing' ? 'Ready on the historical test; being confirmed on new matches' : 'Ready on the historical test';
-		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n,
+		return [{ id: c.id, title: c.title, stage: c.stage, evaluation: r.evaluation, delta: r.delta, gain: gain(metric, r.delta), expected, interval: r.interval, tone: tone(r), before: r.baseline, after: r.after, n: r.n,
 			ready: ok, readyNote, mark: ok ? 'ready' as Mark : liveWorse ? 'worse' as Mark : markOf(false, tone(r)), live: c.live ?? [], liveRecord: now.record, liveText: now.text, liveWhy: now.why }];
 	}).sort((a, b) => Number(b.ready) - Number(a.ready) || ORDER[a.tone] - ORDER[b.tone] || (b.gain ?? -Infinity) - (a.gain ?? -Infinity) || (a.id < b.id ? -1 : 1));
 }
 
-// Chart 3, expected against actual: every change that recorded a number beforehand, with what a
-// test (never a development figure) then showed on the same measure, or null while there is none
-export type ExpectedRow = { id: string; title: string; metric: string; expected: number; range: [number, number] | null; actual: number | null; actualFrom: string | null; gap: number | null };
-export function expectedRows(changes: Change[]): ExpectedRow[] {
-	return changes.flatMap((c) => c.expected.metrics.map((m) => {
-		const tested = c.results.filter((r) => r.metric === m.metric && r.evaluation !== 'development').sort((a, b) => RANK[a.evaluation] - RANK[b.evaluation])[0];
-		return { id: c.id, title: c.title, metric: m.metric, expected: m.delta, range: m.low != null && m.high != null ? [m.low, m.high] as [number, number] : null,
-			actual: tested ? tested.delta : null, actualFrom: tested ? tested.evaluation : null, gap: tested ? tested.delta - m.delta : null };
-	}));
-}
-
-// Chart 4, the running total across the versions that went to production: each deployed change's
+// Chart 3, the running total across the versions that went to production: each deployed change's
 // own backtest gain on the measure, added in the order they went live. The samples differ from
 // change to change, so the total is a sum of separate tests, not one measurement.
 export type Step = { id: string; title: string; on: string; delta: number | null; total: number };
@@ -261,11 +253,6 @@ export function ticks(lo: number, hi: number, about = 4): number[] {
 	for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toFixed(10));
 	return out;
 }
-// The widest a set of changes and their intervals reach either side of zero, for a shared scale
-export function reach(values: (number | null | undefined)[]): number {
-	return Math.max(0, ...values.filter((v): v is number => v != null).map(Math.abs)) || 1;
-}
-
 // The forward record in a sentence each: what was expected, what the backtest gave, what has
 // been seen since, and how far the last is from the first
 export function forwardSummary(c: Change, metric = 'log_loss') {
