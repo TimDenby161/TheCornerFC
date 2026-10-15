@@ -20,6 +20,11 @@
 		<div class="empty-state">The model change record has not been stored yet. It is written by the next export after the Admin migration is applied.</div>
 	{:else}
 		<p class="mc-env" id="mc-env">{data.environment === 'production' ? 'Production' : data.environment === 'staging' ? 'Staging: test data, not the live record' : 'Environment not named'} · updated <LocalTime iso={data.generated} show="short" /> <LocalTime iso={data.generated} show="time" /></p>
+		<div class="stats-grid mc-tiles" id="mc-tiles">
+			{#each data.tiles as t (t.label)}
+				<div class="stats-card"><div class="stats-label">{t.label}</div><div class="stats-value mc-value"><span class={t.cls}>{t.value}</span></div><div class="stats-note">{t.note}</div></div>
+			{/each}
+		</div>
 		{#if data.model}
 			<div class="stats-card mc-switch" id="mc-switch"><div class="stats-value mc-value">Model Comparison</div>
 				{#if data.versus}{@const v = data.versus}
@@ -58,12 +63,6 @@
 			<div class="sim-banner mc-alert" role="alert">A file in the register no longer matches what was first recorded. The record below is the first version; put a mistake right with a correction, not an edit.
 				<ul>{#each data.differs as line (line)}<li>{line}</li>{/each}</ul></div>
 		{/if}
-
-		<div class="stats-grid mc-tiles" id="mc-tiles">
-			{#each data.tiles as t (t.label)}
-				<div class="stats-card"><div class="stats-label">{t.label}</div><div class="stats-value mc-value"><span class={t.cls}>{t.value}</span></div><div class="stats-note">{t.note}</div></div>
-			{/each}
-		</div>
 
 		<form class="mc-filters" id="mc-filters" method="GET" action="/admin/changes" data-sveltekit-reset="false">
 			<label>Status <select name="status"><option value="all">All</option>{#each data.statuses as s (s)}<option value={s} selected={data.choices.status === s}>{s}</option>{/each}</select></label>
