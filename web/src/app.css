@@ -196,9 +196,8 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-filters label { display: grid; gap: 3px; }
 .mc-filters select, .mc-filters input { font: inherit; font-weight: 400; color: var(--text-primary); background: var(--page-plane); border: 1px solid var(--border); border-radius: 4px; padding: 5px 6px; min-height: 30px; }
 .mc-clear { align-self: center; color: var(--blue-text); }
-.mc-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 24px; }
 .mc-chart { margin: 6px 0 0; }
-.mc-wide { grid-column: 1 / -1; }
+.mc-sections .stats-card { margin-bottom: 18px; }
 .mc-fold { margin: 12px 0 4px; }
 .mc-fold summary { cursor: pointer; color: var(--blue-text); width: fit-content; padding: 4px 0; font-size: 14px; }
 .mc-fold summary:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
@@ -266,5 +265,5 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-events th:nth-child(3) { text-align: left; }
 @media (min-width: 900px) {
 	.mc-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-	.mc-charts, .mc-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.mc-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

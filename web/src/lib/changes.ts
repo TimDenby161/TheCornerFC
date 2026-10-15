@@ -209,18 +209,6 @@ export function cumulative(changes: Change[], metric = 'log_loss', model = 'matc
 	});
 }
 
-// Chart 3's points: one for each deployed change, labelled by its month and number, so two
-// changes that went live in the same month are two points and never one label twice
-export const stepPoints = (steps: Step[]) => steps.map((s) => ({ x: `${s.on.slice(0, 7)} ${shortId(s.id)}`, value: s.total, note: s.title }));
-
-// Chart 1, the model's results by month on a measure: one line for the predictions stored before
-// kickoff and one for the reconstructed history, which is today's code replayed and so not a
-// record of what any earlier version said. A month with under `floor` matches is left out.
-export type Line = { source: 'live' | 'backfill'; points: { month: string; value: number; n: number }[] };
-export function monthLines(series: SeriesPoint[], metric: 'log_loss' | 'brier', floor = 200): Line[] {
-	return (['backfill', 'live'] as const).map((source) => ({ source, points: series.filter((s) => s.source === source && s.n >= floor).map((s) => ({ month: s.month, value: s[metric], n: s.n })) })).filter((l) => l.points.length);
-}
-
 // The model beside the simplest forecaster there is: one that gives every match the same three
 // chances, the shares of home wins, draws and away wins in the months before the live record
 // began. Both are scored on the live record's matches (the predictions stored before kickoff).

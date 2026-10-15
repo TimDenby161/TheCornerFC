@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, filterChanges, stepPoints, forwardSummary, inProduction, headline, intervalText, monthLines, percent,
+	NO_CHOICES, againstBaseRates, bestWaiting, choicesFrom, counts, cumulative, deltaRows, filterChanges, forwardSummary, inProduction, headline, intervalText, percent,
 	gain, liveStanding, liveText, markOf, notReadyNote, ready, scale, shortId, signed, ticks, tone, type Change, type LiveDoc, type LiveRecord, type Result
 } from './changes';
 
@@ -192,20 +192,6 @@ describe('the charts', () => {
 		expect(steps.map((s) => s.id)).toEqual(['MC-0001', 'MC-0003', 'MC-0005']);
 		expect(steps.map((s) => s.delta)).toEqual([-0.00113, -0.002, null]);
 		expect(steps[2].total).toBeCloseTo(-0.00313, 6);
-	});
-	it('give two changes deployed in the same month two points with different labels', () => {
-		const points = stepPoints(cumulative([
-			change('MC-0028', { deployed: true, deployed_on: '2026-10-14', results: [result({ delta: -0.002 })] }),
-			change('MC-0029', { deployed: true, deployed_on: '2026-10-14', results: [] })
-		]));
-		expect(points.map((p) => p.x)).toEqual(['2026-10 A28', '2026-10 A29']);
-	});
-	it('keep the stored record and the reconstructed history as separate lines, without thin months', () => {
-		const lines = monthLines([
-			{ month: '2026-08', source: 'backfill', n: 1500, log_loss: 0.99, brier: 0.59 }, { month: '2026-09', source: 'backfill', n: 900, log_loss: 1.0, brier: 0.6 },
-			{ month: '2026-09', source: 'live', n: 150, log_loss: 0.9, brier: 0.5 }, { month: '2026-10', source: 'live', n: 600, log_loss: 0.97, brier: 0.58 }
-		], 'log_loss');
-		expect(lines.map((l) => [l.source, l.points.map((p) => p.month)])).toEqual([['backfill', ['2026-08', '2026-09']], ['live', ['2026-10']]]);
 	});
 	it('place figures on a straight scale with round steps', () => {
 		const x = scale([-0.004, 0.004], [0, 200]);

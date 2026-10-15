@@ -1,6 +1,6 @@
 import {
 	EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, againstBaseRates, bestWaiting, choicesFrom, cumulative, deltaRows,
-	filterChanges, headline, inProduction, intervalText, markOf, monthLines, ready, shortId, signed, tone
+	filterChanges, headline, inProduction, intervalText, markOf, ready, shortId, signed, tone
 } from '#lib/changes.ts';
 import { fail } from '@sveltejs/kit';
 import { matchModel, matchModelCompare, switchMatchModel } from '#lib/server/admin.ts';
@@ -8,7 +8,7 @@ import { changesDoc, liveDoc } from '#lib/server/changes.ts';
 import { apartRow, isMatchModel, pastRows, scoreRows } from '#lib/matchModels.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 
-// The Model Change Tracker: the figures at the top, three charts and the list, for the choices in
+// The Model Change Tracker: the figures at the top, the model comparison, two tables and the list, for the choices in
 // the address. The administrator's only (hooks.server.ts, and the database again for the document).
 // A18's own record, and the results file of its test on past matches against the released club rank
 const A18 = 'MC-0018', A18_PAST = 'experiments/a18_on_release/results.json';
@@ -57,7 +57,6 @@ export async function load({ fetch, locals, url }) {
 			forward: x.forward?.verdict ?? null
 		};
 	});
-	const lineMetric = metric === 'brier' ? 'brier' : 'log_loss';
 	// The model comparison above the switch: the bookmakers, the base model and A18 on A18's test
 	// on past matches (its change record) and on the same finished live matches, and where the
 	// two models part on the fixtures to come.
@@ -70,7 +69,6 @@ export async function load({ fetch, locals, url }) {
 		tabHead, ready: true as const, environment: doc.environment, generated: doc.generated_at, stored: doc.stored, differs: doc.differs,
 		choices: ch, statuses: doc.statuses, components: doc.components, metrics: Object.entries(METRIC_LABELS).filter(([k]) => doc.changes.some((x) => x.results.some((r) => r.metric === k))),
 		tiles, rows, all: doc.changes.length, metric, metricLabel: METRIC_LABELS[metric],
-		lines: monthLines(doc.series, lineMetric), lineLabel: METRIC_LABELS[lineMetric],
 		// Table 2 is for deciding what to add, so changes already in production, themselves or inside
 		// a release, are left out of it
 		deltas: deltaRows(shown.filter((x) => !inProduction(x)), metric, live), steps,
