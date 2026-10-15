@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ChangeLines from '#lib/components/ChangeLines.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
-	import { METRIC_LABELS, shortId, signed } from '#lib/changes.ts';
+	import { METRIC_LABELS, shortId, signed, stepPoints } from '#lib/changes.ts';
 	import { MATCH_MODEL_LABELS, otherModel } from '#lib/matchModels.ts';
 
 	let { data, form } = $props();
@@ -78,7 +78,7 @@
 			</div>
 			<div class="stats-card"><div class="stats-label">3 · Running total across deployed versions, log loss</div>
 				{#if data.steps.some((s) => s.delta != null)}
-					<ChangeLines label="Cumulative change in log loss across deployed changes" zero places={4} series={[{ name: 'Sum of each deployed change’s own backtest', cls: 'live', points: data.steps.map((s) => ({ x: s.on.slice(0, 7), value: s.total, note: s.title })) }]} />
+					<ChangeLines label="Cumulative change in log loss across deployed changes" zero places={4} series={[{ name: 'Sum of each deployed change’s own backtest', cls: 'live', points: stepPoints(data.steps) }]} />
 				{/if}
 				<table class="calib-table mc-steps"><thead><tr><th>Deployed</th><th>Change</th><th>Its backtest</th><th>Total</th></tr></thead>
 					<tbody>{#each data.steps as s (s.id)}<tr><td>{s.on.slice(0, 7)}</td><td><a class="team-link" href="/admin/changes/{s.id}">{shortId(s.id)} · {s.title}</a></td><td>{s.delta != null ? signed(s.delta) : 'No test recorded'}</td><td>{signed(s.total)}</td></tr>{/each}</tbody></table>
