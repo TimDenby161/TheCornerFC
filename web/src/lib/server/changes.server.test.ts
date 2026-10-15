@@ -33,11 +33,9 @@ describe('the Model Change Tracker', () => {
 	it('gives the eight figures, the charts and the list for an administrator', async () => {
 		const d = await list(event({ ok: true, doc }));
 		if (!d.ready) throw new Error('not ready');
-		expect(d.tiles.map((t) => t.label)).toEqual(['Production model', 'Log loss · Brier now', 'Right result now', 'Against guessing the base rates', 'Against the bookmakers',
-			'Gained since the earliest dated version', 'Best proven gain not yet in production', 'Matches in the latest evaluation']);
-		expect(d.tiles.map((t) => t.value)).toEqual(['match-prediction', '0.9867 · 0.5885', '52.3%', 'Not recorded', '+0.0203', '+0.00113', 'None yet', '740']);
+		expect(d.tiles.map((t) => t.label)).toEqual(['Base log loss', 'vs Bookmakers', 'vs Guessing', 'Matches', 'Brier score', 'Improvement', 'Best gain not in production', 'Right results']);
+		expect(d.tiles.map((t) => t.value)).toEqual(['0.9867', '+0.0203', 'Not recorded', '740', '0.5885', '−0.00113', 'None yet', '52.3%']);   // minus is better throughout
 		expect(d.tiles.some((t) => /^(Accepted|Rejected)/.test(t.label))).toBe(false);
-		expect(d.tiles[0].note).toBe('2 changes proposed · 1 in production · 0 being tested');
 		expect(d.rows.map((r) => [r.id, r.stage, r.expected, r.result?.word])).toEqual([['MC-0001', 'Tested and rejected', '−0.00070', 'Proven, not ready'], ['MC-0002', 'Deployed to production', 'Not specified', 'Unclear']]);
 		expect(d.rows.map((r) => r.result?.mark)).toEqual(['none', 'none']);                 // a rejected gain and an unproven one: no green
 		expect(d.deltas.find((x) => x.id === 'MC-0001')?.expected).toBe(0.0007);
