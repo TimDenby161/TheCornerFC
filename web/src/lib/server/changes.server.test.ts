@@ -36,18 +36,10 @@ describe('the Model Change Tracker', () => {
 		expect(d.tiles.map((t) => t.label)).toEqual(['Base log loss', 'vs Bookmakers', 'vs Guessing', 'Matches', 'Brier score', 'Improvement', 'Best gain not in production', 'Right results']);
 		expect(d.tiles.map((t) => t.value)).toEqual(['0.9867', '+0.0203', 'Not recorded', '740', '0.5885', '−0.00113', 'None yet', '52.3%']);   // minus is better throughout
 		expect(d.tiles.some((t) => /^(Accepted|Rejected)/.test(t.label))).toBe(false);
-		expect(d.rows.map((r) => [r.id, r.stage, r.expected, r.result?.word])).toEqual([['MC-0001', 'Tested and rejected', '−0.00070', 'Proven, not ready'], ['MC-0002', 'Deployed to production', 'Not specified', 'Unclear']]);
-		expect(d.rows.map((r) => r.result?.mark)).toEqual(['none', 'none']);                 // a rejected gain and an unproven one: no green
+		expect(d.deltas.map((x) => x.mark)).toEqual(['none']);                 // a rejected gain: no green
 		expect(d.deltas.find((x) => x.id === 'MC-0001')?.expected).toBe(0.0007);
 		expect(d.deltas.map((x) => x.id)).not.toContain('MC-0002');        // already in production: not a choice to make   // written down before the test, shown beside its result
-		expect(d.steps.map((s) => s.id)).toEqual(['MC-0002']);       // the experiment is never in the production total
 		expect(d.environment).toBe('staging');
-	});
-	it('narrows to the choices in the address', async () => {
-		const d = await list(event({ ok: true, doc }, '?status=Rejected&component=Match%20probabilities'));
-		if (!d.ready) throw new Error('not ready');
-		expect(d.rows.map((r) => r.id)).toEqual(['MC-0001']);
-		expect(d.all).toBe(2);
 	});
 	it('says so before the first record is stored, and is a missing page for anyone else', async () => {
 		expect((await list(event({ ok: true, doc: null }))).ready).toBe(false);

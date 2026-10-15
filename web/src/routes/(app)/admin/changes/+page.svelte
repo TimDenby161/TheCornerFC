@@ -5,7 +5,6 @@
 
 	let { data, form } = $props();
 	const refused = $derived((form as { message?: string } | null)?.message ?? '');
-	const STAGE: Record<string, string> = { 'Deployed to production': 'deployed', 'Tested and rejected': 'rejected', 'Being tested': 'testing', Reverted: 'reverted' };
 </script>
 
 <svelte:head>
@@ -62,18 +61,8 @@
 				<ul>{#each data.differs as line (line)}<li>{line}</li>{/each}</ul></div>
 		{/if}
 
-		<form class="mc-filters" id="mc-filters" method="GET" action="/admin/changes" data-sveltekit-reset="false">
-			<label>Status <select name="status"><option value="all">All</option>{#each data.statuses as s (s)}<option value={s} selected={data.choices.status === s}>{s}</option>{/each}</select></label>
-			<label>Part of the model <select name="component"><option value="all">All</option>{#each data.components as s (s)}<option value={s} selected={data.choices.component === s}>{s}</option>{/each}</select></label>
-			<label>Measure <select name="metric"><option value="all">All (charts on log loss)</option>{#each data.metrics as [k, name] (k)}<option value={k} selected={data.choices.metric === k}>{name}</option>{/each}</select></label>
-			<label>From <input type="date" name="from" value={data.choices.from} /></label>
-			<label>To <input type="date" name="to" value={data.choices.to} /></label>
-			<button type="submit" class="mt-btn">Show</button>
-			<a class="mc-clear" href="/admin/changes">Clear</a>
-		</form>
-
 		<div class="mc-sections" id="mc-charts">
-			<div class="stats-card"><div class="stats-label">1 · Each change against the current version, {data.metricLabel.toLowerCase()}</div>
+			<div class="stats-card"><div class="stats-label">Each change against the current version, {data.metricLabel.toLowerCase()}</div>
 				{#if data.deltas.length}
 					<table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Past matches</th><th>Past gain</th><th>Current → with the change</th><th>Live matches</th><th>Live gain</th><th>On live matches</th></tr></thead>
 						<tbody>{#each data.deltas as d (d.id)}
@@ -90,25 +79,7 @@
 					<div class="stats-note"><b>Green means one thing: implement this.</b> A row is green when there is statistical evidence that the change makes the model better, however small the gain: on live matches, or on a test that was not the matches it was built on, and it has been neither rejected nor deployed. No other change is marked green anywhere on this page. A gain that is large but unproven, or rejected, has no colour and says why under its name. Red is a change a test has proven worse. Releasing a green change is still your decision. Green rows come first, then proven gains, then the unproven, then the proven losses. Gain is how much lower the {data.metricLabel.toLowerCase()} is with the change, so a plus is an improvement. Past figures are each change's own historical test on its own matches, never a production result.</div>
 				{:else}<div class="stats-note">No change outside production in this selection has a result on {data.metricLabel.toLowerCase()}.</div>{/if}
 			</div>
-			<div class="stats-card"><div class="stats-label">2 · Running total across deployed versions, log loss</div>
-				<table class="calib-table mc-steps"><thead><tr><th>Deployed</th><th>Change</th><th>Its backtest</th><th>Total</th></tr></thead>
-					<tbody>{#each data.steps as s (s.id)}<tr><td>{s.on.slice(0, 7)}</td><td><a class="team-link" href="/admin/changes/{s.id}">{shortId(s.id)} · {s.title}</a></td><td>{s.delta != null ? signed(s.delta) : 'No test recorded'}</td><td>{signed(s.total)}</td></tr>{/each}</tbody></table>
-				<div class="stats-note">Match-model changes that are in production, in the order they went live. Each figure comes from that change's own test on its own sample, so the total is a sum of separate tests and not a measurement. Changes made before this record began were never dated and are not here.</div>
-			</div>
 		</div>
 
-		<details class="stats-card mc-list" id="mc-list"><summary class="stats-label">Every change ({data.rows.length} of {data.all}): deployed, rejected and still to decide</summary>
-			{#if data.rows.length}
-				<div class="mc-scroll"><table class="calib-table mc-table"><thead><tr><th>Change</th><th>Date</th><th>Part of the model</th><th>Where it stands</th><th>Expected</th><th>Result</th><th>Since deployment</th></tr></thead>
-					<tbody>{#each data.rows as r (r.id)}
-						<tr><td><a class="team-link" href="/admin/changes/{r.id}">{r.title}</a><span class="mc-sub">{shortId(r.id)} · {r.kind}</span></td>
-							<td>{r.date}</td><td>{r.component}</td>
-							<td><span class="mc-stage {STAGE[r.stage] ?? (r.stage.startsWith('In production') ? 'deployed' : 'other')}">{r.stage}</span>{#if r.status !== r.stage}<span class="mc-sub">{r.status}</span>{/if}</td>
-							<td>{r.expected}</td>
-							<td>{#if r.result}<span class="mc-pill mark-{r.result.mark}">{r.result.word} {r.result.text}</span><span class="mc-sub">{r.result.kind}{r.result.metric !== data.metricLabel ? ` · ${r.result.metric}` : ''}{r.result.n ? ` · ${r.result.n.toLocaleString('en-GB')} matches` : ''}</span>{:else}No result recorded{/if}</td>
-							<td>{r.forward ?? '–'}</td></tr>
-					{/each}</tbody></table></div>
-			{:else}<div class="stats-note">No change matches these choices.</div>{/if}
-		</details>
 	{/if}
 </section>

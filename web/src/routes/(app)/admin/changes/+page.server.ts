@@ -1,27 +1,22 @@
-import {
-	EVALUATION_LABELS, METRIC_LABELS, NOT_SPECIFIED, TONE_WORDS, againstBaseRates, bestWaiting, choicesFrom, cumulative, deltaRows,
-	filterChanges, headline, inProduction, intervalText, markOf, ready, shortId, signed, tone
-} from '#lib/changes.ts';
+import { METRIC_LABELS, againstBaseRates, bestWaiting, cumulative, deltaRows, inProduction, shortId, signed } from '#lib/changes.ts';
 import { fail } from '@sveltejs/kit';
 import { matchModel, matchModelCompare, switchMatchModel } from '#lib/server/admin.ts';
 import { changesDoc, liveDoc } from '#lib/server/changes.ts';
 import { apartRow, isMatchModel, pastRows, scoreRows } from '#lib/matchModels.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 
-// The Model Change Tracker: the figures at the top, the model comparison, two tables and the list, for the choices in
-// the address. The administrator's only (hooks.server.ts, and the database again for the document).
+// The Model Change Tracker: the figures at the top, the model comparison with the switch, and the
+// changes not yet in production against the current version. The administrator's only
+// (hooks.server.ts, and the database again for the document).
 // A18's own record, and the results file of its test on past matches against the released club rank
 const A18 = 'MC-0018', A18_PAST = 'experiments/a18_on_release/results.json';
 
-export async function load({ fetch, locals, url }) {
+export async function load({ fetch, locals }) {
 	const tabHead = { title: 'Model Change Tracker', ...TAB_INFO.changes };
 	const [doc, live, model, compare] = await Promise.all([changesDoc(fetch, locals.token), liveDoc(fetch, locals.token), matchModel(fetch, locals.token), matchModelCompare(fetch, locals.token)]);
 	if (!doc) return { tabHead, ready: false as const };
 
-	const ch = choicesFrom(url.searchParams, doc);
-	// the measure the charts are drawn on: the one chosen, or log loss
-	const metric = ch.metric === 'all' ? 'log_loss' : ch.metric;
-	const shown = filterChanges(doc.changes, ch);
+	const metric = 'log_loss';
 	const cur = doc.current;
 	const steps = cumulative(doc.changes), total = steps.filter((s) => s.delta != null);
 	const gap = cur?.vs_market ? cur.vs_market.model_log_loss - cur.vs_market.market_log_loss : null;
@@ -47,16 +42,6 @@ export async function load({ fetch, locals, url }) {
 		{ label: 'Right results', value: cur?.accuracy != null ? `${(100 * cur.accuracy).toFixed(1)}%` : 'Not recorded', note: 'The outcome the model made most likely happened, on the same matches' }
 	];
 
-	const rows = [...shown].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? 1 : -1)).map((x) => {
-		const r = headline(x, metric) ?? x.results[0] ?? null;
-		const hoped = x.expected.metrics.find((m) => m.metric === metric) ?? x.expected.metrics[0];
-		return {
-			id: x.id, date: x.date, title: x.title, component: x.component, stage: x.stage, status: x.status, kind: x.kind,
-			expected: hoped ? `${signed(hoped.delta)}${hoped.metric !== metric ? ` ${METRIC_LABELS[hoped.metric].toLowerCase()}` : ''}` : NOT_SPECIFIED,
-			result: r ? { text: signed(r.delta), tone: tone(r), mark: markOf(ready(x, r), tone(r)), word: ready(x, r) ? 'Ready to implement' : tone(r) === 'better' ? 'Proven, not ready' : TONE_WORDS[tone(r)], interval: intervalText(r), kind: EVALUATION_LABELS[r.evaluation], metric: METRIC_LABELS[r.metric], n: r.n } : null,
-			forward: x.forward?.verdict ?? null
-		};
-	});
 	// The model comparison above the switch: the bookmakers, the base model and A18 on A18's test
 	// on past matches (its change record) and on the same finished live matches, and where the
 	// two models part on the fixtures to come.
@@ -67,11 +52,10 @@ export async function load({ fetch, locals, url }) {
 	} : null;
 	return {
 		tabHead, ready: true as const, environment: doc.environment, generated: doc.generated_at, stored: doc.stored, differs: doc.differs,
-		choices: ch, statuses: doc.statuses, components: doc.components, metrics: Object.entries(METRIC_LABELS).filter(([k]) => doc.changes.some((x) => x.results.some((r) => r.metric === k))),
-		tiles, rows, all: doc.changes.length, metric, metricLabel: METRIC_LABELS[metric],
-		// Table 2 is for deciding what to add, so changes already in production, themselves or inside
-		// a release, are left out of it
-		deltas: deltaRows(shown.filter((x) => !inProduction(x)), metric, live), steps,
+		tiles, metricLabel: METRIC_LABELS[metric],
+		// the table is for deciding what to add, so changes already in production, themselves or
+		// inside a release, are left out of it
+		deltas: deltaRows(doc.changes.filter((x) => !inProduction(x)), metric, live),
 		model, versus,
 		live: live ? { n: live.n, weeks: live.weeks, start: live.start, to: live.to, generated: live.generated_at, tracked: Object.keys(live.changes).length, protocol: live.protocol, matches: live.minimum.matches, minWeeks: live.minimum.weeks } : null
 	};

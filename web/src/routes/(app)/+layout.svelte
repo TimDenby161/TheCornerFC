@@ -26,9 +26,11 @@
 	// the page's name, a line on what it shows and what its figures mean, where the page gives one
 	type TabHead = { title: string; intro: string; more: string; key: [string, string][] };
 	const head = $derived(page.data.tabHead as TabHead | undefined);
-	// the Fantasy group: for the owner, known from an earlier visit or as soon as the database says so
+	// the Fantasy group: for the owner, known from an earlier visit in this browser, as soon as the
+	// database says so, or because the database says this visitor is the administrator (the owner).
+	// The links decide nothing: each fantasy page's data is handed only to the owner by the database.
 	// the Admin group: for an administrator, as the database answered for this request
-	const menu = $derived([...MENU, ...((data.owner && owner.status !== 'no') || owner.status === 'ok' ? [OWNER_MENU] : []), ...(data.admin ? [ADMIN_MENU] : [])]);
+	const menu = $derived([...MENU, ...(data.admin || (data.owner && owner.status !== 'no') || owner.status === 'ok' ? [OWNER_MENU] : []), ...(data.admin ? [ADMIN_MENU] : [])]);
 	const current = $derived([...MENU, OWNER_MENU, ADMIN_MENU].flatMap((g) => g.sections).find((s) => s.path && page.url.pathname.startsWith(s.path)));
 
 	// The server writes <body data-tab>; after a move between pages in the browser it follows here.
