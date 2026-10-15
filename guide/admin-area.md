@@ -87,10 +87,12 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   boosted trees (`thecornerfc/models/match_trees.py`). The card at the top of the Model Change
   Tracker names the live one and has the one button that switches it, through
   `admin_set_match_model()`, which only an administrator can call and which logs every switch.
-  Above the button the card compares the two (`admin_match_model_compare()`): A18's test on past
-  matches, each model's log loss, Brier and right results on the same finished matches since
-  P18's start, P18's verdict and range, and the twenty upcoming fixtures where they differ most;
-  every gap is A18 minus base. A Bookmakers column beside them (`20261015_match_model_compare_market.sql`)
+  Above the button the card, Model Comparison (`admin_match_model_compare()`), sets the
+  bookmakers, the base model and A18 side by side on log loss, Brier and right results: on A18's
+  test on past matches and on the same finished matches since P18's start, with how many matches
+  each column is on. The twenty upcoming fixtures where the two models differ most are folded
+  away under it. P18's verdict is not on the card: it is in the change's own page and the table
+  of changes. A Bookmakers column beside them (`20261015_match_model_compare_market.sql`)
   gives the closing prices with the margin taken out, averaged, as the Stats page does: on the
   finished matches with stored prices, with both models on those same matches under it, and for
   an upcoming fixture once prices are stored (about 14 days before kickoff). The log of switches is

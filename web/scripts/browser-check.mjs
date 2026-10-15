@@ -248,6 +248,12 @@ check("the betting pages' old public addresses are gone", gone === '404,404', go
 for (let i = errors.length - 1; i >= 0; i--) if (/404 \(Not Found\).*\/(simulation|model-vs-market)$/.test(errors[i])) errors.splice(i, 1);
 check('the menu has no Admin links for a visitor', !(await run(`[...document.querySelectorAll('#main-menu a')].some((a) => /Admin|Paper Simulation|Model vs Market|Model Change/.test(a.textContent) || a.getAttribute('href').startsWith('/admin'))`)));
 
+// "What the numbers mean" sits at the foot of a page, under what it explains, and opens there
+await open('/clubs?c=39'); await until(`!!document.querySelector('#tab-key summary')`);
+const keyFoot = await run(`(() => { const k = document.querySelector('#tab-key'), h = document.querySelector('#tab-head'), panel = document.querySelector('main section.panel'), foot = document.querySelector('.site-links'); return !!k && !!h && !!panel && !!foot && !h.contains(k) && (panel.compareDocumentPosition(k) & 4) !== 0 && (k.compareDocumentPosition(foot) & 4) !== 0; })()`);
+await run(`document.querySelector('#tab-key summary').click()`); await until(`document.querySelector('#tab-key').open`);
+check('the key to the numbers is at the foot of the page and opens', keyFoot && (await run(`document.querySelectorAll('#tab-key-list dt').length > 0`)));
+
 // an address with no page: the site's own error page, in plain words and with a way on, never the fault
 await open('/no-such-page-here'); await until(`!!document.querySelector('.error-page h2')`);
 check('an address with no page shows the error page, with no fault text', (await run(`document.querySelector('.error-page h2')?.textContent`)) === 'Page not found'

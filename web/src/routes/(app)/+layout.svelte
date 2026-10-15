@@ -125,15 +125,16 @@
 		<div class="tab-head" id="tab-head">
 			<p class="tab-title" id="tab-title" aria-hidden="true">{head.title}</p>
 			<p class="tab-intro" id="tab-intro">{head.intro}{#if head.more}{' '}<a href={methodologyHref(head.more)} data-sveltekit-reload>How it works</a>{/if}</p>
-			{#if head.key.length}
-				<details class="tab-key" id="tab-key"><summary>What the numbers mean</summary>
-					<dl id="tab-key-list">{#each head.key as [term, meaning] (term)}<dt>{term}</dt><dd>{meaning}</dd>{/each}</dl>
-				</details>
-			{/if}
 		</div>
 	{/if}
 	<div class="ad-slot ad-top" id="ad-top" aria-hidden="true"></div>
 	{@render children()}
+	<!-- what the page's figures mean: at the foot of every page, under what it explains -->
+	{#if head?.key.length}
+		<details class="tab-key tab-key-foot" id="tab-key"><summary>What the numbers mean</summary>
+			<dl id="tab-key-list">{#each head.key as [term, meaning] (term)}<dt>{term}</dt><dd>{meaning}</dd>{/each}</dl>
+		</details>
+	{/if}
 	{#if data.fresh.items.length || data.fresh.model}
 		<footer class="freshness" id="freshness">
 			{#each data.fresh.items as [label, iso, tip] (label)}<span title={tip}>{label} <LocalTime {iso} show="short" /> <LocalTime {iso} show="time" /></span>{/each}

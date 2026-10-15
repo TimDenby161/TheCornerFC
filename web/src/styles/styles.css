@@ -166,6 +166,7 @@
   .tab-intro a, .tab-key a { color: var(--blue-text); }
   .tab-key { font-size: 13px; color: var(--text-secondary); }
   .tab-key[hidden] { display: none; }
+  .tab-key-foot { margin: 24px 0 8px; padding-top: 10px; border-top: 1px solid var(--border); }
   .tab-key summary { cursor: pointer; color: var(--blue-text); width: fit-content; padding: 4px 0; }
   .tab-key summary:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
   .tab-key dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }

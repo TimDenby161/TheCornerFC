@@ -199,6 +199,10 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 24px; }
 .mc-chart { margin: 6px 0 0; }
 .mc-wide { grid-column: 1 / -1; }
+.mc-fold { margin: 12px 0 4px; }
+.mc-fold summary { cursor: pointer; color: var(--blue-text); width: fit-content; padding: 4px 0; font-size: 14px; }
+.mc-fold summary:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
+.mc-live-now { margin-top: 16px; }
 .mc-two tr.mc-count td { color: var(--text-secondary); font-weight: 700; }
 .mc-two tr.mc-group th { text-align: left; padding-top: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
 .mc-list summary { cursor: pointer; color: var(--blue-text); width: fit-content; }

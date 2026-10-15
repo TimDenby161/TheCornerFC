@@ -86,12 +86,3 @@ export function apartRow(r: ApartRow) {
 		market: r.market ? hda(r.market) : null,
 		baseXg: xg(r.base), a18Xg: xg(r.a18), gap: `${Math.abs(100 * r.gap).toFixed(1)} pts`, differ: r.differ };
 }
-
-// How far apart the two are on the fixtures to come, in words
-export function upcomingSummary(u: ModelCompare['upcoming']): string {
-	if (!u.n) return 'No upcoming fixtures with both models’ predictions yet.';
-	const g = u.mean_gap;
-	const gaps = g.home != null && g.draw != null && g.away != null
-		? ` On average they are ${(100 * g.home).toFixed(1)} points apart on a home win, ${(100 * g.draw).toFixed(1)} on a draw and ${(100 * g.away).toFixed(1)} on an away win.` : '';
-	return `${u.n.toLocaleString('en-GB')} upcoming fixtures. They pick a different favourite in ${u.different_favourite.toLocaleString('en-GB')} (${pct(u.different_favourite / u.n, 1)}).${gaps} A18 gives the home side more in ${pct(u.a18_home_higher / u.n)} of them.`;
-}

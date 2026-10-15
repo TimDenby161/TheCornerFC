@@ -5,12 +5,11 @@ import {
 import { fail } from '@sveltejs/kit';
 import { matchModel, matchModelCompare, switchMatchModel } from '#lib/server/admin.ts';
 import { changesDoc, liveDoc } from '#lib/server/changes.ts';
-import { apartRow, isMatchModel, pastRows, scoreRows, upcomingSummary } from '#lib/matchModels.ts';
+import { apartRow, isMatchModel, pastRows, scoreRows } from '#lib/matchModels.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 
 // The Model Change Tracker: the figures at the top, three charts and the list, for the choices in
 // the address. The administrator's only (hooks.server.ts, and the database again for the document).
-const CHALLENGER = 'MC-0029';
 // A18's own record, and the results file of its test on past matches against the released club rank
 const A18 = 'MC-0018', A18_PAST = 'experiments/a18_on_release/results.json';
 
@@ -57,21 +56,12 @@ export async function load({ fetch, locals, url }) {
 		};
 	});
 	const lineMetric = metric === 'brier' ? 'brier' : 'log_loss';
-	// The two match models side by side, above the switch: A18's test on past matches (its change
-	// record), the head-to-head on live matches (P18, from the Live tracking job), each measure
-	// on the same finished matches, and where they part on the fixtures to come.
-	const challenger = doc.changes.find((x) => x.id === CHALLENGER);
-	const past = challenger?.expected.metrics.find((m) => m.metric === 'log_loss') ?? null;
-	const p18 = live?.changes[CHALLENGER] ?? null;
+	// The model comparison above the switch: the bookmakers, the base model and A18 on A18's test
+	// on past matches (its change record) and on the same finished live matches, and where the
+	// two models part on the fixtures to come.
 	const versus = model ? {
-		past: past ? { delta: signed(past.delta, 4), low: past.low != null ? signed(past.low, 4) : null, high: past.high != null ? signed(past.high, 4) : null, source: past.source } : null,
-		// P18 records A18's gain (plus is better); shown here as A18 minus base, like everything else on the card
-		p18: p18 ? { n: p18.n, weeks: p18.weeks, delta: p18.gain != null ? signed(-p18.gain, 4) : null, low: p18.high != null ? signed(-p18.high, 4) : null, high: p18.low != null ? signed(-p18.low, 4) : null,
-			verdict: p18.verdict, generated: live!.generated_at, matches: live!.minimum.matches, minWeeks: live!.minimum.weeks } : null,
-		target: challenger?.live?.find((t) => t.protocol === 'P18')?.target ?? (challenger?.events ?? []).flatMap((e) => (e.type === 'live_test' && 'target' in e && e.target ? [e.target] : []))[0] ?? null,
 		scores: compare ? scoreRows(compare.finished) : null, start: compare?.start ?? null,
 		pastScores: pastRows((doc.changes.find((x) => x.id === A18)?.results ?? []).filter((r) => r.source === A18_PAST)),
-		upcoming: compare ? upcomingSummary(compare.upcoming) : null,
 		apart: compare ? compare.apart.map(apartRow) : []
 	} : null;
 	return {

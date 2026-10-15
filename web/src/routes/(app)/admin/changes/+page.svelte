@@ -21,11 +21,9 @@
 	{:else}
 		<p class="mc-env" id="mc-env">{data.environment === 'production' ? 'Production' : data.environment === 'staging' ? 'Staging: test data, not the live record' : 'Environment not named'} · updated <LocalTime iso={data.generated} show="short" /> <LocalTime iso={data.generated} show="time" /></p>
 		{#if data.model}
-			<div class="stats-card mc-switch" id="mc-switch"><div class="stats-label">Live match model</div>
-				<div class="stats-value mc-value">{MATCH_MODEL_LABELS[data.model.live]}</div>
+			<div class="stats-card mc-switch" id="mc-switch"><div class="stats-value mc-value">Model Comparison</div>
 				{#if data.versus}{@const v = data.versus}
 					<div class="mc-compare" id="mc-compare">
-						<div class="stats-label">The bookmakers, the base model and A18 compared</div>
 						{#if v.scores?.n || v.pastScores.rows.length}
 							<div class="mc-scroll"><table class="calib-table mc-rows mc-two" id="mc-two"><thead><tr><th>Measure</th><th>Bookmakers</th><th>Base</th><th>A18</th><th>A18 − Bookmakers</th><th>A18 − Base</th></tr></thead>
 								{#if v.pastScores.rows.length}<tbody><tr class="mc-group"><th colspan="6">Past matches{#if v.pastScores.period}, {v.pastScores.period[0]} to {v.pastScores.period[1]}{/if}</th></tr>
@@ -39,16 +37,17 @@
 										<td><span class="mc-pill {r.mark}">{r.gap}</span></td></tr>{/each}</tbody>{/if}</table></div>
 							<div class="stats-note">Both models’ live predictions were stored before kickoff; the past period had been looked at before, so the live matches are the real test. The bookmakers are their closing prices with the margin taken out, averaged; there are no clean stored prices for the past period, so it has none{#if v.scores?.priced && v.scores.priced < v.scores.n}. Only {v.scores.priced} of the {v.scores.n} matches have prices, so the Bookmakers column and A18 − Bookmakers are on those {v.scores.priced}, with A18's own figure on them under the gap{/if}. Minus is better for A18 on log loss and Brier, plus on right results.</div>
 						{/if}
-						<p class="mc-para"><strong>The verdict</strong> (protocol P18): {#if v.p18}{#if v.p18.verdict === 'better'}A18 is proven better.{:else if v.p18.verdict === 'worse'}A18 is proven worse.{:else}not proven either way yet.{/if}{#if v.p18.delta}{' '}Log loss {v.p18.delta}{#if v.p18.low && v.p18.high}, and the true gap could still be anywhere from {v.p18.low} to {v.p18.high}{/if}.{/if} {v.p18.n.toLocaleString('en-GB')} matches over {v.p18.weeks} week{v.p18.weeks === 1 ? '' : 's'}; nothing is called before {v.p18.matches} matches and {v.p18.minWeeks} weeks{#if v.target}, and a call is expected at about {v.target.toLocaleString('en-GB')}{/if}. Updated <LocalTime iso={v.p18.generated} show="short" />, Mondays and Thursdays.{:else}the Live tracking job has not scored it yet (Mondays and Thursdays).{/if}</p>
-						{#if v.upcoming}<p class="mc-para"><strong>Upcoming fixtures:</strong> {v.upcoming}</p>{/if}
 						{#if v.apart.length}
-							<div class="stats-label">Where they differ most · home · draw · away chances, expected goals</div>
+							<details class="mc-fold" id="mc-apart-fold"><summary>Where they differ most: the {v.apart.length} upcoming fixtures furthest apart</summary>
+							<div class="stats-note">Home · draw · away chances, with each model's expected goals under them.</div>
 							<div class="mc-scroll"><table class="calib-table mc-rows mc-apart" id="mc-apart"><thead><tr><th>Kick-off</th><th>Match</th><th>Bookmakers</th><th>Base</th><th>A18</th><th>Gap</th></tr></thead>
 								<tbody>{#each v.apart as r (r.fixture)}<tr class:mc-differ={r.differ}><td><LocalTime iso={r.kickoff} show="short" /></td><td><a class="team-link" href="/match/{r.fixture}">{r.match}</a><span class="mc-sub">{r.league}{r.differ ? ' · different favourite' : ''}</span></td>
 									<td>{r.market ?? 'No prices yet'}</td><td>{r.base}<span class="mc-sub">xG {r.baseXg}</span></td><td>{r.a18}<span class="mc-sub">xG {r.a18Xg}</span></td><td>{r.gap}</td></tr>{/each}</tbody></table></div>
+							</details>
 						{/if}
 					</div>
 				{/if}
+				<p class="mc-para mc-live-now">Live now: <strong>{MATCH_MODEL_LABELS[data.model.live]}</strong></p>
 				<form method="POST" action="?/switch"><input type="hidden" name="live" value={otherModel(data.model.live)} />
 					<button type="submit" class="mt-btn">Make live: {MATCH_MODEL_LABELS[otherModel(data.model.live)]}</button></form>
 				{#if refused}<div class="sim-banner mc-alert" role="alert">{refused}</div>{/if}

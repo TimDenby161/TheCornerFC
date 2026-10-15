@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MATCH_MODEL_LABELS, MATCH_MODELS, apartRow, asModelCompare, isMatchModel, otherModel, pastRows, scoreRows, upcomingSummary } from './matchModels.ts';
+import { MATCH_MODEL_LABELS, MATCH_MODELS, apartRow, asModelCompare, isMatchModel, otherModel, pastRows, scoreRows } from './matchModels.ts';
 
 describe('the two match models', () => {
 	it('knows the two names and nothing else', () => {
@@ -45,10 +45,6 @@ describe('the two models compared', () => {
 			base: [0.39, 0.25, 0.36, 1.72, 1.63], a18: [0.6, 0.2, 0.2, 2.26, 1.24] });
 		expect(r).toMatchObject({ match: 'Altrincham v Man Utd', base: '39% · 25% · 36%', a18: '60% · 20% · 20%', baseXg: '1.72–1.63', gap: '20.6 pts', differ: true, market: null });
 		expect(apartRow({ fixture: 2, kickoff: '2026-10-18T14:00:00Z', league: 'L', home: 'H', away: 'A', differ: false, gap: 0, base: [0.4, 0.3, 0.3, 1, 1], a18: [0.4, 0.3, 0.3, 1, 1], market: [0.5, 0.25, 0.25] }).market).toBe('50% · 25% · 25%');
-	});
-	it('says how far apart they are', () => {
-		expect(upcomingSummary(upcoming)).toContain('different favourite in 10 (5.0%)');
-		expect(upcomingSummary({ ...upcoming, n: 0 })).toMatch(/No upcoming/);
 	});
 });
 
