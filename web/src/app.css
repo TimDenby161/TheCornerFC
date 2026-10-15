@@ -199,6 +199,7 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 24px; }
 .mc-chart { margin: 6px 0 0; }
 .mc-wide { grid-column: 1 / -1; }
+.mc-two tr.mc-count td { color: var(--text-secondary); font-weight: 700; }
 .mc-list summary { cursor: pointer; color: var(--blue-text); width: fit-content; }
 .mc-list summary:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
 .mc-list[open] summary { margin-bottom: 8px; }

@@ -33,7 +33,8 @@ describe('the two models compared', () => {
 		const s = (log_loss: number, n = 6) => ({ n, log_loss, brier: 0.6, accuracy: 0.5 });
 		const { priced, rows } = scoreRows({ base: s(1.0, 9), a18: s(0.99, 9), market: s(0.95), base_priced: s(0.98), a18_priced: s(0.97) });
 		expect(priced).toBe(6);
-		expect(rows[0]).toMatchObject({ market: '0.9500', marketNote: 'base 0.9800 · A18 0.9700 on these 6' });
+		expect(rows[0]).toMatchObject({ market: '0.9500', marketGap: '+0.0200', marketMark: 'worse', marketNote: 'A18 0.9700 on these 6' });
+		expect(rows[2]).toMatchObject({ marketGap: '0.0 pts', marketMark: '' });
 	});
 	it('shows nothing before any match has finished', () => {
 		expect(scoreRows({}).rows).toEqual([]);

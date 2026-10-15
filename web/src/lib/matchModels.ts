@@ -33,17 +33,22 @@ const points = (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(100
 
 // Each measure on the same finished matches: both models, and A18 minus base, marked better or
 // worse for A18 (lower is better for log loss and Brier, higher for right results).
-export type ScoreRow = { label: string; base: string; a18: string; gap: string; mark: 'better' | 'worse' | ''; market: string | null; marketNote: string };
+export type ScoreRow = { label: string; base: string; a18: string; gap: string; mark: 'better' | 'worse' | ''; market: string | null;
+	// A18 against the bookmakers, on the matches with prices only, and A18's own figure on those
+	marketGap: string | null; marketMark: 'better' | 'worse' | ''; marketNote: string };
 // The bookmakers are read on the matches with stored prices, beside both models on those same
 // matches, so the three are always compared on the same games.
 export function scoreRows(finished: ModelCompare['finished']): { n: number; priced: number; rows: ScoreRow[] } {
 	const b = finished.base, a = finished.a18, m = finished.market, bp = finished.base_priced, ap = finished.a18_priced;
 	if (!b || !a || !b.n) return { n: 0, priced: 0, rows: [] };
 	const priced = m && bp && ap && m.n ? m.n : 0;
+	const mark = (d: number, lowerBetter: boolean) => (d === 0 ? '' : (d < 0) === lowerBetter ? 'better' : 'worse') as ScoreRow['mark'];
 	const row = (label: string, key: 'log_loss' | 'brier' | 'accuracy', show: (v: number) => string, gap: (d: number) => string, lowerBetter: boolean): ScoreRow => {
 		const x = b[key], y = a[key], d = y - x;
-		return { label, base: show(x), a18: show(y), gap: gap(d), mark: d === 0 ? '' : (d < 0) === lowerBetter ? 'better' : 'worse',
-			market: priced ? show(m![key]) : null, marketNote: priced ? `base ${show(bp![key])} · A18 ${show(ap![key])} on these ${priced}` : '' };
+		const dm = priced ? ap![key] - m![key] : 0;
+		return { label, base: show(x), a18: show(y), gap: gap(d), mark: mark(d, lowerBetter),
+			market: priced ? show(m![key]) : null, marketGap: priced ? gap(dm) : null, marketMark: priced ? mark(dm, lowerBetter) : '',
+			marketNote: priced && priced < Math.min(a.n, b.n) ? `A18 ${show(ap![key])} on these ${priced}` : '' };
 	};
 	const four = (v: number) => v.toFixed(4);
 	const sign4 = (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toFixed(4)}`;
