@@ -1,5 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
-import type { Handle } from '@sveltejs/kit/hooks';
+import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 import { SITE_ENV, SITE_HOST } from '#lib/config.ts';
 import { oldFile, tabFor } from '#lib/menu.ts';
 import { adminGate, isAdminPath } from '#lib/server/admin.ts';
@@ -75,4 +75,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (SITE_ENV !== 'production') response.headers.set('x-robots-tag', 'noindex, nofollow');
 	if (event.locals.user || isAdminPath(event.url.pathname)) response.headers.set('cache-control', 'private, no-store');
 	return response;
+};
+
+// A page that fails: logged for the Worker's logs, and its cause shown to an administrator only,
+// so a fault on an Admin page can be read off the page. Anyone else sees the usual message.
+export const handleError: HandleServerError = ({ error, event }) => {
+	console.error(event.url.pathname, error);
+	const cause = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+	return { message: 'Internal Error', detail: event.locals.admin ? cause.slice(0, 1200) : undefined };
 };
