@@ -8,7 +8,7 @@ const doc: RankingsDoc = {
 		[157, 78, 1118.4, 1117.5, 1118.2, 287, 33.1, 1, 1189.4, 1047.4, 1124, 1112.7],
 		[42, 39, 1093.9, 1094.1, 1095.7, 333, 15.1, 1, 1071.9, 1115.9, 1089.8, 1097.9],
 		[50, 39, 1109.6, 1107.7, 1091.8, 368, null, 1, 1128.3, 1090.9, 1105.1, 1114.1],
-		[900, 39, 900.4, 900, 1095.7, 10, -4, 0, 900, 900, 900, 900]
+		[900, 39, 1093.9, 900, 1095.7, 10, -4, 0, 900, 900, 900, 900]
 	]
 };
 const all = clubs(doc);
@@ -26,13 +26,13 @@ describe('clubPlaces', () => {
 	const places = clubPlaces(all);
 	it('ranks every club in the world, equal ratings sharing a place', () => {
 		expect(places.get(157)!.world).toBe(1);
-		expect(places.get(42)!.world).toBe(2);
-		expect(places.get(900)!.world).toBe(2);
-		expect(places.get(50)!.world).toBe(4);
+		expect(places.get(50)!.world).toBe(2);
+		expect(places.get(42)!.world).toBe(3);
+		expect(places.get(900)!.world).toBe(3);
 	});
 	it('ranks a club in its league among this season\'s clubs only', () => {
-		expect(places.get(42)).toMatchObject({ dom: 1, domOf: 2 });
-		expect(places.get(50)).toMatchObject({ dom: 2, domOf: 2 });
+		expect(places.get(50)).toMatchObject({ dom: 1, domOf: 2 });
+		expect(places.get(42)).toMatchObject({ dom: 2, domOf: 2 });
 		expect(places.get(900)).toMatchObject({ dom: null, domOf: null });
 	});
 });

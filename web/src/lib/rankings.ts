@@ -30,16 +30,16 @@ function placeIn(sorted: number[], v: number) {
 }
 const desc = (a: number, b: number) => b - a;
 
-// A club's place by Baseline Strength among every ranked club, and among the clubs in its league
+// A club's place by Current Strength among every ranked club, and among the clubs in its league
 // this season.
 export function clubPlaces(all: Club[]): Map<number, Place> {
-	const world = all.map((c) => c.lt).sort(desc);
+	const world = all.map((c) => c.current).sort(desc);
 	const by = new Map<number, number[]>();
-	for (const c of all) if (c.in_league) by.set(c.league, [...(by.get(c.league) || []), c.lt]);
+	for (const c of all) if (c.in_league) by.set(c.league, [...(by.get(c.league) || []), c.current]);
 	for (const l of by.values()) l.sort(desc);
 	return new Map(all.map((c) => {
 		const lg = c.in_league ? by.get(c.league)! : null;
-		return [c.team, { world: placeIn(world, c.lt), dom: lg ? placeIn(lg, c.lt) : null, domOf: lg?.length ?? null }];
+		return [c.team, { world: placeIn(world, c.current), dom: lg ? placeIn(lg, c.current) : null, domOf: lg?.length ?? null }];
 	}));
 }
 
