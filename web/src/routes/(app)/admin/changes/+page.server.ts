@@ -5,12 +5,14 @@ import {
 import { fail } from '@sveltejs/kit';
 import { matchModel, matchModelCompare, switchMatchModel } from '#lib/server/admin.ts';
 import { changesDoc, liveDoc } from '#lib/server/changes.ts';
-import { apartRow, isMatchModel, scoreRows, upcomingSummary } from '#lib/matchModels.ts';
+import { apartRow, isMatchModel, pastRows, scoreRows, upcomingSummary } from '#lib/matchModels.ts';
 import { TAB_INFO } from '#lib/tabInfo.ts';
 
 // The Model Change Tracker: the figures at the top, three charts and the list, for the choices in
 // the address. The administrator's only (hooks.server.ts, and the database again for the document).
 const CHALLENGER = 'MC-0029';
+// A18's own record, and the results file of its test on past matches against the released club rank
+const A18 = 'MC-0018', A18_PAST = 'experiments/a18_on_release/results.json';
 
 export async function load({ fetch, locals, url }) {
 	const tabHead = { title: 'Model Change Tracker', ...TAB_INFO.changes };
@@ -68,6 +70,7 @@ export async function load({ fetch, locals, url }) {
 			verdict: p18.verdict, generated: live!.generated_at, matches: live!.minimum.matches, minWeeks: live!.minimum.weeks } : null,
 		target: challenger?.live?.find((t) => t.protocol === 'P18')?.target ?? (challenger?.events ?? []).flatMap((e) => (e.type === 'live_test' && 'target' in e && e.target ? [e.target] : []))[0] ?? null,
 		scores: compare ? scoreRows(compare.finished) : null, start: compare?.start ?? null,
+		pastScores: pastRows((doc.changes.find((x) => x.id === A18)?.results ?? []).filter((r) => r.source === A18_PAST)),
 		upcoming: compare ? upcomingSummary(compare.upcoming) : null,
 		apart: compare ? compare.apart.map(apartRow) : []
 	} : null;

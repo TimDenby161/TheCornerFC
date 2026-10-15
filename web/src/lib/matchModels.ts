@@ -29,7 +29,7 @@ export const asModelCompare = (answer: (Partial<ModelCompare> & { ok?: boolean }
 
 const pct = (p: number, places = 0) => `${(100 * p).toFixed(places)}%`;
 // A difference in percentage points, with its sign
-const points = (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(100 * d).toFixed(1)}`;
+const points = (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(100 * d).toFixed(2)}`;
 
 // Each measure on the same finished matches: both models, and A18 minus base, marked better or
 // worse for A18 (lower is better for log loss and Brier, higher for right results).
@@ -57,6 +57,25 @@ export function scoreRows(finished: ModelCompare['finished']): { n: number; pric
 		row('Brier', 'brier', four, sign4, true),
 		row('Right result', 'accuracy', (v) => pct(v, 1), (d) => `${points(d)} pts`, false)
 	] };
+}
+
+// A18's test on past matches (its change record's results from one results file): base and A18
+// on each measure. No bookmakers: there are no clean stored prices for that period.
+export type PastResult = { metric: string; n: number | null; baseline: number | null; after: number | null; period: [string, string] | null };
+export function pastRows(results: PastResult[]): { n: number | null; period: [string, string] | null; rows: ScoreRow[] } {
+	const four = (v: number) => v.toFixed(4);
+	const sign4 = (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toFixed(4)}`;
+	const shown = [['Log loss', 'log_loss', four, sign4, true], ['Brier', 'brier', four, sign4, true],
+		['Right result', 'accuracy', (v: number) => pct(v, 1), (d: number) => `${points(d)} pts`, false]] as const;
+	const rows = shown.flatMap(([label, key, show, gap, lowerBetter]) => {
+		const r = results.find((x) => x.metric === key && x.baseline != null && x.after != null);
+		if (!r) return [];
+		const d = r.after! - r.baseline!;
+		return [{ label, base: show(r.baseline!), a18: show(r.after!), gap: gap(d), mark: (d === 0 ? '' : (d < 0) === lowerBetter ? 'better' : 'worse') as ScoreRow['mark'],
+			market: null, marketGap: null, marketMark: '' as const, marketNote: '' }];
+	});
+	const first = results.find((x) => x.n != null);
+	return { n: first?.n ?? null, period: first?.period ?? null, rows };
 }
 
 // One upcoming fixture as shown: both models' chances and expected goals

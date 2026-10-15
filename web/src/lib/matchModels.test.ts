@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MATCH_MODEL_LABELS, MATCH_MODELS, apartRow, asModelCompare, isMatchModel, otherModel, scoreRows, upcomingSummary } from './matchModels.ts';
+import { MATCH_MODEL_LABELS, MATCH_MODELS, apartRow, asModelCompare, isMatchModel, otherModel, pastRows, scoreRows, upcomingSummary } from './matchModels.ts';
 
 describe('the two match models', () => {
 	it('knows the two names and nothing else', () => {
@@ -27,14 +27,14 @@ describe('the two models compared', () => {
 		expect(n).toBe(600);
 		expect(rows.map((r) => r.mark)).toEqual(['better', 'worse', 'better']);
 		expect(rows[0].gap).toBe('−0.0100');
-		expect(rows[2]).toMatchObject({ base: '50.0%', a18: '52.0%', gap: '+2.0 pts', market: null });
+		expect(rows[2]).toMatchObject({ base: '50.0%', a18: '52.0%', gap: '+2.00 pts', market: null });
 	});
 	it('reads the bookmakers on the priced matches, beside both models on those same matches', () => {
 		const s = (log_loss: number, n = 6) => ({ n, log_loss, brier: 0.6, accuracy: 0.5 });
 		const { priced, rows } = scoreRows({ base: s(1.0, 9), a18: s(0.99, 9), market: s(0.95), base_priced: s(0.98), a18_priced: s(0.97) });
 		expect(priced).toBe(6);
 		expect(rows[0]).toMatchObject({ market: '0.9500', marketGap: '+0.0200', marketMark: 'worse', marketNote: 'A18 0.9700 on these 6' });
-		expect(rows[2]).toMatchObject({ marketGap: '0.0 pts', marketMark: '' });
+		expect(rows[2]).toMatchObject({ marketGap: '0.00 pts', marketMark: '' });
 	});
 	it('shows nothing before any match has finished', () => {
 		expect(scoreRows({}).rows).toEqual([]);
@@ -49,5 +49,19 @@ describe('the two models compared', () => {
 	it('says how far apart they are', () => {
 		expect(upcomingSummary(upcoming)).toContain('different favourite in 10 (5.0%)');
 		expect(upcomingSummary({ ...upcoming, n: 0 })).toMatch(/No upcoming/);
+	});
+});
+
+describe('A18 on past matches', () => {
+	it('sets base and A18 side by side on each measure the test recorded, with no bookmakers', () => {
+		const period: [string, string] = ['2024-07-01', '2026-10-11'];
+		const { n, rows } = pastRows([
+			{ metric: 'log_loss', n: 45089, baseline: 0.99856, after: 0.99667, period },
+			{ metric: 'accuracy', n: 45089, baseline: 0.50975, after: 0.51024, period }
+		]);
+		expect(n).toBe(45089);
+		expect(rows.map((r) => [r.label, r.base, r.a18, r.gap, r.mark, r.market])).toEqual([
+			['Log loss', '0.9986', '0.9967', '−0.0019', 'better', null], ['Right result', '51.0%', '51.0%', '+0.05 pts', 'better', null]]);
+		expect(pastRows([]).rows).toEqual([]);
 	});
 });

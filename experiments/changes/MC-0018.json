@@ -118,6 +118,51 @@
    "vs_market": null,
    "meaningful": "Yes: still a real gain on top of the club-rank release (MC-0028), two thirds of its 0.0028 on the old model, in every season, every goal market, leagues and cups. Scored on every 90-minute score, ties after extra time counted as draws; on matches finished in 90 minutes only, 0.00199. Seen period: P17 is the unseen test.",
    "source": "experiments/a18_on_release/results.json"
+  },
+  {
+   "date": "2026-10-15",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Final period, refitted on the released club rank",
+   "n": 45089,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "source": "experiments/a18_on_release/results.json",
+   "metric": "brier",
+   "delta": -0.00113,
+   "baseline": 0.59636,
+   "after": 0.59523,
+   "interval": [
+    -0.00158,
+    -0.00068
+   ],
+   "interval_level": 0.95,
+   "vs_market": null,
+   "meaningful": "The Brier score of the same test, recorded beside its log loss for the Admin switch card."
+  },
+  {
+   "date": "2026-10-15",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Final period, refitted on the released club rank",
+   "n": 45089,
+   "period": [
+    "2024-07-01",
+    "2026-10-11"
+   ],
+   "source": "experiments/a18_on_release/results.json",
+   "metric": "accuracy",
+   "delta": 0.00049,
+   "baseline": 0.50975,
+   "after": 0.51024,
+   "interval": null,
+   "interval_level": null,
+   "vs_market": null,
+   "meaningful": "The share of right results in the same test (no range was worked out), recorded for the Admin switch card."
   }
  ]
 }
