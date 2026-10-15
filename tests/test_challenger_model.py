@@ -75,5 +75,30 @@ class CompareTest(unittest.TestCase):
         self.assertIn('c.captured_at < f.kickoff AND c.written_at < f.kickoff', text)
 
 
+MARKET = ROOT / 'db/migrations/20261015_match_model_compare_market.sql'
+
+
+class CompareMarketTest(unittest.TestCase):
+    def test_it_is_in_the_schema_word_for_word(self):
+        self.assertIn(MARKET.read_text(), (ROOT / 'db/schema.sql').read_text())
+
+    def test_it_answers_an_administrator_only_and_reads_only(self):
+        text = MARKET.read_text()
+        self.assertIn('IF NOT site.is_admin() THEN', text)
+        self.assertIn('GRANT EXECUTE ON FUNCTION public.admin_match_model_compare() TO authenticated;', text)
+        body = text.split('BEGIN;', 1)[1].split('COMMIT;', 1)[0].upper()
+        for write in ('INSERT ', 'UPDATE ', 'DELETE ', 'CREATE TABLE', 'CREATE TEMP'):
+            self.assertNotIn(write, body)
+
+    def test_the_bookmakers_are_the_stats_pages_and_read_on_the_same_matches(self):
+        text = MARKET.read_text()
+        # each bookmaker's whole home/draw/away set, its margin removed, averaged (site_record.market_consensus)
+        self.assertIn("(1 / o.odd::float8) / pg_catalog.sum(1 / o.odd::float8) OVER w AS p", text)
+        self.assertIn("WINDOW w AS (PARTITION BY o.fixture_id, o.bookmaker_id)) b\n        WHERE b.k = 3", text)
+        # the two models again on exactly the priced matches
+        self.assertIn("SELECT p.model || '_priced', p.y, p.p_home, p.p_draw, p.p_away", text)
+        self.assertIn("FROM paired p WHERE p.fixture_id IN (SELECT m.fixture_id FROM priced m)", text)
+
+
 if __name__ == '__main__':
     unittest.main()

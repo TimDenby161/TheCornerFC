@@ -14,10 +14,11 @@ export const otherModel = (live: MatchModelName): MatchModelName => (live === 'b
 // db/migrations/20261014_match_model_compare.sql). Chances are 0 to 1; a row's five numbers are
 // home, draw and away chances, then home and away expected goals.
 export type ModelScore = { n: number; log_loss: number; brier: number; accuracy: number };
-export type ApartRow = { fixture: number; kickoff: string; league: string; home: string; away: string; differ: boolean; gap: number; base: number[]; a18: number[] };
+export type ApartRow = { fixture: number; kickoff: string; league: string; home: string; away: string; differ: boolean; gap: number; base: number[]; a18: number[]; market?: number[] | null };
 export type ModelCompare = {
 	start: string;
-	finished: Partial<Record<MatchModelName, ModelScore>>;
+	// base and a18 on every finished match; market, base_priced and a18_priced on those with stored prices
+	finished: Partial<Record<MatchModelName | 'market' | 'base_priced' | 'a18_priced', ModelScore>>;
 	upcoming: { n: number; different_favourite: number; mean_gap: { home: number | null; draw: number | null; away: number | null }; a18_home_higher: number };
 	apart: ApartRow[];
 };
@@ -32,20 +33,24 @@ const points = (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(100
 
 // Each measure on the same finished matches: both models, and A18 minus base, marked better or
 // worse for A18 (lower is better for log loss and Brier, higher for right results).
-export type ScoreRow = { label: string; base: string; a18: string; gap: string; mark: 'better' | 'worse' | '' };
-export function scoreRows(finished: ModelCompare['finished']): { n: number; rows: ScoreRow[] } {
-	const b = finished.base, a = finished.a18;
-	if (!b || !a || !b.n) return { n: 0, rows: [] };
-	const row = (label: string, x: number, y: number, show: (v: number) => string, gap: (d: number) => string, lowerBetter: boolean): ScoreRow => {
-		const d = y - x;
-		return { label, base: show(x), a18: show(y), gap: gap(d), mark: d === 0 ? '' : (d < 0) === lowerBetter ? 'better' : 'worse' };
+export type ScoreRow = { label: string; base: string; a18: string; gap: string; mark: 'better' | 'worse' | ''; market: string | null; marketNote: string };
+// The bookmakers are read on the matches with stored prices, beside both models on those same
+// matches, so the three are always compared on the same games.
+export function scoreRows(finished: ModelCompare['finished']): { n: number; priced: number; rows: ScoreRow[] } {
+	const b = finished.base, a = finished.a18, m = finished.market, bp = finished.base_priced, ap = finished.a18_priced;
+	if (!b || !a || !b.n) return { n: 0, priced: 0, rows: [] };
+	const priced = m && bp && ap && m.n ? m.n : 0;
+	const row = (label: string, key: 'log_loss' | 'brier' | 'accuracy', show: (v: number) => string, gap: (d: number) => string, lowerBetter: boolean): ScoreRow => {
+		const x = b[key], y = a[key], d = y - x;
+		return { label, base: show(x), a18: show(y), gap: gap(d), mark: d === 0 ? '' : (d < 0) === lowerBetter ? 'better' : 'worse',
+			market: priced ? show(m![key]) : null, marketNote: priced ? `base ${show(bp![key])} · A18 ${show(ap![key])} on these ${priced}` : '' };
 	};
 	const four = (v: number) => v.toFixed(4);
 	const sign4 = (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toFixed(4)}`;
-	return { n: Math.min(a.n, b.n), rows: [
-		row('Log loss', b.log_loss, a.log_loss, four, sign4, true),
-		row('Brier', b.brier, a.brier, four, sign4, true),
-		row('Right result', b.accuracy, a.accuracy, (v) => pct(v, 1), (d) => `${points(d)} pts`, false)
+	return { n: Math.min(a.n, b.n), priced, rows: [
+		row('Log loss', 'log_loss', four, sign4, true),
+		row('Brier', 'brier', four, sign4, true),
+		row('Right result', 'accuracy', (v) => pct(v, 1), (d) => `${points(d)} pts`, false)
 	] };
 }
 
@@ -54,6 +59,7 @@ export function apartRow(r: ApartRow) {
 	const hda = (p: number[]) => `${pct(p[0])} · ${pct(p[1])} · ${pct(p[2])}`;
 	const xg = (p: number[]) => (p[3] != null && p[4] != null ? `${p[3].toFixed(2)}–${p[4].toFixed(2)}` : '–');
 	return { fixture: r.fixture, kickoff: r.kickoff, match: `${r.home} v ${r.away}`, league: r.league, base: hda(r.base), a18: hda(r.a18),
+		market: r.market ? hda(r.market) : null,
 		baseXg: xg(r.base), a18Xg: xg(r.a18), gap: `${Math.abs(100 * r.gap).toFixed(1)} pts`, differ: r.differ };
 }
 

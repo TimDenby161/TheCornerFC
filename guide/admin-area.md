@@ -90,7 +90,10 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   Above the button the card compares the two (`admin_match_model_compare()`): A18's test on past
   matches, each model's log loss, Brier and right results on the same finished matches since
   P18's start, P18's verdict and range, and the twenty upcoming fixtures where they differ most;
-  every gap is A18 minus base. The log of switches is
+  every gap is A18 minus base. A Bookmakers column beside them (`20261015_match_model_compare_market.sql`)
+  gives the closing prices with the margin taken out, averaged, as the Stats page does: on the
+  finished matches with stored prices, with both models on those same matches under it, and for
+  an upcoming fixture once prices are stored (about 14 days before kickoff). The log of switches is
   `match_model_switches`. The live model is the one the site, the paper bets and the fantasy
   models use, from the next run. Both models' last predictions before each kickoff are kept in
   `challenger_predictions` whichever is live, and P18 compares them on the same matches; the

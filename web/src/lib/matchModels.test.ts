@@ -27,7 +27,13 @@ describe('the two models compared', () => {
 		expect(n).toBe(600);
 		expect(rows.map((r) => r.mark)).toEqual(['better', 'worse', 'better']);
 		expect(rows[0].gap).toBe('−0.0100');
-		expect(rows[2]).toMatchObject({ base: '50.0%', a18: '52.0%', gap: '+2.0 pts' });
+		expect(rows[2]).toMatchObject({ base: '50.0%', a18: '52.0%', gap: '+2.0 pts', market: null });
+	});
+	it('reads the bookmakers on the priced matches, beside both models on those same matches', () => {
+		const s = (log_loss: number, n = 6) => ({ n, log_loss, brier: 0.6, accuracy: 0.5 });
+		const { priced, rows } = scoreRows({ base: s(1.0, 9), a18: s(0.99, 9), market: s(0.95), base_priced: s(0.98), a18_priced: s(0.97) });
+		expect(priced).toBe(6);
+		expect(rows[0]).toMatchObject({ market: '0.9500', marketNote: 'base 0.9800 · A18 0.9700 on these 6' });
 	});
 	it('shows nothing before any match has finished', () => {
 		expect(scoreRows({}).rows).toEqual([]);
@@ -36,7 +42,8 @@ describe('the two models compared', () => {
 	it('puts an upcoming fixture’s two predictions side by side', () => {
 		const r = apartRow({ fixture: 1, kickoff: '2026-10-17T14:00:00Z', league: 'FA Cup', home: 'Altrincham', away: 'Man Utd', differ: true, gap: 0.2057,
 			base: [0.39, 0.25, 0.36, 1.72, 1.63], a18: [0.6, 0.2, 0.2, 2.26, 1.24] });
-		expect(r).toMatchObject({ match: 'Altrincham v Man Utd', base: '39% · 25% · 36%', a18: '60% · 20% · 20%', baseXg: '1.72–1.63', gap: '20.6 pts', differ: true });
+		expect(r).toMatchObject({ match: 'Altrincham v Man Utd', base: '39% · 25% · 36%', a18: '60% · 20% · 20%', baseXg: '1.72–1.63', gap: '20.6 pts', differ: true, market: null });
+		expect(apartRow({ fixture: 2, kickoff: '2026-10-18T14:00:00Z', league: 'L', home: 'H', away: 'A', differ: false, gap: 0, base: [0.4, 0.3, 0.3, 1, 1], a18: [0.4, 0.3, 0.3, 1, 1], market: [0.5, 0.25, 0.25] }).market).toBe('50% · 25% · 25%');
 	});
 	it('says how far apart they are', () => {
 		expect(upcomingSummary(upcoming)).toContain('different favourite in 10 (5.0%)');

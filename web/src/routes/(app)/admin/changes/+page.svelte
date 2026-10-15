@@ -26,19 +26,20 @@
 				{#if data.versus}{@const v = data.versus}
 					<div class="mc-compare" id="mc-compare">
 						<div class="stats-label">The two compared · A18 minus base, minus is better for A18 on log loss and Brier</div>
-						<p class="mc-para"><strong>On past matches</strong> (A18’s test before release): {#if v.past}log loss {v.past.delta}{#if v.past.low && v.past.high} (range {v.past.low} to {v.past.high}){/if}. That period had been looked at before, so the matches below are the real test.{:else}no test recorded.{/if}</p>
+						<p class="mc-para"><strong>On past matches</strong> (A18’s test before release): {#if v.past}log loss {v.past.delta}{#if v.past.low && v.past.high}{' '}(range {v.past.low} to {v.past.high}){/if}. That period had been looked at before, so the matches below are the real test.{:else}no test recorded.{/if}</p>
 						<p class="mc-para"><strong>On live matches</strong>, both predictions stored before kickoff{#if v.start}, from {v.start}{/if}:{#if !v.scores}{' '}not available yet.{:else if !v.scores.n}{' '}no finished matches yet.{:else}{' '}{v.scores.n.toLocaleString('en-GB')} matches.{/if}</p>
 						{#if v.scores?.n}
-							<table class="calib-table mc-rows mc-two" id="mc-two"><thead><tr><th>Measure</th><th>Base</th><th>A18</th><th>A18 − base</th></tr></thead>
-								<tbody>{#each v.scores.rows as r (r.label)}<tr><td>{r.label}</td><td>{r.base}</td><td>{r.a18}</td><td><span class="mc-pill {r.mark}">{r.gap}</span></td></tr>{/each}</tbody></table>
+							<table class="calib-table mc-rows mc-two" id="mc-two"><thead><tr><th>Measure</th><th>Base</th><th>A18</th><th>A18 − base</th><th>Bookmakers</th></tr></thead>
+								<tbody>{#each v.scores.rows as r (r.label)}<tr><td>{r.label}</td><td>{r.base}</td><td>{r.a18}</td><td><span class="mc-pill {r.mark}">{r.gap}</span></td><td>{#if r.market}{r.market}<span class="mc-sub">{r.marketNote}</span>{:else}No prices{/if}</td></tr>{/each}</tbody></table>
+							<div class="stats-note">{#if v.scores.priced}The bookmakers are their closing prices with the margin taken out, averaged, on the {v.scores.priced} of these matches with stored prices; under each, the two models on those same matches.{:else}None of these matches has stored bookmaker prices yet.{/if}</div>
 						{/if}
-						<p class="mc-para"><strong>The verdict</strong> (protocol P18): {#if v.p18}{#if v.p18.verdict === 'better'}A18 is proven better.{:else if v.p18.verdict === 'worse'}A18 is proven worse.{:else}not proven either way yet.{/if}{#if v.p18.delta} Log loss {v.p18.delta}{#if v.p18.low && v.p18.high}, and the true gap could still be anywhere from {v.p18.low} to {v.p18.high}{/if}.{/if} {v.p18.n.toLocaleString('en-GB')} matches over {v.p18.weeks} week{v.p18.weeks === 1 ? '' : 's'}; nothing is called before {v.p18.matches} matches and {v.p18.minWeeks} weeks{#if v.target}, and a call is expected at about {v.target.toLocaleString('en-GB')}{/if}. Updated <LocalTime iso={v.p18.generated} show="short" />, Mondays and Thursdays.{:else}the Live tracking job has not scored it yet (Mondays and Thursdays).{/if}</p>
+						<p class="mc-para"><strong>The verdict</strong> (protocol P18): {#if v.p18}{#if v.p18.verdict === 'better'}A18 is proven better.{:else if v.p18.verdict === 'worse'}A18 is proven worse.{:else}not proven either way yet.{/if}{#if v.p18.delta}{' '}Log loss {v.p18.delta}{#if v.p18.low && v.p18.high}, and the true gap could still be anywhere from {v.p18.low} to {v.p18.high}{/if}.{/if} {v.p18.n.toLocaleString('en-GB')} matches over {v.p18.weeks} week{v.p18.weeks === 1 ? '' : 's'}; nothing is called before {v.p18.matches} matches and {v.p18.minWeeks} weeks{#if v.target}, and a call is expected at about {v.target.toLocaleString('en-GB')}{/if}. Updated <LocalTime iso={v.p18.generated} show="short" />, Mondays and Thursdays.{:else}the Live tracking job has not scored it yet (Mondays and Thursdays).{/if}</p>
 						{#if v.upcoming}<p class="mc-para"><strong>Upcoming fixtures:</strong> {v.upcoming}</p>{/if}
 						{#if v.apart.length}
 							<div class="stats-label">Where they differ most · home · draw · away chances, expected goals</div>
-							<div class="mc-scroll"><table class="calib-table mc-rows mc-apart" id="mc-apart"><thead><tr><th>Kick-off</th><th>Match</th><th>Base</th><th>A18</th><th>Gap</th></tr></thead>
+							<div class="mc-scroll"><table class="calib-table mc-rows mc-apart" id="mc-apart"><thead><tr><th>Kick-off</th><th>Match</th><th>Base</th><th>A18</th><th>Bookmakers</th><th>Gap</th></tr></thead>
 								<tbody>{#each v.apart as r (r.fixture)}<tr class:mc-differ={r.differ}><td><LocalTime iso={r.kickoff} show="short" /></td><td><a class="team-link" href="/match/{r.fixture}">{r.match}</a><span class="mc-sub">{r.league}{r.differ ? ' · different favourite' : ''}</span></td>
-									<td>{r.base}<span class="mc-sub">xG {r.baseXg}</span></td><td>{r.a18}<span class="mc-sub">xG {r.a18Xg}</span></td><td>{r.gap}</td></tr>{/each}</tbody></table></div>
+									<td>{r.base}<span class="mc-sub">xG {r.baseXg}</span></td><td>{r.a18}<span class="mc-sub">xG {r.a18Xg}</span></td><td>{r.market ?? 'No prices yet'}</td><td>{r.gap}</td></tr>{/each}</tbody></table></div>
 						{/if}
 					</div>
 				{/if}
