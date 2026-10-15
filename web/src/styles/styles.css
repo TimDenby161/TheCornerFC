@@ -268,6 +268,7 @@
   .not-found h2 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 44px); line-height: 1; font-weight: 900; font-stretch: 62%; text-transform: uppercase; color: var(--text-primary); }
   .not-found p { margin: 0 0 20px; font-size: 15px; color: var(--text-secondary); }
   .not-found .mt-btn { display: inline-block; text-decoration: none; }
+  .error-links { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
   /* a wide table's row under the pointer: the name and its numbers can be a window's width apart.
      A wash over the cell's own colour, so pinned columns keep theirs */
   @media (hover: hover) {

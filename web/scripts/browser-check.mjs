@@ -248,6 +248,13 @@ check("the betting pages' old public addresses are gone", gone === '404,404', go
 for (let i = errors.length - 1; i >= 0; i--) if (/404 \(Not Found\).*\/(simulation|model-vs-market)$/.test(errors[i])) errors.splice(i, 1);
 check('the menu has no Admin links for a visitor', !(await run(`[...document.querySelectorAll('#main-menu a')].some((a) => /Admin|Paper Simulation|Model vs Market|Model Change/.test(a.textContent) || a.getAttribute('href').startsWith('/admin'))`)));
 
+// an address with no page: the site's own error page, in plain words and with a way on, never the fault
+await open('/no-such-page-here'); await until(`!!document.querySelector('.error-page h2')`);
+check('an address with no page shows the error page, with no fault text', (await run(`document.querySelector('.error-page h2')?.textContent`)) === 'Page not found'
+	&& (await run(`!!document.querySelector('.error-page a[href="/"]')`)) && !(await run(`/Error|stack|at https?:/i.test(document.querySelector('.error-page').textContent)`)), await run(`document.querySelector('.error-page')?.textContent`));
+// (that 404 was asked for)
+for (let i = errors.length - 1; i >= 0; i--) if (/404 \(Not Found\)|no-such-page-here/.test(errors[i])) errors.splice(i, 1);
+
 // the account box: opens from the menu, shows the forms and the bot check, and answers in place
 await open('/clubs?c=39');
 await run(`document.querySelector('a.account-btn')?.click()`); await sleep(2500);

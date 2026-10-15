@@ -77,10 +77,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
-// A page that fails: logged for the Worker's logs, and its cause shown to an administrator only,
-// so a fault on an Admin page can be read off the page. Anyone else sees the usual message.
+// A page that fails: the fault goes to the Worker's log, never onto the page. The visitor sees
+// the error page's plain words (lib/components/ErrorPage.svelte).
 export const handleError: HandleServerError = ({ error, event }) => {
 	console.error(event.url.pathname, error);
-	const cause = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
-	return { message: 'Internal Error', detail: event.locals.admin ? cause.slice(0, 1200) : undefined };
+	return { message: 'Internal Error' };
 };

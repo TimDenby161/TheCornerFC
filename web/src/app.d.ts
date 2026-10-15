@@ -4,11 +4,6 @@ declare global {
 	// the commit this build was made from (vite.config.ts), for /version
 	const __COMMIT__: string;
 	namespace App {
-		// what a failed page says: the cause is added for a signed-in administrator only (hooks.server.ts)
-		interface Error {
-			message: string;
-			detail?: string;
-		}
 		// the Worker's own settings (wrangler.jsonc): which environment it is set up as
 		interface Platform {
 			env?: { SITE_ENV?: string };
