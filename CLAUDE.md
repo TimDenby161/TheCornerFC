@@ -9,6 +9,18 @@ Start with `guide/architecture.md` (the parts, what may depend on what, how data
 what deploys and what gates it). This file is the short list of what to know before changing
 anything; the conventions for each part load from `.claude/rules/` when you work in it.
 
+## Read the brain first
+
+Before working on any request, read `.claude/brain/index.md`, then the brain files it names for
+the task: the owner's decisions, lessons learned, experiments and the current state. Find the
+request in `tasks.md` (or add it, typed Requested, Broken or Recommended), then read the code and
+guide pages, then work; a finished task moves to `completed.md` with how it was verified, and
+the rest of `tasks.md` is reorganised at once (unblocked, re-checked, re-sorted). Update a brain file only when something important is
+learned (a decision, a bug's real cause, a failed approach, a concluded experiment, a change in
+what is live), as `index.md` describes, and say so in one line. The brain is local and
+gitignored, like `audit/`: never commit it or quote it in a public file. If it is missing (a
+fresh clone or a cloud session), carry on from this file and `guide/`.
+
 ## The parts
 
 | Folder | What it is |
@@ -21,7 +33,8 @@ anything; the conventions for each part load from `.claude/rules/` when you work
 | `experiments/` | One folder per model experiment, with its evaluator and results. |
 | `.github/workflows/` | The scheduled jobs (nightly, match day, FPL, backfills): they write to the database and commit nothing, and each runs the unit tests first. `tests.yml` runs both test suites on every push. |
 | `scripts/` | `environment.py`: the switch between staging and production on this machine. |
-| `audit/` | Private notes, plans and drafts. Gitignored: never commit it or quote it in a public file. |
+| `audit/` | Private notes, plans and drafts. Gitignored: never commit it or quote it in a public file. `audit/system-plan.md` is the owner's plan for the whole system. |
+| `.claude/brain/` | Claude's working knowledge of the project (start at `index.md`). Gitignored, like `audit/`. |
 
 The site reads only the database, through functions with fixed SQL that the public key is
 allowed to call. `.export/` is a local export folder and is not in git.
