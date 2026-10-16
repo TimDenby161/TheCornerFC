@@ -44,9 +44,9 @@ jobs:
       API_DAILY_RESERVE: "3000"        # staging stops long before the day's allowance that production needs
       STEPS: ${{ inputs.steps }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: pip
@@ -79,14 +79,14 @@ jobs:
           if [ "$STEPS" = "nightly (needs a call budget)" ] && [ "$API_RUN_BUDGET" = "0" ]; then echo "nightly needs a call budget above 0"; exit 1; fi
 
       - name: Restore staging's query cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache
           key: staging-db-cache-${{ github.run_id }}
           restore-keys: staging-db-cache-
 
       - name: Restore staging's API usage ledger
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .api-usage
           key: staging-api-usage-${{ github.run_id }}-${{ github.run_attempt }}
@@ -115,7 +115,7 @@ jobs:
 
       - name: Save staging's query cache
         if: always()
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache
           key: staging-db-cache-${{ github.run_id }}-${{ github.run_attempt }}
@@ -126,7 +126,7 @@ jobs:
 
       - name: Save staging's API usage ledger
         if: always()
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .api-usage
           key: staging-api-usage-${{ github.run_id }}-${{ github.run_attempt }}
