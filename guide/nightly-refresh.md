@@ -8,6 +8,8 @@
 5. Updates the club rankings (see [Club ranking](club-ranking.md)).
 6. Projects the score and win/draw/loss chances for every upcoming fixture, and backfills any finished fixture that has no projection.
 
+**When it runs.** The timer (`timer/`, a Cloudflare Worker) starts it at 01:17 UTC; GitHub's own schedule (01:17, 03:47, 06:17) is the back-up, and a run skips once another has worked that UTC day (`scripts/already_ran.py`). Match day (every 30 minutes) and the FPL update (07:00, 13:00, 19:00) are started the same way. A run started by hand (Actions → Run workflow) always works.
+
 A normal night uses about 350–500 API calls and takes a few minutes. If one competition fails, the others still run, and the exit code is non-zero.
 
 **Query cache.** The nightly job keeps a local copy of the big historical query results (every player appearance, finished fixture with xG, rank history and injury list) in `.cache/`, so it doesn't download them from Supabase every night. See `thecornerfc/pipeline/cache.py`.

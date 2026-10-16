@@ -32,7 +32,8 @@ fresh clone or a cloud session), carry on from this file and `guide/`.
 | `tests/` | Python unit tests, with stand-in database connections. |
 | `experiments/` | One folder per model experiment, with its evaluator and results. |
 | `.github/workflows/` | The scheduled jobs (nightly, match day, FPL, backfills): they write to the database and commit nothing, and each runs the unit tests first. `tests.yml` runs both test suites on every push. |
-| `scripts/` | `environment.py`: the switch between staging and production on this machine. |
+| `scripts/` | `environment.py`: the switch between staging and production on this machine. `already_ran.py`: whether a scheduled job's slot is already done. |
+| `timer/` | The Cloudflare Worker `thecornerfc-timer`: Cron Triggers that start the nightly, match-day and FPL jobs on time (GitHub's schedules are the back-up). |
 | `audit/` | Private notes, plans and drafts. Gitignored: never commit it or quote it in a public file. `audit/system-plan.md` is the owner's plan for the whole system. |
 | `.claude/brain/` | Claude's working knowledge of the project (start at `index.md`). Gitignored, like `audit/`. |
 

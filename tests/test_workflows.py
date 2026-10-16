@@ -158,5 +158,38 @@ class WorkflowIsolationTests(unittest.TestCase):
         self.assertIn('"preview_urls": false', production)
 
 
+class TimerTests(unittest.TestCase):
+    """The timer (timer/) starts the scheduled jobs on the minute; GitHub's schedules are the
+    back-up, and every job skips a slot another run has already worked (scripts/already_ran.py)."""
+    TIMED = {"nightly.yml": "sync", "matchday.yml": "matchday", "fpl.yml": "fpl"}
+
+    def test_each_timed_job_checks_its_slot_before_working(self):
+        for name, work in self.TIMED.items():
+            with self.subTest(workflow=name):
+                found = jobs(code(WORKFLOWS[name]))
+                self.assertIn(f"python3 scripts/already_ran.py {name}", found["check"])
+                self.assertIn("SOURCE: ${{ inputs.source }}", found["check"])
+                self.assertIn("needs: check", found[work])
+                self.assertIn("needs.check.outputs.run == 'true'", found[work])
+                self.assertRegex(WORKFLOWS[name], r"workflow_dispatch:.*\n    inputs:\n      source:")
+
+    def test_the_timer_starts_each_job_at_its_scheduled_time(self):
+        timer = (ROOT / "timer/src/index.js").read_text()
+        pairs = dict(re.findall(r"'([^']+)': '([a-z]+\.yml)'", timer))
+        self.assertEqual(sorted(pairs.values()), sorted(self.TIMED))
+        for cron, name in pairs.items():
+            with self.subTest(workflow=name):
+                first = re.search(r'cron: "([^"]+)"', WORKFLOWS[name]).group(1)
+                self.assertEqual(cron, first)
+                self.assertIn(f'"{cron}"', (ROOT / "timer/wrangler.jsonc").read_text())
+
+    def test_the_timer_has_no_address_and_starts_only_main(self):
+        config = code((ROOT / "timer/wrangler.jsonc").read_text().replace("//", " # "))
+        self.assertIn('"workers_dev": false', config)
+        self.assertIn('"preview_urls": false', config)
+        self.assertNotIn('"routes"', config)
+        self.assertIn("ref: 'main'", (ROOT / "timer/src/index.js").read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -79,6 +79,10 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # the timer (timer/): Node's own test runner, no packages
+      - name: Timer tests
+        run: node --test ../timer/src/index.test.js
+
       # (the type check loads the build's settings, which must name an environment)
       - name: Types
         env:

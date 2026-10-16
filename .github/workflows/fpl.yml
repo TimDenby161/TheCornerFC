@@ -6,7 +6,12 @@ name: FPL update
 on:
   schedule:
     - cron: "0 7,13,19 * * *"   # 07:00, 13:00 and 19:00 UTC
-  workflow_dispatch:
+  workflow_dispatch:       # "Run workflow" by hand always runs; the timer passes source=timer
+    inputs:
+      source:
+        description: "Who started it: leave blank by hand (the timer sends 'timer')"
+        required: false
+        default: ""
 
 concurrency:
   group: db-sync            # shared with the nightly and match-day jobs so they never overlap
@@ -17,10 +22,32 @@ concurrency:
 permissions: {}
 
 jobs:
+  # The timer (timer/) starts this job on the minute and GitHub's schedule above is the back-up:
+  # do the work only if no other run has done it in this slot (scripts/already_ran.py). A run
+  # started by hand always works.
+  check:
+    permissions:
+      contents: read       # the script
+      actions: read        # to list this workflow's runs and their jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: scripts
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ inputs.source }}
+        run: python3 scripts/already_ran.py fpl.yml
+
   fpl:
+    needs: check
     # Production's secrets are for main only: said here, and by the production environment's own
     # branch rule. The same file on any other branch runs nothing (guide/environments.md).
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.check.outputs.run == 'true'
     permissions:
       contents: read       # the data goes to the database, nothing is committed
     environment: Production

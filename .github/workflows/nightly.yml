@@ -1,13 +1,19 @@
 name: Nightly sync
 
 on:
-  # GitHub's scheduler is best-effort: runs on the hour are often hours late or dropped entirely.
-  # So try three times, off the hour; the later attempts skip if one already succeeded today (UTC).
+  # GitHub's scheduler is best-effort (on 2026-10-16 the 01:17 run started about 06:00), so the
+  # timer (timer/) starts this at 01:17 and these three are the back-up; each skips once one has
+  # worked today (UTC).
   schedule:
     - cron: "17 1 * * *"   # 01:17 UTC
     - cron: "47 3 * * *"   # 03:47 UTC (backup)
     - cron: "17 6 * * *"   # 06:17 UTC (backup)
-  workflow_dispatch:       # "Run workflow" button for manual runs (always runs)
+  workflow_dispatch:       # "Run workflow" by hand always runs; the timer passes source=timer
+    inputs:
+      source:
+        description: "Who started it: leave blank by hand (the timer sends 'timer')"
+        required: false
+        default: ""
 
 concurrency:
   group: db-sync            # shared with the match-day job so they never overlap
@@ -18,30 +24,26 @@ concurrency:
 permissions: {}
 
 jobs:
-  # Scheduled backups do nothing if the nightly sync has already succeeded today
+  # The timer (timer/) starts this job on the minute and GitHub's schedule above is the back-up:
+  # do the work only if no other run has done it in this slot (scripts/already_ran.py). A run
+  # started by hand always works.
   check:
     permissions:
-      actions: read        # to list this workflow's earlier runs
+      contents: read       # the script
+      actions: read        # to list this workflow's runs and their jobs
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       run: ${{ steps.check.outputs.run }}
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: scripts
       - id: check
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          done_today=$(gh run list -R "$GITHUB_REPOSITORY" --workflow nightly.yml --status success \
-            --created ">=$(date -u +%F)" --json databaseId --jq length)
-          if [ "$done_today" -gt 0 ]; then
-            echo "Nightly sync already succeeded today; skipping"
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
+          SOURCE: ${{ inputs.source }}
+        run: python3 scripts/already_ran.py nightly.yml
 
   sync:
     needs: check
