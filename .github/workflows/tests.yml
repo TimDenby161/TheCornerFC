@@ -24,6 +24,21 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # A throwaway Postgres for tests/test_site_access_db.py, which builds the schema on it and checks
+    # who sees what (the paywall, the Admin area, the owner's FPL data, what the public key can
+    # reach). Holds nothing real and goes with the job. Postgres 17, as the Supabase projects run.
+    services:
+      postgres:
+        image: postgres:17.11@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+        env:
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -39,6 +54,7 @@ jobs:
           THECORNERFC_MODE: local
           THECORNERFC_READ_ONLY: "true"
           THECORNERFC_NO_API: "true"
+          SITE_DB_TEST_DSN: postgresql://postgres:test@localhost:5432/postgres
         run: python -m unittest discover -s tests
 
   site:
