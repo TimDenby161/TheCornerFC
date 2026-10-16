@@ -13,6 +13,10 @@
 	// site outside the domain's Cloudflare settings (audit finding S20, 2026-10-16)
 	"workers_dev": false,
 	"preview_urls": false,
+	// keep a log line per request (Observability tab): its CPU time and whether it was cut off,
+	// to find what makes pages answer 503 (task T-039). About 23,000 lines a day, inside the free
+	// plan's 200,000
+	"observability": { "enabled": true },
 	// Staging: a second Worker with its own address, settings and secrets, deployed with
 	// `wrangler deploy --env staging` from the staging branch. It answers only at its own domain
 	// (behind Cloudflare Access): no workers.dev address and no preview addresses.
