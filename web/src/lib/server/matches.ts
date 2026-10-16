@@ -10,7 +10,7 @@ const FACTORS = [['r_winner', 'Winner', '30%'], ['r_margin', 'Margin', '25%'], [
 // A match as its card draws it: names, the strengths beside them, the chances as the bars show
 // them, the key reasons in words, and what (if anything) the database held back for subscribers.
 export type CardView = ReturnType<typeof cardView>;
-export function cardView(site: Site, ranks: Map<number, Club>, m: Match, paywall: boolean) {
+export function cardView(site: Site, ranks: Map<number, Club>, m: Match, paywall: boolean, now = Date.now()) {
 	const finished = FINISHED.has(m.status) && m.hg != null;
 	const upcoming = !finished && !LIVE.has(m.status);
 	const intl = !!m.intl;
@@ -25,8 +25,11 @@ export function cardView(site: Site, ranks: Map<number, Club>, m: Match, paywall
 	const home = side(m.home, m.home_rank), away = side(m.away, m.away_rank);
 	const probs = m.p_home != null && m.p_draw != null ? shownProbs(m.p_home, m.p_draw) : null;
 	const market = m.m_home != null && m.m_draw != null && probs ? shownProbs(m.m_home, m.m_draw) : null;
-	// behind the paywall: the database left the paid fields of a match to come out for this visitor
-	const locked = paywall && upcoming && !NO_GAME.has(m.status);
+	// behind the paywall: the database left the paid fields of a match to come out for this visitor.
+	// It decides by the kick-off time (a match that has kicked off is whole: the record is free), so
+	// the card does too: the status can still say "not started" until the next export
+	const kickedOff = new Date(m.kickoff).getTime() <= now;
+	const locked = paywall && upcoming && !kickedOff && !NO_GAME.has(m.status);
 	return {
 		id: m.id, kickoff: m.kickoff, round: m.round, status: m.status, intl,
 		home, away, hg: m.hg, ag: m.ag, penH: m.pen_h, penA: m.pen_a, homeXg: m.home_xg, awayXg: m.away_xg, likely: m.likely, source: m.source,
