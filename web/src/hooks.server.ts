@@ -4,6 +4,7 @@ import { SITE_ENV, SITE_HOST } from '#lib/config.ts';
 import { oldFile, tabFor } from '#lib/menu.ts';
 import { adminGate, isAdminPath } from '#lib/server/admin.ts';
 import { secured } from '#lib/server/headers.ts';
+import { shareTags } from '#lib/server/share.ts';
 import { supabaseFor } from '#lib/server/auth.ts';
 
 const LINK_TYPES = new Set(['signup', 'email', 'recovery', 'magiclink', 'invite', 'email_change']);
@@ -65,8 +66,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (gate === 'admin') event.locals.admin = true;
 
 	const response = await resolve(event, {
-		// the stylesheet lays a section out by the name on <body data-tab>, so the server writes it
-		transformPageChunk: ({ html }) => html.replace('%tab%', tabFor(event.url.pathname)),
+		// the stylesheet lays a section out by the name on <body data-tab>, so the server writes it;
+		// and the share tags and canonical address go in the head (lib/server/share.ts)
+		transformPageChunk: ({ html }) => shareTags(html.replace('%tab%', tabFor(event.url.pathname)), `https://${SITE_HOST}`, event.url.pathname),
 		filterSerializedResponseHeaders: (name) => name === 'content-range' || name === 'x-supabase-api-version'
 	});
 	// a page differs by who asks: nothing may hand one visitor's copy to another, and a signed-in

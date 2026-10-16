@@ -74,8 +74,6 @@
 <svelte:head>
 	<title>The Corner FC</title>
 	<meta name="description" content="Club strength ratings, projected scores and model win/draw/loss chances." />
-	<meta property="og:type" content="website" /><meta property="og:site_name" content="The Corner FC" /><meta property="og:title" content="The Corner FC" />
-	<meta property="og:description" content="Club strength ratings, projected scores and model win/draw/loss chances." />
 </svelte:head>
 
 {#snippet slide(key: string, name: string, first: string, second: string, lede: string, go: string, href: string, head: string, note: string, sample: import('svelte').Snippet)}
