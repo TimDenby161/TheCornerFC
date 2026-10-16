@@ -76,7 +76,7 @@ interactive piece, and wait with its `until()`, not a fixed sleep. `scripts/fant
 covers the fantasy pages.
 
 Skills: `/new-migration` (any database change), `/model-experiment` (any change to a model),
-`/pre-push` (work goes to `staging`), `/promote-production` (the only way onto `main`).
+`/pre-push` (work goes to `staging`), `/promote-production` (the only way onto `main`), `/add-task` (puts one task on the brain's list).
 
 ## Rules that must not be broken
 
