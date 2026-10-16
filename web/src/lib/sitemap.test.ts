@@ -7,7 +7,7 @@ describe('the sitemap', () => {
 	it('lists the main pages, each league once and each club, at the live address', () => {
 		expect(locs.slice(0, MAIN_PAGES.length)).toEqual(MAIN_PAGES.map((p) => 'https://thecornerfc.com' + p));
 		expect(locs.slice(MAIN_PAGES.length)).toEqual([
-			'https://thecornerfc.com/league/39', 'https://thecornerfc.com/league/140',
+			'https://thecornerfc.com/league/39/table', 'https://thecornerfc.com/league/140/table',
 			'https://thecornerfc.com/club/7', 'https://thecornerfc.com/club/9', 'https://thecornerfc.com/club/42'
 		]);
 	});
