@@ -3,6 +3,7 @@ import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 import { SITE_ENV, SITE_HOST } from '#lib/config.ts';
 import { oldFile, tabFor } from '#lib/menu.ts';
 import { adminGate, isAdminPath } from '#lib/server/admin.ts';
+import { secured } from '#lib/server/headers.ts';
 import { supabaseFor } from '#lib/server/auth.ts';
 
 const LINK_TYPES = new Set(['signup', 'email', 'recovery', 'magiclink', 'invite', 'email_change']);
@@ -74,7 +75,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// staging is never for search engines, whatever links to it
 	if (SITE_ENV !== 'production') response.headers.set('x-robots-tag', 'noindex, nofollow');
 	if (event.locals.user || isAdminPath(event.url.pathname)) response.headers.set('cache-control', 'private, no-store');
-	return response;
+	// HSTS, nosniff, the referrer and permissions policies (lib/server/headers.ts). Redirects are
+	// left as SvelteKit makes them, sign-in cookies included: one page carrying HSTS covers the site
+	return secured(response);
 };
 
 // A page that fails: the fault goes to the Worker's log, never onto the page. The visitor sees

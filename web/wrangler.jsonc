@@ -9,6 +9,10 @@
 	// Which environment this Worker is set up as. The code is built for one too (VITE_SITE_ENV),
 	// and refuses to serve if the two differ (src/hooks.server.ts).
 	"vars": { "SITE_ENV": "production" },
+	// thecornerfc.com only: no workers.dev address and no preview addresses, which would serve the
+	// site outside the domain's Cloudflare settings (audit finding S20, 2026-10-16)
+	"workers_dev": false,
+	"preview_urls": false,
 	// Staging: a second Worker with its own address, settings and secrets, deployed with
 	// `wrangler deploy --env staging` from the staging branch. It answers only at its own domain
 	// (behind Cloudflare Access): no workers.dev address and no preview addresses.

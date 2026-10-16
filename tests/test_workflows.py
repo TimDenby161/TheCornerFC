@@ -151,6 +151,12 @@ class WorkflowIsolationTests(unittest.TestCase):
         self.assertIn('"preview_urls": false', staging)
         self.assertIn('"vars": { "SITE_ENV": "production" }', text.split('"env": {', 1)[0])
 
+    def test_the_production_worker_answers_only_at_the_sites_address(self):
+        text = code((ROOT / "web/wrangler.jsonc").read_text().replace("//", " # "))
+        production = text.split('"env": {', 1)[0]
+        self.assertIn('"workers_dev": false', production)
+        self.assertIn('"preview_urls": false', production)
+
 
 if __name__ == "__main__":
     unittest.main()
