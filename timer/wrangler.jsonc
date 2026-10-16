@@ -7,6 +7,9 @@
 	"compatibility_date": "2026-10-01",
 	"workers_dev": false,
 	"preview_urls": false,
+	// keep its log (Observability tab): each tick writes one line, about 50 a day, well inside the
+	// free plan's 200,000
+	"observability": { "enabled": true },
 	"triggers": {
 		"crons": ["17 1 * * *", "*/30 * * * *", "0 7,13,19 * * *"]
 	}

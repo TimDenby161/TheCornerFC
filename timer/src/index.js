@@ -25,6 +25,7 @@ export function dispatchRequest(workflow, token) {
 			authorization: `Bearer ${token}`,
 			accept: 'application/vnd.github+json',
 			'x-github-api-version': '2022-11-28',
+			'content-type': 'application/json',
 			'user-agent': 'thecornerfc-timer'
 		},
 		body: JSON.stringify({ ref: 'main', inputs: { source: 'timer' } })
@@ -36,9 +37,10 @@ export default {
 		const workflow = JOBS[controller.cron];
 		if (!workflow) return console.error('No job for', controller.cron);
 		const response = await fetch(dispatchRequest(workflow, env.GITHUB_TOKEN));
-		// GitHub answers 204 when the run is queued; anything else goes to the Worker's log, never
-		// anywhere a visitor could see it
-		if (response.status !== 204) console.error(workflow, response.status, (await response.text()).slice(0, 300));
+		// GitHub answers 204 when the run is queued. Either way one line goes to the Worker's log
+		// (Observability), never anywhere a visitor could see it
+		if (response.status === 204) console.log(workflow, 'started');
+		else console.error(workflow, response.status, (await response.text()).slice(0, 300));
 	},
 	// nothing to visit
 	async fetch() {

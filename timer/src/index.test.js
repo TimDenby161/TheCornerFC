@@ -17,6 +17,7 @@ test('a tick asks GitHub to run the workflow on main, marked as the timer', asyn
 	assert.equal(r.method, 'POST');
 	assert.equal(r.url, 'https://api.github.com/repos/TimDenby161/TheCornerFC/actions/workflows/matchday.yml/dispatches');
 	assert.equal(r.headers.get('authorization'), 'Bearer tok');
+	assert.equal(r.headers.get('content-type'), 'application/json');
 	assert.deepEqual(await r.json(), { ref: 'main', inputs: { source: 'timer' } });
 });
 
