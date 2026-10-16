@@ -95,7 +95,7 @@ export const actions = {
 	// account's id, which is how the webhook knows whose it is.
 	subscribe: async ({ request, locals, fetch, url }) => {
 		const p = payments(env);
-		if (!p) return fail(400, { message: "Subscriptions aren't open yet." });
+		if (!p) return fail(400, { message: 'Subscriptions are coming soon.' });
 		if (!locals.user) return fail(401, { message: 'Sign in first.' });
 		const plan = text(await request.formData(), 'plan') === 'yearly' ? 'yearly' : 'monthly';
 		let to: string;
@@ -118,7 +118,7 @@ export const actions = {
 	// On to Stripe's own page for a subscriber: change the card, see invoices, cancel
 	manage: async ({ locals, fetch, url }) => {
 		const p = payments(env);
-		if (!p) return fail(400, { message: "Subscriptions aren't open yet." });
+		if (!p) return fail(400, { message: 'Subscriptions are coming soon.' });
 		if (!locals.user) return fail(401, { message: 'Sign in first.' });
 		let to: string;
 		try {

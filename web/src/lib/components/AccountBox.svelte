@@ -103,7 +103,7 @@
 	<p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings, league tables and the betting comparison pages.</p>
 	<p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free).</p>
 	{#if !pay}
-		<p class="account-text"><b>Subscriptions aren't open yet.</b></p>
+		<p class="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free above is here for everyone, with no account needed.</p>
 	{:else if sub?.subscriber}
 		<p class="account-text"><b>This account is subscribed.</b></p>
 	{:else if user}
