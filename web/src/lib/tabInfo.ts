@@ -3,6 +3,18 @@
 export type TabInfo = { intro: string; more: string; key: [string, string][] };
 // prettier-ignore
 export const TAB_INFO: Record<string, TabInfo> = {
+	"model": {
+		"intro": "How good the match model is, shown in the open: every prediction is stored before kick-off and can't be changed afterwards, and every change to the model is tested before it goes live, by a test written before its result was seen.",
+		"more": "evidence",
+		"key": [
+			["Log loss", "How surprised the model was by what happened, averaged over every match. Lower is better. Giving every match the usual home, draw and away rates scores about 1.07."],
+			["Brier score", "The squared gap between the chances given and what happened. Lower is better."],
+			["Right results", "How often the outcome the model made most likely happened."],
+			["vs Bookmakers", "The model's log loss minus the bookmakers' (their closing prices with the margin taken out). Minus means the model did better."],
+			["Live test", "A change scored on matches played after it was written down, so it can't have been tuned to them."],
+			["Green / red", "Green: statistical evidence the change makes the model better. Red: evidence it makes it worse. No colour: not proven either way yet."]
+		]
+	},
 	"clubs": {
 		"intro": "Every club ranked by strength, on a scale where 100 points is worth about a goal a game.",
 		"more": "terms",

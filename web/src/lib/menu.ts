@@ -13,7 +13,8 @@ export const MENU: { label: string; sections: Section[] }[] = [
 	{ label: 'Predictions', sections: [
 		{ tab: 'matches', label: 'Matches', path: '/matches' },
 		{ tab: 'stats', label: 'Stats', path: '/stats' },
-		{ tab: 'lineups', label: 'Line-up record', path: '/lineups' }
+		{ tab: 'lineups', label: 'Line-up record', path: '/lineups' },
+		{ tab: 'model', label: 'The Model', path: '/model' }
 	] }
 ];
 // The Admin area is the site administrator's: in the menu for them only, and every address under

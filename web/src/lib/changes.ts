@@ -259,3 +259,35 @@ export function forwardSummary(c: Change, metric = 'log_loss') {
 	const observed = f?.after?.vs_market && f.before?.vs_market ? f.after.vs_market.model_minus_market - f.before.vs_market.model_minus_market : null;
 	return { expected, backtest: tested, observed, matches: f?.after?.n ?? 0, gap: observed != null && expected != null ? observed - expected : null, verdict: f?.verdict ?? null, why: f?.why ?? null };
 }
+
+// The eight figures at the top of the Model Change Tracker and of the public page The Model
+// (/model): how the live model is doing on its locked pre-kickoff record, how it compares with
+// the bookmakers and with guessing, and how the changes have moved it. Every figure that compares
+// is a change in log loss, so minus is better throughout.
+export type Tile = { label: string; value: string; note: string; cls?: string };
+export function scoreTiles(doc: Pick<ChangesDoc, 'current' | 'series' | 'changes'>): Tile[] {
+	const cur = doc.current;
+	const steps = cumulative(doc.changes), total = steps.filter((s) => s.delta != null);
+	const gap = cur?.vs_market ? cur.vs_market.model_log_loss - cur.vs_market.market_log_loss : null;
+	const day = (iso: string | undefined) => (iso ? iso.slice(0, 10) : '');
+	// How the model is doing now, how it has got better and how it compares with other
+	// forecasters. (How many changes were accepted or rejected is in the list below.)
+	const base = againstBaseRates(doc.series), next = bestWaiting(doc.changes);
+	const pos = (v: number) => (v < 0 ? 'pos' : v > 0 ? 'neg' : '');
+	// Two rows of four. Every figure that compares is a change in log loss, so minus is better
+	// throughout: the model against the bookmakers and against guessing, and the changes' gains.
+	return [
+		{ label: 'Base log loss', value: cur?.log_loss != null ? cur.log_loss.toFixed(4) : 'Not recorded', note: cur?.period ? `The live model's predictions stored before kickoff, ${day(cur.period.from)} to ${day(cur.period.to)}. Lower is better` : 'The live record' },
+		{ label: 'vs Bookmakers', value: gap != null ? signed(gap, 4) : 'Not recorded', cls: gap != null ? pos(gap) : '',
+			note: gap != null ? `Result log loss, model minus market, on ${cur!.vs_market!.n.toLocaleString('en-GB')} matches with stored prices in the last 12 months. ${gap > 0 ? 'Behind the market' : 'Ahead of the market'}; the registered comparison is protocol P6` : 'No matches with stored prices' },
+		{ label: 'vs Guessing', value: base ? signed(base.model - base.base, 4) : 'Not recorded', cls: base ? pos(base.model - base.base) : '',
+			note: base ? `Log loss ${base.model.toFixed(4)} against ${base.base.toFixed(4)} for giving every match ${(100 * base.rates[0]).toFixed(0)}% / ${(100 * base.rates[1]).toFixed(0)}% / ${(100 * base.rates[2]).toFixed(0)}%, on ${base.n.toLocaleString('en-GB')} live matches. Minus means the model is better` : 'Needs a live record and the months before it' },
+		{ label: 'Matches', value: cur?.n != null ? cur.n.toLocaleString('en-GB') : 'Not recorded', note: 'Finished matches with a prediction stored before kickoff, behind the figures in this row' },
+		{ label: 'Brier score', value: cur?.brier != null ? cur.brier.toFixed(4) : 'Not recorded', note: 'On the same matches as the log loss. Lower is better' },
+		{ label: 'Improvement', value: total.length ? signed(steps[steps.length - 1].total) : 'Not recorded', cls: total.length ? pos(steps[steps.length - 1].total) : '',
+			note: total.length ? `Change in log loss since the earliest dated version: the sum of ${total.length} deployed change${total.length === 1 ? "'s" : "s'"} own backtest${total.length === 1 ? '' : 's'}, on different samples. Minus is better. Earlier changes were never dated and are not counted` : 'No deployed change has a recorded backtest' },
+		{ label: 'Best gain not in production', value: next ? signed(-next.gain) : 'None yet', cls: next ? 'pos' : '',
+			note: next ? `Change in log loss. ${shortId(next.id)} · ${next.title}${next.n ? `, on ${next.n.toLocaleString('en-GB')} matches` : ''}. ${next.stage}: a historical test, not yet confirmed on new matches` : 'No change outside production has a proven gain' },
+		{ label: 'Right results', value: cur?.accuracy != null ? `${(100 * cur.accuracy).toFixed(1)}%` : 'Not recorded', note: 'The outcome the model made most likely happened, on the same matches' }
+	];
+}

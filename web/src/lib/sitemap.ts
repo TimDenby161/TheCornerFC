@@ -2,7 +2,7 @@
 // league (at its table, where /league/<id> leads) and every club. Players and nations are reached
 // through the links on those pages, so building it needs only the club list the site already
 // keeps (task T-031).
-export const MAIN_PAGES = ['/', '/clubs', '/players', '/matches', '/leagues', '/nations', '/stats', '/lineups', '/methodology', '/privacy', '/terms'];
+export const MAIN_PAGES = ['/', '/clubs', '/players', '/matches', '/leagues', '/nations', '/stats', '/lineups', '/model', '/methodology', '/privacy', '/terms'];
 
 export function sitemap(origin: string, clubs: { team: number; league: number }[]): string {
 	const leagues = [...new Set(clubs.map((c) => c.league).filter((l) => l != null))].sort((a, b) => a - b);

@@ -4,6 +4,14 @@ Three pages under `/admin` are the site administrator's only: **Model Change Tra
 **Model vs Market** and **Paper Simulation**. The two betting pages were public until
 2026-10-13 (owner's decision). Nothing here changes a model, a bet or a stored prediction.
 
+**The record is public too (owner's decision 2026-10-16, the most transparent model).** The
+public page **The Model** (`/model`) shows the tracker's eight figures and every change with its
+past and live results, from `model.json`: the nightly export writes it beside the Admin copy
+(`site_record.public_model`), leaving out which database wrote it and the register's internal
+mismatch notes. What stays here only: the model switch, where the two models part on matches to
+come (both database functions, not documents), the paper bets and the Model vs Market tips. The
+model against the bookmakers, market by market, was already public on the Stats page.
+
 ## Who gets in
 
 - **An administrator is an address in `site_admins`**, set by hand in the SQL editor of each

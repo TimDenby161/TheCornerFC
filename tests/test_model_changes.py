@@ -466,7 +466,7 @@ class ExportTests(unittest.TestCase):
         with read_only(), self.assertRaises(config.SafetyError):
             site_files.store_admin_doc(Conn(), 'bets', {})
 
-    def test_the_tracker_s_document_is_stored_privately_and_says_which_database_it_is(self):
+    def test_the_tracker_s_document_is_stored_and_says_which_database_it_is(self):
         for environment in ('staging', 'production'):
             conn = Conn(environment=environment, months=[('2026-10', 'live', 700, 0.97, 0.58, 310, 170, 220)])
             with tempfile.TemporaryDirectory() as d, writable():
@@ -474,13 +474,25 @@ class ExportTests(unittest.TestCase):
                                                                                   "versions": [{"name": "match-prediction", "n": 740}]}}))
                 (Path(d) / 'stats.json').write_text(json.dumps({"ranges": {"365d": {"all": {"markets": {"1X2": {"n": 1147, "model_ll": 0.9739, "close_ll": 0.9536}}}}}}))
                 doc = site_record.export_model_changes(conn, Path(d), NOW)
-                self.assertEqual(sorted(p.name for p in Path(d).iterdir()), ['methodology.json', 'stats.json'])
+                # the same record also goes out in public for The Model page (owner, 2026-10-16)
+                self.assertEqual(sorted(p.name for p in Path(d).iterdir()), ['methodology.json', 'model.json', 'stats.json'])
+                public = json.loads((Path(d) / 'model.json').read_text())
             self.assertEqual(conn.admin['model_changes'], doc)
             self.assertEqual((doc['environment'], doc['stored'], doc['differs']), (environment, True, []))
             self.assertEqual(len(doc['changes']), len(conn.changes))
             self.assertEqual((doc['current']['version'], doc['current']['n'], doc['current']['vs_market']['n']), ('match-prediction', 740, 1147))
             self.assertEqual(doc['series'][0], {"month": "2026-10", "source": "live", "n": 700, "log_loss": 0.97, "brier": 0.58,
                                                 "home": 310, "draw": 170, "away": 220})
+            self.assertEqual((public['current'], public['series'], len(public['changes'])), (doc['current'], doc['series'], len(doc['changes'])))
+            self.assertNotIn('environment', public)
+            self.assertNotIn('differs', public)
+
+    def test_the_public_record_carries_the_live_tests_and_none_of_the_admin_notes(self):
+        doc = {"generated_at": "t", "current": {"n": 1}, "series": [], "changes": [{"id": "MC-0001"}], "forward_record": {},
+               "live": {}, "environment": "production", "differs": ["x"], "stored": True}
+        public = site_record.public_model(doc, {"n": 5, "changes": {"MC-0018": {"called": False}}})
+        self.assertEqual(sorted(public), ['changes', 'current', 'forward_record', 'generated_at', 'live', 'series', 'tracking'])
+        self.assertEqual(public['tracking']['n'], 5)
 
     def test_a_local_run_builds_the_document_from_the_files_and_stores_nothing(self):
         conn = Conn()

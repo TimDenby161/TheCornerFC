@@ -228,6 +228,15 @@ await run(`[...document.querySelectorAll('#stats-ranges a')].find((a) => a.textC
 check('Stats: the range changes the figures', (await run('location.search')) === '?r=365d' && (await run(`document.querySelector('#stats-body .stats-value')?.textContent`)) !== matches30 && (await run(`document.querySelectorAll('#stats-body .calib-table').length`)) >= 2, `${matches30} -> ${await run(`document.querySelector('#stats-body .stats-value')?.textContent`)} matches`);
 await run(`document.querySelector('#stats-filters button[value="c:England"]')?.click()`); await sleep(1500);
 check('Stats: a country\'s competitions together, the range kept', (await run('location.search')).includes('r=365d') && decodeURIComponent(await run('location.search')).includes('c=c:England') && (await run(`document.querySelectorAll('#stats-body .stats-card').length`)) >= 8, decodeURIComponent(await run('location.search')));
+// The Model (/model): the public record and every change, or the note that the nightly run hasn't
+// written it yet; the model switch never appears on it
+await open('/model');
+await until(`document.querySelector('#model-tiles .stats-card') || document.querySelector('#model-empty')`);
+{
+	const tiles = await run(`document.querySelectorAll('#model-tiles .stats-card').length`), empty = await run(`!!document.querySelector('#model-empty')`);
+	check('The Model shows its eight figures and the changes, or says it is being prepared', tiles === 8 ? (await run(`document.querySelectorAll('#model-in tbody tr, #model-tried tbody tr').length`)) > 0 : empty, tiles === 8 ? `${tiles} figures` : 'being prepared');
+	check('The Model has no model switch and no upcoming fixtures', !(await run(`!!document.querySelector('form[action*="switch"], #mc-switch, #mc-apart')`)));
+}
 await open('/lineups');
 check('the line-up record saved before kick-off', (await run(`document.querySelectorAll('#lineup-body .stats-card').length`)) >= 10 && /of 11/.test(await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`)), await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`));
 await run(`[...document.querySelectorAll('#lineup-source a')].find((a) => a.textContent === 'Reconstructed history')?.click()`);

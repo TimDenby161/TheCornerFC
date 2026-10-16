@@ -113,10 +113,12 @@ Skills: `/new-migration` (any database change), `/model-experiment` (any change 
   on and revoke `anon` from views.
 - **A signed-in visitor's requests** go through `askAs(fetch, locals.token, ...)`, never
   `keptAsk`, and their pages answer `private, no-store`.
-- **The Admin area is the administrator's only** (`guide/admin-area.md`): the paper bets and the
-  model change record live in `admin_docs`, read through `adminDoc(fetch, locals.token, ...)`
-  on a page under `/admin`, never in `site.docs`, `.export` or a public page. The files in
-  `experiments/changes/` are added to, never edited.
+- **The Admin area is the administrator's only** (`guide/admin-area.md`): the paper bets live in
+  `admin_docs`, read through `adminDoc(fetch, locals.token, ...)` on a page under `/admin`, never
+  in `site.docs`, `.export` or a public page, and so do the model switch and anything about
+  matches still to be played. The model change record and its live tests are also public, on
+  The Model (`/model`, owner's decision 2026-10-16), as `model.json` without the Admin notes
+  (`site_record.public_model`). The files in `experiments/changes/` are added to, never edited.
 - **Lists behind the paywall keep the subscriber's order** with the ranks hidden. Never reorder
   hidden players or drop the list.
 
