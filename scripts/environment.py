@@ -213,6 +213,10 @@ def switch(name, ask, folder=None, env_file=None, site_file=None):
                          f"the site needs VITE_SITE_ENV={name} in it.")
         else:
             replace(site_file, f"{HEADER}\nVITE_SITE_ENV={name}\n")
+    # the C# site (site/, T-048) beside it reads the same choice from its own file
+    cs_file = site_file.parent.parent / "site" / "environment.local"
+    if cs_file.parent.is_dir():
+        replace(cs_file, f"{HEADER}\nSITE_ENV={name}\n")
     return notes
 
 

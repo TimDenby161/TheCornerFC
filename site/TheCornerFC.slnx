@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TheCornerFC.Web.Tests/TheCornerFC.Web.Tests.csproj" />
+  <Project Path="TheCornerFC.Web/TheCornerFC.Web.csproj" />
+</Solution>

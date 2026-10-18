@@ -35,3 +35,10 @@ experiments/*/inputs.json.gz
 # Each environment keeps its own local cache and export (scripts/environment.py)
 .cache-staging/
 .export-staging/
+
+# The C# site (site/): what dotnet builds, the environment the switch chose for this machine,
+# and its wwwroot/, made at each build from web/'s stylesheets, fonts and icons and its own Assets/
+site/**/bin/
+site/**/obj/
+site/environment.local
+site/TheCornerFC.Web/wwwroot/

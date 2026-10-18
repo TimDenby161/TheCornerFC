@@ -124,9 +124,10 @@ class WorkflowIsolationTests(unittest.TestCase):
                     tests = body.split("- name: Unit tests", 1)[1].split("\n      - ", 1)[0]
                     self.assertNotIn("secrets.", tests)
 
-    def test_both_test_suites_run_on_staging_and_on_main(self):
+    def test_every_test_suite_runs_on_staging_and_on_main(self):
+        # Python, the site, and the C# site being rebuilt beside it (site/, T-048)
         self.assertIn("branches: [main, staging]", WORKFLOWS["tests.yml"])
-        self.assertEqual(sorted(jobs(WORKFLOWS["tests.yml"])), ["python", "site"])
+        self.assertEqual(sorted(jobs(WORKFLOWS["tests.yml"])), ["csharp", "python", "site"])
         self.assertNotIn("secrets.", WORKFLOWS["tests.yml"])
 
     def test_dependabot_opens_its_pull_requests_on_staging(self):

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Until the switch-over (audit plan step 9) the current site in web/ keeps the one copy of the
+       stylesheets, fonts, icons and each page's intro: each build copies them in, so a fix there
+       reaches both sites. wwwroot/ is made by the build and is not in git. -->
+  <PropertyGroup>
+    <WebSource>$(MSBuildProjectDirectory)/../../web</WebSource>
+  </PropertyGroup>
+  <ItemGroup>
+    <WebStatic Include="$(WebSource)/static/**/*" />
+    <WebStyles Include="$(WebSource)/src/styles/**/*" />
+    <WebStyles Include="$(WebSource)/src/app.css;$(WebSource)/src/lib/crest-hues.css;$(WebSource)/src/lib/placed.css" />
+    <OwnAssets Include="Assets/**/*" />
+    <EmbeddedResource Include="$(WebSource)/src/lib/tabInfo.json" LogicalName="tabInfo.json" />
+  </ItemGroup>
+  <Target Name="CopyWebAssets" BeforeTargets="BeforeBuild;ResolveStaticWebAssetsInputs">
+    <Copy SourceFiles="@(WebStatic)" DestinationFiles="@(WebStatic->'wwwroot/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(WebStyles)" DestinationFiles="@(WebStyles->'wwwroot/styles/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(OwnAssets)" DestinationFiles="@(OwnAssets->'wwwroot/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <Content Include="wwwroot/**/*" Exclude="@(Content)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

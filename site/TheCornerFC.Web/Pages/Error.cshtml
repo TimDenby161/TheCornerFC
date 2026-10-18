@@ -1,0 +1,27 @@
+@page "/error/{status:int?}"
+@{
+    // What a visitor sees when a page can't be shown (ErrorPage.svelte): plain words, never the
+    // fault itself (that goes to the server's log), and a way on. No back button: the browser has one.
+    var status = RouteData.Values["status"] is string s && int.TryParse(s, out var n) ? n : 500;
+    var missing = status == 404;
+    var feature = HttpContext.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodeReExecuteFeature>();
+    var again = (feature?.OriginalPath ?? "/") + (feature?.OriginalQueryString ?? "");
+    ViewData["Title"] = (missing ? "Page not found" : "Something went wrong") + " · The Corner FC";
+    Response.Headers.CacheControl = "no-store";
+}
+<section class="panel" data-tab="club" data-active="true">
+    <div class="empty-state not-found error-page" role="status">
+        @if (missing)
+        {
+            <h2>Page not found</h2>
+            <p>There's no page at this address. The link may be old, or mistyped.</p>
+            <p class="error-links"><a class="mt-btn" href="/">Home</a> <a class="mt-btn" href="/clubs">Clubs</a></p>
+        }
+        else
+        {
+            <h2>Something went wrong</h2>
+            <p>This page couldn't be shown just now. The problem is on our side, and it's usually over in a moment.</p>
+            <p class="error-links"><a class="mt-btn" href="@again">Try again</a> <a class="mt-btn" href="/">Home</a></p>
+        }
+    </div>
+</section>

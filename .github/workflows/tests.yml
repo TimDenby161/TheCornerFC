@@ -1,6 +1,7 @@
 name: Tests
 
-# The Python unit tests and the site's unit tests and type check, on every push and pull request.
+# The Python unit tests, the site's unit tests and type check, and the C# site's tests (site/, the
+# rebuild in progress), on every push and pull request.
 # No secrets, no database, no API. The same checks also stand in front of what deploys: the site's
 # build runs its two (web/package.json, "build"), and each job that writes to the database runs
 # the Python tests first (guide/architecture.md, "What gates a deploy").
@@ -88,3 +89,25 @@ jobs:
         env:
           VITE_SITE_ENV: production
         run: npm run check
+
+  # The C# site (site/, T-048): its unit tests and the whole site started in memory against a
+  # stand-in database. It copies the stylesheets and each page's intro from web/ as it builds.
+  csharp:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Tests
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+        run: dotnet test

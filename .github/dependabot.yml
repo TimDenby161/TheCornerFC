@@ -21,3 +21,13 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # the C# site (site/, T-048)
+  - package-ecosystem: nuget
+    directory: /site
+    target-branch: staging      # nothing reaches main except by promotion (guide/environments.md)
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ["*"]

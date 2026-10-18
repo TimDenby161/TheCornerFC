@@ -1,0 +1,141 @@
+@using TheCornerFC.Web.Site
+@inject SiteEnvironment Env
+@inject TheCornerFC.Web.Data.Database Db
+@{
+    // Every page of the site (web/src/app.html and the (app) layout): the menu, the page's name
+    // and intro, the page, what its numbers mean, when its data was fetched, and the site links.
+    var path = Context.Request.Path.Value ?? "/";
+    var visitor = Visitor.Of(Context);
+    var tab = Menu.TabFor(path);
+    var current = Menu.Current(path);
+    var head = ViewData["TabHead"] as TabHead;
+    var title = ViewData["Title"] as string ?? "The Corner FC";
+    var description = ViewData["Description"] as string;
+    var fresh = await Freshness.Read(Db);
+    var menu = Menu.Main.Concat(visitor.Admin || visitor.Owner ? [Menu.Owner] : []).Concat(visitor.Admin ? [Menu.Admin] : []);
+    var nonce = Context.Nonce();
+    // where a link to this page is shared, and which address search engines take as its own
+    // (web/src/lib/server/share.ts): the page's address without its query
+    var url = $"https://{Env.Host}{path}";
+    const string Site = " · The Corner FC";
+    var mark = (visitor.Email ?? "").Trim() is { Length: > 0 } email ? char.ToUpperInvariant(email[0]).ToString() : "";
+}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0e3b29" />
+    <!-- the Light or Dark theme picked in the menu, applied before the page draws -->
+    <script src="/theme.js"></script>
+    <title>@title</title>
+    @if (description is not null)
+    {
+        <meta name="description" content="@description" />
+    }
+    <link rel="canonical" href="@url" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="The Corner FC" />
+    <meta property="og:title" content="@(title.EndsWith(Site) ? title[..^Site.Length] : title)" />
+    @if (description is not null)
+    {
+        <meta property="og:description" content="@description" />
+    }
+    <meta property="og:url" content="@url" />
+    <meta property="og:image" content="https://@Env.Host/share-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@("@")TheCorner_FC" />
+    <link rel="stylesheet" href="/styles/styles.css" />
+    <link rel="stylesheet" href="/styles/crest-hues.css" />
+    <link rel="stylesheet" href="/styles/app.css" />
+    <link rel="stylesheet" href="/styles/placed.css" />
+    <link rel="stylesheet" href="/site.css" />
+    @await RenderSectionAsync("Head", required: false)
+</head>
+<body data-tab="@tab" data-tz="@visitor.Zone.Tz" data-uk-time="@(visitor.Zone.UkTime ? "1" : "0")">
+@if (!Env.IsProduction)
+{
+    <p id="staging-strip">Staging: test data, not the live site</p>
+}
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header>
+    <div class="app-bar">
+        <button type="button" class="menu-btn" aria-label="Menu" aria-expanded="false" aria-controls="main-menu">&#9776;</button>
+        <a class="brand" href="/" aria-current="@(tab == "home" ? "page" : null)"><span class="brand-mark" aria-hidden="true"></span><span>The Corner FC</span></a>
+        <!-- the section's name; on a club's, player's, competition's or nation's page, its own -->
+        <h1 class="app-title">@(current?.Label ?? (tab == "club" && ViewData["Name"] is string name ? name : "Home"))</h1>
+    </div>
+    <nav class="tabs" id="main-menu" aria-label="Main">
+        <div class="menu-links">
+            @foreach (var group in menu)
+            {
+                <p class="nav-label">@group.Label</p>
+                @foreach (var s in group.Sections)
+                {
+                    <a class="menu-link" href="@s.Path" aria-current="@(s == current ? "page" : null)">@s.Label</a>
+                }
+            }
+            <!-- Room kept for an advert. Empty and out of the layout until adverts are switched on -->
+            <div class="ad-slot ad-rail" id="ad-rail" aria-hidden="true"></div>
+        </div>
+        <div class="menu-foot">
+            <a class="account-btn @(visitor.SignedIn ? "is-profile" : null)" href="/account" aria-haspopup="dialog">
+                <span class="account-mark" aria-hidden="true">@mark</span><span id="account-label">@(visitor.SignedIn ? "Profile" : "Sign in")</span></a>
+            <div class="theme-pick seg" role="group" aria-label="Theme">
+                <button type="button" data-theme-pick="" aria-pressed="true">Device</button>
+                <button type="button" data-theme-pick="light" aria-pressed="false">Light</button>
+                <button type="button" data-theme-pick="dark" aria-pressed="false">Dark</button>
+            </div>
+            <div class="theme-pick time-pick seg" role="group" aria-label="Kick-off times">
+                <button type="button" data-uk-time="0" aria-pressed="@(visitor.Zone.UkTime ? "false" : "true")">My time</button>
+                <button type="button" data-uk-time="1" aria-pressed="@(visitor.Zone.UkTime ? "true" : "false")">UK time</button>
+            </div>
+        </div>
+    </nav>
+    <div class="menu-backdrop" hidden></div>
+</header>
+
+<main id="main" tabindex="-1">
+    @if (head is not null)
+    {
+        <div class="tab-head" id="tab-head">
+            <p class="tab-title" id="tab-title" aria-hidden="true">@head.Title</p>
+            <p class="tab-intro" id="tab-intro">@head.Info.Intro@if (head.Info.More != "")
+                {<text> <a href="@Menu.MethodologyHref(head.Info.More)">How it works</a></text>}</p>
+        </div>
+    }
+    <div class="ad-slot ad-top" id="ad-top" aria-hidden="true"></div>
+    @RenderBody()
+    <!-- what the page's figures mean: at the foot of every page, under what it explains -->
+    @if (head?.Info.Key.Count > 0)
+    {
+        <details class="tab-key tab-key-foot" id="tab-key"><summary>What the numbers mean</summary>
+            <dl id="tab-key-list">@foreach (var k in head.Info.Key) { <dt>@k[0]</dt><dd>@k[1]</dd> }</dl>
+        </details>
+    }
+    @if (fresh.Items.Count > 0 || fresh.Model is not null)
+    {
+        <footer class="freshness" id="freshness">
+            @foreach (var (label, at, tip) in fresh.Items)
+            {
+                <span title="@tip">@label @Markup.LocalTime(at, "short", visitor) @Markup.LocalTime(at, "time", visitor)</span>
+            }
+            @if (fresh.Model is not null)
+            {
+                <span title="Latest registered match model version">Model @fresh.Model.Name@(fresh.Model.Code is null ? "" : $" · {fresh.Model.Code}")</span>
+            }
+        </footer>
+    }
+    <footer class="site-links"><a href="/methodology">How the models work</a> · <a href="/privacy">Privacy, corrections &amp; security</a> · <a href="/terms">Terms of use</a></footer>
+</main>
+<script src="/site.js" nonce="@nonce"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
