@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import DetailSections from './DetailSections.svelte';
 	import LocalTime from './LocalTime.svelte';
 	import MatchHead from './MatchHead.svelte';
 	import ProbBars from './ProbBars.svelte';
@@ -116,15 +117,7 @@
 				{:else if d.locked}
 					<div class="why-note">The model's detail is for subscribers. <SubscriberLink /></div>
 				{:else}
-					{#each d.sections || [] as sec (sec.title)}
-						<div class="why-sec"><div class="why-sec-hd">{sec.title}{#if sec.unit}{' '}<span class="why-unit">{sec.unit}</span>{/if}</div>
-							{#each sec.rows as r (r.label)}
-								<div class="why-row" class:why-teams={r.teams} title={r.tip}><span>{r.label}</span><b>{#if typeof r.value === 'string'}{r.value}{:else}<LocalTime iso={r.value.when} show="short" /> <LocalTime iso={r.value.when} show="time" />{/if}</b></div>
-							{/each}
-							{#if sec.note}<div class="why-note">{sec.note}</div>{/if}
-						</div>
-					{/each}
-					{#each d.notes || [] as n (n)}<div class="why-note">{n}</div>{/each}
+					<DetailSections sections={d.sections || []} notes={d.notes || []} />
 				{/if}
 			{/await}
 		</div>

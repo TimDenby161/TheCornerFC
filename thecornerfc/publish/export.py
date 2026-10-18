@@ -70,6 +70,7 @@ from .site_matches import (
     national_xis,
     site_freshness,
     store_matches,
+    worked_example,
 )
 from .site_record import (
     BET_BANK_GBP,
@@ -310,9 +311,10 @@ def _write_site_data(conn, out_dir=OUT_DIR):
     log.info("Exported %d matches and %d rankings to %s", len(matches), len(rankings), out_dir)
     export_stats(conn, out_dir)
     export_bets(conn, out_dir)
-    store_matches(conn, matches, {**match_explanations(conn, now), **national_why})
+    explained = {**match_explanations(conn, now), **national_why}
+    store_matches(conn, matches, explained)
     export_methodology(conn, out_dir, now)
-    export_model_changes(conn, out_dir, now)
+    export_model_changes(conn, out_dir, now, example=worked_example(matches, explained, teams, competitions))
     player_team, listed = export_players(conn, out_dir, rankings)
     export_injuries(conn, out_dir, listed["free"])
     # the players are rows of site.players: the site asks for the ones a view shows, and needs the

@@ -430,6 +430,8 @@
   .why-sec-hd { margin-bottom: 2px; }
   .why-unit { text-transform: none; letter-spacing: 0; font-weight: 600; }
   .why-row[title] span { cursor: help; }
+  .why-row b { flex-shrink: 1; overflow-wrap: anywhere; }
+  .why-tip { font-size: 11px; line-height: 1.4; color: var(--text-muted); padding: 0 0 4px; }
   .why-teams b { color: var(--text-muted); font-size: 11px; font-weight: 600; }
   .why-note { grid-column: 1 / -1; font-size: 11px; line-height: 1.4; color: var(--text-muted); padding-top: 6px; }
   .why-sec .why-note { padding-top: 2px; }

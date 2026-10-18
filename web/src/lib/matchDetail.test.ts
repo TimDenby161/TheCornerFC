@@ -51,4 +51,25 @@ describe('matchDetail', () => {
 		expect(intl.sections.find((s) => s.title === 'Expected margin')!.rows[1].tip).toMatch(/national team/);
 		expect(intl.sections.find((s) => s.title === 'Goals')!.rows[0].label).toBe('Two level sides');
 	});
+	it('works through the steps from goals records to chances, with the weights used', () => {
+		const steps: NonNullable<Why['steps']> = {
+			now_share: 0.6, record: [[1.67, 1.03, 17], [1.1, 1.5, 16]], league: [1.5, 1.2], shrunk: [1.62, 1.39, 1.13, 1.12], plain: [1.51, 1.13],
+			open_total: 2.81, base: [1.6, 1.2], scale: 1.123, xg: [1.8, 1.07], poisson: [0.52, 0.24, 0.24], boost: 1.051, chances: [0.508, 0.252, 0.24], likely: '1-1',
+			weights: { now: [0.6, 0.2], shrink: 6, open: 0.75, draw: [1.1, 1.5], absence: 0.1, line: 0.005 }
+		};
+		const d = matchDetail(m, { ...why, steps }, 'Arsenal', 'Leeds');
+		const v = (title: string, label: string) => d.sections.find((s) => s.title === title)?.rows.find((r) => r.label === label)?.value;
+		expect(d.sections.map((s) => s.title).slice(0, 6)).toEqual(['Strength', 'Expected margin', "Each side's usual goals", 'How open the game is', 'Projected goals', 'Chances']);
+		expect(v('Strength', 'Blend')).toBe('60% Current · 40% Baseline');
+		expect(v("Each side's usual goals", 'Home goals, Arsenal')).toBe('(1.62 + 1.39) ÷ 2 = 1.51');
+		expect(d.sections.find((s) => s.title === "Each side's usual goals")!.note).toMatch(/counts 6 games/);
+		expect(v('How open the game is', 'Blended')).toBe('25% × 2.64 + 75% × 2.81 = 2.80');
+		expect(v('Projected goals', 'Scaled')).toBe('1.60 × 1.123 · 1.20 ÷ 1.123');
+		expect(v('Chances', 'From the projected goals')).toBe('52 · 24 · 24%');
+		expect(v('Chances', 'Final chances')).toBe('51 · 25 · 24%');
+		expect(v('Chances', 'Draw boost')).toBe('× 1.051');
+		const plain = matchDetail(m, { ...why, steps: { ...steps, open_total: null, now_share: null } }, 'Arsenal', 'Leeds');
+		expect(plain.sections.some((s) => s.title === 'How open the game is')).toBe(false);
+		expect(plain.sections.find((s) => s.title === 'Strength')!.rows.some((r) => r.label === 'Blend')).toBe(false);
+	});
 });

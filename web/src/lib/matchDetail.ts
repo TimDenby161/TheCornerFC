@@ -11,6 +11,17 @@ export type Why = {
 	captured_at: string; source: string; injuries_at?: string | null; odds_at?: string | null; model?: string | null;
 	// a national match: each side's predicted XI, [player, name, role]
 	xi?: Record<string, [number, string, string][]>;
+	steps?: Steps;
+};
+// The arithmetic from the inputs to the chances, with the weights the model used
+// (site_matches.worked_steps): home first in every pair
+export type Steps = {
+	now_share: number | null;
+	record: [number | null, number | null, number][]; league: [number, number];
+	shrunk: [number, number, number, number]; plain: [number, number]; open_total: number | null; base: [number, number];
+	scale: number; xg: [number, number]; poisson: [number, number, number]; boost: number;
+	chances: [number, number, number]; likely: string;
+	weights: { now: [number, number]; shrink: number; open: number; draw: [number, number]; absence: number; line: number };
 };
 // a row's value: words, or a moment (shown in the visitor's own time)
 export type DetailRow = { label: string; value: string | { when: string }; tip?: string; teams?: boolean };
@@ -52,12 +63,15 @@ export function matchDetail(m: Match, x: (Why & { model_info?: { name?: string; 
 			{ label: '', value: `${home} · ${away}`, teams: true },
 			row('Current Strength', pair(...x.current), 'Elo rating now, from recent results'),
 			row('Baseline Strength', pair(...x.baseline), 'Long-term level (LT ALGO)'),
-			row('Used for this match', pair(...x.match), 'A blend of Current and Baseline Strength; matches further away lean more on Baseline')
+			row('Used for this match', pair(...x.match), 'A blend of Current and Baseline Strength; matches further away lean more on Baseline'),
+			x.steps?.now_share != null ? row('Blend', `${Math.round(x.steps.now_share * 100)}% Current · ${100 - Math.round(x.steps.now_share * 100)}% Baseline`,
+				`${Math.round(x.steps.weights.now[0] * 100)}% Current for a match today, sliding to ${Math.round(x.steps.weights.now[1] * 100)}% for one a year or more away`) : null
 		], missing.length ? { note: `No rating history yet for ${missing.join(' or ')}: the competition's starting strength was used.` } : {});
 		add('Expected margin', [
 			...Object.entries(x.margin).map(([k, v]) => { const [label, tip] = (m.intl && INTL_MARGIN_LABELS[k]) || MARGIN_LABELS[k] || [k, '']; return row(label, signedGoals(v), tip); }),
 			row('Total', signedGoals(x.exp_diff), "The model's expected home minus away goals")
 		], { unit: 'goals, + favours home' });
+		if (x.steps) workedSteps(x.steps, x.exp_diff, home, away, add, row);
 	}
 
 	add('Goals', [
@@ -102,4 +116,44 @@ export function matchDetail(m: Match, x: (Why & { model_info?: { name?: string; 
 	} else if (m.p_home != null) notes.push("No breakdown for this prediction: its captured model inputs aren't available.");
 	notes.push("These are the model's inputs and how much each moved its numbers, not a statement of what will decide the match.");
 	return { sections, notes };
+}
+
+const two = (v: number | null) => (v == null ? '–' : v.toFixed(2));
+const pct = (p: [number, number, number]) => `${shownProbs(p[0], p[1]).join(' · ')}%`;
+type Add = (title: string, rows: (DetailRow | null)[], o?: { unit?: string; note?: string }) => void;
+type Row = (label: string, value: string | null | undefined, tip?: string) => DetailRow | null;
+
+// From each side's goals record to the chances, one step at a time, with the numbers and weights
+// the model used. Every figure is the stored one; the sums only show how they follow
+function workedSteps(s: Steps, expDiff: number, home: string, away: string, add: Add, row: Row) {
+	const [h, a] = s.record, w = s.weights;
+	add("Each side's usual goals", [
+		{ label: '', value: `${home} · ${away}`, teams: true },
+		row('Scored', `${two(h[0])} · ${two(a[0])}`, `${home} at home and ${away} away, over the last 12 months. xG is used instead of goals for any match that has it`),
+		row('Conceded', `${two(h[1])} · ${two(a[1])}`),
+		row('Games', `${h[2]} · ${a[2]}`),
+		row('Competition average', `${two(s.league[0])} home · ${two(s.league[1])} away`),
+		row(`Home goals, ${home}`, `(${two(s.shrunk[0])} + ${two(s.shrunk[1])}) ÷ 2 = ${two(s.plain[0])}`, `${home}'s scoring at home and ${away}'s conceding away, each pulled towards the competition's average`),
+		row(`Away goals, ${away}`, `(${two(s.shrunk[2])} + ${two(s.shrunk[3])}) ÷ 2 = ${two(s.plain[1])}`, `${away}'s scoring away and ${home}'s conceding at home, each pulled towards the competition's average`)
+	], { unit: 'a game', note: `Each average counts ${w.shrink} games at the competition's average as well as the side's own, so a short record moves the numbers less.` });
+	if (s.open_total != null) {
+		const records = s.plain[0] + s.plain[1];
+		add('How open the game is', [
+			row('From the goals records', records.toFixed(2), 'The two numbers above added up'),
+			row('From attack and defence', s.open_total.toFixed(2), "Both clubs' attacking and defensive ratings, for two level sides"),
+			row('Blended', `${Math.round((1 - w.open) * 100)}% × ${records.toFixed(2)} + ${Math.round(w.open * 100)}% × ${s.open_total.toFixed(2)} = ${(s.base[0] + s.base[1]).toFixed(2)}`),
+			row('Goals before the margin', `${two(s.base[0])} · ${two(s.base[1])}`, 'The two sides keep their shares of the total')
+		], { unit: 'total goals' });
+	}
+	add('Projected goals', [
+		row('Expected margin', signedGoals(expDiff), 'From the expected margin above'),
+		row('Scaled', `${two(s.base[0])} × ${s.scale.toFixed(3)} · ${two(s.base[1])} ÷ ${s.scale.toFixed(3)}`, "One factor raises the home side's goals and lowers the away side's until the gap between them is the expected margin"),
+		row('Projected goals', `${two(s.xg[0])} · ${two(s.xg[1])}`)
+	]);
+	add('Chances', [
+		row('From the projected goals', pct(s.poisson), "Each side's goals as a Poisson distribution, 0 to 10 goals, every scoreline's chance added up"),
+		row('Draw boost', `× ${s.boost.toFixed(3)}`, `Up to × ${w.draw[0]} in a close game, none once the projected margin reaches ${w.draw[1]} goals: models like this one under-count draws`),
+		row('Final chances', pct(s.chances)),
+		row('Most likely score', s.likely)
+	], { unit: 'H · D · A' });
 }

@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 from thecornerfc.models import predictions
-from thecornerfc.publish import export
+from thecornerfc.publish import export, site_matches
 from thecornerfc.publish.export import ExportValidationError, explanation, match_explanations, store_matches
 from tests import test_match_snapshots
 
@@ -100,6 +100,85 @@ class ExplainTests(unittest.TestCase):
         parts = explain(inputs, row["league_id"], (row["exp_diff"], row["home_xg"], row["away_xg"]))
         self.assertIsNotNone(parts)
         self.assertAlmostEqual(sum(parts["margin"].values()), row["exp_diff"], places=12)
+
+
+class WorkedStepTests(unittest.TestCase):
+    def steps(self, **kw):
+        inputs, stored = snapshot_inputs(**kw)
+        return site_matches.worked_steps(inputs, predictions.record_totals(HOME),
+                                         predictions.record_totals(AWAY), stored), inputs, stored
+
+    def test_the_steps_end_at_the_stored_prediction(self):
+        steps, _, stored = self.steps()
+        got = predictions.predict_match(1100.0, 1000.0, HOME, AWAY, 1.5, 1.2, 39, 0.4, 0.0, SIDES, LINES)
+        self.assertEqual(steps["xg"], [round(stored[1], 2), round(stored[2], 2)])
+        self.assertEqual(steps["chances"], [round(v, 3) for v in got[3:6]])
+        self.assertEqual(steps["likely"], got[6])
+        # projected goals are the base goals scaled up for home and down for away by one factor
+        base = predictions._base_goals(predictions.record_totals(HOME), predictions.record_totals(AWAY), 1.5, 1.2, SIDES)
+        self.assertAlmostEqual(steps["scale"], stored[1] / base[0], places=3)
+        self.assertAlmostEqual(base[1] / (stored[1] / base[0]), stored[2], places=12)
+
+    def test_records_are_averages_pulled_to_the_competition(self):
+        steps, _, _ = self.steps()
+        self.assertEqual(steps["record"], [[1.67, 1.03, 3], [1.1, 1.5, 2]])
+        self.assertEqual(steps["league"], [1.5, 1.2])
+        # (5.0 + 1.5 x 6) / (3 + 6): the home side's scoring, pulled by six games of the average
+        self.assertEqual(steps["shrunk"][0], round((5.0 + 1.5 * 6) / 9, 2))
+        self.assertEqual(steps["plain"], [round((steps["shrunk"][0] * 9 / 9 + (3.0 + 1.5 * 6) / 8) / 2, 2),
+                                          round(((2.2 + 1.2 * 6) / 8 + (3.1 + 1.2 * 6) / 9) / 2, 2)])
+        self.assertIsNotNone(steps["open_total"])
+
+    def test_draw_boost_fades_with_the_margin_and_the_weights_are_the_models(self):
+        steps, _, _ = self.steps()
+        margin = abs(steps["xg"][0] - steps["xg"][1])
+        self.assertGreater(steps["boost"], 1.0)
+        self.assertAlmostEqual(steps["boost"], 1 + 0.1 * max(0.0, 1 - margin / 1.5), places=2)
+        self.assertGreater(steps["chances"][1], steps["poisson"][1])
+        self.assertEqual(steps["weights"]["shrink"], predictions.SHRINK_GAMES)
+        self.assertEqual(steps["weights"]["now"], [predictions.MATCH_RANK_NOW_TODAY, predictions.MATCH_RANK_NOW_YEAR])
+
+    def test_the_share_of_current_strength_comes_from_the_blend(self):
+        steps, inputs, _ = self.steps()
+        cur, lt, m = inputs["home_current_rank"], inputs["home_lt_algo"], inputs["home_match_rank"]
+        self.assertEqual(steps["now_share"], round((m - lt) / (cur - lt), 2))
+
+    def test_no_open_total_without_the_attack_defence_model(self):
+        steps, _, _ = self.steps(sides=None)
+        self.assertIsNone(steps["open_total"])
+        self.assertEqual(steps["plain"], steps["base"])
+
+    def test_the_explanation_carries_the_steps(self):
+        inputs, stored = snapshot_inputs()
+        totals = predictions.record_totals(HOME), predictions.record_totals(AWAY)
+        self.assertIn("steps", explanation(inputs, 39, *totals, stored, {"source": "prospective"}))
+
+
+class WorkedExampleTests(unittest.TestCase):
+    def row(self, fid, kickoff, league=39, status="FT", hg=2, intl=0):
+        r = [None] * len(site_matches.SITE_MATCH_FIELDS)
+        at = {n: i for i, n in enumerate(site_matches.SITE_MATCH_FIELDS)}
+        for k, v in dict(id=fid, kickoff=kickoff, league=league, status=status, hg=hg, ag=1, home=10, away=20, intl=intl).items():
+            r[at[k]] = v
+        return r
+
+    def test_latest_finished_premier_league_match_captured_before_kickoff(self):
+        rows = [self.row(1, "2026-10-17T14:00:00+00:00"), self.row(2, "2026-10-18T14:00:00+00:00"),
+                self.row(3, "2026-10-19T14:00:00+00:00", status="NS", hg=None),
+                self.row(4, "2026-10-18T16:00:00+00:00", league=140),
+                self.row(5, "2026-10-18T15:00:00+00:00")]
+        why = lambda source="prospective": {"source": source, "steps": {}}
+        explained = {"1": why(), "2": why(), "3": why(), "4": why(), "5": why("reconstruction")}
+        ex = site_matches.worked_example(rows, explained, {10: "Arsenal", 20: "Chelsea"}, {39: {"name": "Premier League"}})
+        self.assertEqual((ex["match"]["id"], ex["home_name"], ex["away_name"], ex["competition"]),
+                         (2, "Arsenal", "Chelsea", "Premier League"))
+        self.assertIs(ex["why"], explained["2"])
+
+    def test_another_competition_when_the_premier_league_has_none(self):
+        rows = [self.row(4, "2026-10-18T16:00:00+00:00", league=140), self.row(6, "2026-10-18T17:00:00+00:00", intl=1)]
+        explained = {"4": {"source": "prospective", "steps": {}}, "6": {"source": "prospective", "steps": {}}}
+        self.assertEqual(site_matches.worked_example(rows, explained, {}, {})["match"]["id"], 4)
+        self.assertIsNone(site_matches.worked_example(rows, {}, {}, {}))
 
 
 class ExportTests(unittest.TestCase):
@@ -202,7 +281,8 @@ class FixturePageTests(unittest.TestCase):
         with patch.object(export.config, "require_db_write", side_effect=export.config.SafetyError("read-only")):
             self.assertFalse(store_matches(conn, [self.match(11)], {}))
         source = Path(export.__file__).read_text()
-        self.assertIn("store_matches(conn, matches, {**match_explanations(conn, now), **national_why})", source)
+        self.assertIn("explained = {**match_explanations(conn, now), **national_why}", source)
+        self.assertIn("store_matches(conn, matches, explained)", source)
         for gone in ('"matches.json"', '"explanations.json"', "fixtures/"):        # the matches are rows, not files
             self.assertNotIn(gone, source)
 

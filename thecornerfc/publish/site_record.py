@@ -544,12 +544,13 @@ def _store_admin(conn, name, doc):
     return False
 
 
-def export_model_changes(conn, out_dir=OUT_DIR, now=None):
+def export_model_changes(conn, out_dir=OUT_DIR, now=None, example=None):
     """The Model Change Tracker (admin_docs 'model_changes'): the register in experiments/changes
     copied into its append-only tables, then written out as recorded, with the live record's
     figures from this export's methodology.json and stats.json, the match model's results by
     month and how each deployed change has done since. The same record also goes out in public as
-    model.json (public_model: the owner's decision 2026-10-16, the most transparent model). Never
+    model.json (public_model: the owner's decision 2026-10-16, the most transparent model), with
+    example, one finished match worked through step by step (site_matches.worked_example). Never
     fatal. Returns the document, or None when the register can't be read."""
     from ..evidence import model_changes
     now = now or datetime.now(timezone.utc)
@@ -602,19 +603,19 @@ def export_model_changes(conn, out_dir=OUT_DIR, now=None):
     doc = model_changes.document(rows, environment=environment, generated_at=now.isoformat(), current=current,
                                  series=series, forward_record=record, differs=differs, stored=stored, live=live)
     _store_admin(conn, "model_changes", doc)
-    _write_json_file(out_dir / "model.json", public_model(doc, _admin_doc(conn, "live_tracking")), ensure_ascii=False)
+    _write_json_file(out_dir / "model.json", public_model(doc, _admin_doc(conn, "live_tracking"), example), ensure_ascii=False)
     return doc
 
 
-def public_model(changes, tracking):
+def public_model(changes, tracking, example=None):
     """The public page The Model (/model): the change record and the live tests' results, as the
     Admin area has them, less what is only the administrator's (owner's decision 2026-10-16). Left
     out: which database wrote it and the register's internal mismatch notes. Everything in it is
     about finished matches or the register itself, which is in the public repository; the model
     switch and where the two models part on matches to come stay in the Admin area (database
-    functions, not documents)."""
+    functions, not documents). example: a finished match worked through step by step, or None."""
     keep = ("generated_at", "current", "series", "changes", "forward_record", "live")
-    return {**{k: changes.get(k) for k in keep if k in changes}, "tracking": tracking}
+    return {**{k: changes.get(k) for k in keep if k in changes}, "tracking": tracking, "example": example}
 
 
 def _admin_doc(conn, name):

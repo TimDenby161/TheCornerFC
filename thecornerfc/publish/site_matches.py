@@ -80,10 +80,92 @@ def explanation(inputs, league_id, home_totals, away_totals, stored, meta):
         "reasons": [[k, _r(v)] for k, v in parts["reasons"]],
         **meta,
     }
+    steps = worked_steps(inputs, home_totals, away_totals, stored)
+    if steps:
+        out["steps"] = steps
     fallback = [bool(inputs.get("home_rank_fallback")), bool(inputs.get("away_rank_fallback"))]
     if any(fallback):
         out["fallback"] = fallback
     return out
+
+
+def worked_steps(inputs, home_totals, away_totals, stored):
+    """The arithmetic between a prediction's inputs and its chances, step by step, with the weights
+    it used (T-043, the most transparent model): each side's goals record and the competition's,
+    the pull towards the competition, how open the game is, the projected goals and the chances.
+    Worked out with predictions.py's own functions and settings, so nothing here is a second
+    model; explain() has already checked the inputs give back the stored prediction. None for a
+    prediction without the competition's averages."""
+    lg_home, lg_away = inputs.get("league_home_goals"), inputs.get("league_away_goals")
+    if lg_home is None or lg_away is None:
+        return None
+    exp_diff, home_xg, away_xg = stored
+    (h_for, h_against, h_n), (a_for, a_against, a_n) = home_totals, away_totals
+    sides = inputs.get("sides")
+    sides = tuple(sides) if sides and None not in sides else None
+    shrunk = [predictions._shrunk(h_for, h_n, lg_home), predictions._shrunk(a_against, a_n, lg_home),
+              predictions._shrunk(a_for, a_n, lg_away), predictions._shrunk(h_against, h_n, lg_away)]
+    plain = predictions._base_goals(home_totals, away_totals, lg_home, lg_away, None)
+    base = predictions._base_goals(home_totals, away_totals, lg_home, lg_away, sides)
+    open_total = None
+    if sides:
+        level = (sides[0] + sides[1]) / 100
+        open_total = max(0.2, sides[4] + level) + max(0.2, sides[5] + level)
+    # the Poisson chances before the draw boost, as outcome_probabilities works them out
+    ph, pa = predictions._pmf(home_xg), predictions._pmf(away_xg)
+    grid = [[ph[i] * pa[j] for j in range(len(pa))] for i in range(len(ph))]
+    total = sum(map(sum, grid))
+    home = sum(grid[i][j] for i in range(len(ph)) for j in range(i)) / total
+    draw = sum(grid[i][i] for i in range(len(ph))) / total
+    boost = 1 + (predictions.DRAW_INFLATION - 1) * max(0.0, 1 - abs(home_xg - away_xg) / predictions.DRAW_FADE_MARGIN)
+    p_home, p_draw, p_away, likely = predictions.outcome_probabilities(home_xg, away_xg)
+    h_cur, a_cur = inputs.get("home_current_rank"), inputs.get("away_current_rank")
+    h_lt, a_lt = inputs.get("home_lt_algo"), inputs.get("away_lt_algo")
+    h_rank, a_rank = inputs.get("home_match_rank"), inputs.get("away_match_rank")
+    # the share of Current Strength in the match strength, from the blend itself (it slides with
+    # how far ahead the match was); unknown where the two strengths are level
+    now_share = next(((m - lt) / (cur - lt) for cur, lt, m in ((h_cur, h_lt, h_rank), (a_cur, a_lt, a_rank))
+                      if None not in (cur, lt, m) and abs(cur - lt) >= 1), None)
+    return {
+        "now_share": _r(now_share),
+        "record": [[_r(h_for / h_n) if h_n else None, _r(h_against / h_n) if h_n else None, h_n],
+                   [_r(a_for / a_n) if a_n else None, _r(a_against / a_n) if a_n else None, a_n]],
+        "league": [_r(lg_home), _r(lg_away)],
+        "shrunk": [_r(v) for v in shrunk],
+        "plain": [_r(v) for v in plain],
+        "open_total": _r(open_total),
+        "base": [_r(v) for v in base],
+        "scale": _r(home_xg / max(base[0], 0.05), 3),
+        "xg": [_r(home_xg), _r(away_xg)],
+        "poisson": [_r(home, 3), _r(draw, 3), _r(1 - home - draw, 3)],
+        "boost": _r(boost, 3),
+        "chances": [_r(p_home, 3), _r(p_draw, 3), _r(p_away, 3)],
+        "likely": likely,
+        "weights": {"now": [predictions.MATCH_RANK_NOW_TODAY, predictions.MATCH_RANK_NOW_YEAR],
+                    "shrink": predictions.SHRINK_GAMES, "open": predictions.AD_GOALS_WEIGHT,
+                    "draw": [predictions.DRAW_INFLATION, predictions.DRAW_FADE_MARGIN],
+                    "absence": predictions.INJURY_BETA, "line": predictions.XI_LINE_WEIGHTS[1]},
+    }
+
+
+def worked_example(matches, explained, teams, competitions, league_id=39):
+    """The Model page's worked example: the latest finished match in the Premier League (or, with
+    none in the last PAST_DAYS, in any competition) whose prediction was captured before kick-off
+    and can be worked through step by step. Its row as the site has it, the clubs' and
+    competition's names, and its full explanation. None when there is no such match. Finished
+    matches only: their detail is everyone's."""
+    at = {name: i for i, name in enumerate(SITE_MATCH_FIELDS)}
+    done = [m for m in matches if m[at["status"]] in config.FINISHED_STATUSES and m[at["hg"]] is not None
+            and not m[at["intl"]] and (explained.get(str(m[at["id"]])) or {}).get("source") == "prospective"
+            and "steps" in explained[str(m[at["id"]])]]
+    pick = [m for m in done if m[at["league"]] == league_id] or done
+    if not pick:
+        return None
+    m = max(pick, key=lambda r: (r[at["kickoff"]], r[at["id"]]))
+    return {"match": dict(zip(SITE_MATCH_FIELDS, m)), "home_name": teams.get(m[at["home"]]),
+            "away_name": teams.get(m[at["away"]]),
+            "competition": (competitions.get(m[at["league"]]) or {}).get("name"),
+            "why": explained[str(m[at["id"]])]}
 
 
 def match_explanations(conn, now=None):

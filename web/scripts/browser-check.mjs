@@ -177,6 +177,11 @@ await run(`document.querySelector('#matches-list .match-card .match-score')?.cli
 check('a card opens its line-ups: two elevens on pitches', (await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel .pp-pitch').length`)) === 2 && (await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel .xi-spot').length`)) === 22, `${await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel .xi-spot').length`)} players`);
 await run(`document.querySelectorAll('#matches-list .match-card')[1]?.querySelector('.why-toggle')?.click()`); await sleep(1800);
 check('opening another card\'s model detail closes the first card', (await run(`document.querySelectorAll('#matches-list .fixture-lineup-panel').length`)) === 0 && (await run(`document.querySelectorAll('#matches-list .why-detail .why-sec').length`)) >= 2, `${await run(`document.querySelectorAll('#matches-list .why-detail .why-sec').length`)} sections`);
+// its detail works through the steps to the chances (written by the nightly export from 2026-10-18)
+{
+	const heads = await run(`[...document.querySelectorAll('#matches-list .why-detail .why-sec-hd')].map((h) => h.firstChild?.textContent?.trim()).join('|')`);
+	check('a model detail works through the steps to the chances, where the export has written them', !/Chances/.test(heads) || (/Each side's usual goals/.test(heads) && /Projected goals/.test(heads)), /Chances/.test(heads) ? 'steps shown' : 'no steps written yet');
+}
 await run(`document.querySelector('.secondary-filters a.today-btn')?.click()`); await sleep(1800);
 check('Next goes to the round to come, where the paid parts are locked', (await run('location.search')) === '?c=39' && (await run(`document.querySelectorAll('#matches-list .paid-lock').length`)) > 0);
 await run(`document.querySelector('#matches-list .paid-lock .link-btn')?.click()`); await sleep(500);
@@ -236,6 +241,10 @@ await until(`document.querySelector('#model-tiles .stats-card') || document.quer
 	const tiles = await run(`document.querySelectorAll('#model-tiles .stats-card').length`), empty = await run(`!!document.querySelector('#model-empty')`);
 	check('The Model shows its eight figures and the changes, or says it is being prepared', tiles === 8 ? (await run(`document.querySelectorAll('#model-in tbody tr, #model-tried tbody tr').length`)) > 0 : empty, tiles === 8 ? `${tiles} figures` : 'being prepared');
 	check('The Model has no model switch and no upcoming fixtures', !(await run(`!!document.querySelector('form[action*="switch"], #mc-switch, #mc-apart')`)));
+	// one finished match worked through step by step, once the nightly export has picked one
+	const steps = await run(`document.querySelectorAll('#model-example .why-sec').length`);
+	const example = await run(`!!document.querySelector('#model-example')`);
+	check('The Model works one finished match through step by step', example ? steps >= 6 && (await run(`[...document.querySelectorAll('#model-example .why-row span')].some((s) => s.textContent === 'Final chances') && document.querySelectorAll('#model-example .why-tip').length > 5`)) : true, example ? `${steps} steps` : 'no example written yet');
 }
 await open('/lineups');
 check('the line-up record saved before kick-off', (await run(`document.querySelectorAll('#lineup-body .stats-card').length`)) >= 10 && /of 11/.test(await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`)), await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`));

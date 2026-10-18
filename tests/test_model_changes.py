@@ -491,8 +491,10 @@ class ExportTests(unittest.TestCase):
         doc = {"generated_at": "t", "current": {"n": 1}, "series": [], "changes": [{"id": "MC-0001"}], "forward_record": {},
                "live": {}, "environment": "production", "differs": ["x"], "stored": True}
         public = site_record.public_model(doc, {"n": 5, "changes": {"MC-0018": {"called": False}}})
-        self.assertEqual(sorted(public), ['changes', 'current', 'forward_record', 'generated_at', 'live', 'series', 'tracking'])
+        self.assertEqual(sorted(public), ['changes', 'current', 'example', 'forward_record', 'generated_at', 'live', 'series', 'tracking'])
         self.assertEqual(public['tracking']['n'], 5)
+        self.assertIsNone(public['example'])
+        self.assertEqual(site_record.public_model(doc, None, {"match": {"id": 1}})['example'], {"match": {"id": 1}})
 
     def test_a_local_run_builds_the_document_from_the_files_and_stores_nothing(self):
         conn = Conn()

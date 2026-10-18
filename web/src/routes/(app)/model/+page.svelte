@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DetailSections from '#lib/components/DetailSections.svelte';
 	import LocalTime from '#lib/components/LocalTime.svelte';
 	import { shortId, signed } from '#lib/changes.ts';
 
@@ -25,6 +26,13 @@
 			{/each}
 		</div>
 		<p class="stats-note">The model against the bookmakers on every bet market, competition by competition, is on the <a href="/stats">Stats</a> page.</p>
+
+		{#if data.example}
+			{@const ex = data.example}
+			<h2 class="mc-h2">One match, step by step</h2>
+			<p class="stats-note">How the model made its prediction for {ex.home} v {ex.away}{ex.competition ? ` (${ex.competition}, ` : ' ('}<LocalTime iso={ex.kickoff} show="short" />), from the inputs it had before kick-off to its chances. Every number is the one stored before the match. Final score: {ex.home} {ex.hg}–{ex.ag} {ex.away}. Any match's card shows the same breakdown under Model detail.</p>
+			<div class="stats-card"><div class="why-detail mc-example" id="model-example"><DetailSections sections={ex.sections} notes={ex.notes} tips /></div></div>
+		{/if}
 
 		<h2 class="mc-h2">Every change, and the test behind it</h2>
 		<p class="stats-note">{data.registered} changes are on the record. Each was written down, with how it would be judged, before its result was seen. Past figures are each change's own test on earlier matches; live figures are on matches played after it was written down.</p>
