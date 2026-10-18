@@ -458,9 +458,29 @@ def sync_odds(api, conn, league_seasons, bet_ids=None):
 def sync_odds_fixtures(api, conn, fixture_ids, bet_ids=None):
     """Refresh odds for specific fixtures (one call each) - used close to kickoff."""
     total = 0
-    for fid in fixture_ids:
-        total += _store_odds(conn, api.get("odds", fixture=fid), bet_ids)
+    for fid, resp in _each_fixture(api, "odds", fixture_ids):
+        total += _store_odds(conn, resp, bet_ids)
     log.info("Odds for %d fixtures: %d prices", len(fixture_ids), total)
+
+
+def _each_fixture(api, endpoint, fixture_ids):
+    """(fixture_id, response) for one call per fixture, skipping a fixture whose call fails, so one
+    bad answer (API-Football's own "5xEr" bug on one fixture's odds, 2026-10-17 at 3 pm) doesn't
+    stop a match-day run before its line-ups, injuries and bets. The next run asks again. Fails
+    only when every call does, or the quota runs out."""
+    skipped = 0
+    for fid in fixture_ids:
+        try:
+            resp = api.get(endpoint, fixture=fid)
+        except QuotaExhausted:
+            raise
+        except RuntimeError as exc:
+            skipped += 1
+            log.warning("Skipped %s for fixture %s: %s", endpoint, fid, exc)
+            continue
+        yield fid, resp
+    if fixture_ids and skipped == len(fixture_ids):
+        raise RuntimeError(f"Every {endpoint} call failed ({skipped} fixtures)")
 
 
 def _store_odds(conn, resp, bet_ids=None):
@@ -1137,8 +1157,8 @@ def sync_fixture_players(api, conn, league_ids, batch_size=20):
 def sync_injuries_fixtures(api, conn, fixture_ids):
     """Refresh the injury list for specific fixtures (one call each) - used close to kickoff."""
     rows = {}
-    for fid in fixture_ids:
-        for item in api.get("injuries", fixture=fid):
+    for fid, resp in _each_fixture(api, "injuries", fixture_ids):
+        for item in resp:
             p, lg = item.get("player") or {}, item.get("league") or {}
             if p.get("id"):
                 rows[(fid, p["id"])] = {
