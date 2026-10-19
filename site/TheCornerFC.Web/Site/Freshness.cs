@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using TheCornerFC.Web.Data;
 
 namespace TheCornerFC.Web.Site;
@@ -17,7 +16,7 @@ public sealed record Freshness(IReadOnlyList<(string Label, DateTimeOffset At, s
         var f = site.Freshness ?? new Sources(null, null, null, null);
         (string, DateTimeOffset?, string)[] all =
         [
-            ("Data updated", site.GeneratedAt, "When this site's data was last exported"),
+            ("Data updated", DateTimeOffset.TryParse(site.GeneratedAt, out var at) ? at : null, "When this site's data was last exported"),
             ("Predictions updated", f.Predictions, "Latest match prediction written"),
             ("Injuries updated", f.Injuries, "Latest injury and suspension list fetched"),
             ("Odds last seen", f.Odds, "Latest bookmaker prices fetched"),
@@ -25,7 +24,6 @@ public sealed record Freshness(IReadOnlyList<(string Label, DateTimeOffset At, s
         return new(all.Where(x => x.Item2 is not null).Select(x => (x.Item1, x.Item2!.Value, x.Item3)).ToList(), f.Model);
     }
 
-    public sealed record SiteDoc([property: JsonPropertyName("generated_at")] DateTimeOffset? GeneratedAt, Sources? Freshness);
     public sealed record Sources(DateTimeOffset? Predictions, DateTimeOffset? Injuries, DateTimeOffset? Odds, ModelVersion? Model);
     public sealed record ModelVersion(string Name, string? Code);
 }

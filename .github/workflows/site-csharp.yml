@@ -19,6 +19,7 @@ on:
       - "web/src/app.css"
       - "web/src/lib/*.css"
       - "web/src/lib/tabInfo.json"
+      - "web/src/lib/names.json"
       - "web/src/text/**"
       - ".github/workflows/site-csharp.yml"
   workflow_dispatch:

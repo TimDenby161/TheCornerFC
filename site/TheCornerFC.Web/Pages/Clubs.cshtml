@@ -1,0 +1,92 @@
+@page "/clubs"
+@model ClubsModel
+@{
+    var title = Model.Filter == "all" ? "Clubs" : $"{Model.Menu.Name} clubs";
+    ViewData["Title"] = $"{title} · The Corner FC";
+    ViewData["Description"] = $"Strength ratings for {Js.Num(Model.Rows.Count)} clubs{(Model.Filter == "all" ? "" : $" ({Model.Menu.Name})")} on one scale: long-term level, current rating and recent movement.";
+    (string Key, string Cls, string Tip, string Label)[] columns =
+    [
+        ("lt", "", "Baseline Strength: the long-term Elo rating (LT ALGO), a smoothed rating weighted mostly to the average over the last 100 matches. Slow to move, and the better guide for matches months away.", "Baseline"),
+        ("trend", "col-gap", "Gap: Current Strength minus Baseline Strength. Green: rated above its long-term level; red: below it. A difference in level, not recent movement (see Last 6).", "Gap"),
+        ("current", "", "Current Strength: the Elo rating after the latest match. 100 points is worth a goal a game. It rises when a club does better than expected against that opponent, and falls when it does worse. Colour: green is the top 5% of all clubs, amber the top 20%, orange the top half, red the rest.", "Current"),
+        ("form", "col-recent", "Recent movement: how much the club's Elo rating has changed over its last 6 matches.", "Last 6"),
+    ];
+    var showMeta = Model.Search != "" || Model.Wide;
+}
+<section class="panel" data-tab="table" data-active="true">
+    <div id="table-side">
+        <div class="side-stick">
+            <div class="more-panel" id="more-panel">
+                @await Html.PartialAsync("_ExcludeChips", (Model.Excluded, "/clubs", Model.Choices("ex", "q"), "club"))
+            </div>
+            @await Html.PartialAsync("_FilterMenu", (Model.Menu, "table-filters", "/clubs", Model.Choices("c", "q"), "c"))
+            <button type="button" class="filter-chip" id="more-filters" aria-expanded="false" aria-controls="more-panel">
+                <text>Exclude</text>@if (Model.Excluded.Count > 0){<span class="n">@Model.Excluded.Count</span>}<span class="caret" aria-hidden="true">▾</span>
+            </button>
+        </div>
+    </div>
+    <form class="contents" method="get" action="/clubs" role="search">
+        @foreach (var (k, v) in Model.Choices("q")) { <input type="hidden" name="@k" value="@v" /> }
+        <input type="search" name="q" id="table-search" class="table-search" placeholder="Search clubs, leagues or countries" aria-label="Search" value="@Model.Search" autocomplete="off" data-live-search="#table-wrap" />
+    </form>
+    <div id="table-wrap" data-column-tips data-fit-table="@(showMeta ? "capped" : "")">
+        @if (Model.Rows.Count > 0)
+        {
+            <div class="table-scroll">
+                <table class="leaderboard clubs">
+                    <thead>
+                        <tr>
+                            <th data-tip="Position in this list, in the current sort order.">#</th>
+                            <th data-tip="Club badge. Click a club to open its page."><span class="th-club">Club</span></th>
+                            <th data-tip="Club name, with its country and league. Click a club to open its page.">Club</th>
+                            <th class="num col-spare" data-tip="World rank: place among every ranked club by Current Strength, whatever this list is filtered or sorted by.">World</th>
+                            <th class="num col-dom" data-tip="In league: place by Current Strength among the clubs in its league this season. TheCornerFC's ranking, not the league table (that's on the competition's page).">In lg</th>
+                            @foreach (var col in columns)
+                            {
+                                var on = Model.Sort == col.Key;
+                                var q = Model.Choices("sort");
+                                if (col.Key != "current") q["sort"] = col.Key;
+                                <th class="num sortable @col.Cls@(on ? " active" : "")" aria-sort="@(on ? "descending" : null)" data-tip="@col.Tip Click to sort.">
+                                    <a href="@Model.Address(q)">@if (col.Key == "lt"){<span class="th-full">Baseline</span><span class="th-short">Base</span>}else{@col.Label}</a>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ var i = 0; }
+                        @foreach (var r in Model.Rows)
+                        {
+                            i++;
+                            <tr data-href="@Menu.PageHref("club", r.Team.ToString())">
+                                <td>@i</td>
+                                <td>@Markup.Crest(r.Team, r.Name)</td>
+                                <td>
+                                    <div class="club-cell">
+                                        <a class="team-link" href="@Menu.PageHref("club", r.Team.ToString())" data-short="@r.Short">@r.Name</a>
+                                        @if (showMeta && r.Country != "")
+                                        {
+                                            <span class="club-meta">@Markup.Flag(r.CountryKey, r.Country)<span class="cm-league"><a class="nat-link" href="@Menu.PageHref("league", r.League.ToString())">@r.LeagueName</a></span></span>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="num col-spare">@Js.Num(r.Place.World)</td>
+                                <td class="num col-dom u-muted" title="@(r.Place.Dom is { } dom ? $"{Markup.Ordinal(dom)} of {r.Place.DomOf} in the {r.LeagueName} by Current Strength" : null)">@r.Place.Dom</td>
+                                <td class="num"><span class="rel-chip rel-@r.LtTier">@r.Lt</span></td>
+                                <td class="num col-gap">@Markup.Move(r.Trend)</td>
+                                <td class="num"><span class="rel-chip rel-@r.CurrentTier">@r.Current</span></td>
+                                <td class="num col-recent">@Markup.Move(r.Form)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">No clubs @(Model.Excluded.Count > 0 ? "match these filters" : "found").</div>
+        }
+    </div>
+</section>
+@section Scripts {
+    <script src="/table.js" nonce="@HttpContext.Nonce()"></script>
+}

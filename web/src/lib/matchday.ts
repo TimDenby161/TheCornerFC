@@ -2,7 +2,7 @@
 // round at a time. The server works the days out in the visitor's time zone (it learns that from
 // a cookie the page sets; UK time until then).
 import { CALLED_OFF, FINISHED, NO_GAME, roundName, type Match } from './matches.ts';
-import { COUNTRY_FIRST, DOMESTIC_CUPS, EURO_CUPS, REGIONS, regionOf } from './names.ts';
+import { COUNTRY_FIRST, DOMESTIC_CUPS, EURO_CUPS, GROUP_ORDER, REGIONS, regionOf } from './names.ts';
 import type { Country } from './clubTable.ts';
 import type { Site } from './site.ts';
 
@@ -57,7 +57,7 @@ export function defaultDay(md: MatchDays, today: string): string {
 // ---- The competition menu over the competitions with matches (cups under their country, the
 // European cups and the national team competitions in groups of their own)
 // Order competition groups are stacked in on the page (anything else follows)
-export const GROUP_ORDER = [39, 40, 41, 42, 2, 3, 848, 45, 48, 46, 140, 135, 78, 61, 94, 88, 144, 179, 43, 50, 51, 47];
+export { GROUP_ORDER };
 const orderOf = (id: number) => { const i = GROUP_ORDER.indexOf(id); return i === -1 ? 999 : i; };
 export function compCountries(site: Site, ids: number[]): Country[] {
 	const comps = site.competitions;

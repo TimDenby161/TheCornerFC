@@ -19,6 +19,7 @@ public class TimesTests
         var kickoff = DateTimeOffset.Parse("2026-10-17T14:00:00Z");
         Assert.Equal("15:00", Times.Show(kickoff, "Europe/London", "time"));
         Assert.Equal("10:00", Times.Show(kickoff, "America/New_York", "time"));
+        Assert.Equal("9:05", Times.Show(DateTimeOffset.Parse("2026-10-17T08:05:00Z"), "Europe/London", "time"));
         Assert.Equal("Sat 17 Oct", Times.Show(kickoff, "Europe/London", "day"));
         Assert.Equal("18 Oct", Times.Show(DateTimeOffset.Parse("2026-10-17T23:30:00Z"), "Asia/Tokyo", "short"));
     }

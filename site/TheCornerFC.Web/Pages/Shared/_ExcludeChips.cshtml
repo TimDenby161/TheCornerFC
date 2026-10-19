@@ -1,0 +1,34 @@
+@model (List<string> Excluded, string Action, Dictionary<string, string> Keep, string What)
+@{
+    // Exclude: the big five countries and the continents, hidden from a list on top of its menu
+    // (ExcludeChips.svelte). Each chip's button carries the list as it would be after the press
+    // ("ex" in the address); `Keep` is the page's other choices. `What`: "club" or "player".
+    var ex = Model.Excluded.ToHashSet();
+    string Toggled(params string[] keys)
+    {
+        var next = new List<string>(Model.Excluded);
+        var all = keys.All(next.Contains);
+        foreach (var k in keys) { if (all) next.Remove(k); else if (!next.Contains(k)) next.Add(k); }
+        return string.Join('|', next);
+    }
+    var first = Names.CountryFirst;
+}
+<div id="exclude-filter">
+    <form class="contents" method="get" action="@Model.Action">
+        @foreach (var (k, v) in Model.Keep) { <input type="hidden" name="@k" value="@v" /> }
+        <div class="pos-head"><span>Exclude</span>
+            <button type="submit" class="pos-clear" hidden="@(ex.Count == 0 ? "hidden" : null)">Clear</button></div>
+        <div class="ex-chips">
+            <button type="submit" name="ex" value="@Toggled(first.ToArray())" class="filter-chip ex-chip" aria-pressed="@(first.All(ex.Contains) ? "true" : "false")" title="Exclude @string.Join(", ", first)">Big 5</button>
+            @foreach (var c in first)
+            {
+                <button type="submit" name="ex" value="@Toggled(c)" class="filter-chip ex-chip" aria-pressed="@(ex.Contains(c) ? "true" : "false")" title="Exclude @c's @(Model.What)s">@c</button>
+            }
+            <span class="ex-break"></span>
+            @foreach (var r in Names.Continents)
+            {
+                <button type="submit" name="ex" value="@Toggled($"r:{r}")" class="filter-chip ex-chip" aria-pressed="@(ex.Contains($"r:{r}") ? "true" : "false")" title="Exclude every @Model.What in @r@(r == "Europe" ? " (the big five included)" : "")">@Names.RegionLabel(r)</button>
+            }
+        </div>
+    </form>
+</div>

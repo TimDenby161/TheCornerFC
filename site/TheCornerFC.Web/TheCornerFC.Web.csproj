@@ -21,6 +21,7 @@
     <OwnAssets Include="Assets/**/*" />
     <EmbeddedResource Include="$(WebSource)/src/lib/tabInfo.json" LogicalName="tabInfo.json" />
     <EmbeddedResource Include="$(WebSource)/src/text/*.html" LogicalName="text/%(Filename).html" />
+    <EmbeddedResource Include="$(WebSource)/src/lib/names.json" LogicalName="names.json" />
   </ItemGroup>
   <Target Name="CopyWebAssets" BeforeTargets="BeforeBuild;ResolveStaticWebAssetsInputs">
     <Copy SourceFiles="@(WebStatic)" DestinationFiles="@(WebStatic->'wwwroot/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />

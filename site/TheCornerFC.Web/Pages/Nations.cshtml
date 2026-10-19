@@ -1,0 +1,41 @@
+@page "/nations"
+@model NationsModel
+@{
+    ViewData["Title"] = $"{(Model.Confed == "all" ? "Nations" : $"{Model.Confed} nations")} · The Corner FC";
+    ViewData["Description"] = "National teams ranked by strength, from every men's international since 1872.";
+}
+<section class="panel" data-tab="nations" data-active="true">
+    <div id="nations-body" data-fit-table="">
+        <div class="filter-row u-mb10">
+            <a role="button" class="filter-chip" href="@Model.Address(c: "all")" aria-pressed="@(Model.Confed == "all" ? "true" : "false")">World</a>
+            @foreach (var c in NationsDoc.Confeds){<a role="button" class="filter-chip" href="@Model.Address(c: c)" aria-pressed="@(Model.Confed == c ? "true" : "false")">@c</a>}
+        </div>
+        <div class="table-scroll"><table class="leaderboard clubs">
+            <thead><tr>
+                <th title="Position in this list, in the current sort order.">#</th>
+                <th><span class="th-club">Nation</span></th>
+                <th title="The national team and its confederation. Hover for its last 12 months and last match.">Nation</th>
+                <th class="num sortable@(Model.Sort == "current" ? " active" : "")" aria-sort="@(Model.Sort == "current" ? "descending" : null)" title="Current Strength: the Elo rating now. 100 points is about one goal a game on a neutral ground. Click to sort."><a href="@Model.Address(sort: "current")">Current</a></th>
+                <th class="num sortable@(Model.Sort == "change" ? " active" : "")" aria-sort="@(Model.Sort == "change" ? "descending" : null)" title="Change in Current Strength over the last 12 months. Click to sort."><a href="@Model.Address(sort: "change")">1 yr</a></th>
+            </tr></thead>
+            <tbody>
+                @{ var i = 0; }
+                @foreach (var n in Model.Rows)
+                {
+                    i++;
+                    <tr title="@n.Tip">
+                        <td>@i</td>
+                        <td>@if (n.Flag is not null){<img class="flag" src="https://flagcdn.com/w40/@(n.Flag).png" alt="" loading="lazy" />}</td>
+                        <td><div class="club-cell">@if (n.Page is not null){<a class="team-link" href="/nation/@Js.EncodeUriComponent(n.Page)">@n.Name</a>}else{<span class="team-link">@n.Name</span>}@if (n.Confed is not null){<text> </text><span class="club-meta">@n.Confed</span>}</div></td>
+                        <td class="num"><span class="rel-chip rel-@n.Tier">@n.Current</span></td>
+                        <td class="num">@Markup.Move(n.Change)</td>
+                    </tr>
+                }
+            </tbody>
+        </table></div>
+        <div class="page-note">Elo ratings from every men's full international since 1872 (@Js.Num(Model.Doc.Matches) matches, the latest on @Model.Latest), the club model's method with home advantage only away from neutral grounds. FIFA members that have played in the last four years. Results: <a href="https://github.com/martj42/international_results" rel="noopener">international_results</a>@(Model.Doc.FromApi is > 0 ? $" and API-Football ({Model.Doc.FromApi} recent matches)" : "").</div>
+    </div>
+</section>
+@section Scripts {
+    <script src="/table.js" nonce="@HttpContext.Nonce()"></script>
+}

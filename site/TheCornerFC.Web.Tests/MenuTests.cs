@@ -31,7 +31,7 @@ public class MenuTests
     public void Links_every_kind_of_page()
     {
         Assert.Equal("/club/42", Menu.PageHref("club", "42"));
-        Assert.Equal("/nation/C%C3%B4te%20d%27Ivoire", Menu.PageHref("nation", "Côte d'Ivoire"));
+        Assert.Equal("/nation/C%C3%B4te%20d'Ivoire", Menu.PageHref("nation", "Côte d'Ivoire"));
     }
 
     [Theory]

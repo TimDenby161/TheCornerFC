@@ -1,0 +1,43 @@
+@model (FilterMenuModel Menu, string Id, string Action, Dictionary<string, string> Keep, string Name)
+@{
+    // The country / league menu (FilterMenu.svelte). Each choice is a button of a form that writes
+    // it into the address (`Name`), so it works before the page's script has loaded; `Keep` is the
+    // page's other choices, carried along. Wide screens: a side menu, a group opening after a
+    // short hover. Narrower: the same menu behind a button naming the selection (site.js).
+}
+@functions {
+    void ChipButton(Chip chip)
+    {
+        <button type="submit" name="@Model.Name" value="@chip.Value" class="filter-chip@(chip.Group ? " cchip" : "")@(chip.HasActive ? " has-active" : "")@(chip.Count == 0 ? " none" : "")"
+            title="@chip.Title" aria-pressed="@(chip.Pressed ? "true" : "false")" data-group="@(chip.Group ? "1" : null)">@if (chip.Group){<span class="caret" aria-hidden="true">▾</span>}<span class="flabel">@chip.Label</span>@if (chip.Count is { } n){<span class="cnt">@n</span>}</button>
+    }
+    void Node(MenuNode n)
+    {
+        if (n.Sep)
+        {
+            <div class="sep"></div>
+        }
+        else if (n.Children is not null)
+        {
+            <div class="cgroup@(n.Region ? " region" : "")@(n.Open ? " open" : "")" data-value="@n.Chip!.Value">
+                @{ ChipButton(n.Chip!); }
+                <div class="league-list"><div class="ll-inner">@foreach (var child in n.Children) { Node(child); }</div></div>
+            </div>
+        }
+        else
+        {
+            ChipButton(n.Chip!);
+        }
+    }
+}
+<div class="filters-wrap side-filters" id="@Model.Id" data-filter-menu>
+    <form class="contents" method="get" action="@Model.Action">
+        @foreach (var (k, v) in Model.Keep) { <input type="hidden" name="@k" value="@v" /> }
+        <button type="button" class="menu-trigger" aria-expanded="false">
+            <span class="mt-name">@Model.Menu.Name</span>@if (Model.Menu.Count is { } c){<span class="cnt">@c</span>}<span class="caret" aria-hidden="true">▾</span>
+        </button>
+        <div class="cgroups">
+            @foreach (var n in Model.Menu.Nodes) { Node(n); }
+        </div>
+    </form>
+</div>

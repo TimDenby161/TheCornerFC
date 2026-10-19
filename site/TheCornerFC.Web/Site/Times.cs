@@ -28,7 +28,7 @@ public static class Times
         return show switch
         {
             "day" => there.ToString("ddd d MMM", British),
-            "time" => there.ToString("HH:mm", British),
+            "time" => there.ToString("H:mm", British),   // 8:32, not 08:32, as the browser writes it
             "short" => there.ToString("d MMM", British),
             _ => throw new ArgumentOutOfRangeException(nameof(show), show, null),
         };

@@ -1,0 +1,35 @@
+@model (List<Leagues.RatingRow> Rows, Leagues.Sort Sort, string Def, bool Table)
+@{
+    // The clubs table on league and country pages (ClubRatingTable.svelte): Baseline rank, the
+    // club, its place in the competition's table (or matches rated, where there is none), and its
+    // ratings. Headers sort it; # stays each club's Baseline Strength rank.
+    var (rows, sort, def, table) = Model;
+    IHtmlContent Th(string key, string title, string inner, string cls = "") => Markup.SortTh(Context.Request, key, sort, def, title, inner, cls);
+}
+<div class="table-scroll"><table class="leaderboard clubs">
+    <thead><tr>
+        @Th("rank", "Baseline Strength rank", "#")<th></th>
+        @Th("club", "Club name", "Club")
+        @if (table){@Th("pos", "Actual position in the competition's table", "Table", "num col-spare")}
+        else{@Th("played", "Matches rated", "Pl", "num col-spare")}
+        @Th("lt", "Baseline Strength: long-term Elo", "<span class=\"th-full\">Baseline</span><span class=\"th-short\">Base</span>", "num")
+        @Th("trend", "Current minus Baseline", "Gap", "num col-gap")
+        @Th("current", "Current Strength: Elo now", "Current", "num")
+        @Th("form", "Elo change over the last 6 matches", "Last 6", "num col-recent")
+    </tr></thead>
+    <tbody>
+        @foreach (var r in rows)
+        {
+            <tr>
+                <td>@r.I</td>
+                <td>@Markup.Crest(r.Team, r.Name, href: $"/club/{r.Team}")</td>
+                <td><a class="team-link" href="/club/@r.Team">@r.Name</a>@if (r.Meta is { } meta){<text> </text><span class="club-meta"><a class="nat-link" href="@Menu.PageHref("league", meta.League.ToString())">@meta.Name</a></span>}</td>
+                <td class="num col-spare u-muted">@(table ? r.Pos?.ToString() ?? "" : r.Played.ToString())</td>
+                <td class="num"><span class="rel-chip rel-@r.LtTier">@Js.RoundInt(r.Lt)</span></td>
+                <td class="num col-gap">@Markup.Move(r.Trend)</td>
+                <td class="num"><span class="rel-chip rel-@r.CurrentTier">@Js.RoundInt(r.Current)</span></td>
+                <td class="num col-recent">@Markup.Move(r.Form is { } f ? Js.RoundInt(f) : null)</td>
+            </tr>
+        }
+    </tbody>
+</table></div>

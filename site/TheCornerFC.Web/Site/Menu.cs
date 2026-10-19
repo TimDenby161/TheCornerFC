@@ -55,7 +55,7 @@ public static partial class Menu
         Every.FirstOrDefault(s => path.StartsWith(s.Path, StringComparison.Ordinal));
 
     // A link to a club's, competition's, country's, player's or nation's page.
-    public static string PageHref(string kind, string id) => $"/{kind}/{Uri.EscapeDataString(id)}";
+    public static string PageHref(string kind, string id) => $"/{kind}/{Js.EncodeUriComponent(id)}";
     public static string MethodologyHref(string section) => $"/methodology#{section}";
 
     // The old site's files by their own names (/terms.html, /index.html): where each is here, or

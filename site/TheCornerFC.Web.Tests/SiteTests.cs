@@ -94,7 +94,7 @@ public class SiteTests
         using var site = new SiteFactory("production", r => StubHandler.Json(r.RequestUri!.Query.Contains("p_key=site")
             ? """{"generated_at":"2026-10-18T01:40:00+00:00","freshness":{"odds":"2026-10-18T13:05:00+00:00","model":{"name":"match-prediction","code":"9afa9ed"}}}""" : "null"));
         var html = await Client(site, "thecornerfc.com").GetStringAsync("/");
-        Assert.Contains("Data updated <time datetime=\"2026-10-18T01:40:00.000Z\" data-show=\"short\">18 Oct</time> <time datetime=\"2026-10-18T01:40:00.000Z\" data-show=\"time\">02:40</time>", html);
+        Assert.Contains("Data updated <time datetime=\"2026-10-18T01:40:00.000Z\" data-show=\"short\">18 Oct</time> <time datetime=\"2026-10-18T01:40:00.000Z\" data-show=\"time\">2:40</time>", html);
         Assert.Contains("Odds last seen", html);
         Assert.DoesNotContain("Injuries updated", html);
         Assert.Contains("Model match-prediction · 9afa9ed", html);

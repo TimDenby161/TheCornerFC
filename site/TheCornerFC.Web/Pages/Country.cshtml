@@ -1,0 +1,49 @@
+@page "/country/{name}"
+@model CountryModel
+@{
+    ViewData["Title"] = $"{Model.Name} · The Corner FC";
+    ViewData["Description"] = $"{Model.Name}: its leagues ranked by the strength of their clubs, its cups, and its clubs on one scale.";
+    var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(Request.QueryString.Value).ToDictionary(kv => kv.Key, kv => kv.Value.ToString());
+    q["all"] = "1";
+    var allHref = "?" + Markup.Query(q);
+}
+@functions {
+    void CardLink(CountryModel.Card c)
+    {
+        <a class="lg-card" href="/league/@c.Lid">@Markup.Crest(c.Lid, c.Name, league: true)
+            <span class="lg-main"><span class="lg-name">@c.Name</span>@if (c.Sub != ""){<span class="lg-sub">@c.Sub</span>}</span>
+            @if (c.Avg is { } a){<span class="rel-chip rel-@a.Tier" title="Average Baseline Strength of its clubs">@a.Value</span>}</a>
+    }
+}
+<section class="panel" data-tab="club" data-active="true">
+    <div id="club-body">
+        <div class="pl-hero">
+            @if (Model.Flag is not null){<img class="country-flag-lg" src="https://flagcdn.com/w160/@(Model.Flag).png" alt="" />}else{<span></span>}
+            <div class="pl-hero-main">
+                <h2>@Model.Name</h2>
+                <div class="pl-hero-club"><span class="pl-meta">@Model.Counts</span></div>
+            </div>
+            @if (Model.Avg is { } avg)
+            {
+                <div class="pl-hero-rank rel-@avg.Tier" title="Average Baseline Strength (long-term Elo) of the 15 best clubs in its leagues">
+                    <span class="val">@avg.Value</span><span class="lbl">Top 15 clubs</span></div>
+            }
+        </div>
+        @if (Model.LeagueCards.Count > 0)
+        {
+            <div class="modal-section u-mt0">Leagues</div><div class="lg-list">@foreach (var c in Model.LeagueCards) { CardLink(c); }</div>
+            @if (Model.LeagueCards.Count > 1){<div class="page-note">Strongest first, by the average Baseline Strength of their clubs.</div>}
+        }
+        @if (Model.CupCards.Count > 0)
+        {
+            <div class="club-section@(Model.LeagueCards.Count == 0 ? " u-mt0" : "")"><div class="modal-section">@(Model.LeagueCards.Count > 0 ? "Cups" : "Competitions")</div>
+                <div class="lg-list">@foreach (var c in Model.CupCards) { CardLink(c); }</div></div>
+        }
+        @if (Model.Total > 0)
+        {
+            <div class="club-section"><div class="modal-section">Clubs</div>
+                <div id="country-clubs">@await Html.PartialAsync("_ClubRatingTable", (Model.Rows, Model.Sort, "current", false))</div>
+                @if (!Model.ShowAll && Model.Total > Model.Rows.Count){<a class="show-all" href="@allHref">Show all @Js.Num(Model.Total)</a>}</div>
+        }
+    </div>
+</section>

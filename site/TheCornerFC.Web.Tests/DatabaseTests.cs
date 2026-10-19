@@ -73,6 +73,23 @@ public class DatabaseTests
     }
 
     [Fact]
+    public async Task Never_keeps_a_read_that_timed_out()
+    {
+        var calls = 0;
+        var (db, _, _) = With(_ => ++calls == 1 ? throw new TaskCanceledException("timed out") : StubHandler.Json("""{"n":1}"""));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => db.KeptDoc<Dictionary<string, int>>("nations"));
+        Assert.Equal(1, (await db.KeptDoc<Dictionary<string, int>>("nations"))["n"]);
+    }
+
+    [Fact]
+    public async Task Two_readers_of_one_document_as_different_types_each_get_their_own()
+    {
+        var (db, _, _) = With(_ => StubHandler.Json("""{"generated_at":"x"}"""));
+        Assert.Single(await db.KeptDoc<Dictionary<string, string>>("site"));
+        Assert.Equal("x", (await db.KeptDoc<Dictionary<string, object>>("site"))["generated_at"].ToString());
+    }
+
+    [Fact]
     public async Task Shares_answers_between_signed_out_visitors_only()
     {
         var calls = 0;

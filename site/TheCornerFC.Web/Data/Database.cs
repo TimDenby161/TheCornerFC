@@ -76,11 +76,12 @@ public sealed class Database(HttpClient http, SiteEnvironment env, TimeProvider 
     Task<T> Kept<T>(string key, TimeSpan keepFor, Func<Task<T>> read)
     {
         var now = clock.GetUtcNow();
-        if (kept.TryGetValue(key, out var have) && now - have.At < keepFor && !have.Doc.IsFaulted)
+        // (a read that failed or timed out is never handed on: it is asked again)
+        if (kept.TryGetValue(key, out var have) && now - have.At < keepFor && !have.Doc.IsFaulted && !have.Doc.IsCanceled)
             return Cast<T>(have.Doc);
         var doc = Box(read());
         kept[key] = (now, doc);
-        doc.ContinueWith(_ => kept.TryRemove(new(key, (now, doc))), TaskContinuationOptions.OnlyOnFaulted);
+        doc.ContinueWith(_ => kept.TryRemove(new(key, (now, doc))), TaskContinuationOptions.NotOnRanToCompletion);
         // a server runs for weeks: don't let the answers to one-off questions pile up
         if (kept.Count > 500)
             foreach (var (k, v) in kept)
@@ -91,13 +92,14 @@ public sealed class Database(HttpClient http, SiteEnvironment env, TimeProvider 
     static async Task<object> Box<T>(Task<T> t) => (await t)!;
     static async Task<T> Cast<T>(Task<object> t) => (T)await t;
 
+    // (kept by type as well as by key, so two readers of one document never share a copy of the wrong type)
     public Task<T> KeptDoc<T>(string key, TimeSpan? keepFor = null) =>
-        Kept($"doc:{key}", keepFor ?? TimeSpan.FromMinutes(1), () => SiteDoc<T>(key));
+        Kept($"doc:{typeof(T).FullName}:{key}", keepFor ?? TimeSpan.FromMinutes(1), () => SiteDoc<T>(key));
 
     // The same for a question every signed-out visitor gets the same answer to (a club's matches,
     // say). Never for a signed-in visitor's: theirs may hold paid rows.
     public Task<T> KeptAsk<T>(string fn, object parameters, TimeSpan? keepFor = null) =>
-        Kept($"ask:{fn}?{JsonSerializer.Serialize(parameters, Json)}", keepFor ?? TimeSpan.FromMinutes(1),
+        Kept($"ask:{typeof(T).FullName}:{fn}?{JsonSerializer.Serialize(parameters, Json)}", keepFor ?? TimeSpan.FromMinutes(1),
             () => SiteAsk<T>(fn, parameters));
 
     // A row that may not be there (a club with no file of its own): null in place of "not found".
