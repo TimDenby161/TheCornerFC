@@ -82,13 +82,25 @@
             {
                 <p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings, league tables and the betting comparison pages.</p>
                 <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free).</p>
-                @if (!AccountModel.Pay)
+                @if (!Model.Pay)
                 {
                     <p class="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free above is here for everyone, with no account needed.</p>
                 }
                 else if (sub?.Subscriber == true)
                 {
                     <p class="account-text"><b>This account is subscribed.</b></p>
+                }
+                else if (user.SignedIn)
+                {
+                    <p class="account-text">Cancel whenever you like: the subscription then runs to the end of the time paid for. Payment is taken by Stripe; this site never sees your card. See the <a href="/terms">terms</a>.</p>
+                    <form method="post" action="/account?/subscribe" class="account-plans">
+                        <button type="submit" name="plan" value="monthly" class="mt-btn account-out">Subscribe · @AccountModel.Prices.Monthly</button>
+                        <button type="submit" name="plan" value="yearly" class="mt-btn account-out">Subscribe · @AccountModel.Prices.Yearly</button>
+                    </form>
+                }
+                else
+                {
+                    <p class="account-text"><b>@AccountModel.Prices.Monthly, or @AccountModel.Prices.Yearly.</b> Sign in or create a free account first, then subscribe from here.</p>
                 }
                 <div class="account-links"><a class="link-btn" href="@(user.SignedIn ? "/account" : Href("signin"))">@(user.SignedIn ? "Back to your account" : "Sign in")</a></div>
             }
@@ -100,6 +112,10 @@
                     if (sub.Subscriber)
                     {
                         <p class="account-text">Subscription: <b>@(sub.Status is { } st ? (st == "past_due" ? "payment due" : st) : "active")</b>@(sub.Plan is { } plan ? $" ({plan})" : "")@(sub.RenewsAt is { Length: >= 10 } ra ? $" · {(sub.Ends ? "ends" : "renews")} {ClubPage.LongDate(ra[..10])}" : "")</p>
+                        if (Model.Pay && sub.Status is not null)
+                        {
+                            <form method="post" action="/account?/manage"><button type="submit" class="mt-btn account-out">Manage or cancel subscription</button></form>
+                        }
                     }
                     else
                     {

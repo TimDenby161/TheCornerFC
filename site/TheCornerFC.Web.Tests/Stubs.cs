@@ -28,7 +28,8 @@ public sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> an
 }
 
 // The whole site, started in memory as one environment, reading a stand-in database.
-public sealed class SiteFactory(string environment, Func<HttpRequestMessage, HttpResponseMessage>? answer = null)
+// `settings`: the app's settings, as Azure would give them (payments' secrets)
+public sealed class SiteFactory(string environment, Func<HttpRequestMessage, HttpResponseMessage>? answer = null, Dictionary<string, string>? settings = null)
     : WebApplicationFactory<Program>
 {
     public StubHandler Handler { get; } = new(answer ?? (_ => StubHandler.Json("null")));
@@ -36,11 +37,14 @@ public sealed class SiteFactory(string environment, Func<HttpRequestMessage, Htt
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
         builder.UseSetting("SITE_ENV", environment);
+        foreach (var (k, v) in settings ?? []) builder.UseSetting(k, v);
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton(sp => new Database(new HttpClient(Handler), SiteEnvironment.Named(environment), TimeProvider.System));
             // sign-in asks the same stand-in (Supabase Auth's addresses are under the same project)
             services.AddSingleton(sp => new AuthClient(new HttpClient(Handler), SiteEnvironment.Named(environment)));
+            // and so do Stripe's API and the subscriptions table
+            services.AddSingleton(sp => new PaymentsClient(new HttpClient(Handler), SiteEnvironment.Named(environment)));
         });
     }
 }

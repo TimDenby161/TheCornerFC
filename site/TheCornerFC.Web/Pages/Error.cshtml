@@ -1,4 +1,6 @@
 @page "/error/{status:int?}"
+@* (shown for a post that failed too: a form token isn't asked for here) *@
+@attribute [Microsoft.AspNetCore.Mvc.IgnoreAntiforgeryToken]
 @{
     // What a visitor sees when a page can't be shown (ErrorPage.svelte): plain words, never the
     // fault itself (that goes to the server's log), and a way on. No back button: the browser has one.

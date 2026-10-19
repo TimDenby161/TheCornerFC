@@ -1,6 +1,7 @@
 @using TheCornerFC.Web.Site
 @inject SiteEnvironment Env
 @inject TheCornerFC.Web.Data.Database Db
+@inject IConfiguration Settings
 @{
     // Every page of the site (web/src/app.html and the (app) layout): the menu, the page's name
     // and intro, the page, what its numbers mean, when its data was fetched, and the site links.
@@ -20,7 +21,7 @@
     {
         user = visitor.SignedIn ? new { email = visitor.Email } : null,
         sub = sub is null ? null : new { paywall = sub.Paywall, subscriber = sub.Subscriber, status = sub.Status, plan = sub.Plan, renewsAt = sub.RenewsAt, ends = sub.Ends },
-        botCheck = Env.BotCheck, pay = TheCornerFC.Web.Pages.AccountModel.Pay,
+        botCheck = Env.BotCheck, pay = Payments.From(Settings, Env) is not null,
         prices = new { monthly = TheCornerFC.Web.Pages.AccountModel.Prices.Monthly, yearly = TheCornerFC.Web.Pages.AccountModel.Prices.Yearly },
     }).Replace("<", "\\u003c");
 }

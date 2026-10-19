@@ -23,6 +23,8 @@ builder.Services.AddSingleton(sp => new Database(
     sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(Database)), env, sp.GetRequiredService<TimeProvider>()));
 // sign-in: Supabase Auth's web addresses, asked from here (Site/Auth.cs)
 builder.Services.AddHttpClient<AuthClient>(c => c.Timeout = TimeSpan.FromSeconds(10));
+// payments: Stripe and the subscriptions table, with the server's own keys (Site/Payments.cs)
+builder.Services.AddHttpClient<PaymentsClient>(c => c.Timeout = TimeSpan.FromSeconds(20));
 builder.Services.AddRazorPages();
 // pages written in UTF-8 as they read (·, é, ’), not as character codes: only <, >, &, quotes are escaped
 builder.Services.Configure<WebEncoderOptions>(o => o.TextEncoderSettings = new TextEncoderSettings(UnicodeRanges.All));
@@ -91,6 +93,8 @@ app.MapGet("/players/seasons", async (HttpContext c, Database db) =>
 
 // What a match card asks for as it is opened or comes into view
 MatchEndpoints.Map(app);
+// Stripe's webhook: off until the server has payments' secrets
+StripeWebhook.Map(app);
 
 app.Run();
 

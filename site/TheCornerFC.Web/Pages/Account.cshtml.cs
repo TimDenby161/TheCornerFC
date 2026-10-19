@@ -36,7 +36,7 @@ public sealed record Subscription(bool Paywall, [property: JsonPropertyName("sig
 // (Forms here are checked as SvelteKit checks them, before any page runs: a post must come from
 // this site's own pages, Site/Sessions.cs)
 [IgnoreAntiforgeryToken]
-public sealed class AccountModel(AuthClient auth, Database db) : PageModel
+public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient payments, IConfiguration settings, SiteEnvironment env) : PageModel
 {
     public static readonly HashSet<string> Views = ["signin", "signup", "reset", "newpass", "subscribe", "delete"];
     public static readonly Dictionary<string, string> Titles = new()
@@ -44,9 +44,9 @@ public sealed class AccountModel(AuthClient auth, Database db) : PageModel
         ["signin"] = "Sign in", ["signup"] = "Create an account", ["reset"] = "Reset your password", ["newpass"] = "Choose a new password",
         ["note"] = "Check your email", ["account"] = "Your profile", ["delete"] = "Delete your account", ["subscribe"] = "Subscribe",
     };
-    // whether subscriptions can be bought yet: not until payments come across (the rebuild's step 7c),
-    // as on the live site today
-    public const bool Pay = false;
+    // whether subscriptions can be bought yet: the server has payments' secrets (none yet, on either site)
+    Payments? P => Payments.From(settings, env);
+    public bool Pay => P is not null;
     // what a subscription costs (owner, 2026-10-07): the words on the buttons; the charge itself is
     // the price set in Stripe, and the two must be changed together
     public static readonly (string Monthly, string Yearly) Prices = ("£4.99 a month", "£49 a year");
@@ -169,8 +169,21 @@ public sealed class AccountModel(AuthClient auth, Database db) : PageModel
     // removes the caller's own row from Supabase Auth and nothing else (delete_my_account)
     public async Task<IActionResult> OnPostErase()
     {
-        if (Who.Token is not { } token) return await Fail("Sign in first.", "delete", status: 401);
-        // (a subscription still running is cancelled with Stripe first, once payments come across: none can be bought yet)
+        if (Who.Token is not { } token || Who.UserId is not { } userId) return await Fail("Sign in first.", "delete", status: 401);
+        // a subscription still running is cancelled with Stripe first, so nothing more is charged
+        if (P is { } p)
+        {
+            try
+            {
+                var kept = await payments.KeptFor(p, userId);
+                if (kept?.ProviderSubscription is { Length: > 0 } running && kept.Status != "canceled")
+                    await payments.Stripe(p, HttpMethod.Delete, $"subscriptions/{Uri.EscapeDataString(running)}");
+            }
+            catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+            {
+                return await Fail("Your subscription couldn't be cancelled just now, so the account has been kept. Try again in a moment.", "delete", status: 502);
+            }
+        }
         try { await db.SiteCall("delete_my_account", new { }, token); }
         catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException) { return await Fail("Something went wrong. Try again in a moment.", "delete"); }
         await auth.SignOut(token);
@@ -178,7 +191,54 @@ public sealed class AccountModel(AuthClient auth, Database db) : PageModel
         return await Done("erased", message: "Your account has been deleted.");
     }
 
-    // On to Stripe's checkout, and to Stripe's own page for a subscriber: none until payments come across
-    public Task<IActionResult> OnPostSubscribe() => Fail("Subscriptions are coming soon.", "subscribe");
-    public Task<IActionResult> OnPostManage() => Fail("Subscriptions are coming soon.", "account");
+    // On to Stripe's checkout for the plan picked. The subscription it starts carries this account's
+    // id, which is how the webhook knows whose it is.
+    public async Task<IActionResult> OnPostSubscribe()
+    {
+        if (P is not { } p) return await Fail("Subscriptions are coming soon.", "subscribe");
+        if (Who.UserId is not { } userId) return await Fail("Sign in first.", "subscribe", status: 401);
+        var plan = Text("plan") == "yearly" ? "yearly" : "monthly";
+        string to;
+        try
+        {
+            var kept = await payments.KeptFor(p, userId);
+            if (kept is not null && kept.Status != "canceled") return await Fail("This account already has a subscription.", "subscribe");
+            var session = await payments.Stripe(p, HttpMethod.Post, "checkout/sessions", new Dictionary<string, object?>
+            {
+                ["mode"] = "subscription",
+                ["line_items"] = new[] { new { price = plan == "yearly" ? p.Yearly : p.Monthly, quantity = 1 } },
+                ["client_reference_id"] = userId,
+                ["subscription_data"] = new { metadata = new { user_id = userId } },
+                // a returning subscriber keeps their record with Stripe
+                [kept?.ProviderCustomer is { Length: > 0 } ? "customer" : "customer_email"] = kept?.ProviderCustomer is { Length: > 0 } customer ? customer : Who.Email,
+                ["success_url"] = $"{Origin}/account?paid=1",
+                ["cancel_url"] = $"{Origin}/account?view=subscribe",
+            });
+            to = session.GetProperty("url").GetString()!;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            return await Fail("The checkout couldn't be opened just now. Try again in a moment.", "subscribe", status: 502);
+        }
+        return Away(to);
+    }
+
+    // On to Stripe's own page for a subscriber: change the card, see invoices, cancel
+    public async Task<IActionResult> OnPostManage()
+    {
+        if (P is not { } p) return await Fail("Subscriptions are coming soon.", "account");
+        if (Who.UserId is not { } userId) return await Fail("Sign in first.", "account", status: 401);
+        string to;
+        try
+        {
+            var kept = await payments.KeptFor(p, userId);
+            if (kept?.ProviderCustomer is not { Length: > 0 } customer) return await Fail("No subscription on this account.", "account");
+            to = (await payments.Stripe(p, HttpMethod.Post, "billing_portal/sessions", new { customer, return_url = $"{Origin}/account" })).GetProperty("url").GetString()!;
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            return await Fail("That page couldn't be opened just now. Try again in a moment.", "account", status: 502);
+        }
+        return Away(to);
+    }
 }
