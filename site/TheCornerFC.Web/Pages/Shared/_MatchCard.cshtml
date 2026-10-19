@@ -2,8 +2,9 @@
 @{
     // A match (MatchCard.svelte): when, both sides and the score (or the projected one), the
     // model's chances beside the market's, and the key reasons. For a finished match, how the
-    // prediction did. Its line-ups and model detail open with the match card's script (step 6 of
-    // the rebuild); until then their buttons are drawn and do nothing.
+    // prediction did. Its line-ups, model detail and how the prediction did open from it, and both
+    // clubs' expected squads arrive as it comes into view: the card's React part (site/client,
+    // MatchCards.tsx) asks /match/<id>/... for them and draws them in its panels' place.
     var m = Model.M;
     var visitor = Visitor.Of(Context);
     var canLineups = Model.Lineups && m.CanLineups;
@@ -14,9 +15,12 @@
     meta.AppendHtml(Markup.LocalTime(kickoff, "time", visitor)).Append(round);
     var right = new HtmlContentBuilder();
     if (m.Rating is { } rt) right.AppendHtml($"<button type=\"button\" class=\"rating-badge badge-{rt.Score}\" title=\"{rt.Score}/5 {rt.Label}\" aria-expanded=\"false\">{rt.Score}/5</button>");
+    var ratingJson = m.Rating is { } rd
+        ? System.Text.Json.JsonSerializer.Serialize(new { score = rd.Score, label = rd.Label, factors = rd.Factors.Select(f => new { label = f.Label, weight = f.Weight, score = f.Score }) }).Replace("<", "\\u003c")
+        : null;
     if (m.Tag != "") right.AppendHtml($"<span class=\"status-tag{(m.Live ? " live" : "")}\">{System.Net.WebUtility.HtmlEncode(m.Tag)}</span>");
 }
-<div class="match-card @(m.Rating is { } r ? $"rated acc-{r.Score}" : "")@(canLineups ? " lineup-card" : "")" data-fixture="@m.Id">
+<div class="match-card @(m.Rating is { } r ? $"rated acc-{r.Score}" : "")@(canLineups ? " lineup-card" : "")" data-fixture="@m.Id" data-lineups="@(canLineups ? "1" : null)" data-squads="@(m.CanSquads ? "1" : null)" data-finished="@(m.Finished ? "1" : null)">
     @await Html.PartialAsync("_MatchHead", new MatchHeadModel(m.Home, m.Away, m.Status, m.Hg, m.Ag, m.PenH, m.PenA, m.HomeXg, m.AwayXg, m.Likely, m.Source, meta, right))
     @if (m.Probs is not null){@await Html.PartialAsync("_ProbBars", new ProbBarsModel(m.Probs, m.Market))}
     @if (m.Lock is not null)
@@ -36,6 +40,11 @@
             @if (canLineups){<button type="button" class="lineup-toggle" aria-expanded="false">@(m.Finished ? "Line-ups" : "Predicted line-ups")</button>}
             @if (m.CanDetail){<button type="button" class="why-toggle" aria-expanded="false">@(m.Finished ? "Pre-match model detail" : "Model detail")</button>}
         </div>
+    }
+    @if (canLineups || m.CanDetail || m.Rating is not null)
+    {
+        @* (how the prediction did, for the panel that opens from its badge) *@
+        <div hidden data-card-panels>@if (ratingJson is not null){<script type="application/json">@Html.Raw(ratingJson)</script>}</div>
     }
     @Model.Extra
 </div>

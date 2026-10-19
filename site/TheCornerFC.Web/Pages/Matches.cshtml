@@ -1,0 +1,64 @@
+@page "/matches"
+@model MatchesModel
+@{
+    ViewData["Title"] = $"{(Model.Title is not null ? $"{Model.Title} matches" : "Matches")} · The Corner FC";
+    ViewData["Description"] = $"The model's win, draw and loss chances for {(Model.Title is not null ? $"{Model.Title} matches" : "every match")}, with projected goals and the bookmakers' chances for comparison.";
+    var byRound = Model.Mode == "rounds";
+}
+<section class="panel" data-tab="matches" data-active="true">
+    <div class="match-bar">
+        <div id="match-side">
+            <div class="side-stick">@await Html.PartialAsync("_FilterMenu", (Model.Menu, "match-filters", "/matches", new Dictionary<string, string>(), "c"))</div>
+        </div>
+        <div class="secondary-filters">
+            @if (Model.Prev is not null){<a class="nav-btn" href="@Model.Address(Model.Prev)" aria-label="@(byRound ? "Previous round" : "Previous day")">&#8249;</a>}
+            else{<button type="button" class="nav-btn" disabled aria-label="Previous round">&#8249;</button>}
+            @* a day or round picked loads it (site.js), keeping the menu's choice *@
+            <form class="contents" method="get" action="/matches">
+                @if (Model.Filter != "all"){<input type="hidden" name="c" value="@Model.Filter" />}
+                @if (byRound)
+                {
+                    <select class="date-input" name="d" aria-label="Round" data-submit-on-change>
+                        @foreach (var r in Model.Rounds){<option value="@r.Day" selected="@(r.Day == Model.Day ? "selected" : null)">@r.Label</option>}
+                    </select>
+                }
+                else
+                {
+                    <input type="date" class="date-input" name="d" aria-label="Match date" value="@Model.Day" data-submit-on-change />
+                }
+            </form>
+            @if (Model.Next is not null){<a class="nav-btn" href="@Model.Address(Model.Next)" aria-label="@(byRound ? "Next round" : "Next day")">&#8250;</a>}
+            else{<button type="button" class="nav-btn" disabled aria-label="Next round">&#8250;</button>}
+            <a class="nav-btn today-btn" href="@Model.Address(null)" title="@(byRound ? "The round on now or next up" : null)">@(byRound ? "Next" : "Today")</a>
+        </div>
+    </div>
+    <div id="matches-list">
+        @foreach (var g in Model.Groups)
+        {
+            @* a competition's (or a day's) matches fold away under its name (table.js) *@
+            <div class="comp-group">
+                <div class="comp-group-header" role="button" tabindex="0" aria-expanded="true">
+                    <span class="comp-group-caret" aria-hidden="true">▾</span>
+                    <span class="comp-group-name">@g.Name</span>
+                    <span class="comp-group-count">@g.Cards.Count</span>
+                </div>
+                <div class="card-list">@foreach (var m in g.Cards){@await Html.PartialAsync("_MatchCard", new MatchCardModel(m))}</div>
+            </div>
+        }
+        @if (Model.Groups.Count == 0)
+        {
+            if (Model.Mode == "days")
+            {
+                <div class="empty-state">No matches on @Model.DayName.@if (Model.Upcoming is { } up){<br /><br /><a class="filter-chip" href="@Model.Address(up.Day)">Next: @up.Name</a>}</div>
+            }
+            else
+            {
+                <div class="empty-state">No matches in this competition yet.</div>
+            }
+        }
+    </div>
+</section>
+@section Scripts {
+    <script src="/table.js" nonce="@HttpContext.Nonce()"></script>
+    <script type="module" src="/client/islands.js" nonce="@HttpContext.Nonce()"></script>
+}

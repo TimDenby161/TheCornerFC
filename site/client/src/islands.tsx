@@ -1,6 +1,7 @@
 import type { FunctionComponent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DualRange, PlayerRanges } from './DualRange.tsx';
+import { matchCards } from './MatchCards.tsx';
 import { RankChart } from './RankChart.tsx';
 import { WhoPicker } from './WhoPicker.tsx';
 
@@ -25,3 +26,6 @@ for (const el of document.querySelectorAll<HTMLElement>('[data-island]')) {
 	draw(JSON.parse(data.textContent || '{}'));
 	el.addEventListener('island-props', (e) => draw((e as CustomEvent<Record<string, unknown>>).detail));
 }
+
+// Match cards: their line-ups, model detail and squads, wherever a page has them
+matchCards();

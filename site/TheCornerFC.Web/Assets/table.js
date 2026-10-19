@@ -255,6 +255,17 @@
 		addEventListener('popstate', () => swapTo(location.href, { history: 'none' }));
 	}
 
+	// ---- The Matches page: a competition's (or a day's) matches fold away under its name
+	document.querySelectorAll('.comp-group-header').forEach((h) => {
+		const fold = () => {
+			const closed = h.parentElement.classList.toggle('collapsed');
+			h.setAttribute('aria-expanded', String(!closed));
+			h.querySelector('.comp-group-caret').textContent = closed ? '▸' : '▾';
+		};
+		h.addEventListener('click', fold);
+		h.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fold(); } });
+	});
+
 	document.querySelectorAll('[data-column-tips]').forEach((wrap) => columnTips(wrap, wrap.matches('[data-season-tips]') ? seasonTip : undefined));
 	document.querySelectorAll('[data-fit-table]').forEach(fitTable);
 	document.querySelectorAll('[data-filter-menu]').forEach(filterMenu);

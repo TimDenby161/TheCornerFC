@@ -85,6 +85,9 @@ app.MapGet("/players/seasons", async (HttpContext c, Database db) =>
     return Results.Json(Players.SeasonSpells(siteTask.Result, docTask.IsCompletedSuccessfully ? docTask.Result : null), Database.Json);
 });
 
+// What a match card asks for as it is opened or comes into view
+MatchEndpoints.Map(app);
+
 app.Run();
 
 // so the tests can start the site (WebApplicationFactory)

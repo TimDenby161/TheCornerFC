@@ -38,7 +38,9 @@ public sealed record Match(int Id, string Kickoff, int League, string? Round, in
     int? Hg, int? Ag, int? PenH, int? PenA, double? PHome, double? PDraw, double? PAway, double? HomeXg, double? AwayXg,
     string? Likely, double? HomeRank, double? AwayRank, string? Source, double? HomeXi, double? AwayXi,
     double? HomeMissing, double? AwayMissing, int? Rating, int? RWinner, int? RMargin, int? RCleanSheets, int? RShape, int? RGoals,
-    double? MHome, double? MDraw, int? Intl, List<(string Key, double Goals)> Reasons);
+    double? MHome, double? MDraw, int? Intl, List<(string Key, double Goals)> Reasons,
+    // the last five starting XIs' average rank, over 2.5 goals and both to score
+    double? HomeRecentXi = null, double? AwayRecentXi = null, double? POver25 = null, double? PBtts = null);
 public sealed record MatchesAnswer(JsonElement[][] Matches, Dictionary<string, JsonElement[][]>? Reasons, bool? Paywall);
 
 // The injury lists: per club, its next match's, else its latest recent one. A row is
@@ -105,7 +107,7 @@ public static class ClubData
                 n.I("hg"), n.I("ag"), n.I("pen_h"), n.I("pen_a"), n.D("p_home"), n.D("p_draw"), n.D("p_away"), n.D("home_xg"), n.D("away_xg"),
                 n.S("likely"), n.D("home_rank"), n.D("away_rank"), n.S("source"), n.D("home_xi"), n.D("away_xi"), n.D("home_missing"), n.D("away_missing"),
                 n.I("rating"), n.I("r_winner"), n.I("r_margin"), n.I("r_clean_sheets"), n.I("r_shape"), n.I("r_goals"),
-                n.D("m_home"), n.D("m_draw"), n.I("intl"), reasons);
+                n.D("m_home"), n.D("m_draw"), n.I("intl"), reasons, n.D("home_recent_xi"), n.D("away_recent_xi"), n.D("p_over25"), n.D("p_btts"));
         }).OrderBy(m => m.Kickoff, StringComparer.Ordinal).ThenBy(m => m.Id).ToList();
     }
 

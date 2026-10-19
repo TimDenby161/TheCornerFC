@@ -51,8 +51,9 @@
 	// chose UK time.
 	if (!ukTime && mine && mine !== body.dataset.tz) { keepZone(mine); location.reload(); return; }
 
-	// A menu of choices that loads its choice as soon as it is picked (a league's rounds)
-	document.querySelectorAll('select[data-submit-on-change]').forEach((s) => s.addEventListener('change', () => s.form.requestSubmit()));
+	// A menu of choices, or a date, that loads its choice as soon as it is picked (a league's
+	// rounds, the Matches page's day): a date box emptied loads nothing
+	document.querySelectorAll('[data-submit-on-change]').forEach((s) => s.addEventListener('change', () => { if (s.value) s.form.requestSubmit(); }));
 
 	// A page's tabs (a club's, a league's): on a phone the row can run wider than the screen, so
 	// the tab that's open is brought into view
