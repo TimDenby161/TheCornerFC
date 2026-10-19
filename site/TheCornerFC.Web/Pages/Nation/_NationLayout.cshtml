@@ -1,0 +1,35 @@
+@using TheCornerFC.Web.Pages.NationTabs
+@{
+    // The header every tab of a nation's page shares (the Svelte (app)/nation/[name] layout)
+    Layout = "_Layout";
+    var d = (NationPageModel)ViewContext.ViewData.Model!;
+    var b = Menu.PageHref("nation", d.N.Name);
+    var rest = Uri.UnescapeDataString(Context.Request.Path.Value ?? "");
+    var tab = rest.Length > $"/nation/{d.N.Name}".Length ? rest[($"/nation/{d.N.Name}".Length + 1)..].Split('/')[0] : "";
+    (string Key, string Label)[] tabs = [("", "Overview"), ("xi", "Predicted XI"), ("formations", "Formations"), ("players", "Players")];
+    var coach = d.N.Spell?.Coach;
+}
+<section class="panel" data-tab="club" data-active="true">
+    <div id="club-body">
+        <div class="pl-hero">
+            @if (d.Flag is not null){<img class="country-flag-lg" src="https://flagcdn.com/w160/@(d.Flag).png" alt="" />}else{<span></span>}
+            <div class="pl-hero-main">
+                <h2>@d.N.Name</h2>
+                @if (coach is not null){<div class="pl-hero-club pl-hero-nat">@Markup.PersonChip(coach, "player-photo coach-photo")<span class="pl-meta" title="Head coach">@coach</span></div>}
+            </div>
+            @if (d.N.Rated is { } r)
+            {
+                <div class="pl-hero-rank rel-@r.Tier" title="National team Elo rating: world #@r.Rank of @r.Of@(r.Change is { } ch ? $" · {(ch >= 0 ? "+" : "")}{ch} on a year ago" : "")">
+                    <span class="val">@r.Current</span><span class="lbl"></span></div>
+            }
+        </div>
+        <nav class="page-tabs" aria-label="@d.N.Name's pages">
+            @foreach (var (key, label) in tabs)
+            {
+                <a href="@(key == "" ? b : $"{b}/{key}")" aria-current="@(tab == key ? "page" : null)">@label</a>
+            }
+        </nav>
+        <div id="nat-tab">@RenderBody()</div>
+    </div>
+</section>
+@section Scripts { @RenderSection("Scripts", required: false) }

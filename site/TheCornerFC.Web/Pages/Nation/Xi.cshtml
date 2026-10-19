@@ -1,0 +1,36 @@
+@page "/nation/{name}/xi"
+@model TheCornerFC.Web.Pages.NationTabs.XiModel
+@{
+    var name = Model.N.Name;
+    ViewData["Title"] = $"{name} predicted XI · The Corner FC";
+    ViewData["Description"] = $"The eleven {name}'s coach is most likely to start, read off his recent team sheets.";
+}
+@functions {
+    async Task Pitch()
+    {
+        <div class="club-section pp-section">@await Html.PartialAsync("_XiPitch", new TheCornerFC.Web.Site.Lineups.Pitch(Model.Spots, null))</div>
+    }
+}
+@if (Model.State == "none")
+{
+    <div class="empty-state">No line-ups for @name yet (they come from API-Football's international matches).</div>
+}
+else if (Model.State == "few")
+{
+    <div class="empty-state">Not enough line-ups to predict @name's XI yet.</div>
+}
+else if (Model.Outs.Count > 0)
+{
+    <div class="ov-top"><div class="ov-side">
+        <div class="next-card"><div class="next-top"><span class="next-label">Out injured</span></div>
+            @foreach (var o in Model.Outs)
+            {
+                <div class="nat-xi-row"><span class="nat-xi-who">@Markup.PersonChip(o.Name)@if (o.Link){<a class="player-link" href="/player/@o.Id">@o.Short</a>}else{<span title="@o.Name">@o.Short</span>}</span></div>
+            }
+        </div>
+    </div>@{ await Pitch(); }</div>
+}
+else
+{
+    await Pitch();
+}

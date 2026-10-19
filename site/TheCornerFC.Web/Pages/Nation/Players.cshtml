@@ -1,0 +1,49 @@
+@page "/nation/{name}/players"
+@model TheCornerFC.Web.Pages.NationTabs.PlayersModel
+@{
+    var name = Model.N.Name;
+    ViewData["Title"] = $"{name} players · The Corner FC";
+    ViewData["Description"] = $"Everyone who has played for {name} under the current head coach: appearances, minutes, goals, assists and cards.";
+    (string Key, string Label, string Tip)[] cols =
+    [
+        ("apps", "Apps", "Matches played, starting or from the bench."), ("minutes", "Mins", "Minutes played (where API-Football has the player's stat line)."),
+        ("goals", "G", "Goals."), ("assists", "A", "Assists."), ("cards", "Cards", "Yellow and red cards."), ("last", "Last", "Date of his latest appearance."),
+    ];
+}
+@if (!Model.Any)
+{
+    <div class="empty-state">No line-ups for @name yet (they come from API-Football's international matches).</div>
+}
+else
+{
+    <div class="modal-section nat-spell">@Model.Heading</div>
+    <div class="table-scroll"><table class="leaderboard nat-players">
+        <thead><tr><th>#</th><th>Player</th><th title="His most common starting role in these matches (else his club position).">Pos</th>
+            @foreach (var (key, label, tip) in cols)
+            {
+                var on = Model.Sort == key;
+                <th class="num sortable@(on ? " active" : "")" aria-sort="@(on ? "descending" : null)" title="@tip Click to sort."><a href="@(key == "minutes" ? Menu.PageHref("nation", Model.N.Name) + "/players" : $"?sort={key}")">@label</a></th>
+            }
+        </tr></thead>
+        <tbody>
+            @{ var i = 0; }
+            @foreach (var r in Model.Rows)
+            {
+                var p = r.P;
+                i++;
+                <tr>
+                    <td>@i</td>
+                    <td><div class="club-cell">@Markup.PersonChip(p.Name)@if (r.Link){<a class="player-link" href="/player/@p.Id">@r.Short</a>}else{<span title="@p.Name">@r.Short</span>}
+                        @if (r.Team is { } t && t != 0 && r.TeamName is not null){<a class="pl-badge-link nat-badge" href="/club/@t" title="@r.TeamName" aria-label="@r.TeamName">@Markup.Crest(t, r.TeamName)</a>}</div></td>
+                    <td>@p.Role</td>
+                    <td class="num">@p.Apps</td>
+                    <td class="num" title="@(p.NoMins > 0 ? $"Minutes not known for {p.NoMins} of his matches" : null)">@(p.NoMins == p.Apps ? "–" : $"{p.Minutes}{(p.NoMins > 0 ? "*" : "")}")</td>
+                    <td class="num">@(p.Goals > 0 ? p.Goals.ToString() : "")</td><td class="num">@(p.Assists > 0 ? p.Assists.ToString() : "")</td>
+                    <td class="num">@if (p.Y > 0){<span class="card-y" title="Yellow cards">@p.Y</span>}@if (p.R > 0){<span class="card-r" title="Red cards">@p.R</span>}</td>
+                    <td class="num">@r.LastText</td>
+                </tr>
+            }
+        </tbody>
+    </table></div>
+    <div class="page-note">@Model.Rows.Count players in @Model.Matches matches, from API-Football's line-ups and player stats. Click a heading to sort.@(Model.AnyNoMins ? " * Includes starts with no stat line, whose minutes aren't known." : "")</div>
+}

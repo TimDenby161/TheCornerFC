@@ -10,7 +10,9 @@ public sealed record NationsDoc(
     Dictionary<string, string[]>? Aliases, List<NationsDoc.Nation> Nations)
 {
     public sealed record Nation(string Name, string Flag, string? Confed, double Current,
-        [property: JsonPropertyName("year_ago")] double? YearAgo, int Played, int W, int D, int L, Last Last);
+        [property: JsonPropertyName("year_ago")] double? YearAgo, int Played, int W, int D, int L, Last Last,
+        // the national team's own file (nations/<id>), where the feed has its internationals
+        [property: JsonPropertyName("team_id")] int? TeamId = null);
     public sealed record Last(string Date, string Opp, int Gf, int Ga, string Comp);
 
     public static readonly IReadOnlyList<string> Confeds = ["UEFA", "CONMEBOL", "CONCACAF", "CAF", "AFC", "OFC"];

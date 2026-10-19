@@ -1,0 +1,62 @@
+@page "/nation/{name}"
+@model TheCornerFC.Web.Pages.NationTabs.IndexModel
+@{
+    var name = Model.N.Name;
+    ViewData["Title"] = $"{name} · The Corner FC";
+    ViewData["Description"] = $"{name}: the national team's rating, its best players by position and every ranked {name} player.";
+    var total = Model.N.List.Count;
+}
+@if (total == 0)
+{
+    <div class="empty-state">No ranked players from @name.</div>
+}
+else
+{
+    @if (Model.Shape is { } shape)
+    {
+        <div class="club-section"><div class="modal-section">@(shape.HasShape ? $"Best by current rank in their usual {shape.Formation}" : "Top 3 in each position by current rank")</div>
+            <div class="pp-section">
+                @Markup.PitchStart("dp-pitch", null)
+                    @foreach (var b in Model.Boxes)
+                    {
+                        if (b.Players.Count > 0)
+                        {
+                            <div class="dp-spot gr-@b.Row gc-@b.Col"><span class="dp-pos">@b.Label</span>
+                                @foreach (var p in b.Players)
+                                {
+                                    if (p.Link)
+                                    {
+                                        <a class="dp-row nat-row@(p.Unpicked ? " nat-unpicked" : "")" href="/player/@p.Id" title="@p.Tip"><span class="dp-name">@p.Name</span><span class="dp-rank @(p.Rank is { } rk ? $"t{ClubPage.RankTier(rk)}" : "")">@(p.Rank?.ToString() ?? "–")</span></a>
+                                    }
+                                    else
+                                    {
+                                        <span class="dp-row nat-row@(p.Unpicked ? " nat-unpicked" : "")" title="@p.Tip"><span class="dp-name">@p.Name</span><span class="dp-rank">–</span></span>
+                                    }
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="dp-spot empty gr-@b.Row gc-@b.Col"><span class="dp-pos">@b.Label</span></div>
+                        }
+                    }
+                @Markup.PitchEnd
+                @if (shape.HasShape){<div class="page-note u-center">Plus everyone @(shape.Coach is { Length: > 0 } c ? c : "the current coach") has picked. <span class="nat-unpicked-key">Red</span>: not picked by him.</div>}
+            </div>
+        </div>
+    }
+    @if (Model.N.Paywall){<div class="pl-callout">Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected. <partial name="_SubscriberLink" /></div>}
+    <div class="club-section"><div class="modal-section">All players</div>
+        <div>
+            @{ var i = 0; }
+            @foreach (var p in Model.Rows)
+            {
+                i++;
+                <div class="team-row"><span class="team-row-date">@i. @p.Position</span>
+                    <span class="team-row-opp"><a class="player-link" href="/player/@p.Id">@p.Name</a> <span class="club-sub u-inline">@if (p.Team is { } t && t != 0){<a class="team-link" href="/club/@t">@p.TeamName</a>}else{<span class="dim-text">club not known</span>}@(p.Age is { } a ? $" · {a}" : "")</span></span>
+                    <span class="team-row-res">@if (p.Rank is { } r){<span class="rel-chip rel-@ClubPage.RankTier(r)">@Js.RoundInt(r)</span>}else{<text>–</text>}</span></div>
+            }
+        </div>
+        @if (!Model.ShowAll && total > Model.Rows.Count){<a class="show-all" href="@Model.AllHref()">Show all @Js.Num(total)</a>}
+    </div>
+}

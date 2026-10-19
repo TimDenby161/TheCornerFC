@@ -43,7 +43,7 @@ public sealed record MatchesAnswer(JsonElement[][] Matches, Dictionary<string, J
 
 // The injury lists: per club, its next match's, else its latest recent one. A row is
 // [player, name, type, ban, matches missed in a row, season rank]
-public sealed record Injuries(Dictionary<string, Injuries.Team>? Teams)
+public sealed record Injuries(Dictionary<string, Injuries.Team>? Teams, string[]? Fields = null)
 {
     public sealed record Team(string Kickoff, bool Upcoming, JsonElement[][] Players);
 }
@@ -62,8 +62,14 @@ public static class ClubData
     // API-Football sends some names HTML-encoded ("O&apos;Reilly")
     // (only these six, as the Svelte site decodes them)
     static readonly Dictionary<string, string> Entities = new() { ["apos"] = "'", ["#39"] = "'", ["quot"] = "\"", ["amp"] = "&", ["lt"] = "<", ["gt"] = ">" };
-    public static string Decode(string t) =>
-        t.Contains('&') ? System.Text.RegularExpressions.Regex.Replace(t, "&(apos|#39|quot|amp|lt|gt);", m => Entities[m.Groups[1].Value]) : t;
+    // A few names come garbled with an invisible control character in them (U+0080 to U+009F): the
+    // Svelte site writes it as it is, which browsers don't show, but C# would write it as a code that
+    // browsers show as a stray mark, so it is dropped here.
+    public static string Decode(string t)
+    {
+        if (t.Any(c => c is >= '\u0080' and <= '\u009f')) t = new string(t.Where(c => c is < '\u0080' or > '\u009f').ToArray());
+        return t.Contains('&') ? System.Text.RegularExpressions.Regex.Replace(t, "&(apos|#39|quot|amp|lt|gt);", m => Entities[m.Groups[1].Value]) : t;
+    }
 
     public static List<Player> Players(SiteDoc site, JsonElement[][] rows)
     {
