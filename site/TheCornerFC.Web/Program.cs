@@ -21,6 +21,8 @@ builder.Services.AddHttpClient<Database>(c => c.Timeout = TimeSpan.FromSeconds(1
 // one Database for the server, so the kept documents are shared between requests
 builder.Services.AddSingleton(sp => new Database(
     sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(Database)), env, sp.GetRequiredService<TimeProvider>()));
+// sign-in: Supabase Auth's web addresses, asked from here (Site/Auth.cs)
+builder.Services.AddHttpClient<AuthClient>(c => c.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddRazorPages();
 // pages written in UTF-8 as they read (·, é, ’), not as character codes: only <, >, &, quotes are escaped
 builder.Services.Configure<WebEncoderOptions>(o => o.TextEncoderSettings = new TextEncoderSettings(UnicodeRanges.All));
@@ -36,6 +38,8 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 app.UseGate(env);
+// who is signed in, before any page runs (Site/Sessions.cs)
+app.UseSessions();
 // A page that fails: the fault goes to the server's log, never onto the page
 app.UseExceptionHandler("/error/500");
 app.UseStatusCodePagesWithReExecute("/error/{0}");

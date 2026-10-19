@@ -1,0 +1,127 @@
+@page "/account"
+@model AccountModel
+@inject SiteEnvironment Env
+@* (plain forms: posts here are checked by where they come from, not by ASP.NET's form token) *@
+@removeTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    ViewData["NoIndex"] = true;
+    var view = Model.View;
+    var user = Model.Who;
+    var sub = Model.Sub;
+    // (where the page's script isn't running, a link to another view opens the page on it)
+    static string Href(string to) => $"/account?view={to}";
+}
+@functions {
+    // the page they were on, to come back to after Google (the account page itself: Home)
+    const string Here = "/";
+    void Field(string name, string label, string type, string autocomplete, int? min = null, string value = "")
+    {
+        <label>@label<input type="@type" name="@name" class="table-search" autocomplete="@autocomplete" required minlength="@min" value="@(value == "" ? null : value)" /></label>
+    }
+    void Google()
+    {
+        <form method="post" action="/account?handler=google">
+            <input type="hidden" name="back" value="@Here" />
+            <button type="submit" class="google-btn">
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" /><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z" /><path fill="#FBBC05" d="M3.96 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3-2.33z" /><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z" /></svg>
+                <span>Continue with Google</span></button>
+        </form>
+        <div class="account-or">or</div>
+    }
+    // the check that a visitor isn't a bot (Cloudflare Turnstile), drawn by Cloudflare's script into the form
+    void BotCheck()
+    {
+        <div id="account-botcheck" class="cf-turnstile" data-sitekey="@Env.BotCheck"></div>
+    }
+}
+<section class="panel" data-tab="club" data-active="true">
+    <div class="modal-card account-page">
+        <div class="modal-header"><div id="account-title">@AccountModel.Titles[view]</div></div>
+        <div id="account-body">
+            @if (view == "signin")
+            {
+                Google();
+                <form class="account-form" method="post" action="/account?handler=signin">
+                    @{ Field("email", "Email", "email", "username", value: Model.Email); Field("password", "Password", "password", "current-password"); BotCheck(); }
+                    <button type="submit" class="mt-btn">Sign in</button>
+                </form>
+                <div class="account-links"><a class="link-btn" href="@Href("signup")">Create an account</a><a class="link-btn" href="@Href("reset")">Forgotten your password?</a></div>
+            }
+            else if (view == "signup")
+            {
+                Google();
+                <form class="account-form" method="post" action="/account?handler=signup">
+                    @{ Field("email", "Email", "email", "email", value: Model.Email); Field("password", "Password (8 characters or more)", "password", "new-password", 8); BotCheck(); }
+                    <button type="submit" class="mt-btn">Create account</button>
+                </form>
+                <div class="stats-note">By creating an account you agree to the <a href="/terms">terms of use</a> and the <a href="/privacy">privacy notice</a>.</div>
+                <div class="account-links"><a class="link-btn" href="@Href("signin")">Already have an account? Sign in</a></div>
+            }
+            else if (view == "reset")
+            {
+                <p class="account-text">Enter your email and we'll send you a link to choose a new password.</p>
+                <form class="account-form" method="post" action="/account?handler=reset">
+                    @{ Field("email", "Email", "email", "username", value: Model.Email); BotCheck(); }
+                    <button type="submit" class="mt-btn">Send the link</button>
+                </form>
+                <div class="account-links"><a class="link-btn" href="@Href("signin")">Back to sign in</a></div>
+            }
+            else if (view == "newpass")
+            {
+                <form class="account-form" method="post" action="/account?handler=newpass">
+                    @{ Field("password", "New password (8 characters or more)", "password", "new-password", 8); }
+                    <button type="submit" class="mt-btn">Save password</button>
+                </form>
+            }
+            else if (view == "note")
+            {
+                <p class="account-text">@Model.Note</p>
+                <div class="account-links"><a class="link-btn" href="@Href("signin")">Back to sign in</a></div>
+            }
+            else if (view == "subscribe")
+            {
+                <p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings, league tables and the betting comparison pages.</p>
+                <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free).</p>
+                @if (!AccountModel.Pay)
+                {
+                    <p class="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free above is here for everyone, with no account needed.</p>
+                }
+                else if (sub?.Subscriber == true)
+                {
+                    <p class="account-text"><b>This account is subscribed.</b></p>
+                }
+                <div class="account-links"><a class="link-btn" href="@(user.SignedIn ? "/account" : Href("signin"))">@(user.SignedIn ? "Back to your account" : "Sign in")</a></div>
+            }
+            else if (view == "account")
+            {
+                <p class="account-text">Signed in as <b>@user.Email</b></p>
+                @if (sub?.Paywall == true)
+                {
+                    if (sub.Subscriber)
+                    {
+                        <p class="account-text">Subscription: <b>@(sub.Status is { } st ? (st == "past_due" ? "payment due" : st) : "active")</b>@(sub.Plan is { } plan ? $" ({plan})" : "")@(sub.RenewsAt is { Length: >= 10 } ra ? $" · {(sub.Ends ? "ends" : "renews")} {ClubPage.LongDate(ra[..10])}" : "")</p>
+                    }
+                    else
+                    {
+                        <p class="account-text">No subscription on this account. <a class="link-btn" href="@Href("subscribe")">What subscribers get</a></p>
+                    }
+                }
+                <form method="post" action="/account?handler=signout"><button type="submit" class="mt-btn account-out">Sign out</button></form>
+                <div class="account-links"><a class="link-btn" href="@Href("delete")">Delete account</a></div>
+            }
+            else if (view == "delete")
+            {
+                <p class="account-text">This deletes your account (<b>@user.Email</b>) and its sign-in details for good. It can't be undone.</p>
+                <form method="post" action="/account?handler=erase"><button type="submit" class="mt-btn account-out account-danger">Delete my account</button></form>
+                <div class="account-links"><a class="link-btn" href="/account">Keep my account</a></div>
+            }
+            <div class="stats-note@(Model.Message != "" && !Model.MessageOk ? " bad" : "")" id="account-msg" role="@(Model.Message != "" && !Model.MessageOk ? "alert" : "status")">@Model.Message</div>
+        </div>
+    </div>
+</section>
+@section Scripts {
+    @if (view is "signin" or "signup" or "reset")
+    {
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer nonce="@HttpContext.Nonce()"></script>
+    }
+}

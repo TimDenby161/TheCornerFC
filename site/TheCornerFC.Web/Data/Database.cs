@@ -69,6 +69,24 @@ public sealed class Database(HttpClient http, SiteEnvironment env, TimeProvider 
         return JsonSerializer.Deserialize<T>(await r.Content.ReadAsStringAsync(stop), Json)!;
     }
 
+    // A database function that does something and answers nothing (delete_my_account): asked as the
+    // signed-in visitor, whose token the database checks
+    public async Task SiteCall(string fn, object parameters, string token, CancellationToken stop = default)
+    {
+        var json = JsonSerializer.Serialize(parameters, Json);
+        using var r = await Ask(() =>
+        {
+            var m = new HttpRequestMessage(HttpMethod.Post, $"{env.Url}/rest/v1/rpc/{fn}")
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
+            m.Headers.Add("apikey", env.Key);
+            m.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return m;
+        }, stop);
+        if (!r.IsSuccessStatusCode) throw new DatabaseException(fn, (int)r.StatusCode);
+    }
+
     // Rows every page needs that change a few times a day at most are kept for a minute, so a
     // busy moment is one read of the database and not one per visitor. A failed read isn't kept.
     readonly ConcurrentDictionary<string, (DateTimeOffset At, Task<object> Doc)> kept = new();

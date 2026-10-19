@@ -23,6 +23,10 @@
 {
     <meta name="description" content="@description" />
 }
+@if (ViewData["NoIndex"] is true)
+{
+    <meta name="robots" content="noindex" />
+}
 <link rel="canonical" href="@url" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="The Corner FC" />

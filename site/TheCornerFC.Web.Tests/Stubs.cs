@@ -13,11 +13,14 @@ namespace TheCornerFC.Web.Tests;
 public sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> answer) : HttpMessageHandler
 {
     public List<HttpRequestMessage> Sent { get; } = [];
+    // each request's body as it was sent (the sender may dispose the request after)
+    public Dictionary<HttpRequestMessage, string> Bodies { get; } = [];
 
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken stop)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken stop)
     {
         Sent.Add(request);
-        return Task.FromResult(answer(request));
+        Bodies[request] = request.Content is null ? "" : await request.Content.ReadAsStringAsync(stop);
+        return answer(request);
     }
 
     public static HttpResponseMessage Json(string body, HttpStatusCode status = HttpStatusCode.OK) =>
@@ -33,7 +36,11 @@ public sealed class SiteFactory(string environment, Func<HttpRequestMessage, Htt
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
         builder.UseSetting("SITE_ENV", environment);
-        builder.ConfigureTestServices(services => services.AddSingleton(sp =>
-            new Database(new HttpClient(Handler), SiteEnvironment.Named(environment), TimeProvider.System)));
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton(sp => new Database(new HttpClient(Handler), SiteEnvironment.Named(environment), TimeProvider.System));
+            // sign-in asks the same stand-in (Supabase Auth's addresses are under the same project)
+            services.AddSingleton(sp => new AuthClient(new HttpClient(Handler), SiteEnvironment.Named(environment)));
+        });
     }
 }
