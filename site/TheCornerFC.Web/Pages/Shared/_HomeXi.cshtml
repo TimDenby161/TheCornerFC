@@ -1,0 +1,13 @@
+@model TheCornerFC.Web.Site.Home.XiSlide
+@* Home's example line-up slide: the XI that started, marked against the one the model predicted *@
+<div class="home-slide" role="group" aria-roledescription="slide" aria-label="Line-ups" data-slide="lineups" inert>
+    <div class="home-copy"><h2 class="home-title"><span>The eleven.</span> <em>Called.</em></h2><p class="home-lede">Each club's predicted starting eleven for its next match, marked against the real team sheet afterwards.</p>
+        <div class="home-actions"><a class="mt-btn home-go" href="/lineups">See the line-up record</a></div></div>
+    <div class="home-board"><p class="home-board-head"><span class="home-dot" aria-hidden="true"></span>Predicted against the team sheet<span class="home-board-key"></span></p>
+        <div class="home-sample">
+            <p class="home-xi-head@(Model.Bare ? " home-xi-bare" : "")"><span>@Model.What</span><span class="xi-score xi-score-@Model.Cls" title="Starters the model predicted">@Model.Hits/@Model.Of predicted</span></p>
+            <div class="club-section pp-section">@await Html.PartialAsync("_XiPitch", new TheCornerFC.Web.Site.Lineups.Pitch(Model.Spots, null))</div>
+            <div class="xi-legend"><span><i class="xi-key xi-hit"></i>Predicted to start</span><span><i class="xi-key xi-miss"></i>Not predicted</span></div>
+            @if (Model.Note != ""){<p class="home-nums-note">@Model.Note</p>}
+        </div></div>
+</div>

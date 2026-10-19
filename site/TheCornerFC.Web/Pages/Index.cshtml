@@ -1,10 +1,150 @@
 @page
+@model IndexModel
 @{
-    // The home page comes with step 6 of the rebuild (audit/csharp-rebuild-plan.md). Until then the
-    // C# site is on staging only and says so here.
     ViewData["Title"] = "The Corner FC";
-    ViewData["Description"] = "Football club and player ratings, match predictions and a model that shows its working.";
+    ViewData["Description"] = "Club strength ratings, projected scores and model win/draw/loss chances.";
+    var intro = TabInfo.All;
+    // The hero turns through a slide for each part of the site (home.js). A slide whose sample of the
+    // real thing couldn't be had is left out; the line-up slide joins once it arrives.
+    var slides = new List<(string Key, string Name)> { ("clubs", "Clubs") };
+    if (Model.Players is not null) slides.Add(("players", "Players"));
+    if (Model.Calls is not null) slides.Add(("matches", "Matches"));
+    if (Model.Stats is not null) slides.Add(("stats", "Stats"));
+    if (Model.Leagues.Count > 0) slides.Add(("leagues", "Leagues"));
+    if (Model.Nations is not null) slides.Add(("nations", "Nations"));
+    var visitor = Visitor.Of(HttpContext);
+}
+@functions {
+    void Slide(string key, string name, string first, string second, string lede, string go, string href, string head, string note, Func<object?, Microsoft.AspNetCore.Mvc.Razor.HelperResult> sample)
+    {
+        <div class="home-slide" role="group" aria-roledescription="slide" aria-label="@name" data-slide="@key" inert>
+            <div class="home-copy"><h2 class="home-title"><span>@first</span> <em>@second</em></h2><p class="home-lede">@lede</p>
+                <div class="home-actions"><a class="mt-btn home-go" href="@href">@go</a></div></div>
+            <div class="home-board"><p class="home-board-head"><span class="home-dot" aria-hidden="true"></span>@head<span class="home-board-key">@note</span></p>
+                <div class="home-sample">@sample(null)</div></div>
+        </div>
+    }
 }
 <section class="panel" data-tab="home" data-active="true">
-    <div class="empty-state" id="rebuild-note">This copy of the site is being rebuilt in C#. Its pages arrive one at a time.</div>
+    <div class="home-hero" role="region" aria-roledescription="carousel" aria-label="What's on the site">
+        <!-- the corner of a pitch: the touchline and goal line, the corner arc and the flag (the site's mark) -->
+        <svg class="home-pitch" viewBox="0 0 420 300" aria-hidden="true" focusable="false">
+            <g fill="none" stroke="currentColor" stroke-width="2"><path d="M-4000 110H372V4000" /><path d="M328 110a44 44 0 0 0 44 44" /></g>
+            <path d="M372 110V22" fill="none" stroke="#c9c8c2" stroke-width="3" stroke-linecap="round" />
+            <g class="home-flag"><path d="M371 24H326V56z" fill="#ffffff" /><path d="M371 24V56H326z" fill="#0b110e" /></g>
+        </svg>
+        <div class="home-slides">
+            <div class="home-slide" role="group" aria-roledescription="slide" aria-label="Clubs" data-slide="clubs">
+                <div class="home-copy">
+                    <h2 class="home-title"><span data-count-to="@Model.ClubCount">@Js.Num(Model.ClubCount)</span> clubs. <em>One&nbsp;scale.</em></h2>
+                    <p class="home-lede">One strength rating for every club, from the Premier League to the lower divisions, with ranks for players and national teams and the model's chances for the matches they play.</p>
+                    <div class="home-actions">
+                        <a class="mt-btn home-go" href="/clubs">See the ratings</a>
+                        @if (!Model.SignedIn){<a class="home-ghost" href="/account?view=signup">Create a free account</a>}
+                    </div>
+                </div>
+                <div class="home-board">
+                    <p class="home-board-head"><span class="home-dot" aria-hidden="true"></span>Strongest clubs now<span class="home-board-key">Rating · last 6</span></p>
+                    <ol class="home-top">
+                        @foreach (var x in Model.Clubs)
+                        {
+                            <li>@Markup.Crest(x.Team, x.Name, href: $"/club/{x.Team}")<span class="lg-main"><a class="team-link" href="/club/@x.Team">@x.Name</a><span class="lg-sub">@x.Comp</span></span><b>@Js.Num(x.Current)</b><span class="home-form">@Markup.Move(x.Form)</span></li>
+                        }
+                    </ol>
+                    <a class="home-board-more" href="/clubs">All @Js.Num(Model.ClubCount) clubs</a>
+                </div>
+            </div>
+            @if (Model.Players is { } players)
+            {
+                Slide("players", "Players", "Players.", "0 to 100.", intro["players"].Intro, "See the players", "/players", "Highest-ranked players", "Position · rank", @<ol class="home-top">
+                    @foreach (var p in players)
+                    {
+                        <li>@if (p.Team is { } t && t != 0 && p.TeamName is not null){@Markup.Crest(t, p.TeamName)}else{<span class="club-logo"></span>}<span class="lg-main"><span class="home-who"><a class="team-link" href="/player/@p.Id">@p.Name</a>@if (!string.IsNullOrEmpty(p.Nat) && p.Flag is not null){<a class="pl-flag" href="@Menu.PageHref("nation", p.Nat)" title="@p.Nat" aria-label="@p.Nat national team"><img class="flag" src="https://flagcdn.com/w40/@(p.Flag).png" alt="" loading="lazy" /></a>}</span><span class="lg-sub">@(p.TeamName ?? "Club not known")@(p.League != "" ? $" · {p.League}" : "")</span></span><span class="home-pos">@p.Pos</span><span class="rel-chip rel-@ClubPage.RankTier(p.Rank)">@Js.RoundInt(p.Rank)</span></li>
+                    }
+                </ol>);
+            }
+            @if (Model.Calls is { } calls)
+            {
+                Slide("matches", "Matches", "Matches.", "Forecast.", intro["matches"].Intro, "See the matches", $"/matches?d={calls.Day}", "The model's chances", "", @<text>
+                    @foreach (var m in calls.List)
+                    {
+                        var at = DateTimeOffset.Parse(m.Kickoff);
+                        <div class="home-call"><span class="home-call-teams">@m.HomeName <i>v</i> @m.AwayName</span>
+                            <span class="home-call-when">@m.Comp · @Markup.LocalTime(at, "day", visitor), @Markup.LocalTime(at, "time", visitor)</span>
+                            <span class="home-call-bar" role="img" aria-label="@m.HomeName @(m.H)%, draw @(m.D)%, @m.AwayName @(m.A)%"><span class="prob-home sw-@m.H"></span><span class="prob-draw sw-@m.D"></span><span class="prob-away sw-@m.A"></span></span>
+                            <span class="home-call-key" aria-hidden="true"><span><b>@(m.H)%</b>@m.HomeName</span><span><b>@(m.D)%</b>Draw</span><span><b>@(m.A)%</b>@m.AwayName</span></span></div>
+                    }
+                </text>);
+            }
+            @if (Model.Stats is { } stats)
+            {
+                Slide("stats", "Stats", stats.Matches, "Matches.", "The last year's match predictions, each one marked against the real result, so you can see how often the model is right.", "See the record", "/stats", "The last 12 months", "", @<text>
+                    <dl class="home-nums">@foreach (var (n, unit, what) in stats.Nums){<div><dt>@n@if (unit != ""){<small>@unit</small>}</dt><dd>@what</dd></div>}</dl>
+                    @if (stats.Note != ""){<p class="home-nums-note">@stats.Note</p>}
+                </text>);
+            }
+            @if (Model.Leagues.Count > 0)
+            {
+                Slide("leagues", "Leagues", "Leagues.", "Compared.", intro["leagues"].Intro, "See the leagues", "/leagues", "Strongest leagues now", "Average rating",
+                    @<ol class="home-top">@foreach (var c in Model.Leagues){<li>@Markup.Crest(c.Lid, c.Name, league: true)<span class="lg-main"><a class="team-link" href="/league/@c.Lid">@c.Name</a><span class="lg-sub">@c.Sub</span></span><span class="rel-chip rel-@c.Tier">@c.Lt</span></li>}</ol>);
+            }
+            @if (Model.Nations is { } nations)
+            {
+                Slide("nations", "Nations", "Nations.", "Since 1872.", intro["nations"].Intro, "See the nations", "/nations", "Strongest national teams", "Rating",
+                    @<ol class="home-top">@foreach (var n in nations){<li><span class="home-flag-cell">@if (n.Flag is not null){<img class="flag" src="https://flagcdn.com/w40/@(n.Flag).png" alt="" loading="lazy" />}</span><span class="lg-main"><span class="team-link">@n.Name</span><span class="lg-sub">@n.Confed</span></span><span class="rel-chip rel-@n.Tier">@Js.Num(n.Current)</span><span class="home-form">@Markup.Move(n.Change)</span></li>}</ol>);
+            }
+        </div>
+        <!-- which slide is up, and the way to another: the rule over the one that's up fills as its ten seconds pass -->
+        <div class="home-turn" hidden="@(slides.Count > 1 ? null : "hidden")">
+            <div class="home-turn-list">
+                @for (var i = 0; i < slides.Count; i++){<button type="button" data-slide="@slides[i].Key" aria-current="@(i == 0 ? "true" : null)"><span>@slides[i].Name</span></button>}
+            </div>
+        </div>
+        <!-- on a phone or a tablet the way to an account stands under the slides, there whichever one is up
+             (on a wide screen it is on the first slide, beside its button) -->
+        @if (!Model.SignedIn){<a class="mt-btn home-go home-join" href="/account?view=signup">Create a free account</a>}
+    </div>
+    <!-- the four things a first visit asks, each a label, a one-line answer and the detail under it -->
+    <div class="home-brief">
+        <section class="home-brief-item">
+            <h3 class="home-brief-q">What it is</h3>
+            <p class="home-brief-a">Football ratings on one scale</p>
+            <p>Every club gets one strength number, updated after each match it plays. Around it: players ranked 0 to 100, national team ratings, and win, draw and loss chances for the matches coming up.</p>
+        </section>
+        <section class="home-brief-item">
+            <h3 class="home-brief-q">Who it's for</h3>
+            <p class="home-brief-a">Fans who want more than the league table</p>
+            <ul>
+                <li>You follow a club and want to know where it really stands.</li>
+                <li>You argue about which league or player is better, and want a number.</li>
+                <li>You like a prediction that shows its reasons.</li>
+            </ul>
+            <p class="home-brief-note">The numbers are estimates, <a href="/terms#advice">not betting or fantasy advice</a>.</p>
+        </section>
+        <section class="home-brief-item">
+            <h3 class="home-brief-q">Why it matters</h3>
+            <p class="home-brief-a">A league table only compares clubs that play each other</p>
+            <p>One scale sets a lower-division side against a Champions League club: 100 points is about a goal a game. And every match prediction is marked against the real result, so you can see how often the model is right.</p>
+        </section>
+        <section class="home-brief-item home-brief-next">
+            <h3 class="home-brief-q">What to do next</h3>
+            <p class="home-brief-a">Start with your own club</p>
+            <ol class="home-steps">
+                <li><a href="/clubs">Find your club</a><span>Search for it in the table and open its page.</span></li>
+                <li><a href="/matches">See its next match</a><span>The model's chances, before kick-off.</span></li>
+                <li><a href="/stats">Check the record</a><span>How the predictions have done against results.</span></li>
+            </ol>
+        </section>
+    </div>
+    <div class="home-close">
+        <p class="home-close-line">Ratings you can check.</p>
+        <p class="home-close-sub">How the models work is written up in full, and the Stats page marks their match predictions against what happened.</p>
+        <div class="home-actions">
+            <a class="mt-btn home-go" href="/clubs">See the ratings</a>
+            <a class="home-ghost" href="/methodology">How the models work</a>
+        </div>
+    </div>
 </section>
+@section Scripts {
+    <script src="/home.js" nonce="@HttpContext.Nonce()"></script>
+}

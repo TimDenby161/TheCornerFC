@@ -13,7 +13,8 @@ public class SiteTests
     public async Task Every_page_carries_the_security_headers_and_its_policy()
     {
         using var site = new SiteFactory("production");
-        var r = await Client(site, "thecornerfc.com").GetAsync("/");
+        // (a page that reads nothing from the database but the names: Home reads the ratings)
+        var r = await Client(site, "thecornerfc.com").GetAsync("/privacy");
         Assert.Equal(HttpStatusCode.OK, r.StatusCode);
         foreach (var (k, v) in Gate.SecurityHeaders) Assert.Equal(v, r.Headers.GetValues(k).Single());
         var policy = r.Headers.GetValues("Content-Security-Policy").Single();
@@ -31,7 +32,8 @@ public class SiteTests
     public async Task Staging_is_never_for_search_engines_and_says_what_it_is()
     {
         using var site = new SiteFactory("staging");
-        var r = await Client(site, "staging.thecornerfc.com").GetAsync("/");
+        var r = await Client(site, "staging.thecornerfc.com").GetAsync("/no-such-page");
+        Assert.Equal(HttpStatusCode.NotFound, r.StatusCode);
         Assert.Equal("noindex, nofollow", r.Headers.GetValues("X-Robots-Tag").Single());
         Assert.Contains("id=\"staging-strip\"", await r.Content.ReadAsStringAsync());
     }
@@ -93,7 +95,10 @@ public class SiteTests
     {
         using var site = new SiteFactory("production", r => StubHandler.Json(r.RequestUri!.Query.Contains("p_key=site")
             ? """{"generated_at":"2026-10-18T01:40:00+00:00","freshness":{"odds":"2026-10-18T13:05:00+00:00","model":{"name":"match-prediction","code":"9afa9ed"}}}""" : "null"));
-        var html = await Client(site, "thecornerfc.com").GetStringAsync("/");
+        // (the not-found page: in the site's own layout, and reading nothing else from the database)
+        var r = await Client(site, "thecornerfc.com").GetAsync("/no-such-page");
+        Assert.Equal(HttpStatusCode.NotFound, r.StatusCode);
+        var html = await r.Content.ReadAsStringAsync();
         Assert.Contains("Data updated <time datetime=\"2026-10-18T01:40:00.000Z\" data-show=\"short\">18 Oct</time> <time datetime=\"2026-10-18T01:40:00.000Z\" data-show=\"time\">2:40</time>", html);
         Assert.Contains("Odds last seen", html);
         Assert.DoesNotContain("Injuries updated", html);
