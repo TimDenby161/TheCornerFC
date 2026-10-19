@@ -51,7 +51,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Tests
-        run: dotnet test
+        run: dotnet test --logger GitHubActions
 
       # the commit goes in with the build, for /version
       - name: Build

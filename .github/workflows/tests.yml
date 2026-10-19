@@ -110,4 +110,4 @@ jobs:
       - name: Tests
         env:
           DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-        run: dotnet test
+        run: dotnet test --logger GitHubActions

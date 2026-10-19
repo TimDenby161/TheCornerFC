@@ -22,7 +22,8 @@ public class SiteTests
         Assert.Contains("Cookie", r.Headers.Vary);
         Assert.False(r.Headers.Contains("X-Robots-Tag"));
         // the page's own script carries the nonce the policy names
-        var nonce = System.Text.RegularExpressions.Regex.Match(policy, "'nonce-([^']+)'").Groups[1].Value;
+        var nonce = System.Text.RegularExpressions.Regex.Match(policy, "'nonce-([0-9a-f]{32})'").Groups[1].Value;
+        Assert.NotEmpty(nonce);
         Assert.Contains($"<script src=\"/site.js\" nonce=\"{nonce}\">", await r.Content.ReadAsStringAsync());
     }
 

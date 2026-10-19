@@ -65,7 +65,9 @@ public static class Gate
             return;
         }
 
-        var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+        // hex, not Base64: a + or / in it would be escaped where the page writes it, and the script
+        // tag would no longer match the policy
+        var nonce = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
         context.Items[NonceKey] = nonce;
         response.OnStarting(() =>
         {
