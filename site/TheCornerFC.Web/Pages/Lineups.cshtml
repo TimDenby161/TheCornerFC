@@ -1,0 +1,127 @@
+@page "/lineups"
+@model LineupsModel
+@{
+    ViewData["Title"] = "Line-up record · The Corner FC";
+    ViewData["Description"] = "How often the line-ups the model predicted matched the team sheets: starters named, perfect XIs, by competition and club.";
+}
+@functions {
+    void Bar(LineupsModel.Bar b)
+    {
+        <div class="dist-row" title="@b.Tip"><span class="dist-label">@b.Label</span><span class="dist-bar-wrap"><span class="dist-bar c-blue sw-@b.Share"></span></span><span class="dist-pct">@b.Text@if (b.Dim != ""){<text> </text><span class="dim">(@b.Dim)</span>}</span></div>
+    }
+    void ClubTable(List<LineupsModel.ClubRow> rows)
+    {
+        <table class="calib-table"><thead><tr><th>Club</th><th>Line-ups</th><th>Named</th><th>Perfect</th></tr></thead>
+            <tbody>@foreach (var c in rows){<tr><td><a class="team-link" href="@c.Href">@c.Name</a></td><td>@c.N</td><td>@c.Named</td><td>@c.Perfect</td></tr>}</tbody></table>
+    }
+    void PlayerTable(string label, List<LineupsModel.TallyView> items)
+    {
+        <div class="stats-label u-mt10">@label</div>
+        if (items.Count > 0)
+        {
+            <table class="calib-table"><thead><tr><th>Player</th><th>Club</th><th>Times</th></tr></thead>
+                <tbody>@foreach (var p in items){<tr><td><a class="player-link" href="/player/@p.Id">@p.Name</a></td><td>@p.Team</td><td>@p.N</td></tr>}</tbody></table>
+        }
+        else
+        {
+            <div class="stats-note">No player more than once yet.</div>
+        }
+    }
+}
+<section class="panel" data-tab="lineups" data-active="true">
+    <div id="lineup-side">
+        <div class="side-stick">@if (Model.Menu is not null){@await Html.PartialAsync("_FilterMenu", (Model.Menu, "lineup-filters", "/lineups", Model.Keep(), "c"))}</div>
+    </div>
+    <div class="filter-row range-row" id="lineup-source">
+        <a role="button" class="filter-chip" href="@Model.Address(src: "live", c: "all")" aria-pressed="@(Model.Live ? "true" : "false")" title="Predictions saved before the team sheet came out">Saved before kick-off</a>
+        <a role="button" class="filter-chip" href="@Model.Address(src: "history", c: "all")" aria-pressed="@(!Model.Live ? "true" : "false")" title="The model re-run on every past match">Reconstructed history</a>
+    </div>
+    <div class="filter-row range-row" id="lineup-ranges">
+        @foreach (var (key, label) in LineupsModel.Ranges){<a role="button" class="filter-chip" href="@Model.Address(r: key)" aria-pressed="@(Model.Range == key ? "true" : "false")">@label</a>}
+    </div>
+    <div id="lineup-body">
+        @if (Model.State == "waiting")
+        {
+            <div class="empty-state">The @(Model.Live ? "line-up record" : "reconstructed history") is built by the nightly data run. Check back tomorrow.</div>
+        }
+        else if (Model.State == "none")
+        {
+            <div class="empty-state">No scored line-ups in this range.</div>
+        }
+        else if (Model.State == "empty")
+        {
+            <div class="empty-state">No line-ups scored yet. Each needs a prediction saved before the team sheet came out, and the official XI afterwards.</div>
+        }
+        else
+        {
+            @if (!Model.Live)
+            {
+                <div class="stats-card u-mb12"><div class="stats-note"><b>Reconstructed, not a live record.</b> Today's model re-run on every past match, picking from what it knew before kick-off: the last five matches' minutes and formations, and the injury list. It can't know late team news, and older matches were never predicted this way at the time, so read it as how the current model does on past matches. The live record (Saved before kick-off) is the one that counts.</div></div>
+            }
+            <div class="stats-grid">
+                @foreach (var (label, value, note) in Model.CardsShown){<div class="stats-card"><div class="stats-label">@label</div><div class="stats-value">@value</div><div class="stats-note">@note</div></div>}
+            </div>
+            @if (Model.Sample != ""){<div class="stats-card u-mb12"><div class="stats-note">@Model.Sample</div></div>}
+
+            <div class="stats-card"><div class="stats-label">Starters named correctly, per line-up</div>
+                <div class="u-mt6">@foreach (var b in Model.Spread){ Bar(b); }</div>
+                <div class="stats-note">Number of team line-ups, and their share, by how many of the 11 starters the predicted XI named.</div></div>
+            <div class="stats-card"><div class="stats-label">Over time: average named correctly each @Model.Step</div>
+                <div class="u-mt6">@foreach (var t in Model.Trend){ Bar(t); }</div>
+                <div class="stats-note">Out of 11, newest first; the number of line-ups is in brackets.</div></div>
+            <div class="stats-card"><div class="stats-label">By position</div>
+                <table class="calib-table"><thead><tr><th>Line</th><th>Starters</th><th>Predicted</th><th>Hit rate</th><th></th></tr></thead>
+                    <tbody>@foreach (var l in Model.LinesShown){<tr><td>@l.Name</td><td>@Js.Num((long)l.Starters)</td><td>@Js.Num((long)l.Hit)</td><td>@l.Rate</td><td class="u-w70"><span class="calib-bar cb-@l.Bar"></span></td></tr>}</tbody></table>
+                <div class="stats-note">Of the players who started in each part of the pitch, how many were in the predicted XI. Lines come from the team sheet.</div></div>
+            @if (Model.Live)
+            {
+                <div class="stats-card"><div class="stats-label">How far before kick-off</div>
+                    <table class="calib-table"><thead><tr><th>Saved</th><th>Line-ups</th><th>Named</th><th>Perfect</th></tr></thead>
+                        <tbody>@foreach (var t in Model.Timing){<tr><td>@t.Label</td><td>@t.N</td><td>@t.Named</td><td>@t.Perfect</td></tr>}</tbody></table>
+                    <div class="stats-note">The prediction scored is the last one saved before the team sheet came out.</div></div>
+            }
+            <div class="stats-card"><div class="stats-label">By competition</div>
+                <table class="calib-table"><thead><tr><th>Competition</th><th>Line-ups</th><th>Named</th><th>Perfect</th><th>Position</th></tr></thead>
+                    <tbody>@foreach (var c in Model.Comps){<tr class="@(c.On ? "u-bold" : null)"><td><a class="team-link" href="@Model.Address(c: c.Id.ToString())">@c.Name</a></td><td>@c.N</td><td>@c.Named</td><td>@c.Perfect</td><td>@c.Position</td></tr>}</tbody></table>
+                <div class="stats-note">Tap a competition to narrow to it.</div></div>
+            <div class="stats-card"><div class="stats-label">By club</div>
+                @if (Model.ClubsShown.Easiest is { } easiest && Model.ClubsShown.Hardest is { } hardest)
+                {
+                    <div class="stats-label u-mt8">Easiest to predict</div>ClubTable(easiest);
+                    <div class="stats-label u-mt12">Hardest to predict</div>ClubTable(hardest);
+                }
+                else
+                {
+                    <div class="stats-note">The easiest and hardest clubs are listed once enough clubs have @LineupRecord.ClubMin or more line-ups scored.</div>
+                }
+                <details><summary>All @Model.ClubsShown.All.Count clubs</summary>@{ ClubTable(Model.ClubsShown.All); }</details>
+                <div class="stats-note">Clubs with at least @LineupRecord.ClubMin line-ups scored in the easiest and hardest lists.</div></div>
+            <div class="stats-card"><div class="stats-label">Players the model got wrong most often</div>
+                @{ PlayerTable("Started, but not in the predicted XI", Model.Missed); }
+                @{ PlayerTable("In the predicted XI, but didn't start", Model.Wrong); }
+                <div class="stats-note">@Js.Num(Model.MissedTotal) starters missed in all; each miss is one wrong pick in their place.</div></div>
+            @if (Model.Live)
+            {
+                <div class="stats-card"><div class="stats-label">By model version</div>
+                    <table class="calib-table"><thead><tr><th>Version</th><th>Line-ups</th><th>Named</th><th>Perfect</th></tr></thead>
+                        <tbody>@foreach (var v in Model.Versions){<tr><td>@v.Label <span class="lr-sub">@v.Name@(v.From != "" ? $" · from {v.From}" : "")</span></td><td>@v.N</td><td>@v.Named</td><td>@v.Perfect</td></tr>}</tbody></table>
+                    <div class="stats-note">A new version starts whenever the line-up code changes, even if the name stays the same. Each keeps its own record.</div></div>
+            }
+            <div class="stats-card"><div class="stats-label">Every line-up</div>
+                <table class="calib-table lr-list"><thead><tr><th>Date</th><th>Line-up</th><th>Right</th><th>Missed</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in Model.Rows)
+                        {
+                            <tr><td>@r.Date</td>
+                                <td><a class="team-link" href="@r.Href">@r.Team</a> @(r.Home ? "v" : "at") @r.Opponent<span class="lr-sub">@r.Comp</span></td>
+                                <td><span class="xi-score xi-score-@(r.Correct >= 9 ? "good" : r.Correct >= 7 ? "ok" : "poor")">@r.Correct/11</span></td><td>@(r.Missed != "" ? r.Missed : "–")</td></tr>
+                        }
+                    </tbody></table>
+                @if (Model.More is { } more){<a role="button" class="filter-chip lr-more" href="@Model.Address(n: more.N)">Show more (@Js.Num((long)more.Left) left)</a>}
+                <div class="stats-note">Newest first.@(Model.Live ? " A match's Line-ups on the Matches page shows the XIs side by side for the last three weeks." : "")@(Model.Excluded != 0 ? $" {Model.Excluded} line-ups aren't counted because no complete official XI was recorded." : "")</div></div>
+        }
+    </div>
+</section>
+@section Scripts {
+    <script src="/table.js" nonce="@HttpContext.Nonce()"></script>
+}

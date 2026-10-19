@@ -7,7 +7,12 @@ namespace TheCornerFC.Web.Site;
 
 // The Line-up record's live rows (the "lineups" row) and the reconstructed history's
 // (site_lineup_history), as far as Home reads them (web/src/lib/lineupRecord.ts)
-public sealed record LiveDoc(string[] Fields, JsonElement[][] Rows);
+public sealed record LiveDoc(string[] Fields, JsonElement[][] Rows, bool? Available = null, List<LiveDoc.Version>? Versions = null,
+    Dictionary<string, string>? Teams = null, Dictionary<string, string>? Players = null,
+    [property: JsonPropertyName("excluded_no_official_xi")] int? ExcludedNoOfficialXi = null)
+{
+    public sealed record Version(string? Name, string? Registered);
+}
 public sealed record HistoryDoc(JsonElement[][]? Rows);
 public sealed record LineupsAnswer(Dictionary<string, JsonElement[][]>? Actual, Dictionary<string, JsonElement[][]>? Prematch);
 
