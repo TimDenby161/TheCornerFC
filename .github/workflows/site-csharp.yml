@@ -1,0 +1,71 @@
+name: C# site
+
+# The C# site (site/, T-048) to its staging app in Azure, on every push to staging that touches
+# it or what it copies from web/ (the stylesheets, icons, each page's intro). Its tests first: a
+# failing test deploys nothing. The live app (thecornerfc) gets its deploy at the switch-over,
+# not before (audit plan step 9).
+#
+# No password is stored anywhere: GitHub proves to Azure that this is a run of this repository in
+# its Staging environment, and Azure lets that deploy to the two web apps only
+# (site/azure/setup.sh; the app registration thecornerfc-github-deploy). The ids below name the
+# account; they are not secrets.
+on:
+  push:
+    branches: [staging]
+    paths:
+      - "site/**"
+      - "web/static/**"
+      - "web/src/styles/**"
+      - "web/src/app.css"
+      - "web/src/lib/*.css"
+      - "web/src/lib/tabInfo.json"
+      - ".github/workflows/site-csharp.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: site-csharp-staging
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  deploy-staging:
+    # Staging's branch only, said here and by the Staging environment's own branch rule
+    if: github.ref == 'refs/heads/staging'
+    environment: Staging
+    permissions:
+      contents: read
+      id-token: write       # the token Azure checks in place of a password
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: site
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Tests
+        run: dotnet test
+
+      # the commit goes in with the build, for /version
+      - name: Build
+        run: |
+          dotnet publish TheCornerFC.Web -c Release -o ../publish
+          printf '{"COMMIT": "%s"}\n' "$GITHUB_SHA" > ../publish/appsettings.Production.json
+
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: 3c7c3d33-e141-42ef-9e46-1d2f2d192ac1
+          tenant-id: 8c842454-2b22-4cdd-998e-9d4202d9f35a
+          subscription-id: fe043573-e8ef-4836-85d6-5a80b8b0919b
+
+      - uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3.0.8
+        with:
+          app-name: thecornerfc-staging
+          package: publish
