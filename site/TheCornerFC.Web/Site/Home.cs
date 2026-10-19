@@ -5,15 +5,6 @@ using Match = TheCornerFC.Web.Data.Match;
 
 namespace TheCornerFC.Web.Site;
 
-// The Stats page's figures by range and competition (the "stats" row; web/src/lib/stats.ts)
-public sealed record StatsDoc(Dictionary<string, Dictionary<string, StatsDoc.Stats>> Ranges)
-{
-    public sealed record Stats(int N, int Live, int Rated, double? Correct, double? Exact,
-        [property: JsonPropertyName("home_rate")] double? HomeRate, [property: JsonPropertyName("goal_error")] double? GoalError,
-        // ten bands of stated chance: [calls, average said, share that happened]
-        double?[][]? Calibration);
-}
-
 // The Line-up record's live rows (the "lineups" row) and the reconstructed history's
 // (site_lineup_history), as far as Home reads them (web/src/lib/lineupRecord.ts)
 public sealed record LiveDoc(string[] Fields, JsonElement[][] Rows);

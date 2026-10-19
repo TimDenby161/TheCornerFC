@@ -1,0 +1,100 @@
+@page "/stats"
+@model StatsModel
+@{
+    ViewData["Title"] = $"{(Model.Filter == "all" ? "Stats" : $"{Model.Menu.Name} stats")} · The Corner FC";
+    ViewData["Description"] = "How accurate the model's match predictions have been, and how they compare with the bookmakers'.";
+    var s = Model.S;
+    var keep = Model.Range != "30d" ? new Dictionary<string, string> { ["r"] = Model.Range } : new Dictionary<string, string>();
+}
+<section class="panel" data-tab="stats" data-active="true">
+    <div id="stats-side">
+        <div class="side-stick">@await Html.PartialAsync("_FilterMenu", (Model.Menu, "stats-filters", "/stats", keep, "c"))</div>
+    </div>
+    <div class="filter-row range-row" id="stats-ranges">
+        @foreach (var (key, label) in StatsFigures.Ranges){<a role="button" class="filter-chip" href="@Model.Address(key)" aria-pressed="@(Model.Range == key ? "true" : "false")">@label</a>}
+    </div>
+    <div id="stats-body">
+        @if (s is null)
+        {
+            <div class="empty-state">No finished matches with a projection in this range.</div>
+        }
+        else
+        {
+            <div class="stats-grid">
+                @foreach (var (label, value, note) in s.Cards)
+                {
+                    <div class="stats-card"><div class="stats-label">@label</div><div class="stats-value">@value</div><div class="stats-note">@note</div></div>
+                }
+            </div>
+            @if (s.Market is { } mk)
+            {
+                <div class="stats-card u-mb12">
+                    <div class="stats-label">Model vs Market (@Js.Num(mk.N) matches with odds)</div>
+                    <div class="vs-market">
+                        <span></span><span class="hd">Model</span><span class="hd">Market fair</span>
+                        <span>Right result (matches with odds)</span><span class="num@(mk.Right.ModelBetter ? " better" : "")">@mk.Right.Model</span><span class="num@(mk.Right.MarketBetter ? " better" : "")">@mk.Right.Market</span>
+                        <span>Log loss (matches with odds)</span><span class="num@(mk.Ll.ModelBetter ? " better" : "")">@mk.Ll.Model</span><span class="num@(mk.Ll.MarketBetter ? " better" : "")">@mk.Ll.Market</span>
+                    </div>
+                    <div class="stats-note">Market fair probability: the average across bookmakers with their margin removed, from the last odds before kickoff. Only matches with odds are compared@(mk.Small ? "; the sample is still small, so treat this as a rough guide" : "").</div>
+                </div>
+                @if (s.Markets.Count > 0)
+                {
+                    <div class="stats-card u-mb12">
+                        <div class="stats-label">Every bet market: Model vs Market</div>
+                        <table class="calib-table"><thead><tr><th>Market</th><th>Matches</th><th>Model</th><th>Market fair</th><th>Gap</th><th>Gap at opening</th></tr></thead>
+                            <tbody>
+                                @foreach (var m in s.Markets)
+                                {
+                                    <tr><td>@m.Label</td><td>@Js.Num(m.N)</td><td>@m.Model</td><td>@m.Close</td>
+                                        <td>@if (m.Gap is { } g){<span class="@g.Cls">@g.Text</span>}</td>
+                                        <td>@if (m.Open is { Gap: { } og } o){<span class="@og.Cls">@og.Text</span> <span class="dim">(@Js.Num(o.N))</span>}else{<span class="dim">–</span>}</td></tr>
+                                }
+                            </tbody></table>
+                        <div class="stats-note">Log loss, lower is better, on the same matches. Gap = model minus market: green means the model was more accurate. "At opening" compares with the first prices seen, only for matches whose odds were collected before kickoff (count in brackets). Beating the opening price over many matches would be the first sign the model adds something the market lacks; a small or short-lived gap proves nothing. The goal lines come from the model's projected goals.</div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="stats-card u-mb12"><div class="stats-label">Model vs Market</div><div class="stats-note">No finished matches with bookmaker odds in this range yet. Odds are collected nightly for upcoming matches.</div></div>
+            }
+            <div class="stats-card">
+                <div class="stats-label">Calibration: when it says X%, how often did it happen?</div>
+                <table class="calib-table">
+                    <thead><tr><th>Said</th><th>Calls</th><th>Avg said</th><th>Happened</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in s.Calibration)
+                        {
+                            <tr><td>@c.Name</td><td>@Js.Num((long)c.Count)</td><td>@c.Said</td><td class="@(c.Cls == "" ? null : c.Cls)">@c.Hit</td><td class="u-w70"><span class="calib-bar cb-@c.Bar"></span></td></tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="stats-note">Every home win, draw and away win chance counts as one call. Well calibrated means "Happened" is close to "Avg said".</div>
+            </div>
+            @if (s.Rating is { } rt)
+            {
+                <div class="stats-card u-mt12">
+                    <div class="stats-label">Average rating</div>
+                    <div class="stats-value">@rt.Avg<span class="u-sub"> / 5 · @rt.Label</span></div>
+                    <div class="u-mt10">
+                        @foreach (var d in rt.Dist)
+                        {
+                            <div class="dist-row"><span class="dist-label">@d.Label</span><span class="dist-bar-wrap"><span class="dist-bar c-@d.R sw-@d.Share"></span></span><span class="dist-pct">@d.Pct</span></div>
+                        }
+                    </div>
+                    <div class="stats-label u-mt12">Average by factor (0–5)</div>
+                    <div class="u-mt4">
+                        @foreach (var f in rt.Factors)
+                        {
+                            <div class="dist-row"><span class="dist-label">@f.Label <span class="factor-weight">@f.Weight</span></span><span class="dist-bar-wrap"><span class="dist-bar c-blue sw-@f.Share"></span></span><span class="dist-pct">@f.Value</span></div>
+                        }
+                    </div>
+                    <div class="stats-note">Each result is rated 1 (terrible) to 5 (excellent) from five factors, weighted as shown. Tap a result's rating on the Matches page to see its breakdown.</div>
+                </div>
+            }
+        }
+    </div>
+</section>
+@section Scripts {
+    <script src="/table.js" nonce="@HttpContext.Nonce()"></script>
+}
