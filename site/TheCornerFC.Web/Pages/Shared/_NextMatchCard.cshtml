@@ -14,4 +14,5 @@
     <div class="next-meta"><span>@n.Comp</span>@if (n.Win is { } win){<span>@win% win</span>}@if (proj != ""){<span>projected @proj</span>}
         @if (n.Xi is { } xi){<span>XI rating @Js.RoundInt(xi)</span>}</div>
     @if (n.Missing is > 0){<div class="next-status warn">@n.Missing missing</div>}
+    @if (n.Status is { } st){<div class="next-status @st.Cls">@st.Text</div>}
 </div>

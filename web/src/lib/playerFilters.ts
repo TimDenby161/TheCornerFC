@@ -62,10 +62,7 @@ export const PITCH_SPOTS: [string, number, number][] = names.PITCH_SPOTS as [str
 export const isPosition = (p: string) => PITCH_SPOTS.some(([s]) => s === p);
 // the role group each position is rated in (as positions.py)
 export const GROUP_OF: Record<string, string> = names.GROUP_OF;
-export const GROUP_SINGLE: Record<string, string> = {
-	GK: 'goalkeeper', CB: 'centre-back', FB: 'full-back', WB: 'wing-back', DM: 'defensive mid', CM: 'central mid',
-	AM: 'attacking mid', W: 'winger', ST: 'striker'
-};
+export const GROUP_SINGLE: Record<string, string> = names.GROUP_SINGLE;
 // With the position filter on: the selected role groups, and a player's rank as the best of them
 // (how good he is in each position he has started in, less for one he rarely plays)
 export const selectedGroups = (positions: string[]) => [...new Set(positions.map((r) => GROUP_OF[r]).filter(Boolean))];

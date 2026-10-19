@@ -28,7 +28,7 @@ fresh clone or a cloud session), carry on from this file and `guide/`.
 | `thecornerfc/` | The Python jobs, run as `python -m thecornerfc <command>`. Six folders: `pipeline/` (fetch from API-Football, the database, the nightly and match-day runs), `models/` (ranks, ratings, predictions, bets), `evidence/` (model versions and the append-only snapshots), `fantasy_games/` (FPL and Fantasy EFL), `publish/` (the export to the database), `privacy/` (accounts, retention, removals). `config.py` and `__main__.py` stay at the top. |
 | `db/` | `schema.sql` and dated files in `migrations/`. A Supabase Postgres database. |
 | `web/` | The site: SvelteKit, deployed as the Cloudflare Worker `thecornerfc` (`web/wrangler.jsonc`). Its stylesheets are in `src/styles`, its text pages in `src/text`. |
-| `site/` | The site being rebuilt in C#: ASP.NET Core on .NET 10, React for the interactive parts, to run on Azure App Service. Not deployed yet; until it replaces `web/`, it copies `web/`'s stylesheets, icons and page intros as it builds. `dotnet test` from `site/`. |
+| `site/` | The site being rebuilt in C#: ASP.NET Core on .NET 10, React for the interactive parts, to run on Azure App Service. Seen at next.thecornerfc.com (staging, behind Access); until it replaces `web/`, it takes `web/`'s stylesheets, icons, page text and shared tables (`names.json`, `tabInfo.json`) as it builds, and its React parts (`site/client`) import `web/src/lib`. `dotnet test` from `site/`, `npm test` from `site/client`. |
 | `guide/` | The written explanation, one page per topic. `README.md` is its contents list. |
 | `tests/` | Python unit tests, with stand-in database connections. |
 | `experiments/` | One folder per model experiment, with its evaluator and results. |

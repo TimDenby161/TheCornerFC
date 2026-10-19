@@ -27,7 +27,9 @@ public sealed record ClubMatch(string Date, double Rank, int Opponent, int Home,
 // One player as site_players gives him (web/src/lib/players.ts): a row in the order of the site
 // document's player_fields. `Locked`: the database blanked his ranks for this visitor.
 public sealed record Player(int Id, string Name, string? Position, double? Rank, int? Team, double? Ord,
-    Dictionary<string, double>? PositionRanks, string[]? Positions12m, PlayerSeason? Season, bool Locked);
+    Dictionary<string, double>? PositionRanks, string[]? Positions12m, PlayerSeason? Season, bool Locked,
+    int? League = null, string? Nationality = null, int? Age = null, int? LgRank = null, int? LgN = null,
+    double?[]? Seasons = null, int[]? Estimated = null, double?[]? Future = null, int? World = null, int? Lg = null, int? LgOf = null);
 public sealed record PlayerSeason(int? Minutes, int? Goals, int? Assists);
 public sealed record PlayersAnswer(int Total, bool? Paywall, JsonElement[][] Rows);
 
@@ -75,9 +77,13 @@ public static class ClubData
             var ranks = At("position_ranks") is { ValueKind: JsonValueKind.Object } pr
                 ? pr.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.Number).ToDictionary(p => p.Name, p => p.Value.GetDouble()) : null;
             var pos12 = At("positions_12m") is { ValueKind: JsonValueKind.Array } ps ? ps.EnumerateArray().Select(e => e.GetString()!).ToArray() : null;
+            double?[]? Doubles(string f) => At(f) is { ValueKind: JsonValueKind.Array } a
+                ? a.EnumerateArray().Select(e => e.ValueKind == JsonValueKind.Number ? e.GetDouble() : (double?)null).ToArray() : null;
             return new Player(n.I("id") ?? 0, Decode(n.S("name") ?? ""), n.S("position"), n.D("rank"), n.I("team"), n.D("ord"), ranks, pos12,
                 season is null ? null : new PlayerSeason(season.I("minutes"), season.I("goals"), season.I("assists")),
-                At("seasons") is not { ValueKind: not JsonValueKind.Null });
+                At("seasons") is not { ValueKind: not JsonValueKind.Null },
+                n.I("league"), n.S("nationality"), n.I("age"), n.I("lg_rank"), n.I("lg_n"), Doubles("seasons"),
+                Doubles("estimated")?.Where(x => x is not null).Select(x => (int)x!.Value).ToArray(), Doubles("future"), n.I("world"), n.I("lg"), n.I("lg_of"));
         }).ToList();
     }
 
@@ -104,4 +110,50 @@ public static class ClubData
     public static readonly HashSet<string> NoGame = ["PST", "CANC", "ABD", "AWD", "WO"];
     // still to be played (or being played), oldest first
     public static List<Match> Upcoming(IEnumerable<Match> list) => list.Where(m => !Finished.Contains(m.Status) && !CalledOff.Contains(m.Status)).ToList();
+}
+
+// A player's own file (players/<id> through site_player_page; web/src/lib/player.ts): league
+// seasons by club, his last 20 league appearances, his clubs and positions season by season. A
+// visitor who isn't a subscriber gets it with a locked player's ranks left out.
+public sealed record PlayerDoc(
+    int Id, string? Born, bool? Cut,
+    [property: JsonPropertyName("season_fields")] string[] SeasonFields, JsonElement[][] Seasons,
+    [property: JsonPropertyName("match_fields")] string[] MatchFields, JsonElement[][] Matches,
+    [property: JsonPropertyName("spell_fields")] string[] SpellFields, Dictionary<string, JsonElement[][]>? Spells,
+    Dictionary<string, JsonElement[][]>? Positions,
+    JsonElement? Injury,              // [fixture, type, ban]
+    Dictionary<string, string>? Teams);
+
+public sealed record SeasonLine(int Season, int Team, int League, int Apps, int? Starts, int Minutes, int? Goals, int? Assists, int? Yellow, int? Red);
+public sealed record Appearance(int Fixture, string Date, int League, int Team, int Opponent, int Home, int Gf, int Ga, int Started, int Minutes,
+    string? Role, double? Rank, int Goals, int Assists, int Yellow, int Red);
+public sealed record Spell(int Team, int? Minutes, double? ClubRank, int? Goals, int? Assists);
+
+public static class PlayerFiles
+{
+    public static List<SeasonLine> Seasons(PlayerDoc? doc) => doc is null ? [] : doc.Seasons.Select(r =>
+    {
+        var n = new Named(doc.SeasonFields, r);
+        return new SeasonLine(n.I("season") ?? 0, n.I("team") ?? 0, n.I("league") ?? 0, n.I("apps") ?? 0, n.I("starts"), n.I("minutes") ?? 0,
+            n.I("goals"), n.I("assists"), n.I("yellow"), n.I("red"));
+    }).ToList();
+
+    public static List<Appearance> Appearances(PlayerDoc? doc) => doc is null ? [] : doc.Matches.Select(r =>
+    {
+        var n = new Named(doc.MatchFields, r);
+        return new Appearance(n.I("fixture") ?? 0, n.S("date") ?? "", n.I("league") ?? 0, n.I("team") ?? 0, n.I("opponent") ?? 0, n.I("home") ?? 0,
+            n.I("gf") ?? 0, n.I("ga") ?? 0, n.I("started") ?? 0, n.I("minutes") ?? 0, n.S("role"), n.D("rank"),
+            n.I("goals") ?? 0, n.I("assists") ?? 0, n.I("yellow") ?? 0, n.I("red") ?? 0);
+    }).ToList();
+
+    public static List<Spell> Spells(PlayerDoc? doc, string key) =>
+        doc?.Spells?.GetValueOrDefault(key) is { } rows ? rows.Select(r =>
+        {
+            var n = new Named(doc.SpellFields, r);
+            return new Spell(n.I("team") ?? 0, n.I("minutes"), n.D("club_rank"), n.I("goals"), n.I("assists"));
+        }).ToList() : [];
+
+    // [[role, minutes], ...] as the file has them
+    public static List<(string Role, double Minutes)> Roles(JsonElement[][]? rows) =>
+        (rows ?? []).Select(r => (r[0].GetString() ?? "", r[1].GetDouble())).ToList();
 }

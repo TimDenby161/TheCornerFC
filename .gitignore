@@ -42,3 +42,4 @@ site/**/bin/
 site/**/obj/
 site/environment.local
 site/TheCornerFC.Web/wwwroot/
+site/client/node_modules/

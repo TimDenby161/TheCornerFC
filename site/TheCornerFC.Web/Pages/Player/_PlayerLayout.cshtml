@@ -1,0 +1,95 @@
+@using TheCornerFC.Web.Pages.PlayerTabs
+@{
+    // The header every tab of a player's page shares (the Svelte (app)/player/[id] layout)
+    Layout = "_Layout";
+    var d = (PlayerPageModel)ViewContext.ViewData.Model!;
+    var now = d.Now;
+    var b = $"/player/{d.Id}";
+    var tab = (Context.Request.Path.Value ?? "").Split('/').ElementAtOrDefault(3) ?? "";
+    (string Key, string Label)[] tabs = [("", "Overview"), ("stats", "Stats"), ("matches", "Matches"), ("career", "Career")];
+    const string AbilityTip = "Underlying Ability (0-100): the model's estimate of his level, from his clubs' strength, his stats against players in his position and his age curve. It carries over from earlier seasons, so it isn't a measure of current form: Current Season and Recent Performance are shown separately";
+    var gaTip = $"League {d.SeasonName}, all his clubs";
+    // his league place's colour: the top 2% green, 10% amber, 35% orange, the rest red
+    static int PlaceTier(int place, int of) { var s = (double)place / Math.Max(1, of); return s <= 0.02 ? 4 : s <= 0.1 ? 3 : s <= 0.35 ? 2 : 1; }
+}
+@functions {
+    void Kf(string label, string value, string sub, string tip, int? tier = null)
+    {
+        <div class="kf-tile @(tier is { } t ? $"kf-t{t}" : "")" title="@tip"><div class="kf-label">@label</div><div class="kf-value">@value</div>@if (sub != ""){<div class="kf-sub">@sub</div>}</div>
+    }
+    void Icons(int n, string icon, string word)
+    {
+        if (n > 0) { <span class="ga-icon" title="@n @word@(n == 1 ? "" : "s")">@(n > 3 ? $"{icon}×{n}" : string.Concat(Enumerable.Repeat(icon, n)))</span> }
+    }
+}
+<section class="panel" data-tab="club" data-active="true">
+    <div id="club-body">
+        <div class="pl-hero">
+            @Markup.PersonChip(d.P.Name, "player-photo-lg")
+            <div class="pl-hero-main">
+                <h2>@d.P.Name</h2>
+                <div class="pl-hero-club">@if (d.Team is { } t){@Markup.Crest(t.Id, t.Name, href: $"/club/{t.Id}")}
+                    <span>@if (d.Team is { } t2){<a class="team-link" href="/club/@t2.Id">@t2.Name</a>}else{<span class="dim-text">club not known</span>}@if (d.League is { } lg){<span class="dim-sep"> · </span><a class="pl-league team-link" href="@Menu.PageHref("league", lg.Id.ToString())">@lg.Name</a>}</span></div>
+                <div class="pl-hero-club pl-hero-nat">
+                    @if (d.Nationality is { } nat){@if (nat.Flag is not null){<img class="flag" src="https://flagcdn.com/w40/@(nat.Flag).png" alt="" loading="lazy" />}<span><a class="nat-link" href="@Menu.PageHref("nation", nat.Name)">@nat.Name</a></span><span class="dim-sep">·</span>}
+                    <span class="pl-meta">@(d.P.Position ?? "")</span>@if (d.P.Age is { } age){<span class="dim-sep">·</span><span class="pl-meta" title="@(d.Born is not null ? $"Born {d.Born}" : null)">@age</span>}
+                </div>
+            </div>
+            <div class="hero-ranks">
+                <div class="pl-hero-rank pl-hero-ga" title="@gaTip"><span class="val">@(now?.Goals?.ToString() ?? (now is not null ? "0" : "–"))</span><span class="lbl">Goals</span></div>
+                <div class="pl-hero-rank pl-hero-ga" title="@gaTip"><span class="val">@(now?.Assists?.ToString() ?? (now is not null ? "0" : "–"))</span><span class="lbl">Assists</span></div>
+                @if (d.Rank is { } rk)
+                {
+                    <div class="pl-hero-rank rel-@ClubPage.RankTier(rk)" title="@AbilityTip"><span class="val">@rk</span><span class="lbl">Ability</span></div>
+                }
+                else
+                {
+                    <div class="pl-hero-rank" title="His rank is for subscribers"><span class="val">–</span><span class="lbl">Ability</span></div>
+                }
+            </div>
+        </div>
+        @if (d.P.Locked){<div class="pl-callout">Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected. <partial name="_SubscriberLink" /></div>}
+
+        <div class="key-figures pl-figures"><div class="kf-group"><div class="kf-tiles kf-main">
+            @if (d.LeagueRank is { } lr && d.League is { } lgn)
+            {
+                Kf("League rank", $"#{Js.Num(lr.Place)}", $"of {Js.Num(lr.Of)} in {lgn.Name}", $"Place by Ability among ranked players at {lgn.Name} clubs", PlaceTier(lr.Place, lr.Of));
+            }
+            @{ Kf($"{d.Season} minutes", now is not null ? Js.Num(now.Minutes ?? 0) : "–", now?.Apps is { } ap ? $"{ap} apps{(now.Starts is { } st ? $" · {st} started" : "")}" : "league matches", "League minutes this season, all his clubs"); }
+            @{ Kf($"{d.Season} goals · assists", now?.Minutes is > 0 ? $"{now.Goals ?? 0} · {now.Assists ?? 0}" : "–", now?.Minutes is > 0 ? "league matches" : "no minutes yet", "League goals and assists this season, all his clubs"); }
+        </div></div></div>
+
+        <div class="club-section pl-block">
+            @if (d.RecentForm.Apps.Count == 0)
+            {
+                <div class="modal-section">Recent Performance</div>
+                <div class="pl-callout">No match-by-match data for him: only the leagues with per-match player stats have it.</div>
+            }
+            else
+            {
+                @if (d.RecentForm.Stale)
+                {
+                    <div class="modal-section">Most recent appearances · last played @d.RecentForm.LastDate</div>
+                    <div class="pl-callout">No league appearance for @d.RecentForm.Days days, so these are not current form.</div>
+                }
+                <div class="form-strip">
+                    @foreach (var m in d.RecentForm.Apps)
+                    {
+                        <div class="form-cell" title="@m.Title">
+                            <span class="rel-chip @(m.Gf > m.Ga ? "rel-4" : m.Gf == m.Ga ? "rel-none" : "rel-1")">@m.Gf–@m.Ga</span><span class="form-ga">@{ Icons(m.Goals, "⚽", "goal"); Icons(m.Assists, "👟", "assist"); }</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <nav class="page-tabs" aria-label="@d.P.Name's pages">
+            @foreach (var (key, label) in tabs)
+            {
+                <a href="@(key == "" ? b : $"{b}/{key}")" aria-current="@(tab == key ? "page" : null)">@label</a>
+            }
+        </nav>
+        <div id="pl-tab">@RenderBody()</div>
+    </div>
+</section>
+@section Scripts { @RenderSection("Scripts", required: false) }

@@ -1,0 +1,27 @@
+@page "/player/{id}/matches"
+@model TheCornerFC.Web.Pages.PlayerTabs.MatchesModel
+@{
+    ViewData["Title"] = $"{Model.P.Name} matches · The Corner FC";
+    ViewData["Description"] = $"{Model.P.Name}'s latest league appearances: minutes, position, goals and assists, and his rank going into each match.";
+}
+@if (Model.Rows.Count == 0)
+{
+    <div class="empty-state">No match-by-match data for him (only the leagues with per-match player stats have it).</div>
+}
+else
+{
+    <div class="match-list">
+        @foreach (var m in Model.Rows)
+        {
+            <div class="match-row">
+                <div class="mr-date">@m.Date</div>
+                <div class="mr-opp">@Markup.Crest(m.Opp, m.OppName, href: $"/club/{m.Opp}")
+                    <span>@(m.Home ? "v" : "@") <a class="team-link" href="/club/@m.Opp">@m.OppName</a></span></div>
+                <div class="mr-res res-@m.Res">@m.Gf–@m.Ga</div>
+                <div class="mr-rank" title="His rank going into the match">@if (m.Rank is { } rk){<span class="rel-chip rel-@ClubPage.RankTier(rk)">@Js.RoundInt(rk)</span>}else{<text>–</text>}</div>
+                <div class="mr-sub"><span>@string.Join(" · ", m.Bits)@if (m.Card is not null){@(m.Bits.Count > 0 ? " · " : "")<span class="card@(m.Card == "red" ? " red" : "")"></span>}</span></div>
+            </div>
+        }
+    </div>
+    <div class="page-note">His last @Model.Rows.Count league appearances. The number on the right is his rank going into the match.</div>
+}

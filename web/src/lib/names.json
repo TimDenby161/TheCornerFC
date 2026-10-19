@@ -721,5 +721,24 @@
 		"D": "CB",
 		"M": "CM",
 		"F": "ST"
+	},
+	"SEO_BOTS": [
+		"SemrushBot",
+		"AhrefsBot",
+		"MJ12bot",
+		"DotBot",
+		"DataForSeoBot",
+		"BLEXBot"
+	],
+	"GROUP_SINGLE": {
+		"GK": "goalkeeper",
+		"CB": "centre-back",
+		"FB": "full-back",
+		"WB": "wing-back",
+		"DM": "defensive mid",
+		"CM": "central mid",
+		"AM": "attacking mid",
+		"W": "winger",
+		"ST": "striker"
 	}
 }

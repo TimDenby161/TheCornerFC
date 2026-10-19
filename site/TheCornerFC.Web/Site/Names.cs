@@ -11,7 +11,7 @@ public static class Names
         string[] COUNTRY_FIRST, string[] REGIONS, int[] EURO_CUPS, int[] DOMESTIC_CUPS, string[] CONTINENTS,
         Dictionary<string, string> CLUB_ALIASES, Dictionary<int, string> LEAGUE_ALIASES, Dictionary<string, string> COUNTRY_ALIASES,
         Comp[] PRIMARY_COMPS, Comp[] TABLE_COMPS, Dictionary<string, string[]> REGION_LISTS, int[] GROUP_ORDER,
-        JsonElement[][] PITCH_SPOTS, Dictionary<string, string> GROUP_OF);
+        JsonElement[][] PITCH_SPOTS, Dictionary<string, string> GROUP_OF, string[] SEO_BOTS, Dictionary<string, string> GROUP_SINGLE);
     public sealed record Comp(string Id, string Label, int[]? Ids);
 
     static readonly File Read = Load();
@@ -41,6 +41,10 @@ public static class Names
         Read.PITCH_SPOTS.Select(s => (s[0].GetString()!, s[1].GetDouble(), s[2].GetDouble())).ToList();
     // the role group each position is rated in (as positions.py)
     public static IReadOnlyDictionary<string, string> GroupOf => Read.GROUP_OF;
+    // a role group in words ("centre-back")
+    public static IReadOnlyDictionary<string, string> GroupSingle => Read.GROUP_SINGLE;
+    // SEO tools' crawlers, asked by robots.txt to stay away (task T-039): they send no visitors
+    public static IReadOnlyList<string> SeoBots => Read.SEO_BOTS;
 
     static readonly Dictionary<string, string> RegionOfCountry =
         Read.REGION_LISTS.SelectMany(kv => kv.Value.Select(c => (c, kv.Key))).GroupBy(x => x.c).ToDictionary(g => g.Key, g => g.Last().Key);

@@ -1,0 +1,43 @@
+@page "/player/{id}"
+@model TheCornerFC.Web.Pages.PlayerTabs.IndexModel
+@{
+    ViewData["Title"] = $"{Model.P.Name} · The Corner FC";
+    ViewData["Description"] = $"{Model.P.Name}{(Model.Team is { } t ? $" ({t.Name})" : "")}: Ability rank, this season's minutes, goals and assists, recent appearances and positions.";
+    var now = Model.Now;
+}
+@if (Model.Next is not null){@await Html.PartialAsync("_NextMatchCard", Model.Next with { Status = Model.Status })}
+
+@if (Model.Chips.Count > 0)
+{
+    <div class="club-section pos-section">
+        <div class="pos-row">
+            @foreach (var c in Model.Chips)
+            {
+                <div class="pos-chip rel-@ClubPage.RankTier(c.Rank)@(c.Main ? " main" : "")" title="@c.Name: rank @Js.ToFixed(c.Rank, 1) · @(c.Pct > 0 ? $"{c.Pct}% of his starting minutes" : "no starts here")">
+                    <span class="pos-chip-pos">@c.Group</span><span class="pos-chip-rank">@Js.RoundInt(c.Rank)</span>
+                    <span class="pos-chip-pct">@(c.Pct > 0 ? $"{c.Pct}%" : "–")</span></div>
+            }
+        </div>
+    </div>
+}
+
+<div class="club-section pl-block">
+    <div class="modal-section">Current Season · @Model.SeasonName</div>
+    @if (now?.Minutes is > 0)
+    {
+        <div class="team-stats compact">
+            <div class="team-stat"><div class="team-stat-label">Minutes</div><div class="team-stat-value">@Js.Num(now.Minutes.Value)</div>@if (now.Apps is { } ap){<div class="team-stat-sub">@ap apps@(now.Starts is { } st ? $" · {st} started" : "")</div>}</div>
+            @if (!Model.Keeper)
+            {
+                <div class="team-stat"><div class="team-stat-label">Goals</div><div class="team-stat-value">@(now.Goals?.ToString() ?? "–")</div></div>
+                <div class="team-stat"><div class="team-stat-label">Assists</div><div class="team-stat-value">@(now.Assists?.ToString() ?? "–")</div></div>
+            }
+        </div>
+        @if (now.Minutes < 900){<div class="page-note">Only @Js.Num(now.Minutes.Value) minutes so far: this season moves his Ability only a little until he plays more.</div>}
+    }
+    else
+    {
+        <div class="pl-callout">No league minutes in @Model.SeasonName yet@(Model.Listed is not null ? $" · listed {Model.Listed}" : "").
+            @if (Model.Rank is { } rk){<text>His Ability of @rk comes from earlier seasons and his age curve, not from current form.</text>}</div>
+    }
+</div>

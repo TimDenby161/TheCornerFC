@@ -1,0 +1,45 @@
+@page "/player/{id}/career"
+@model TheCornerFC.Web.Pages.PlayerTabs.CareerModel
+@{
+    ViewData["Title"] = $"{Model.P.Name} career · The Corner FC";
+    ViewData["Description"] = $"{Model.P.Name} season by season: his rank, clubs, minutes, goals and assists, and the positions he played.";
+}
+@functions {
+    void SpellList(List<TheCornerFC.Web.Pages.PlayerTabs.CareerModel.SpellView> list)
+    {
+        foreach (var x in list)
+        {
+            <div class="spell"><a class="team-link" href="/club/@x.Team">@x.Name</a>
+                <span class="dim"> · club @(x.ClubRank?.ToString() ?? "–") · @(x.Minutes > 0 ? $"{Js.Num(x.Minutes)}′" : "no minutes here")@(x.Minutes > 0 ? $" · {x.Goals} G, {x.Assists} A" : "")</span></div>
+        }
+    }
+}
+@if (Model.Points.Count > 0)
+{
+    <div class="chart-card"><div class="chart-head"><span class="chart-title">Season ranks</span></div>
+        @await Html.PartialAsync("_RankChart", new TheCornerFC.Web.Site.RankChartModel(Model.Points, Model.P.Name))</div>
+}
+<div class="club-section@(Model.Points.Count == 0 ? " u-mt0" : "")"><div class="modal-section">Season by season</div>
+    @if (Model.Rows.Count > 0)
+    {
+        <table class="season-table"><thead><tr><th>Season</th><th>Clubs · club Elo · minutes · goals, assists</th><th class="num">Rank</th></tr></thead>
+            <tbody>
+                @foreach (var r in Model.Rows)
+                {
+                    <tr><td class="num u-left">@r.Label<div class="dim">@(r.Age is { } a ? $"age {a}" : "")</div></td>
+                        <td>@if (r.Spells.Count > 0){ SpellList(r.Spells); }else{<span class="dim">@(r.Est ? "Estimated from his other seasons and age" : "")</span>}
+                            @if (r.Shares.Count > 0 || r.RatedAs is not null){<div class="pos-shares">@foreach (var s in r.Shares){<span class="pos-share@(s.Other ? " sub" : "")">@s.Label @s.Pct%</span>}@if (r.RatedAs is not null){<span class="rated-as">rated as @r.RatedAs</span>}</div>}</td>
+                        <td class="num">@if (r.Est){<span class="est"><span class="rel-chip rel-@ClubPage.RankTier(r.Rank)">@Js.RoundInt(r.Rank)</span></span>}else{<span class="rel-chip rel-@ClubPage.RankTier(r.Rank)">@Js.RoundInt(r.Rank)</span>}</td></tr>
+                }
+            </tbody></table>
+        <div class="page-note">A season's rank starts from his clubs' level (LT ALGO over his matches) and his stats against players in his position, then follows the typical age curve for his position from a level of his own: a season only moves off that curve as far as its minutes justify. Outlined ranks are estimated.</div>
+    }
+    else
+    {
+        <div class="pl-callout">His season ranks are for subscribers.</div>
+    }
+</div>
+@if (Model.NowSpells.Count > 0)
+{
+    <div class="club-section"><div class="modal-section">His current rank is built on · last 20 appearances</div><div class="season-now">@{ SpellList(Model.NowSpells); }</div></div>
+}

@@ -7,11 +7,11 @@ public static class Crawlers
 {
     // Search engines are let in at the live site's own address only. Anywhere else (staging, the
     // host's own address) is kept out. The account, the owner's fantasy pages and the server's own
-    // addresses are never for them.
+    // addresses are never for them, and SEO tools' crawlers are asked to stay away altogether.
     public static string Robots(SiteEnvironment env, string host)
     {
         string[] lines = env.IsProduction && host == env.Host
-            ? ["User-agent: *", "Disallow: /account", "Disallow: /admin", "Disallow: /fantasy/", "Disallow: /fpl",
+            ? [.. Names.SeoBots.SelectMany(bot => new[] { $"User-agent: {bot}", "Disallow: /", "" }), "User-agent: *", "Disallow: /account", "Disallow: /admin", "Disallow: /fantasy/", "Disallow: /fpl",
                "Disallow: /my-fpl-team", "Disallow: /efl-fantasy", "Disallow: /stripe/", "Disallow: /players/rows",
                "Disallow: /players/options", "Disallow: /players/seasons", "", $"Sitemap: https://{env.Host}/sitemap.xml", ""]
             : ["User-agent: *", "Disallow: /", ""];

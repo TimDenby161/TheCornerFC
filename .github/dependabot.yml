@@ -31,3 +31,13 @@ updates:
     groups:
       nuget:
         patterns: ["*"]
+
+  # the C# site's React parts (site/client)
+  - package-ecosystem: npm
+    directory: /site/client
+    target-branch: staging      # nothing reaches main except by promotion (guide/environments.md)
+    schedule:
+      interval: weekly
+    groups:
+      client:
+        patterns: ["*"]

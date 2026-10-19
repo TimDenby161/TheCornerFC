@@ -1,0 +1,9 @@
+@model TheCornerFC.Web.Site.RankChartModel
+@{
+    // Season ranks as a line (RankChart.svelte). The server draws it 640 wide, so the page reads the
+    // same before any script runs; the React chart (site/client, RankChart.tsx) then takes over the
+    // spot, redraws it at its box's real width and shows the nearest season's rank on hover.
+    var props = System.Text.Json.JsonSerializer.Serialize(new { points = Model.Points.Select(p => new { label = p.Label, season = p.Season, v = p.V, est = p.Est }), name = Model.Name });
+}
+<div class="chart-wrap" id="pl-chart" data-island="rank-chart"><script type="application/json">@Html.Raw(props.Replace("<", "\\u003c"))</script>@Html.Raw(PlayerPage.ChartSvg(Model.Points, Model.Name, 640))</div>
+<script type="module" src="/client/islands.js" nonce="@Context.Nonce()"></script>

@@ -1,0 +1,44 @@
+@page "/player/{id}/stats"
+@model TheCornerFC.Web.Pages.PlayerTabs.StatsModel
+@{
+    ViewData["Title"] = $"{Model.P.Name} stats · The Corner FC";
+    ViewData["Description"] = $"{Model.P.Name}'s league appearances, minutes, goals, assists and cards, season by season.";
+}
+@functions {
+    void Tile(string label, string? value, string sub = "")
+    {
+        <div class="team-stat"><div class="team-stat-label">@label</div><div class="team-stat-value">@(value ?? "–")</div>@if (sub != ""){<div class="team-stat-sub">@sub</div>}</div>
+    }
+}
+@if (!Model.Any)
+{
+    <div class="empty-state">No season stats for him yet.</div>
+}
+else
+{
+    <div class="stats-controls">
+        <div class="chip-scroll">
+            @foreach (var y in Model.Years){<a role="button" class="filter-chip" href="@Model.Address(y.Y, Model.Per90)" aria-pressed="@(y.Y == Model.Shown ? "true" : "false")">@y.Label</a>}
+        </div>
+        <div class="seg">
+            <a role="button" class="seg-link" href="@Model.Address(Model.Shown, false)" aria-pressed="@(!Model.Per90 ? "true" : "false")">Totals</a>
+            <a role="button" class="seg-link" href="@Model.Address(Model.Shown, true)" aria-pressed="@(Model.Per90 ? "true" : "false")">Per 90</a>
+        </div>
+    </div>
+    <div class="season-clubs">
+        @foreach (var c in Model.ClubLines)
+        {
+            <div class="season-club">@Markup.Crest(c.Team, c.Name, href: $"/club/{c.Team}")
+                <a class="team-link" href="/club/@c.Team">@c.Name</a><span class="dim"> · @c.Comp · @c.Apps apps · @(Js.Num(c.Minutes))′</span></div>
+        }
+    </div>
+    <div class="team-stats compact">
+        @{ Tile("Apps", Model.AppsTotal?.ToString(), Model.Started is { } st ? $"{st} started" : ""); }
+        @{ Tile("Minutes", Js.Num(Model.Minutes)); }
+        @{ Tile("Goals", Model.Goals); }
+        @{ Tile("Assists", Model.Assists); }
+        @{ Tile("Yellow cards", Model.Yellow); }
+        @{ Tile("Red cards", Model.Red); }
+    </div>
+    <div class="page-note">League matches only@(Model.Per90 ? $", per 90 minutes ({Js.Num(Model.Minutes)} minutes)" : "").@(Model.Partial ? " Leagues without match-by-match data give season totals only, so starts are missing there." : "")</div>
+}

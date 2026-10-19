@@ -28,7 +28,8 @@ public class CrawlerTests
         var live = Crawlers.Robots(Live, "thecornerfc.com");
         Assert.Contains("Disallow: /account", live);
         Assert.Contains("Sitemap: https://thecornerfc.com/sitemap.xml", live);
-        Assert.DoesNotContain("Disallow: /\n", live);
+        Assert.StartsWith("User-agent: SemrushBot\nDisallow: /\n\nUser-agent: AhrefsBot\nDisallow: /\n", live);
+        Assert.Contains("\nUser-agent: *\nDisallow: /account\n", live);
         Assert.Equal("User-agent: *\nDisallow: /\n", Crawlers.Robots(Live, "thecornerfc.azurewebsites.net"));
         Assert.Equal("User-agent: *\nDisallow: /\n", Crawlers.Robots(Staging, "staging.thecornerfc.com"));
     }

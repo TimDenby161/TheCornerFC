@@ -1,7 +1,8 @@
 name: C# site
 
 # The C# site (site/, T-048) to its staging app in Azure, on every push to staging that touches
-# it or what it copies from web/ (the stylesheets, icons, each page's intro, the text pages). Its tests first: a
+# it or what it takes from web/ (the stylesheets, icons, each page's intro, the text pages, and
+# the shared logic the React parts import). Its tests first: a
 # failing test deploys nothing. The live app (thecornerfc) gets its deploy at the switch-over,
 # not before (audit plan step 9).
 #
@@ -14,6 +15,7 @@ on:
     branches: [staging]
     paths:
       - "site/**"
+      - "web/src/lib/**"
       - "web/static/**"
       - "web/src/styles/**"
       - "web/src/app.css"
@@ -47,6 +49,19 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/client/package-lock.json
+
+      # the React parts (site/client): their packages, and their own tests
+      - name: React parts
+        working-directory: site/client
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
 
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:

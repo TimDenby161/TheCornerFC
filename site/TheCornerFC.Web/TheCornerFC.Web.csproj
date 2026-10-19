@@ -23,6 +23,19 @@
     <EmbeddedResource Include="$(WebSource)/src/text/*.html" LogicalName="text/%(Filename).html" />
     <EmbeddedResource Include="$(WebSource)/src/lib/names.json" LogicalName="names.json" />
   </ItemGroup>
+  <!-- The React parts (../client): built into wwwroot/client when their sources change. Needs Node
+       on the path (on this Mac it is Homebrew's). -->
+  <PropertyGroup>
+    <ClientSource>$(MSBuildProjectDirectory)/../client</ClientSource>
+  </PropertyGroup>
+  <ItemGroup>
+    <ClientInputs Include="$(ClientSource)/src/**/*;$(ClientSource)/package.json;$(ClientSource)/vite.config.ts;$(WebSource)/src/lib/**/*.ts;$(WebSource)/src/lib/*.json" Exclude="$(WebSource)/src/lib/**/*.test.ts" />
+  </ItemGroup>
+  <Target Name="BuildClient" BeforeTargets="CopyWebAssets" Inputs="@(ClientInputs)" Outputs="wwwroot/client/islands.js">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(ClientSource)" Condition="!Exists('$(ClientSource)/node_modules')" EnvironmentVariables="PATH=$(PATH):/opt/homebrew/bin:/usr/local/bin" />
+    <Exec Command="npm run build" WorkingDirectory="$(ClientSource)" EnvironmentVariables="PATH=$(PATH):/opt/homebrew/bin:/usr/local/bin" />
+  </Target>
+
   <Target Name="CopyWebAssets" BeforeTargets="BeforeBuild;ResolveStaticWebAssetsInputs">
     <Copy SourceFiles="@(WebStatic)" DestinationFiles="@(WebStatic->'wwwroot/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(WebStyles)" DestinationFiles="@(WebStyles->'wwwroot/styles/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
