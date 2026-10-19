@@ -1,0 +1,22 @@
+@inject SiteEnvironment Env
+@{
+    // The plain text pages (how the models work, terms, privacy): the site's look without the menu,
+    // ruled, not boxed (the Svelte site's (text) layout and page.css).
+    var visitor = Visitor.Of(Context);
+}
+<!doctype html>
+<html lang="en">
+<head>
+    <partial name="_Head" />
+    <link rel="stylesheet" href="/styles/page.css" />
+    <link rel="stylesheet" href="/site.css" />
+</head>
+<body data-tz="@visitor.Zone.Tz" data-uk-time="@(visitor.Zone.UkTime ? "1" : "0")">
+@if (!Env.IsProduction)
+{
+    <p id="staging-strip">Staging: test data, not the live site</p>
+}
+<main>@RenderBody()</main>
+<script src="/site.js" nonce="@Context.Nonce()"></script>
+</body>
+</html>

@@ -8,8 +8,9 @@
   </PropertyGroup>
 
   <!-- Until the switch-over (audit plan step 9) the current site in web/ keeps the one copy of the
-       stylesheets, fonts, icons and each page's intro: each build copies them in, so a fix there
-       reaches both sites. wwwroot/ is made by the build and is not in git. -->
+       stylesheets, fonts, icons, each page's intro and the text pages' words: each build copies or
+       builds them in, so a fix there reaches both sites. wwwroot/ is made by the build and is not
+       in git. -->
   <PropertyGroup>
     <WebSource>$(MSBuildProjectDirectory)/../../web</WebSource>
   </PropertyGroup>
@@ -19,6 +20,7 @@
     <WebStyles Include="$(WebSource)/src/app.css;$(WebSource)/src/lib/crest-hues.css;$(WebSource)/src/lib/placed.css" />
     <OwnAssets Include="Assets/**/*" />
     <EmbeddedResource Include="$(WebSource)/src/lib/tabInfo.json" LogicalName="tabInfo.json" />
+    <EmbeddedResource Include="$(WebSource)/src/text/*.html" LogicalName="text/%(Filename).html" />
   </ItemGroup>
   <Target Name="CopyWebAssets" BeforeTargets="BeforeBuild;ResolveStaticWebAssetsInputs">
     <Copy SourceFiles="@(WebStatic)" DestinationFiles="@(WebStatic->'wwwroot/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />

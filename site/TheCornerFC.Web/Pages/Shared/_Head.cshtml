@@ -1,0 +1,39 @@
+@inject SiteEnvironment Env
+@{
+    // What every page's <head> holds, whichever layout it uses (web/src/app.html): the icons, the
+    // theme picked in the menu, the page's title and description, and where a link to it is
+    // shared, the share tags and the address search engines take as its own, without its query
+    // (web/src/lib/server/share.ts).
+    var title = ViewData["Title"] as string ?? "The Corner FC";
+    var description = ViewData["Description"] as string;
+    var url = $"https://{Env.Host}{Context.Request.Path.Value}";
+    const string Site = " · The Corner FC";
+}
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0e3b29" />
+<!-- the Light or Dark theme picked in the menu, applied before the page draws -->
+<script src="/theme.js"></script>
+<title>@title</title>
+@if (description is not null)
+{
+    <meta name="description" content="@description" />
+}
+<link rel="canonical" href="@url" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="The Corner FC" />
+<meta property="og:title" content="@(title.EndsWith(Site) ? title[..^Site.Length] : title)" />
+@if (description is not null)
+{
+    <meta property="og:description" content="@description" />
+}
+<meta property="og:url" content="@url" />
+<meta property="og:image" content="https://@Env.Host/share-card.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:site" content="@("@")TheCorner_FC" />

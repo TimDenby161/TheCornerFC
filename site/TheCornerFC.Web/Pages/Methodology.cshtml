@@ -1,0 +1,96 @@
+@page "/methodology"
+@model MethodologyModel
+@{
+    Layout = "_TextLayout";
+    ViewData["Title"] = Model.Text.Title;
+    ViewData["Description"] = Model.Text.Description;
+    var d = Model.Live;
+}
+@foreach (var (html, live) in Model.Text.Parts())
+{
+    @Html.Raw(html)
+    @if (live is null) { continue; }
+    <div id="@live" class="live">
+        @if (d is null)
+        {
+            <p class="warn">Couldn't load the live figures. Try reloading the page.</p>
+        }
+        else if (live == "fresh-live")
+        {
+            <ul class="fresh">@foreach (var (label, at) in Model.Fresh()) { <li><strong>@label: </strong>@Model.When(at)</li> }</ul>
+            @if (Model.Hours > MethodologyModel.StaleHours)
+            {
+                <p class="warn">This data is @((int)Math.Floor(Model.Hours)) hours old, so an update has been missed. Treat predictions and injury news with extra care.</p>
+            }
+            <p class="muted">Times are in your time zone.</p>
+        }
+        else if (live == "matches-live")
+        {
+            var m = d.Matches;
+            if (m is null)
+            {
+                <p class="muted">No live predictions have been scored yet. Figures appear here once matches predicted before kick-off have finished.</p>
+            }
+            else
+            {
+                <p>@MethodologyModel.Num(m.N) finished matches, each predicted before kick-off. @Model.Period(m.Period)</p>
+                @if (MethodologyModel.SampleNote(m.N, "matches") is { Length: > 0 } note) { <p class="warn">@note</p> }
+                <div class="stats">
+                    <div class="stat"><span class="stat-v">@MethodologyModel.Pct(m.Accuracy)</span><span class="stat-l">Most likely result was right</span></div>
+                    <div class="stat"><span class="stat-v">@m.LogLoss.ToString("0.000")</span><span class="stat-l">Log loss (lower is better)</span></div>
+                    <div class="stat"><span class="stat-v">@m.Brier.ToString("0.000")</span><span class="stat-l">Brier score (lower is better)</span></div>
+                    @if (m.ExactScore is { N: > 0 } exact)
+                    {
+                        <div class="stat"><span class="stat-v">@MethodologyModel.Pct(exact.Accuracy)</span><span class="stat-l">Exact score right</span></div>
+                    }
+                </div>
+                <p class="muted">Giving every result a one-in-three chance would score 1.099 and 0.667.</p>
+                <p><strong>Calibration</strong>: when the model gave something a certain chance, how often did it happen?</p>
+                <table class="calib"><thead><tr><th>Model said</th><th>Average</th><th>It happened</th><th>Predictions</th></tr></thead>
+                    <tbody>
+                    @foreach (var row in m.Calibration)
+                    {
+                        var bounds = row[0].GetString()!.Split('-').Select(x => (int)Math.Round(double.Parse(x, System.Globalization.CultureInfo.InvariantCulture) * 100)).ToArray();
+                        <tr><td>@bounds[0]–@bounds[1]%</td><td>@((int)Math.Round(row[2].GetDouble() * 100))%</td><td>@((int)Math.Round(row[3].GetDouble() * 100))%</td><td>@MethodologyModel.Num(row[1].GetInt32())</td></tr>
+                    }
+                    </tbody></table>
+                <p class="muted">Rows with few predictions say little on their own.</p>
+                @if (MethodologyModel.Versions(m.Versions, "predictions are") is { Length: > 0 } v) { <p class="muted">@v</p> }
+                @if (m.ExcludedNoRegulationScore is > 0 and var left) { <p class="muted">@MethodologyModel.Num(left) matches without a 90-minute score on record are left out.</p> }
+            }
+        }
+        else if (live == "lineups-live")
+        {
+            var l = d.Lineups;
+            if (l is null)
+            {
+                <p class="muted">No live predicted line-ups have been scored yet. They need a prediction saved before the team sheet came out, and the official XI afterwards.</p>
+            }
+            else
+            {
+                <p>@MethodologyModel.Num(l.N) team line-ups predicted before the official team sheet was published. @Model.Period(l.Period)</p>
+                @if (MethodologyModel.SampleNote(l.N, "line-ups") is { Length: > 0 } note) { <p class="warn">@note</p> }
+                <div class="stats">
+                    <div class="stat"><span class="stat-v">@l.CorrectStartersMean.ToString("0.0") of 11</span><span class="stat-l">Starters named correctly, on average</span></div>
+                    @if (l.RoleAccuracy is { N: > 0 } role)
+                    {
+                        <div class="stat"><span class="stat-v">@MethodologyModel.Pct(role.Accuracy)</span><span class="stat-l">Correct starters in the right position</span></div>
+                    }
+                </div>
+                @if (MethodologyModel.Versions(l.Versions, "line-ups are") is { Length: > 0 } v) { <p class="muted">@v</p> }
+                @if (l.ExcludedNoOfficialXi is > 0 and var left) { <p class="muted">@MethodologyModel.Num(left) line-ups are left out because no complete official XI was recorded.</p> }
+            }
+        }
+        else if (live == "version-live")
+        {
+            if (d.Freshness?.Model is { } inUse)
+            {
+                <p>The match model in use is <strong>@inUse.Name</strong>@(inUse.Code is null ? "" : $" (code {inUse.Code})")@(inUse.Registered is { } r ? $", registered {Model.Day(r)}." : ".")</p>
+            }
+            else
+            {
+                <p class="muted">The current model version isn't available in this data export.</p>
+            }
+        }
+    </div>
+}

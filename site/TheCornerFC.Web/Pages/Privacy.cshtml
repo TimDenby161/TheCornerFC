@@ -1,0 +1,9 @@
+@page "/privacy"
+@{
+    // The words are the site's own file, web/src/text/privacy.html (TextPage)
+    Layout = "_TextLayout";
+    var text = TextPage.Named("privacy");
+    ViewData["Title"] = text.Title;
+    ViewData["Description"] = text.Description;
+}
+@Html.Raw(text.Html)

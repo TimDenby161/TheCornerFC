@@ -1,0 +1,9 @@
+@page "/terms"
+@{
+    // The words are the site's own file, web/src/text/terms.html (TextPage)
+    Layout = "_TextLayout";
+    var text = TextPage.Named("terms");
+    ViewData["Title"] = text.Title;
+    ViewData["Description"] = text.Description;
+}
+@Html.Raw(text.Html)

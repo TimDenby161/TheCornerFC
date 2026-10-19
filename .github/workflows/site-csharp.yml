@@ -1,7 +1,7 @@
 name: C# site
 
 # The C# site (site/, T-048) to its staging app in Azure, on every push to staging that touches
-# it or what it copies from web/ (the stylesheets, icons, each page's intro). Its tests first: a
+# it or what it copies from web/ (the stylesheets, icons, each page's intro, the text pages). Its tests first: a
 # failing test deploys nothing. The live app (thecornerfc) gets its deploy at the switch-over,
 # not before (audit plan step 9).
 #
@@ -19,6 +19,7 @@ on:
       - "web/src/app.css"
       - "web/src/lib/*.css"
       - "web/src/lib/tabInfo.json"
+      - "web/src/text/**"
       - ".github/workflows/site-csharp.yml"
   workflow_dispatch:
 
