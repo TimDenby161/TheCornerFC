@@ -263,7 +263,7 @@ check('every address under /admin is shut to a signed-out visitor, the data behi
 const gone = await run(`Promise.all(['/simulation', '/model-vs-market'].map((u) => fetch(u).then((r) => r.status))).then((x) => x.join())`);
 check("the betting pages' old public addresses are gone", gone === '404,404', gone);
 // (those two 404s were asked for: they are not the page going wrong)
-for (let i = errors.length - 1; i >= 0; i--) if (/404 \(Not Found\).*\/(simulation|model-vs-market)$/.test(errors[i])) errors.splice(i, 1);
+for (let i = errors.length - 1; i >= 0; i--) if (/404 \([^)]*\).*\/(simulation|model-vs-market)$/.test(errors[i])) errors.splice(i, 1);
 check('the menu has no Admin links for a visitor', !(await run(`[...document.querySelectorAll('#main-menu a')].some((a) => /Admin|Paper Simulation|Model vs Market|Model Change/.test(a.textContent) || a.getAttribute('href').startsWith('/admin'))`)));
 
 // "What the numbers mean" sits at the foot of a page, under what it explains, and opens there
