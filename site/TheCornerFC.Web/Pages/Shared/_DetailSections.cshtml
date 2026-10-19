@@ -1,0 +1,19 @@
+@model (TheCornerFC.Web.Site.MatchDetail.Detail Detail, bool Tips)
+@{
+    // A match's model detail, section by section (DetailSections.svelte; on a match card React draws
+    // it, DetailSections.tsx). Tips: each row's explanation written out under it, where there is
+    // room (The Model's worked example), not only on hover
+    var visitor = Visitor.Of(Context);
+}
+@foreach (var sec in Model.Detail.Sections)
+{
+    <div class="why-sec"><div class="why-sec-hd">@sec.Title@if (sec.Unit is not null){<text> </text><span class="why-unit">@sec.Unit</span>}</div>
+        @foreach (var r in sec.Rows)
+        {
+            <div class="why-row@(r.Teams == true ? " why-teams" : "")" title="@(Model.Tips ? null : r.Tip)"><span>@r.Label</span><b>@if (r.Value is string text){@text}else if (r.Value is TheCornerFC.Web.Site.MatchDetail.When w){var at = DateTimeOffset.Parse(w.At);@Markup.LocalTime(at, "short", visitor)<text> </text>@Markup.LocalTime(at, "time", visitor)}</b></div>
+            @if (Model.Tips && !string.IsNullOrEmpty(r.Tip)){<div class="why-tip">@r.Tip</div>}
+        }
+        @if (sec.Note is not null){<div class="why-note">@sec.Note</div>}
+    </div>
+}
+@foreach (var n in Model.Detail.Notes){<div class="why-note">@n</div>}
