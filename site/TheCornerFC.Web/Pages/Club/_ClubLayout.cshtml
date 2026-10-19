@@ -1,0 +1,122 @@
+@using TheCornerFC.Web.Pages.ClubTabs
+@{
+    // The header every tab of a club's page shares (the Svelte (app)/club/[id] layout)
+    Layout = "_Layout";
+    var d = (ClubPageModel)ViewContext.ViewData.Model!;
+    var b = $"/club/{d.C.Id}";
+    var tab = (Context.Request.Path.Value ?? "").Split('/').ElementAtOrDefault(3) ?? "";
+    (string Key, string Label)[] tabs = [("", "Overview"), ("xi", "Predicted XI"), ("formations", "Formations"), ("matches", "Matches"), ("history", "History")];
+}
+@functions {
+    void HeroRank(string value, string label, int tier, string tip)
+    {
+        <div class="pl-hero-rank rel-@tier" title="@tip"><span class="val">@value</span><span class="lbl">@label</span></div>
+    }
+}
+<section class="panel" data-tab="club" data-active="true">
+    <div id="club-body">
+        <div class="pl-hero">
+            @Markup.Crest(d.C.Id, d.C.Name, size: "club-logo-lg")
+            <div class="pl-hero-main">
+                <h2>@d.C.Name</h2>
+                @if (d.League is { } lg)
+                {
+                    <div class="pl-hero-club">@Markup.Flag(lg.CountryKey, lg.Country)<span class="pl-league"><a class="nat-link" href="@Menu.PageHref("league", lg.Id.ToString())">@lg.Name</a></span></div>
+                }
+                @if (d.Coach is not null || d.Ratings is not null)
+                {
+                    <div class="pl-hero-club pl-hero-nat">
+                        @if (d.Coach is not null){@Markup.PersonChip(d.Coach, "player-photo coach-photo")<span class="pl-meta">@d.Coach</span>}
+                        @if (d.Coach is not null && d.Ratings is not null){<span class="dim-sep">·</span>}
+                        @if (d.Ratings is not null){<a class="team-link" href="/clubs" title="Place among every ranked club by Current Strength, as the Club Rankings are ordered. Opens the Rankings">#@Js.Num(d.Ratings.Place)</a>}
+                    </div>
+                }
+            </div>
+            @if (d.Ratings is { } r)
+            {
+                <div class="hero-ranks">
+                    @if (r.Form is { } f) { HeroRank(ClubPageModel.Signed(f), "Last 6", f > 0 ? 4 : f < 0 ? 1 : 0, "Change in Current Strength over the club's last 6 matches, in all competitions"); }
+                    @{ HeroRank(r.Lt.ToString(), "Baseline", r.LtTier, "Baseline Strength: the long-term level (LT ALGO), from every match since 2020"); }
+                    @{ HeroRank(r.Current.ToString(), "Current", r.CurrentTier, "Current Strength: the Elo rating after the latest match, from recent results"); }
+                </div>
+            }
+        </div>
+
+        @if (d.Form.Count > 0)
+        {
+            <div class="club-form lt-form"><span class="club-form-key">Form · latest first</span>@foreach (var f in d.Form){<i class="res-@char.ToLowerInvariant(f.C)" title="@f.Title">@f.C</i>}</div>
+        }
+
+        @if (d.Table is not null || d.BestPlayers.Count > 0)
+        {
+            <div class="club-top">
+                @if (d.Table is { } t)
+                {
+                <div class="club-mini-table">
+                    <div class="table-scroll"><table class="league-table">
+                        <thead><tr>
+                            <th class="cmt-head" colspan="3"><a class="cmt-link" href="@Menu.PageHref("league", t.League.ToString())/table">@t.Title<span class="cmt-full"> table</span> ›</a></th>
+                            <th class="lt-wdl" title="Played">P</th><th title="Goal difference">GD</th><th title="Points">Pts</th>
+                            <th class="lt-formcol" title="Last five league games, newest first: green won, grey drawn, red lost">Form</th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach (var x in t.Rows)
+                            {
+                                <tr class="@(x.Me ? "lt-me" : null)">
+                                    <td class="lt-pos @x.Zone">@x.Rank</td>
+                                    <td class="lt-badge">@Markup.Crest(x.Team, x.Name, href: x.Me ? null : $"/club/{x.Team}")</td>
+                                    <td class="lt-club lt-clubname"><span>@if (x.Me){<b>@x.Name</b>}else{<a class="team-link" href="/club/@x.Team">@x.Name</a>}</span></td>
+                                    <td class="lt-wdl">@x.Played</td><td>@(x.Gd > 0 ? "+" : "")@x.Gd</td><td><b>@x.Points</b></td>
+                                    <td class="lt-formcol">@if (!string.IsNullOrEmpty(x.Form)){<span class="lt-form">@foreach (var ch in x.Form){<i class="@(ch == 'W' ? "res-w" : ch == 'D' ? "res-d" : "res-l")">@ch</i>}</span>}</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table></div>
+                </div>
+                }
+                @if (d.BestPlayers.Count > 0)
+                {
+                    <div class="club-mini-table">
+                        <div class="table-scroll"><table class="league-table">
+                            <thead><tr>
+                                <th class="cmt-head" colspan="2"><a class="cmt-link" href="/players?club=@d.C.Id" title="All @d.C.Name players in the Players ranking">Best players<span class="cmt-full"> · by Ability</span> ›</a></th>
+                                <th title="Underlying Ability (0-100): the model's estimate of his level"><span class="cmt-full">Ability</span><span class="cmt-short">Abil.</span></th>
+                                <th title="Goals this season, all his clubs">G</th><th title="Assists this season, all his clubs">A</th>
+                            </tr></thead>
+                            <tbody>
+                                @foreach (var p in d.BestPlayers)
+                                {
+                                    <tr>
+                                        <td class="lt-badge">@Markup.PersonChip(p.Name)</td>
+                                        <td class="lt-club"><a class="player-link" href="/player/@p.Id"><span class="cmt-full">@p.Name</span><span class="cmt-short">@p.Short</span></a>@if (p.Position is not null){<text> </text><span class="bp-pos">@p.Position</span>}</td>
+                                        <td>@if (p.Rank is { } rk){<span class="rel-chip rel-@ClubPage.RankTier(rk)">@Js.RoundInt(rk)</span>}else{<text>–</text>}</td><td>@(p.Goals?.ToString() ?? "–")</td><td>@(p.Assists?.ToString() ?? "–")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table></div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (d.Style is { } style)
+        {
+            <div class="sp-grid"><div class="sp-card">
+                <div class="sp-row" title="Left (blue) defensive, right (orange) attacking, grey middle balanced. Attack and Defence average to Current Strength; the lean is half their difference. The ends are the most one-sided clubs in the world. Clubs in high-scoring games drift towards attack, low-scoring ones towards defence">
+                    <span class="sp-lbl">Style</span>
+                    <span class="sp-track"><i class="sp-mid"></i><i class="sp-mark sx-@style.X"></i></span>
+                    <span class="sp-text">@style.Text</span>
+                </div>
+            </div></div>
+        }
+
+        <nav class="page-tabs" aria-label="@d.C.Name's pages">
+            @foreach (var (key, label) in tabs)
+            {
+                <a href="@(key == "" ? b : $"{b}/{key}")" aria-current="@(tab == key ? "page" : null)">@label</a>
+            }
+        </nav>
+        <div id="club-tab">@RenderBody()</div>
+    </div>
+</section>
+@section Scripts { @RenderSection("Scripts", required: false) }

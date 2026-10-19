@@ -11,7 +11,11 @@ public sealed record SiteDoc(
     Dictionary<string, string> Teams,
     [property: JsonPropertyName("nation_pages")] Dictionary<string, string>? NationPages,
     // when each source of the data was last fetched, and the match model it was made by
-    Freshness.Sources? Freshness)
+    Freshness.Sources? Freshness,
+    // the order of a match's row and of a player's, as site_matches and site_players give them
+    [property: JsonPropertyName("match_fields")] string[]? MatchFields = null,
+    [property: JsonPropertyName("player_fields")] string[]? PlayerFields = null,
+    [property: JsonPropertyName("player_season_fields")] string[]? PlayerSeasonFields = null)
 {
     public Competition? Comp(int id) => Competitions.GetValueOrDefault(id.ToString());
     public string TeamName(int id) => Teams.GetValueOrDefault(id.ToString()) ?? $"Team {id}";

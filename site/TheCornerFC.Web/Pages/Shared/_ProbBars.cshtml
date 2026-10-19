@@ -1,0 +1,34 @@
+@model TheCornerFC.Web.Site.ProbBarsModel
+@{
+    // The win-chance bars (ProbBars.svelte): the model's home, draw and away chances, and under it
+    // the market's (the bookmakers' average with their margin removed) where its prices are known.
+    // `Diff` adds the gap between the two in whole points.
+    var gap = Model.Market is { } mk ? Model.Probs.Select((v, i) => { var x = v - mk[i]; return $"{(x > 0 ? "+" : x < 0 ? "−" : "")}{Math.Abs(x)}"; }).ToArray() : [];
+}
+@functions {
+    void Bar(int[] p, string? name, string tip)
+    {
+        int h = p[0], d = p[1], a = p[2];
+        <div class="match-probs@(name is not null ? " labelled" : "")">@if (name is not null){<span class="prob-name" title="@tip">@name</span>}
+            <div class="prob-bar">
+                <span class="prob-home sw-@h"></span><span class="prob-draw sw-@d"></span><span class="prob-away sw-@a"></span>
+            </div>
+            <div class="prob-labels">
+                <span class="prob-home sx-0 sw-@h">@h%</span><span class="prob-draw sx-@h sw-@d">@d%</span><span class="prob-away sx-@(h + d) sw-@a">@a%</span>
+            </div>
+        </div>
+    }
+}
+@if (Model.Market is { } market)
+{
+    Bar(Model.Probs, "Model", "Model probability: the model's home, draw and away chances");
+    Bar(market, "Market fair", "Market fair probability: the average across bookmakers with their margin removed");
+    if (Model.Diff)
+    {
+        <div class="market-line" title="Model probability minus market fair probability, in percentage points. A difference is a disagreement with the market, not a betting edge or proof of value.">Difference (model − market) H <b>@gap[0]</b> · D <b>@gap[1]</b> · A <b>@gap[2]</b></div>
+    }
+}
+else
+{
+    Bar(Model.Probs, null, "");
+}

@@ -207,3 +207,22 @@ public class CupTests
         Assert.Equal([1, 2], Cups.Entrants(Cup(fx)));
     }
 }
+
+public class JsNumberTests
+{
+    // the browser's x.toFixed(n), which the pages' decimals follow
+    [Theory]
+    [InlineData(2.05, 1, "2.0")]
+    [InlineData(1.25, 1, "1.3")]
+    [InlineData(1.35, 1, "1.4")]
+    [InlineData(0.45, 1, "0.5")]
+    [InlineData(2.675, 2, "2.67")]
+    [InlineData(0.15, 1, "0.1")]
+    [InlineData(-1.25, 1, "-1.3")]
+    [InlineData(-0.04, 1, "-0.0")]
+    [InlineData(0, 2, "0.00")]
+    [InlineData(1093.94, 1, "1093.9")]
+    [InlineData(0.98141, 3, "0.981")]
+    [InlineData(12, 0, "12")]
+    public void Writes_decimals_as_the_browsers_toFixed_does(double x, int digits, string expected) => Assert.Equal(expected, Js.ToFixed(x, digits));
+}

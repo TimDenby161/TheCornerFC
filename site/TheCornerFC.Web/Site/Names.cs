@@ -10,7 +10,8 @@ public static class Names
         Dictionary<int, string> SHORT_NAMES, Dictionary<int, string> CLUB_SHORT, Dictionary<string, string> FLAG_CODES,
         string[] COUNTRY_FIRST, string[] REGIONS, int[] EURO_CUPS, int[] DOMESTIC_CUPS, string[] CONTINENTS,
         Dictionary<string, string> CLUB_ALIASES, Dictionary<int, string> LEAGUE_ALIASES, Dictionary<string, string> COUNTRY_ALIASES,
-        Comp[] PRIMARY_COMPS, Comp[] TABLE_COMPS, Dictionary<string, string[]> REGION_LISTS, int[] GROUP_ORDER);
+        Comp[] PRIMARY_COMPS, Comp[] TABLE_COMPS, Dictionary<string, string[]> REGION_LISTS, int[] GROUP_ORDER,
+        JsonElement[][] PITCH_SPOTS, Dictionary<string, string> GROUP_OF);
     public sealed record Comp(string Id, string Label, int[]? Ids);
 
     static readonly File Read = Load();
@@ -35,6 +36,11 @@ public static class Names
     public static IReadOnlyList<Comp> TableComps => Read.TABLE_COMPS;
     // the order competitions are listed in where several are shown together
     public static IReadOnlyList<int> GroupOrder => Read.GROUP_ORDER;
+    // a pitch of positions, attacking upwards: [position, x %, y %]
+    public static readonly IReadOnlyList<(string Role, double X, double Y)> PitchSpots =
+        Read.PITCH_SPOTS.Select(s => (s[0].GetString()!, s[1].GetDouble(), s[2].GetDouble())).ToList();
+    // the role group each position is rated in (as positions.py)
+    public static IReadOnlyDictionary<string, string> GroupOf => Read.GROUP_OF;
 
     static readonly Dictionary<string, string> RegionOfCountry =
         Read.REGION_LISTS.SelectMany(kv => kv.Value.Select(c => (c, kv.Key))).GroupBy(x => x.c).ToDictionary(g => g.Key, g => g.Last().Key);

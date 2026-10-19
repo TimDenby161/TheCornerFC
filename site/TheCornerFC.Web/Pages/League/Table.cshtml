@@ -34,7 +34,7 @@
                     <td class="lt-club"><a class="team-link" href="/club/@r.Team">@row.Name</a></td>
                     <td>@r.Played</td><td class="lt-wdl">@r.Win</td><td class="lt-wdl">@r.Draw</td><td class="lt-wdl">@r.Lose</td>
                     <td class="lt-wide">@r.Gf</td><td class="lt-wide">@r.Ga</td><td class="lt-gd">@(r.Gd > 0 ? "+" : "")@r.Gd</td><td><b>@r.Points</b></td>
-                    @if (Model.HasXg){<td title="@xgTip">@r.Xg90?.ToString("0.00")</td><td title="@xgTip">@r.Xga90?.ToString("0.00")</td>}
+                    @if (Model.HasXg){<td title="@xgTip">@(r.Xg90 is { } x9 ? Js.ToFixed(x9, 2) : "")</td><td title="@xgTip">@(r.Xga90 is { } xa9 ? Js.ToFixed(xa9, 2) : "")</td>}
                     <td class="lt-formcol">@if (!string.IsNullOrEmpty(r.Form)){<span class="lt-form">@foreach (var c in r.Form){<i class="@(c == 'W' ? "res-w" : c == 'D' ? "res-d" : "res-l")">@c</i>}</span>}</td>
                     <td class="lt-elo">@(row.Current is { } cur ? Js.RoundInt(cur).ToString() : "")</td></tr>
             }

@@ -1,0 +1,17 @@
+@model TheCornerFC.Web.Site.NextMatch
+@{
+    // A club's next match (NextMatchCard.svelte): when, who, the model's view, the predicted XI's
+    // rating, and a line on availability where there is one
+    var n = Model;
+    var visitor = Visitor.Of(Context);
+    var proj = n.Proj ?? (n.Gf is { } gf && n.Ga is { } ga ? $"{Js.ToFixed(gf, 1)}–{Js.ToFixed(ga, 1)}" : "");
+}
+<div class="next-card">
+    <div class="next-top"><span class="next-label">@(n.Live ? "Live now" : "Next match")</span>
+        <span>@Markup.LocalTime(n.Kickoff, "day", visitor) · @Markup.LocalTime(n.Kickoff, "time", visitor)</span></div>
+    <div class="next-opp">@Markup.Crest(n.Opp, n.OppName, href: $"/club/{n.Opp}")
+        <span class="next-opp-name">@(n.Home ? "v" : "@") <a class="team-link" href="/club/@n.Opp">@n.OppName</a></span></div>
+    <div class="next-meta"><span>@n.Comp</span>@if (n.Win is { } win){<span>@win% win</span>}@if (proj != ""){<span>projected @proj</span>}
+        @if (n.Xi is { } xi){<span>XI rating @Js.RoundInt(xi)</span>}</div>
+    @if (n.Missing is > 0){<div class="next-status warn">@n.Missing missing</div>}
+</div>

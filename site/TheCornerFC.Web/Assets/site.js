@@ -63,6 +63,12 @@
 		if (r.left < box.left || r.right > box.right) nav.scrollLeft += r.left - box.left - (box.width - r.width) / 2;
 	});
 
+	// A pitch in a club's own kit colours: they can't be classes, so they are set here
+	document.querySelectorAll('.pitch[data-kit]').forEach((p) => {
+		const [shirt, number] = p.dataset.kit.split(',');
+		if (/^[0-9a-f]{6}$/i.test(shirt) && /^[0-9a-f]{6}$/i.test(number)) { p.style.setProperty('--kit', `#${shirt}`); p.style.setProperty('--kit2', `#${number}`); }
+	});
+
 	// A link shared from the old site (thecornerfc.com/#/club/42/matches) names its page after a #,
 	// which the server never sees: go to the same address here.
 	const old = /^#\/(clubs|players|leagues|nations|matches|stats|lineups|fpl|my-fpl-team|efl-fantasy|(?:club|player|league|country|nation)\/[^?#]+)(\?[^#]*)?$/.exec(location.hash);

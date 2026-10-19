@@ -38,7 +38,7 @@ public sealed class MatchesModel(Database db) : LeaguePage(db)
                 return new Row(f.Id, DateTimeOffset.Parse(f.Kickoff), Leagues.Live.Contains(f.Status), Leagues.OffText(f.Status),
                     new(f.Home, L.Club(f.Home), over && f.Hg > f.Ag), new(f.Away, L.Club(f.Away), over && f.Ag > f.Hg),
                     done ? $"{f.Hg}–{f.Ag}" : null, done && f.PenH is not null ? $"{f.PenH}–{f.PenA} pens" : null,
-                    !done && f.PHome is not null && f.HomeXg is { } hx && f.AwayXg is { } ax ? $"{hx:0.0}–{ax:0.0}" : null,
+                    !done && f.PHome is not null && f.HomeXg is { } hx && f.AwayXg is { } ax ? $"{Js.ToFixed(hx, 1)}–{Js.ToFixed(ax, 1)}" : null,
                     !done && f.PHome is { } ph && f.PDraw is { } pd && f.PAway is { } pa ? $"{Js.RoundInt(ph * 100)}% · {Js.RoundInt(pd * 100)}% · {Js.RoundInt(pa * 100)}%" : null);
             }).ToList())).ToList();
         return Task.FromResult<IActionResult?>(null);

@@ -1,0 +1,54 @@
+@page "/club/{id}/xi"
+@model TheCornerFC.Web.Pages.ClubTabs.XiModel
+@{
+    ViewData["Title"] = $"{Model.C.Name} predicted XI · The Corner FC";
+    ViewData["Description"] = $"The line-up the model expects {Model.C.Name} to start in their next match.";
+}
+@functions {
+    void Tile(string label, double? v, string tip)
+    {
+        if (v is { } x)
+        {
+            <div class="sq-tile" title="@tip"><span class="sq-lbl">@label</span><span class="rel-chip rel-@ClubPage.RankTier(x)">@Js.RoundInt(x)</span></div>
+        }
+    }
+    async Task Pitch()
+    {
+        <div class="club-section pp-section">
+            @await Html.PartialAsync("_XiPitch", new TheCornerFC.Web.Site.Lineups.Pitch(Model.Spots!, Model.Kit))
+            @if (Model.Average is { } avg){<div class="page-note u-center">Average rank @avg</div>}
+        </div>
+    }
+}
+@if (Model.Paywall)
+{
+    <div class="empty-state">Predicted line-ups are for subscribers. <partial name="_SubscriberLink" /></div>
+}
+else if (Model.Spots is null)
+{
+    <div class="empty-state">No predicted XI for this club (it needs player data from its recent matches).</div>
+}
+else if (Model.Next is not null || Model.Squad is not null)
+{
+    <div class="ov-top">
+        <div class="ov-side">
+            @if (Model.Next is not null){@await Html.PartialAsync("_NextMatchCard", Model.Next)}
+            @if (Model.Squad is { } sq)
+            {
+                <div class="next-card squad-card">
+                    <div class="next-top"><span class="next-label">Squad</span></div>
+                    <div class="sq-tiles">
+                        @{ Tile("Attack", sq.Attack, "Expected players' ratings, weighted by expected minutes and how much each position attacks"); }
+                        @{ Tile("Defence", sq.Defence, "Expected players' ratings, weighted by expected minutes and how much each position defends"); }
+                        @{ Tile("Strength", sq.Overall, "Every expected player's rating, weighted by expected minutes (bench minutes included)"); }
+                    </div>
+                </div>
+            }
+        </div>
+        @{ await Pitch(); }
+    </div>
+}
+else
+{
+    await Pitch();
+}

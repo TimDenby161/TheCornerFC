@@ -2,6 +2,7 @@
 // two-handled sliders, the position pitch, and the club and nationality picks.
 import type { Country } from './clubTable.ts';
 import { leagueName, teamName, type Site } from './site.ts';
+import names from './names.json';
 
 // ---- A range as the address has it: "20-25", "-25" (up to), "20-" (from); null = that end open
 export type Range = [number | null, number | null];
@@ -55,21 +56,12 @@ export function rangeLabel(k: RangeKey, stops: number[], a: number, b: number): 
 // for the database: whole numbers, an open end as null
 export const rangeParam = ([lo, hi]: Range) => [lo == null ? null : Math.ceil(lo), hi == null ? null : Math.floor(hi)];
 
-// ---- Position: a pitch of positions, attacking upwards. [position, x %, y %]
-export const PITCH_SPOTS: [string, number, number][] = [
-	['ST', 50, 12],
-	['LW', 18, 25], ['AM', 50, 27], ['RW', 82, 25],
-	['LM', 18, 41], ['CM', 50, 43], ['RM', 82, 41],
-	['LWB', 18, 57], ['DM', 50, 57], ['RWB', 82, 57],
-	['LB', 18, 72], ['CB', 50, 73], ['RB', 82, 72],
-	['GK', 50, 89]
-];
+// ---- Position: a pitch of positions, attacking upwards. [position, x %, y %] (names.json, which
+// the C# site reads too)
+export const PITCH_SPOTS: [string, number, number][] = names.PITCH_SPOTS as [string, number, number][];
 export const isPosition = (p: string) => PITCH_SPOTS.some(([s]) => s === p);
 // the role group each position is rated in (as positions.py)
-export const GROUP_OF: Record<string, string> = {
-	GK: 'GK', CB: 'CB', LB: 'FB', RB: 'FB', LWB: 'WB', RWB: 'WB', DM: 'DM', CM: 'CM', LM: 'W', RM: 'W',
-	AM: 'AM', LW: 'W', RW: 'W', ST: 'ST', G: 'GK', D: 'CB', M: 'CM', F: 'ST'
-};
+export const GROUP_OF: Record<string, string> = names.GROUP_OF;
 export const GROUP_SINGLE: Record<string, string> = {
 	GK: 'goalkeeper', CB: 'centre-back', FB: 'full-back', WB: 'wing-back', DM: 'defensive mid', CM: 'central mid',
 	AM: 'attacking mid', W: 'winger', ST: 'striker'

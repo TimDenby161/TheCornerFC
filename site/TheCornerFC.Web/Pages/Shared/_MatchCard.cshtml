@@ -1,0 +1,41 @@
+@model TheCornerFC.Web.Site.MatchCardModel
+@{
+    // A match (MatchCard.svelte): when, both sides and the score (or the projected one), the
+    // model's chances beside the market's, and the key reasons. For a finished match, how the
+    // prediction did. Its line-ups and model detail open with the match card's script (step 6 of
+    // the rebuild); until then their buttons are drawn and do nothing.
+    var m = Model.M;
+    var visitor = Visitor.Of(Context);
+    var canLineups = Model.Lineups && m.CanLineups;
+    var kickoff = DateTimeOffset.Parse(m.Kickoff);
+    var round = m.Round is null ? "" : $" · {(Model.When == "day" ? Cards.RoundName(m.Round) : System.Text.RegularExpressions.Regex.Replace(m.Round, "^Regular Season - ", "Round "))}";
+    var meta = new HtmlContentBuilder();
+    if (Model.When == "day") meta.AppendHtml(Markup.LocalTime(kickoff, "day", visitor)).Append(" · ");
+    meta.AppendHtml(Markup.LocalTime(kickoff, "time", visitor)).Append(round);
+    var right = new HtmlContentBuilder();
+    if (m.Rating is { } rt) right.AppendHtml($"<button type=\"button\" class=\"rating-badge badge-{rt.Score}\" title=\"{rt.Score}/5 {rt.Label}\" aria-expanded=\"false\">{rt.Score}/5</button>");
+    if (m.Tag != "") right.AppendHtml($"<span class=\"status-tag{(m.Live ? " live" : "")}\">{System.Net.WebUtility.HtmlEncode(m.Tag)}</span>");
+}
+<div class="match-card @(m.Rating is { } r ? $"rated acc-{r.Score}" : "")@(canLineups ? " lineup-card" : "")" data-fixture="@m.Id">
+    @await Html.PartialAsync("_MatchHead", new MatchHeadModel(m.Home, m.Away, m.Status, m.Hg, m.Ag, m.PenH, m.PenA, m.HomeXg, m.AwayXg, m.Likely, m.Source, meta, right))
+    @if (m.Probs is not null){@await Html.PartialAsync("_ProbBars", new ProbBarsModel(m.Probs, m.Market))}
+    @if (m.Lock is not null)
+    {
+        <div class="market-line paid-lock">@(m.Lock == "chances" ? "The model's chances for matches more than 7 days ahead" : $"Projected score, key reasons{(m.Intl ? "" : ", predicted line-ups")} and model detail") are for subscribers. <partial name="_SubscriberLink" /></div>
+    }
+    @if (m.Reasons.Count > 0)
+    {
+        <div class="why">
+            <div class="why-hd" title="The model inputs that moved this projection most, in goals of expected margin (or total goals). They describe how the model arrived at its numbers, not what will decide the match.">Key reasons</div>
+            <ul class="why-list">@foreach (var x in m.Reasons){<li><span>@x.Text</span><b>@x.Size</b></li>}</ul>
+        </div>
+    }
+    @if (canLineups || m.CanDetail)
+    {
+        <div class="card-toggles">
+            @if (canLineups){<button type="button" class="lineup-toggle" aria-expanded="false">@(m.Finished ? "Line-ups" : "Predicted line-ups")</button>}
+            @if (m.CanDetail){<button type="button" class="why-toggle" aria-expanded="false">@(m.Finished ? "Pre-match model detail" : "Model detail")</button>}
+        </div>
+    }
+    @Model.Extra
+</div>

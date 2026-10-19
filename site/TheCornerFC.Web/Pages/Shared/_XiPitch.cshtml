@@ -1,0 +1,27 @@
+@model TheCornerFC.Web.Site.Lineups.Pitch
+@{
+    // An eleven on a pitch (XiPitch.svelte): keeper at the top, attacking down. Each spot is the
+    // player's rank over his name, then his chance of starting and expected minutes (a predicted
+    // XI) or his position (the XI that started). A started XI marked against the prediction is
+    // ringed green where he was predicted and red where not, with the model's pick instead under a miss.
+    // start chance colour: 80%+ green, 60-80 yellow, 40-60 orange, under 40 red
+    static int StartTier(int c) => c >= 80 ? 4 : c >= 60 ? 3 : c >= 40 ? 2 : 1;
+    static string Cls(TheCornerFC.Web.Site.Lineups.Spot s) => s.Predicted is { } p ? $"xi-mark {(p ? "xi-hit" : "xi-miss")}" : $"sq-{(s.Chance is { } c ? StartTier(c) : ClubPage.RankTier(s.Rank ?? 0))}";
+}
+@Markup.PitchStart("pp-pitch", Model.Kit)
+    @foreach (var s in Model.Spots)
+    {
+        <a class="pp-spot xi-spot @Cls(s) sx-@s.X sy-@s.Y" href="/player/@s.Id" title="@s.Tip">
+            @if (Model.Ranks){<span class="pp-rank rk-@ClubPage.RankTier(s.Rank ?? 0)">@(s.Rank is { } r ? Js.RoundInt(r).ToString() : "–")</span>}<span class="pp-name">@s.Name</span>
+            @if (s.Chance is not null || s.Mins is not null)
+            {
+                <span class="pp-meta">@if (s.Chance is { } c){<span class="sc-@StartTier(c)">@c%</span>}@(s.Chance is not null && s.Mins is not null ? " · " : "")@(s.Mins is { } m ? $"{m}′" : "")</span>
+            }
+            else
+            {
+                <span class="pp-meta">@s.Label</span>
+            }
+            @if (s.Instead is { } ins){<span class="pp-instead"><span class="pp-instead-name">@ins.Name</span><span class="pp-instead-rank rk-@ClubPage.RankTier(ins.Rank ?? 0)">@(ins.Rank is { } ir ? Js.RoundInt(ir).ToString() : "–")</span></span>}
+        </a>
+    }
+@Markup.PitchEnd

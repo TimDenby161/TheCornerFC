@@ -37,8 +37,8 @@
                 @if (MethodologyModel.SampleNote(m.N, "matches") is { Length: > 0 } note) { <p class="warn">@note</p> }
                 <div class="stats">
                     <div class="stat"><span class="stat-v">@MethodologyModel.Pct(m.Accuracy)</span><span class="stat-l">Most likely result was right</span></div>
-                    <div class="stat"><span class="stat-v">@m.LogLoss.ToString("0.000")</span><span class="stat-l">Log loss (lower is better)</span></div>
-                    <div class="stat"><span class="stat-v">@m.Brier.ToString("0.000")</span><span class="stat-l">Brier score (lower is better)</span></div>
+                    <div class="stat"><span class="stat-v">@Js.ToFixed(m.LogLoss, 3)</span><span class="stat-l">Log loss (lower is better)</span></div>
+                    <div class="stat"><span class="stat-v">@Js.ToFixed(m.Brier, 3)</span><span class="stat-l">Brier score (lower is better)</span></div>
                     @if (m.ExactScore is { N: > 0 } exact)
                     {
                         <div class="stat"><span class="stat-v">@MethodologyModel.Pct(exact.Accuracy)</span><span class="stat-l">Exact score right</span></div>
@@ -71,7 +71,7 @@
                 <p>@MethodologyModel.Num(l.N) team line-ups predicted before the official team sheet was published. @Model.Period(l.Period)</p>
                 @if (MethodologyModel.SampleNote(l.N, "line-ups") is { Length: > 0 } note) { <p class="warn">@note</p> }
                 <div class="stats">
-                    <div class="stat"><span class="stat-v">@l.CorrectStartersMean.ToString("0.0") of 11</span><span class="stat-l">Starters named correctly, on average</span></div>
+                    <div class="stat"><span class="stat-v">@Js.ToFixed(l.CorrectStartersMean, 1) of 11</span><span class="stat-l">Starters named correctly, on average</span></div>
                     @if (l.RoleAccuracy is { N: > 0 } role)
                     {
                         <div class="stat"><span class="stat-v">@MethodologyModel.Pct(role.Accuracy)</span><span class="stat-l">Correct starters in the right position</span></div>

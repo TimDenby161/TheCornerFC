@@ -95,6 +95,22 @@ public static partial class Markup
     public static string Query(IEnumerable<KeyValuePair<string, string>> q) =>
         string.Join('&', q.Select(kv => $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}".Replace("%20", "+")));
 
+    // A person's chip: initials on the plain chip colour (no photos: they belong to photographers)
+    public static IHtmlContent PersonChip(string name, string size = "player-photo") =>
+        new HtmlString($"<span class=\"{size} person-chip\" aria-hidden=\"true\"><b>{E(ClubPage.PersonInitials(name))}</b></span>");
+
+    // A pitch (Pitch.svelte), in the club's home kit colours where its file has them (stripes in the
+    // shirt colour, lines in the number colour); otherwise the plain dark pitch. The colours are the
+    // club's own, so they can't be classes: the page's script sets them from data-kit. Close it
+    // with PitchEnd.
+    public static IHtmlContent PitchStart(string kind, string[]? kit) => new HtmlString(
+        $"<div class=\"pitch {kind}{(kit is not null ? " kit" : "")}\"{(kit is not null ? $" data-kit=\"{E(kit[0])},{E(kit[1])}\"" : "")}>" +
+        "<svg viewBox=\"0 0 68 88\" preserveAspectRatio=\"none\" aria-hidden=\"true\" fill=\"none\" stroke=\"rgba(255,255,255,0.16)\" stroke-width=\"0.6\">" +
+        "<rect x=\"3\" y=\"3\" width=\"62\" height=\"82\" rx=\"1\" /><line x1=\"3\" y1=\"44\" x2=\"65\" y2=\"44\" />" +
+        "<circle cx=\"34\" cy=\"44\" r=\"7\" /><rect x=\"17\" y=\"3\" width=\"34\" height=\"12\" /><rect x=\"26\" y=\"3\" width=\"16\" height=\"5\" />" +
+        "<rect x=\"17\" y=\"73\" width=\"34\" height=\"12\" /><rect x=\"26\" y=\"80\" width=\"16\" height=\"5\" /></svg>");
+    public static readonly IHtmlContent PitchEnd = new HtmlString("</div>");
+
     [GeneratedRegex("[.'’]")] private static partial Regex CrestDrop();
     [GeneratedRegex(@"[\s-]+")] private static partial Regex CrestWordSplit();
 }

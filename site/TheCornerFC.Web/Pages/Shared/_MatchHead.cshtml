@@ -1,0 +1,48 @@
+@model TheCornerFC.Web.Site.MatchHeadModel
+@{
+    // A match card's top (MatchHead.svelte): when (Meta), both clubs with chip and rating, and the
+    // score, or the projected goals and likely score before it is played. (The expected squads'
+    // badges come with the match card's script, step 6 of the rebuild.)
+    var finished = ClubData.Finished.Contains(Model.Status) && Model.Hg is not null;
+    var played = finished || (ClubData.Live.Contains(Model.Status) && Model.Hg is not null);
+    var rankTitle = finished ? "Strength going into this match (Elo)" : "Current Strength (Elo)";
+}
+@functions {
+    void Rank(double? v, string title) { if (v is { } x && double.IsFinite(x)) { <span class="club-score" title="@title">@Js.Num(Js.RoundInt(x))</span> } }
+    void SideOf(TheCornerFC.Web.Site.Cards.Side s)
+    {
+        if (s.Nation) { @Markup.Crest(s.Id, s.Name)<a class="team-link" href="@s.Href">@s.Name</a> }
+        else { @Markup.Crest(s.Id, s.Name, href: Menu.PageHref("club", s.Id.ToString()))<a class="team-link" href="@Menu.PageHref("club", s.Id.ToString())">@s.Name</a> }
+    }
+}
+<div class="match-card-top">
+    <span class="match-meta">@Model.Meta</span>
+    <span class="card-top-right">@Model.Right</span>
+</div>
+<div class="match-teams">
+    <div class="match-team">
+        <div class="mt-name">@{ SideOf(Model.Home); }</div>
+        <div class="score-badges">@{ Rank(Model.Home.Rank, rankTitle); }</div>
+    </div>
+    <div class="match-score">
+        @if (played)
+        {
+            <div class="score-row"><span class="final-box">@Model.Hg</span><span class="vs-text">–</span><span class="final-box">@Model.Ag</span></div>
+            @if (Model.PenH is not null){<div class="score-sub">pens @Model.PenH–@Model.PenA</div>}
+            @if (Model.HomeXg is { } hx && Model.AwayXg is { } ax){<div class="score-sub" title="@(Model.Source == "backfill" ? "Projected score, reconstructed afterwards from pre-match data" : "Projected score, before kickoff")">@Js.ToFixed(hx, 1)–@Js.ToFixed(ax, 1)</div>}
+        }
+        else if (Model.HomeXg is null || Model.AwayXg is null)
+        {
+            <div class="score-row"><span class="vs-text">vs</span></div>
+        }
+        else
+        {
+            <div class="score-row" title="Projected goals (the model's expected goals)"><span class="proj-box">@Js.ToFixed(Model.HomeXg.Value, 1)</span><span class="vs-text">xG</span><span class="proj-box">@Js.ToFixed(Model.AwayXg.Value, 1)</span></div>
+            @if (Model.Likely is not null){<div class="score-sub" title="The single most likely score; most matches end some other way">Likely @Model.Likely</div>}
+        }
+    </div>
+    <div class="match-team away">
+        <div class="mt-name">@{ SideOf(Model.Away); }</div>
+        <div class="score-badges">@{ Rank(Model.Away.Rank, rankTitle); }</div>
+    </div>
+</div>

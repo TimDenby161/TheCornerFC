@@ -1,0 +1,64 @@
+@page "/club/{id}/matches"
+@model TheCornerFC.Web.Pages.ClubTabs.MatchesModel
+@{
+    ViewData["Title"] = $"{Model.C.Name} {(Model.View == "results" ? "results" : "fixtures")} · The Corner FC";
+    ViewData["Description"] = $"{Model.C.Name}'s upcoming fixtures with the model's win chance, and every result since 2020 with the rating after it.";
+    string Move(double v) => $"{(v > 0 ? "+" : "")}{Js.ToFixed(v, 1)}";
+    string Lines(double?[] l) => string.Join(" · ", new[] { "GK", "DEF", "MID", "FWD" }.Select((k, i) => $"{k} {(i < l.Length && l[i] is { } v ? Js.RoundInt(v).ToString() : "–")}"));
+}
+@if (Model.FixtureCount == 0 && Model.ResultCount == 0)
+{
+    <div class="empty-state">No matches for this club yet.</div>
+}
+else
+{
+    <div class="stats-controls u-mt0">
+        <form class="seg" method="get">
+            <button type="submit" aria-pressed="@(Model.View == "fixtures" ? "true" : "false")">Fixtures@(Model.FixtureCount > 0 ? $" ({Model.FixtureCount})" : "")</button>
+            <button type="submit" name="view" value="results" aria-pressed="@(Model.View == "results" ? "true" : "false")">Results@(Model.ResultCount > 0 ? $" ({Model.ResultCount})" : "")</button>
+        </form>
+    </div>
+    if (Model.View == "fixtures")
+    {
+        if (Model.Fixtures.Count > 0)
+        {
+            <div class="card-list">
+                @foreach (var f in Model.Fixtures)
+                {
+                    var extra = new HtmlString($"<div class=\"club-card-extra\"><span>{System.Net.WebUtility.HtmlEncode(f.Comp)}</span>{(f.Win is { } w ? $"<span><b>{w}%</b> win</span>" : "")}</div>");
+                    @await Html.PartialAsync("_MatchCard", new MatchCardModel(f.Card, "day", false, extra))
+                }
+            </div>
+            <div class="page-note">Projected score and win chance from the model.</div>
+        }
+        else
+        {
+            <div class="empty-state">No upcoming fixtures for this club.</div>
+        }
+    }
+    else if (Model.Results.Count > 0)
+    {
+        <div class="card-list" id="club-results">
+            @foreach (var r in Model.Results)
+            {
+                <div class="match-card club-res-@r.Res">
+                    @await Html.PartialAsync("_MatchHead", new MatchHeadModel(r.Home, r.Away, "FT", r.Hg, r.Ag, null, null, r.HomeXg, r.AwayXg, null, null, new HtmlString(System.Net.WebUtility.HtmlEncode(r.Meta))))
+                    @if (r.Lines is not null){<div class="market-line" title="Average player rank (0-100) by line">Starting XI @Lines(r.Lines)</div>}
+                    <div class="club-card-extra">
+                        <span title="@(r.Attack is { } a && r.Defence is { } d ? $"Attack {Js.RoundInt(a)} · Defence {Js.RoundInt(d)} after the match" : null)">Elo <b>@Js.ToFixed(r.Rank, 1)</b></span>
+                        <span class="rank-move">@if (r.Move is { } mv){<span class="@(mv > 0 ? "form-up" : mv < 0 ? "form-down" : "")">@Move(mv)</span>}</span>
+                    </div>
+                </div>
+            }
+        </div>
+        @if (!Model.ShowAll && Model.ResultCount > Model.Results.Count)
+        {
+            <a class="show-all" href="?view=results&amp;all=1">Show all @Js.Num(Model.ResultCount)</a>
+        }
+        <div class="page-note">Elo: the club's Elo rating after the match; the change is how far that match moved it.</div>
+    }
+    else
+    {
+        <div class="empty-state">No results for this club yet.</div>
+    }
+}

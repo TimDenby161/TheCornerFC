@@ -32,7 +32,7 @@ public sealed class MethodologyModel(Database db, TimeProvider clock) : PageMode
     // "18 Oct 2026, 14:05" and "18 Oct 2026", in the visitor's time zone as the server has it
     public string When(DateTimeOffset at) => There(at).ToString("d MMM yyyy, HH:mm", British);
     public string Day(DateTimeOffset at) => There(at).ToString("d MMM yyyy", British);
-    public static string Pct(double x) => (x * 100).ToString("0.0", British) + "%";
+    public static string Pct(double x) => Js.ToFixed(x * 100, 1) + "%";
     public static string Num(int x) => x.ToString("N0", British);
     public string Period(Span? p) => p is null ? "" : $"Kick-offs from {Day(p.From)} to {Day(p.To)}.";
 

@@ -1,0 +1,108 @@
+@page "/club/{id}"
+@model TheCornerFC.Web.Pages.ClubTabs.IndexModel
+@{
+    ViewData["Title"] = $"{Model.C.Name} · The Corner FC";
+    ViewData["Description"] = $"{Model.C.Name}: strength rating, form, league position, next fixtures with the model's chances, and recent results.";
+    var visitor = TheCornerFC.Web.Site.Visitor.Of(HttpContext);
+    string Move(double v) => $"{(v > 0 ? "+" : "")}{Js.ToFixed(v, 1)}";
+}
+@functions {
+    async Task SidePanel()
+    {
+        var visitor = TheCornerFC.Web.Site.Visitor.Of(HttpContext);
+        if (Model.Next is not null) { @await Html.PartialAsync("_NextMatchCard", Model.Next) }
+        var inj = Model.InjuryList;
+        <div class="next-card inj-card">
+            <div class="next-top"><span class="next-label">Injured &amp; Suspended</span>
+                @if (inj?.Players.Count > 0){<span>@if (inj.Upcoming){<text>Next match</text>}else{<text>Latest list · </text>@if (inj.Latest is not null){@inj.Latest<text>, </text>}@Markup.LocalTime(inj.Kickoff, "short", visitor)}</span>}</div>
+            @if (inj?.Players.Count > 0)
+            {
+                foreach (var p in inj.Players)
+                {
+                    <div class="inj-row">
+                        <div class="inj-top"><span class="inj-name" title="@p.Name: missed his club's last @p.Missed match@(p.Missed == 1 ? "" : "es")"><span class="inj-surname"><a class="player-link" href="@Menu.PageHref("player", p.Id.ToString())">@ClubPage.ShortName(p.Name)</a></span>@if (p.Missed > 0){<span class="inj-missed">&nbsp;– @p.Missed</span>}</span>
+                            @if (p.Rank is { } rk){<span class="rel-chip rel-@ClubPage.RankTier(rk)">@Js.RoundInt(rk)</span>}else{<span class="rel-chip rel-none" title="No rating shown">–</span>}</div>
+                        @if (p.Note == "doubt"){<span class="inj-reason doubt">Doubtful</span>}else if (p.Note == "susp"){<span class="inj-reason susp">@(p.Ban is not null ? $"Suspended · {p.Ban}" : "Suspended")</span>}
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="next-meta"><span>@(inj is not null ? "No one listed" : "No injury list for this club")</span></div>
+            }
+        </div>
+    }
+    void PitchPanel()
+    {
+        if (Model.Boxes is null) return;
+        <div class="club-section pp-section">
+            @Markup.PitchStart("dp-pitch", Model.Kit)
+                @foreach (var b in Model.Boxes)
+                {
+                    if (b.Rows.Count > 0)
+                    {
+                        <div class="dp-spot gr-@b.Row gc-@b.Col">
+                            <span class="dp-pos" title="@(b.N > 0 ? $"{b.N} usually start{(b.N == 1 ? "s" : "")} here this season" : null)">@b.Label@if (b.N > 0){<span class="dp-usual"> – @b.N</span>}<span class="dp-total" title="Expected minutes in this position, all its players">@(b.Total)′</span></span>
+                            @foreach (var r in b.Rows)
+                            {
+                                <a class="dp-row" href="/player/@r.Id" title="@r.Tip">
+                                    <span class="dp-name">@r.Name</span><span class="dp-pct">@(r.Pct is { } pc ? $"{pc}%" : "")</span>
+                                    <span class="dp-rank t@(ClubPage.RankTier(r.Rank))">@r.Rank</span><span class="dp-xmin@(r.XMin == 0 ? " zero" : "")">@(r.XMin)′</span></a>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="dp-spot empty gr-@b.Row gc-@b.Col"><span class="dp-pos">@b.Label@if (b.N > 0){<span class="dp-usual"> – @b.N</span>}</span></div>
+                    }
+                }
+            @Markup.PitchEnd
+        </div>
+    }
+}
+<!-- next match and availability beside the squad, then the fixtures after it and recent results -->
+@if (Model.Boxes is not null){<div class="ov-top"><div class="ov-side">@{ await SidePanel(); }</div>@{ PitchPanel(); }</div>}else{ await SidePanel(); }
+
+@if (Model.FixtureRows.Count > 0 || Model.Results.Count > 0)
+{
+    <div class="ov-row">
+        @if (Model.FixtureRows.Count > 0)
+        {
+            <div class="next-card form-card">
+                <div class="next-top"><span class="next-label">Fixtures</span></div>
+                <div class="next5-row next5-hdr"><span></span><span></span><span></span><span></span><span title="Projected goals">Goals</span><span title="Clean sheet chance">CS</span><span title="Win chance">Win</span></div>
+                @foreach (var f in Model.FixtureRows)
+                {
+                    <div class="next5-row" title="@(f.S.Home ? "v" : "@") @f.S.OppName · @f.CompFull">
+                        <span class="next5-date">@Markup.LocalTime(f.Kickoff, "short", visitor)</span>
+                        @Markup.Crest(f.S.Opp, f.S.OppName, href: $"/club/{f.S.Opp}", label: f.S.OppName)
+                        <span class="form-ha">@(f.S.Home ? "H" : "A")</span>
+                        @Markup.Crest(f.League, f.Comp, size: "next5-comp", league: true, href: Menu.PageHref("league", f.League.ToString()), label: f.Comp)
+                        <span class="next5-num">@(f.S.Gf is { } gf ? Js.ToFixed(gf, 1) : "")</span>
+                        <span class="next5-num">@(f.Cs is { } cs ? $"{cs}%" : "")</span>
+                        <span class="next5-num strong">@(f.S.Win is { } w ? $"{w}%" : "")</span>
+                    </div>
+                }
+            </div>
+        }
+        @if (Model.Results.Count > 0)
+        {
+            <div class="next-card form-card">
+                <div class="next-top"><span class="next-label">Recent results</span></div>
+                <div class="form-row form-hdr"><span></span><span></span><span></span><span></span><span>xG</span><span title="How far each result moved Current Strength">Elo ±</span></div>
+                @foreach (var r in Model.Results)
+                {
+                    <div class="form-row" title="@r.Title">
+                        <span class="rel-chip rel-@(r.Gf > r.Ga ? 4 : r.Gf == r.Ga ? 3 : 1)">@r.Gf–@r.Ga</span>
+                        @Markup.Crest(r.Opp, r.OppName, href: $"/club/{r.Opp}", label: r.OppName)
+                        <span class="form-ha">@r.Where</span>
+                        @Markup.Crest(r.League, r.Comp, size: "next5-comp", league: true, href: Menu.PageHref("league", r.League.ToString()), label: r.Comp)
+                        <span class="form-xg@(r.Est ? " est" : "")" title="@(r.Est ? "Expected goals estimated from shots: for – against" : "Expected goals: for – against")">@(r.Xgf is { } xf && r.Xga is { } xa ? $"{(r.Est ? "≈" : "")}{Js.ToFixed(xf, 1)}–{Js.ToFixed(xa, 1)}" : "–")</span>
+                        <span class="form-move">@if (r.Move is { } mv){<span class="@(mv > 0 ? "form-up" : mv < 0 ? "form-down" : "")">@Move(mv)</span>}</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+<div class="page-note">Longer-term rating history is on the History tab.</div>
