@@ -1,0 +1,35 @@
+@page "/league/{id}/matches"
+@model TheCornerFC.Web.Pages.League.MatchesModel
+@{
+    ViewData["Title"] = $"{Model.Label} matches · The Corner FC";
+    ViewData["Description"] = $"{Model.Label} fixtures and results round by round, with the model's chances for the matches to come.";
+    var visitor = TheCornerFC.Web.Site.Visitor.Of(HttpContext);
+}
+@if (!Model.Any)
+{
+    <div class="empty-state">No fixtures yet this season.</div>
+}
+else
+{
+    <div class="round-nav">
+        @if (Model.Prev is not null){<a role="button" class="filter-chip" href="@Model.Address(Model.Prev)" aria-label="Previous round">‹</a>}else{<button type="button" class="filter-chip" disabled aria-label="Previous round">‹</button>}
+        <form class="contents" method="get"><select id="round-select" name="round" aria-label="Round" data-submit-on-change>
+            @foreach (var r in Model.Rounds){<option value="@r.Key" selected="@(r.Key == Model.Round ? "selected" : null)">@r.Label</option>}
+        </select></form>
+        @if (Model.Next is not null){<a role="button" class="filter-chip" href="@Model.Address(Model.Next)" aria-label="Next round">›</a>}else{<button type="button" class="filter-chip" disabled aria-label="Next round">›</button>}
+    </div>
+    foreach (var day in Model.Days)
+    {
+        <div class="modal-section">@day.Name</div>
+        foreach (var f in day.Matches)
+        {
+            <div class="lf-row">
+                <div class="lf-team lf-home@(f.Home.Won ? " lf-win" : "")"><a class="team-link" href="/club/@f.Home.Id">@f.Home.Name</a>@Markup.Crest(f.Home.Id, f.Home.Name, href: $"/club/{f.Home.Id}")</div>
+                <div class="lf-mid@(f.Live ? " lf-live" : "")">@if (f.Score is not null){<b>@f.Score</b>@if (f.Pens is not null){<span class="lf-note">@f.Pens</span>}}else if (f.Off is not null){<span class="lf-note">@f.Off</span>}else{@Markup.LocalTime(f.Kickoff, "time", visitor)}</div>
+                <div class="lf-team@(f.Away.Won ? " lf-win" : "")">@Markup.Crest(f.Away.Id, f.Away.Name, href: $"/club/{f.Away.Id}")<a class="team-link" href="/club/@f.Away.Id">@f.Away.Name</a></div>
+                @if (f.Xg is not null){<div class="lf-sub" title="The model's expected goals for each side">@f.Xg</div>}
+                @if (f.Probs is not null){<div class="lf-sub">@f.Probs</div>}
+            </div>
+        }
+    }
+}

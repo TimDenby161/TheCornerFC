@@ -64,4 +64,56 @@ public static class Leagues
         ["played"] = new(-1, r => r.Played), ["lt"] = new(-1, r => r.Lt), ["trend"] = new(-1, r => r.Trend),
         ["current"] = new(-1, r => r.Current), ["form"] = new(-1, r => r.Form),
     };
+
+    // The clubs in a competition that have a rating: this season's league members plus anyone in
+    // its table (or, with no table yet, its fixtures), strongest first by Baseline Strength
+    public static List<Club> LeagueRanked(List<Club> all, int lid, List<TableRow> table, List<Fixture> fixtures)
+    {
+        var ids = new List<int>();
+        void Add(int t) { if (!ids.Contains(t)) ids.Add(t); }
+        foreach (var r in table) Add(r.Team);
+        foreach (var c in LeagueClubs(all, lid)) Add(c.Team);
+        if (table.Count == 0) foreach (var f in fixtures) { Add(f.Home); Add(f.Away); }
+        var byTeam = all.ToDictionary(c => c.Team);
+        return ids.Where(byTeam.ContainsKey).Select(t => byTeam[t]).OrderByDescending(c => c.Lt).ToList();
+    }
+
+    // ---- A league table's zones (promotion, Europe, relegation ...), from the notes on its rows:
+    // each note's class, in the order the notes first appear
+    public static List<(string Text, string Cls)> Zones(IEnumerable<string?> descriptions)
+    {
+        var zones = new List<(string, string)>();
+        int next = 0, releg = 0;
+        foreach (var d in descriptions)
+        {
+            if (string.IsNullOrEmpty(d) || zones.Any(z => z.Item1 == d)) continue;
+            zones.Add((d, d.Contains("relegation", StringComparison.OrdinalIgnoreCase) ? (releg++ > 0 ? "zone-down2" : "zone-down") : $"zone-{Math.Min(next++, 4)}"));
+        }
+        return zones;
+    }
+    public static string ZoneOf(List<(string Text, string Cls)> zones, string? description) =>
+        description is null ? "" : zones.FirstOrDefault(z => z.Text == description).Cls ?? "";
+
+    // points from a form string, newest first ("WDL" = 4)
+    public static int? FormPoints(string? form) => string.IsNullOrEmpty(form) ? null : form.Sum(c => c switch { 'W' => 3, 'D' => 1, _ => 0 });
+
+    // "Round 6" for "Regular Season - 6"
+    public static string RoundLabel(string? r) => System.Text.RegularExpressions.Regex.Replace(r ?? "", @"^Regular Season - (\d+)$", "Round $1");
+
+    // ---- A league's own matches tab: its rounds in the order they are first played, and the one
+    // to open on (the round with the next fixture, else the last)
+    public static readonly HashSet<string> Finished = ["FT", "AET", "PEN", "AWD", "WO"];
+    public static readonly HashSet<string> Live = ["1H", "HT", "2H", "ET", "BT", "P", "LIVE", "INT", "SUSP"];
+    static readonly HashSet<string> Off = ["CANC", "PST", "ABD"];
+
+    public static (List<string> Rounds, string? Open) Rounds(List<Fixture> fixtures)
+    {
+        var rounds = fixtures.Select(f => f.Round ?? "").Distinct().ToList();
+        var next = fixtures.FirstOrDefault(f => !Finished.Contains(f.Status) && !Off.Contains(f.Status));
+        return (rounds, next is not null ? next.Round ?? "" : rounds.LastOrDefault());
+    }
+    public static string? OffText(string status) => status switch { "PST" => "Postponed", "CANC" => "Cancelled", "ABD" => "Abandoned", _ => null };
+
+    // a chance as the projected table shows it
+    public static string ChanceText(double p) => p <= 0 ? "–" : p < 0.005 ? "<1%" : p > 0.995 && p < 1 ? ">99%" : $"{Js.RoundInt(p * 100)}%";
 }

@@ -1,0 +1,44 @@
+@page "/league/{id}/table"
+@model TheCornerFC.Web.Pages.League.TableModel
+@{
+    ViewData["Title"] = $"{Model.Label} table · The Corner FC";
+    ViewData["Description"] = $"The {Model.Label} table this season, with each club's form and current strength rating.";
+    IHtmlContent Th(string key, string title, string inner, string cls = "") => Markup.SortTh(Request, key, Model.Sort, "rank", title, inner, cls);
+}
+@foreach (var g in Model.Groups)
+{
+    @if (Model.Several){<div class="modal-section">@g.Name</div>}
+    <div class="table-scroll"><table class="league-table">
+        <thead><tr>
+            @Th("rank", "Position", "#", "lt-pos")<th></th>
+            @Th("club", "Club name", "Club", "lt-club")
+            @Th("played", "Played", "P")
+            @Th("win", "Won", "W", "lt-wdl")@Th("draw", "Drawn", "D", "lt-wdl")@Th("lose", "Lost", "L", "lt-wdl")
+            @Th("gf", "Goals for", "GF", "lt-wide")@Th("ga", "Goals against", "GA", "lt-wide")
+            @Th("gd", "Goal difference", "GD", "lt-gd")@Th("points", "Points", "Pts")
+            @if (Model.HasXg)
+            {
+                @Th("xg90", "Expected goals per 90 minutes over the club's last five league games, estimated from its shots", "xG/90")
+                @Th("xga90", "Expected goals conceded per 90 minutes over the club's last five league games, estimated from the shots it faced", "xGC/90")
+            }
+            @Th("form", "Last five league games, newest first: green won, grey drawn, red lost. Sorts by points from them", "Form", "lt-formcol")
+            @Th("current", "Current Strength: the club's current Elo rating", "Current")
+        </tr></thead>
+        <tbody>
+            @foreach (var row in g.Rows)
+            {
+                var r = row.R;
+                var xgTip = r.XgGames > 0 ? $"Over the last {r.XgGames} league game{(r.XgGames == 1 ? "" : "s")} with shot counts" : null;
+                <tr><td class="lt-pos @row.Zone">@r.Rank</td>
+                    <td class="lt-badge">@Markup.Crest(r.Team, row.Name, href: $"/club/{r.Team}")</td>
+                    <td class="lt-club"><a class="team-link" href="/club/@r.Team">@row.Name</a></td>
+                    <td>@r.Played</td><td class="lt-wdl">@r.Win</td><td class="lt-wdl">@r.Draw</td><td class="lt-wdl">@r.Lose</td>
+                    <td class="lt-wide">@r.Gf</td><td class="lt-wide">@r.Ga</td><td class="lt-gd">@(r.Gd > 0 ? "+" : "")@r.Gd</td><td><b>@r.Points</b></td>
+                    @if (Model.HasXg){<td title="@xgTip">@r.Xg90?.ToString("0.00")</td><td title="@xgTip">@r.Xga90?.ToString("0.00")</td>}
+                    <td class="lt-formcol">@if (!string.IsNullOrEmpty(r.Form)){<span class="lt-form">@foreach (var c in r.Form){<i class="@(c == 'W' ? "res-w" : c == 'D' ? "res-d" : "res-l")">@c</i>}</span>}</td>
+                    <td class="lt-elo">@(row.Current is { } cur ? Js.RoundInt(cur).ToString() : "")</td></tr>
+            }
+        </tbody>
+    </table></div>
+}
+@if (Model.L.Zones.Count > 0){<div class="lt-legend">@foreach (var z in Model.L.Zones){<span><i class="@z.Cls"></i>@z.Text</span>}</div>}

@@ -5,6 +5,11 @@ using Microsoft.Extensions.WebEncoders;
 using TheCornerFC.Web.Data;
 using TheCornerFC.Web.Site;
 
+// Numbers and dates are written the British way whatever the server's own setting (1,234.5, not
+// 1.234,5): the pages say what the current site says
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Which copy of the site this server is, production or staging: from the app's settings, or the

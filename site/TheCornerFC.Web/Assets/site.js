@@ -51,6 +51,18 @@
 	// chose UK time.
 	if (!ukTime && mine && mine !== body.dataset.tz) { keepZone(mine); location.reload(); return; }
 
+	// A menu of choices that loads its choice as soon as it is picked (a league's rounds)
+	document.querySelectorAll('select[data-submit-on-change]').forEach((s) => s.addEventListener('change', () => s.form.requestSubmit()));
+
+	// A page's tabs (a club's, a league's): on a phone the row can run wider than the screen, so
+	// the tab that's open is brought into view
+	document.querySelectorAll('nav.page-tabs').forEach((nav) => {
+		const a = nav.querySelector('[aria-current="page"]');
+		if (!a) return;
+		const box = nav.getBoundingClientRect(), r = a.getBoundingClientRect();
+		if (r.left < box.left || r.right > box.right) nav.scrollLeft += r.left - box.left - (box.width - r.width) / 2;
+	});
+
 	// A link shared from the old site (thecornerfc.com/#/club/42/matches) names its page after a #,
 	// which the server never sees: go to the same address here.
 	const old = /^#\/(clubs|players|leagues|nations|matches|stats|lineups|fpl|my-fpl-team|efl-fantasy|(?:club|player|league|country|nation)\/[^?#]+)(\?[^#]*)?$/.exec(location.hash);

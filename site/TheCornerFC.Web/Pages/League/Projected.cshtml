@@ -1,0 +1,81 @@
+@page "/league/{id}/projected"
+@model TheCornerFC.Web.Pages.League.ProjectedModel
+@{
+    ViewData["Title"] = $"{Model.Label} projected table · The Corner FC";
+    ViewData["Description"] = $"Where the model expects each {Model.Label} club to finish, and on how many points.";
+}
+@functions {
+    void Legend()
+    {
+        if (Model.L.Zones.Count > 0)
+        {
+            <div class="lt-legend">@foreach (var z in Model.L.Zones){<span><i class="@z.Cls"></i>@z.Text</span>}</div>
+        }
+    }
+}
+@if (Model.Headline)
+{
+    if (Model.HeadlineGroups.Count == 0)
+    {
+        <div class="empty-state">The projected table and each club's finishing chances are for subscribers. <partial name="_SubscriberLink" /></div>
+    }
+    else
+    {
+        foreach (var g in Model.HeadlineGroups)
+        {
+            @if (Model.Several){<div class="modal-section">@g.Name</div>}
+            <div class="table-scroll"><table class="league-table">
+                <thead><tr><th class="lt-pos">#</th><th></th><th class="lt-club">Club</th>
+                    <th class="lt-wide" title="Matches left to play">Left</th><th title="Projected points: points so far plus the points the model expects from the matches left">Pts</th></tr></thead>
+                <tbody>
+                    @foreach (var x in g.Rows)
+                    {
+                        <tr><td class="lt-pos @x.Zone">@x.X.Place</td>
+                            <td class="lt-badge">@Markup.Crest(x.X.Team, x.Name, href: $"/club/{x.X.Team}")</td>
+                            <td class="lt-club"><a class="team-link" href="/club/@x.X.Team">@x.Name</a></td>
+                            <td class="lt-wide">@x.X.Left</td><td><b>@x.X.Points</b></td></tr>
+                    }
+                </tbody>
+            </table></div>
+        }
+        Legend();
+        <div class="page-note">Projected places and points. Projected wins, draws, losses and goal difference, and each club's chance of finishing in every place, are for subscribers. <partial name="_SubscriberLink" /></div>
+    }
+}
+else if (Model.Left == 0)
+{
+    <div class="empty-state">No upcoming matches to project.</div>
+}
+else
+{
+    foreach (var g in Model.Groups)
+    {
+        @if (Model.Several){<div class="modal-section">@g.Name</div>}
+        <div class="table-scroll"><table class="league-table">
+            <thead><tr><th class="lt-pos">#</th><th></th><th class="lt-club">Club</th>
+                <th class="lt-wide" title="Matches left to play">Left</th><th class="lt-wdl" title="Projected wins">W</th><th class="lt-wdl" title="Projected draws">D</th><th class="lt-wdl" title="Projected losses">L</th>
+                <th class="lt-gd" title="Projected goal difference">GD</th><th title="Projected points: points so far plus the average over the simulated seasons">Pts</th>
+                <th class="lt-chance" title="Chance of finishing top">1st</th>@foreach (var c in g.Cols){<th title="@c.Text"><i class="lt-zone @c.Cls"></i></th>}</tr></thead>
+            <tbody>
+                @for (var i = 0; i < g.Played.Count; i++)
+                {
+                    var x = g.Played[i];
+                    var name = Model.L.Club(x.Team);
+                    <tr><td class="lt-pos @(i < g.Zones.Count ? g.Zones[i] : "")">@(i + 1)</td>
+                        <td class="lt-badge">@Markup.Crest(x.Team, name, href: $"/club/{x.Team}")</td>
+                        <td class="lt-club"><a class="team-link" href="/club/@x.Team">@name</a></td>
+                        <td class="lt-wide">@x.Left</td><td class="lt-wdl">@Js.RoundInt(x.W)</td><td class="lt-wdl">@Js.RoundInt(x.D)</td><td class="lt-wdl">@Js.RoundInt(x.L)</td>
+                        <td class="lt-gd">@(x.Gd >= 0.5 ? "+" : "")@Js.RoundInt(x.Gd)</td><td><b>@Js.RoundInt(x.Pts)</b></td>
+                        <td class="lt-chance@(x.Pos[0] <= 0 ? " dim" : "")">@Leagues.ChanceText(x.Pos[0])</td>
+                        @foreach (var c in g.Cols)
+                        {
+                            var p = c.Places.Sum(place => place < x.Pos.Length ? x.Pos[place] : 0);
+                            <td class="@(p <= 0 ? "dim" : null)">@Leagues.ChanceText(p)</td>
+                        }</tr>
+                }
+            </tbody>
+        </table></div>
+    }
+    Legend();
+    <div class="page-note">The @Js.Num(Model.Left) scheduled matches left, played out @Js.Num(Projection.Sims) times from the model's predicted scores and home · draw · away chances, on top of the current table. Each simulated season also varies every club's true strength a little, since ratings are estimates and a club that is better or worse than rated is so all season. The figures are chances, not a forecast of one outcome. Level clubs are split by goal difference, then goals scored. Matches not yet scheduled (play-offs, split rounds) aren't included.</div>
+}

@@ -33,4 +33,16 @@ public static class Times
             _ => throw new ArgumentOutOfRangeException(nameof(show), show, null),
         };
     }
+
+    // the calendar day ("2026-10-10") an instant falls on there
+    public static string LocalDay(DateTimeOffset at, string tz) =>
+        TimeZoneInfo.ConvertTime(at, TimeZoneInfo.FindSystemTimeZoneById(tz)).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    static readonly string[] Weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], Months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    // "Sat 10 Oct" for a calendar day
+    public static string DayName(string day)
+    {
+        var d = DateTime.ParseExact(day, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return $"{Weekdays[(int)d.DayOfWeek]} {d.Day} {Months[d.Month - 1]}";
+    }
 }

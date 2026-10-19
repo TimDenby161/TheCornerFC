@@ -1,0 +1,37 @@
+@{
+    // The header every tab of a competition's page shares (the Svelte (app)/league/[id] layout)
+    Layout = "_Layout";
+    var m = (TheCornerFC.Web.Pages.League.LeaguePage)ViewContext.ViewData.Model!;
+    var b = $"/league/{m.L.Id}";
+}
+<section class="panel" data-tab="club" data-active="true">
+    <div id="club-body">
+        <div class="pl-hero">
+            @Markup.Crest(m.L.Id, m.Name, size: "club-logo-lg", league: true)
+            <div class="pl-hero-main">
+                <h2>@m.Name</h2>
+                <div class="pl-hero-club">@if (m.Flag is not null){<img class="flag" src="https://flagcdn.com/w40/@(m.Flag).png" alt="" loading="lazy" />}<span><a class="nat-link" href="@Menu.PageHref("country", m.CountryKey)">@m.Country</a></span></div>
+            </div>
+            @if (m.Avg is { } avg)
+            {
+                <div class="pl-hero-rank rel-@avg.Tier" title="Average Baseline Strength (long-term Elo) of the clubs playing in this league">
+                    <span class="val">@avg.Value</span><span class="lbl">Avg baseline</span></div>
+            }
+        </div>
+        @if (m.L.Lg is not null)
+        {
+            <nav class="page-tabs" aria-label="@m.Name's pages">
+                @foreach (var (key, label) in m.Tabs)
+                {
+                    <a href="@b/@key" aria-current="@(m.Tab == key ? "page" : null)">@label</a>
+                }
+            </nav>
+            <div id="league-tab">@RenderBody()</div>
+        }
+        else
+        {
+            <div class="empty-state">No data for this competition this season.</div>
+        }
+    </div>
+</section>
+@section Scripts { @RenderSection("Scripts", required: false) }

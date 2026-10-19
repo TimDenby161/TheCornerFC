@@ -1,0 +1,15 @@
+@page "/league/{id}/clubs"
+@model TheCornerFC.Web.Pages.League.ClubsModel
+@{
+    ViewData["Title"] = $"{Model.Label} strength ranking · The Corner FC";
+    ViewData["Description"] = $"The {Model.Label}'s clubs ranked by strength rating, beside where each sits in the table.";
+}
+@if (Model.Rows.Count > 0)
+{
+    @await Html.PartialAsync("_ClubRatingTable", (Model.Rows, Model.Sort, "lt", Model.L.Table.Count > 0))
+    <div class="page-note">Baseline: Baseline Strength, the long-term Elo rating. Current: Current Strength, the Elo rating now. Gap: Current minus Baseline. Last 6: the change in Elo over the club's last 6 matches.</div>
+}
+else
+{
+    <div class="empty-state">No ranked clubs.</div>
+}
