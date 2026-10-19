@@ -17,13 +17,12 @@ public sealed partial class NationsModel(Database db) : PageModel
     public List<Row> Rows { get; private set; } = [];
 
     public sealed record Row(string Name, string? Page, string? Flag, string? Confed, int Current, int Tier, int? Change, string Tip);
-    // what the Players view's filters know: here, the nationalities the site has players from
-    sealed record Facets(string[] Nats);
 
     public async Task OnGet()
     {
         var docTask = db.KeptDoc<NationsDoc>("nations", TimeSpan.FromMinutes(5));
-        var facetsTask = db.KeptAsk<Facets>("site_player_facets", new { }, TimeSpan.FromMinutes(5));
+        // (the Players page's filters' read, kept for both: here, the nationalities the site has players from)
+        var facetsTask = Players.Facets(db);
         await Task.WhenAll(docTask, facetsTask);
         var d = Doc = docTask.Result;
         var asked = Request.Query["sort"].ToString();

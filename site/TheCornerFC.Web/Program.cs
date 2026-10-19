@@ -64,6 +64,27 @@ app.MapGet("/sitemap.xml", async (HttpContext c, Database db) =>
     return Results.Text(Crawlers.Sitemap($"https://{env.Host}", doc.Clubs()), "application/xml; charset=utf-8");
 });
 
+// What the Players page's club and nationality boxes list, asked for when one is first opened
+app.MapGet("/players/options", async (HttpContext c, Database db) =>
+{
+    var b = await Players.Load(db, c.Request.Query);
+    c.Response.Headers.CacheControl = "public, max-age=300";
+    return Results.Json(Players.Who(b.Site, b.Facets, b.Countries), Database.Json);
+});
+// A player's clubs season by season, for the tip over a season's rank in the Players table: asked
+// for on the first hover over his row
+app.MapGet("/players/seasons", async (HttpContext c, Database db) =>
+{
+    var id = c.Request.Query["id"].ToString();
+    if (id.Length is 0 or > 9 || !id.All(char.IsAsciiDigit)) return Results.BadRequest();
+    var token = Visitor.Of(c).Token;
+    var siteTask = db.KeptDoc<SiteDoc>("site");
+    var docTask = db.AskAs<PlayerDoc?>(token, "site_player_page", new { p_id = int.Parse(id) });
+    try { await Task.WhenAll(siteTask, docTask); } catch (Exception) when (siteTask.IsCompletedSuccessfully) { } // (no file: no tip)
+    if (token is null) c.Response.Headers.CacheControl = "public, max-age=300";
+    return Results.Json(Players.SeasonSpells(siteTask.Result, docTask.IsCompletedSuccessfully ? docTask.Result : null), Database.Json);
+});
+
 app.Run();
 
 // so the tests can start the site (WebApplicationFactory)

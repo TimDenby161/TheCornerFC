@@ -6,7 +6,7 @@ namespace TheCornerFC.Web.Site;
 // does them, so both sites show the same numbers.
 public static class Js
 {
-    static readonly CultureInfo British = CultureInfo.GetCultureInfo("en-GB");
+    public static readonly CultureInfo British = CultureInfo.GetCultureInfo("en-GB");
 
     // Math.round: halves go up (2.5 is 3, -2.5 is -2), where C#'s Math.Round goes to the even
     public static double Round(double x) => Math.Floor(x + 0.5);

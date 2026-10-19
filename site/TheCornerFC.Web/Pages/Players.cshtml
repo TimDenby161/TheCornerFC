@@ -1,0 +1,163 @@
+@page "/players"
+@model PlayersModel
+@using System.Text.Json
+@{
+    var title = Model.Ch.Filter == "all" ? "Players" : $"{Model.Menu.Name} players";
+    ViewData["Title"] = $"{title} · The Corner FC";
+    ViewData["Description"] = $"{Js.Num(Model.Total)} players{(Model.Ch.Filter == "all" ? "" : $" ({Model.Menu.Name})")} ranked by Ability, the model's 0 to 100 estimate of how good each one is now.";
+    var seasons = Model.Seasons;
+    var groups = Model.B.Groups;
+    var shown = Model.B.Years ? seasons.Length : 1;
+    var future = Model.B.Years ? Model.Future.Length : 0;
+    static string Short(int y) => $"{y.ToString()[2..]}/{(y + 1).ToString()[2..]}";
+    static string SeasonName(int y) => $"{y}/{(y + 1).ToString()[2..]}";
+    string SeasonTip(int y, int i) =>
+        $"{(i == 0 ? "Underlying Ability: the model's estimate of how good he is now (not this season's totals, which are on his page). " : "")}Rank for the {SeasonName(y)} season (the {y} season in calendar-year leagues such as MLS and Norway{(i == 0 ? "; so far" : "")}): his club's level that season, moved by how his stats compare with other players in his position (elite seasons earn extra, and positions are weighted). Squad players who play little are marked down. Every player follows the typical age curve for his position from a level of his own, and only moves off it as far as his minutes that season justify, so a thin season (an injury year, the start of a season) stays close to his curve. A season with no minutes in these leagues is estimated from his other seasons and his age, and shown outlined. Click to sort.";
+    // React takes over the sliders and the club and nationality boxes (site/client); its props are
+    // what the server drew them from
+    static IHtmlContent Props(object o) => new HtmlString($"<script type=\"application/json\">{JsonSerializer.Serialize(o, Database.Json).Replace("<", "\\u003c")}</script>");
+    object SliderProps(string k, string name, string[]? ids = null)
+    {
+        var s = Model.Sliders[k];
+        return new { kind = k, name, stops = s.Stops, a = s.A, b = s.B, ids };
+    }
+    var rangeProps = Players.RangeKeys.Select(k => new { slider = SliderProps(k, Players.RangeInfo[k].Label), tip = Players.RangeInfo[k].Tip }).ToList();
+    var whoProps = new { clubs = Model.Clubs.Select(c => new { id = c.Id, name = c.Name }), nats = Model.Nats.Select(n => new { name = n.Name, flag = n.Flag }) };
+}
+@functions {
+    // a two-handled slider as the server draws it (DualRange.tsx draws the same)
+    void DualRange(string k, string name, string[]? ids = null)
+    {
+        var s = Model.Sliders[k];
+        var n = s.Stops.Count - 1;
+        <div class="age-head"><span>@name</span><span class="rng-val">@Players.RangeLabel(k, s.Stops, s.A, s.B)</span></div>
+        <div class="age-slider">
+            <div class="age-track"><div class="age-fill sx-@Players.At(s.A, n) sr-@(100 - Players.At(s.B, n))"></div></div>
+            <input type="range" min="0" max="@n" step="1" value="@s.A" id="@ids?[0]" aria-label="@name: from" />
+            <input type="range" min="0" max="@n" step="1" value="@s.B" id="@ids?[1]" aria-label="@name: to" />
+        </div>
+    }
+    void SortTh(string key, string cls, string tip, string label, bool yearsBtn = false)
+    {
+        var on = Model.Ch.Sort == key;
+        <th class="num sortable @cls@(on ? " active" : "")" aria-sort="@(on ? (key == "age" ? "ascending" : "descending") : null)" data-tip="@tip">
+            @if (yearsBtn)
+            {
+                var open = Model.B.Years;
+                <span class="now-head"><a href="@Model.SortHref(key)">@label</a><a class="years-btn" role="button" href="@Model.YearsHref()" aria-expanded="@(open ? "true" : "false")" aria-label="@(open ? "Hide" : "Show") other seasons" title="@(open ? "Hide" : "Show") past and projected seasons">@(open ? "−" : "+")</a></span>
+            }
+            else
+            {
+                <a href="@Model.SortHref(key)">@label</a>
+            }
+        </th>
+    }
+}
+@* a choice made on the page swaps these parts for the server's new ones, in place (table.js) *@
+<section class="panel" data-tab="table" data-active="true" data-swap-forms data-swap="exclude-filter pos-filter table-filters filters-n search-keep">
+    <div id="table-side">
+        <div class="side-stick">
+            <div class="more-panel" id="more-panel">
+                @await Html.PartialAsync("_ExcludeChips", (Model.Ch.ExcludedList.ToList(), "/players", Model.Choices("ex", "q"), "player"))
+                <div id="range-filter" data-island="player-ranges">@Props(new { ranges = rangeProps })
+                    <div class="pos-head"><span>Ranges</span>
+                        <button type="button" class="pos-clear" hidden="@(Model.RangesOn == 0 ? "hidden" : null)">Clear</button></div>
+                    @foreach (var k in Players.RangeKeys)
+                    {
+                        <div class="rng-row" title="@Players.RangeInfo[k].Tip">@{ DualRange(k, Players.RangeInfo[k].Label); }</div>
+                    }
+                </div>
+                <div id="age-filter" data-island="player-age">@Props(SliderProps("age", "Age", ["age-min", "age-max"]))@{ DualRange("age", "Age", ["age-min", "age-max"]); }</div>
+                <div id="pos-filter">
+                    <form class="contents" method="get" action="/players">
+                        @foreach (var (k, v) in Model.Choices("pos", "sort")) { <input type="hidden" name="@k" value="@v" /> }
+                        <div class="pos-head"><span>Position</span>
+                            <button type="submit" class="pos-clear" hidden="@(Model.Ch.Positions.Count == 0 ? "hidden" : null)">Clear</button></div>
+                        <div class="pitch">
+                            <svg viewBox="0 0 68 88" preserveAspectRatio="none" aria-hidden="true" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.6">
+                                <rect x="3" y="3" width="62" height="82" rx="1" /><line x1="3" y1="44" x2="65" y2="44" />
+                                <circle cx="34" cy="44" r="7" /><rect x="17" y="3" width="34" height="12" /><rect x="26" y="3" width="16" height="5" />
+                                <rect x="17" y="73" width="34" height="12" /><rect x="26" y="80" width="16" height="5" /></svg>
+                            @foreach (var (pos, x, y) in Names.PitchSpots)
+                            {
+                                <button type="submit" name="pos" value="@Model.PosToggled(pos)" class="pos sx-@x sy-@y" aria-pressed="@(Model.Ch.Positions.Contains(pos) ? "true" : "false")" title="@pos: @(Model.B.Facets.Positions.GetValueOrDefault(pos)) players">@pos</button>
+                            }
+                        </div>
+                    </form>
+                </div>
+                <div id="who-filter" data-island="who-picker">@Props(whoProps)
+                    <div class="pos-head"><span>Club &amp; nationality</span>
+                        <button type="button" class="pos-clear" hidden="@(Model.Clubs.Count == 0 && Model.Nats.Count == 0 ? "hidden" : null)">Clear</button></div>
+                    <div class="who-field">
+                        <input type="search" id="club-input" class="table-search who-input" role="combobox" aria-expanded="false" aria-controls="club-menu" aria-autocomplete="list" placeholder="Add a club" aria-label="Filter by club" autocomplete="off" value="" />
+                        <div class="who-menu" id="club-menu" role="listbox" tabindex="-1" aria-label="Clubs" hidden></div>
+                    </div>
+                    <div class="who-field">
+                        <input type="search" id="nat-input" class="table-search who-input" role="combobox" aria-expanded="false" aria-controls="nat-menu" aria-autocomplete="list" placeholder="Add a nationality" aria-label="Filter by nationality" autocomplete="off" value="" />
+                        <div class="who-menu" id="nat-menu" role="listbox" tabindex="-1" aria-label="Nationalities" hidden></div>
+                    </div>
+                    <div class="who-chips" id="who-chips">@foreach (var c in Model.Clubs){<button type="button" class="who-chip" title="Remove">@Markup.Crest(c.Id, c.Name)@c.Name<span class="x" aria-hidden="true">×</span></button>}@foreach (var n in Model.Nats){<button type="button" class="who-chip" title="Remove">@if (n.Flag is not null){<img class="flag" src="https://flagcdn.com/w40/@(n.Flag).png" alt="" loading="lazy" />}else{<span class="kind">Nat</span>}@n.Name<span class="x" aria-hidden="true">×</span></button>}</div>
+                </div>
+            </div>
+            @await Html.PartialAsync("_FilterMenu", (Model.Menu, "table-filters", "/players", Model.Choices("c", "q"), "c"))
+            <button type="button" class="filter-chip" id="more-filters" aria-expanded="false" aria-controls="more-panel">
+                <text>Filters</text><span class="n" id="filters-n" hidden="@(Model.FiltersOn == 0 ? "hidden" : null)">@(Model.FiltersOn == 0 ? "" : Model.FiltersOn)</span><span class="caret" aria-hidden="true">▾</span>
+            </button>
+        </div>
+    </div>
+    <form class="contents" method="get" action="/players" role="search">
+        <span id="search-keep">@foreach (var (k, v) in Model.Choices("q")) { <input type="hidden" name="@k" value="@v" /> }</span>
+        <input type="search" name="q" id="table-search" class="table-search" placeholder="Search players or clubs" aria-label="Search" value="@Model.Ch.Search" autocomplete="off" data-live-search="#table-wrap" />
+    </form>
+    <div id="table-wrap" data-column-tips data-season-tips data-fit-table="@(Model.Wide ? "capped" : "")">
+        @if (Model.Rows.Count > 0)
+        {
+            <div class="table-scroll">
+                <table class="leaderboard players@(Model.B.Years ? " years" : "")" data-seasons="@string.Join(',', seasons)">
+                    <thead>
+                        <tr>
+                            <th data-tip="Position in this list, in the current sort order.">#</th>
+                            <th data-tip="Player, with his club's badge (click it for the club's page) and his country's flag (click it for the national team).">Player</th>
+                            <th class="num" data-tip="Position: the role he has started in most over his last 20 appearances.">Pos</th>
+                            @{ SortTh("age", "col-age", "Age today (sorts youngest first). Click to sort.", "Age"); }
+                            <th class="num col-wrank" data-tip="World rank: his place among every listed player by Ability, whatever this list is filtered or sorted by.">World</th>
+                            <th class="num col-lrank" data-tip="League rank: his place by Ability among the listed players in his club's league.">Lg</th>
+                            @{ SortTh("ga", "col-ga", "Goals and assists this season, all his clubs (7G 4A). Sorts by the two added together. Click to sort.", "G/A"); }
+                            @for (var i = shown - 1; i >= 0; i--)
+                            {
+                                var y = seasons[i];
+                                if (i == 0 && groups.Count > 0)
+                                {
+                                    SortTh("pos", "col-posrank", $"How good he is now as {string.Join(" / ", groups.Select(g => Names.GroupSingle.GetValueOrDefault(g)))}: his recent stats scored as that position against its players, with points off for a position he hasn't played much (none once it's 40% of his starts). With several positions picked, his best of them. Click to sort.",
+                                        groups.Count == 1 ? $"As {groups[0]}" : "In pos", true);
+                                }
+                                else
+                                {
+                                    SortTh($"s{y}", $"col-season col-s{i}{(i == 0 ? " col-now" : "")}", SeasonTip(y, i), i == 0 ? "Ability" : Short(y), i == 0 && (Model.Future.Length > 0 || seasons.Length > 1));
+                                }
+                            }
+                            @for (var j = 0; j < future; j++)
+                            {
+                                var y = Model.Future[j];
+                                SortTh($"f{y}", $"col-season col-future col-f{j}", $"Projected for {SeasonName(y)}: his Ability moved along the typical age curve for his position, from his age now to his age that season (young players rise, from 31 (33 for keepers) they decline, faster each year). A guide, not a forecast of his form. Click to sort.", Short(y));
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @await Html.PartialAsync("_PlayerRows", Model.RowsView)
+                    </tbody>
+                </table>
+                @if (Model.Rows.Count < Model.Total){<div data-more-rows="/players/rows" data-total="@Model.Total"></div>}
+            </div>
+            @if (Model.Paywall){<div class="page-note">Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected. @await Html.PartialAsync("_SubscriberLink")</div>}
+        }
+        else
+        {
+            <div class="empty-state">No players match these filters.</div>
+        }
+    </div>
+</section>
+@section Scripts {
+    <script src="/table.js" nonce="@HttpContext.Nonce()"></script>
+    <script type="module" src="/client/islands.js" nonce="@HttpContext.Nonce()"></script>
+}

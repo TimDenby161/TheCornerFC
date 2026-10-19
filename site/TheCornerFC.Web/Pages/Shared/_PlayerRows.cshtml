@@ -1,0 +1,51 @@
+@model PlayerRowsView
+@{
+    // The Players table's rows (the page's first 100, and each 100 more as it is scrolled). With the
+    // other seasons closed, only the current one shows; with positions picked, his rank in them
+    // takes its place.
+    var shown = Model.Years ? Model.Seasons.Length : 1;
+    var future = Model.Years ? Model.Future.Length : 0;
+    IHtmlContent Dash() => new HtmlString("<span class=\"dim\">–</span>");
+    IHtmlContent Chip(double? v, bool est = false)
+    {
+        if (v is not { } x) return Dash();
+        var chip = $"<span class=\"rel-chip rel-{ClubPage.RankTier(x)}\">{Js.RoundInt(x)}</span>";
+        return new HtmlString(est ? $"<span class=\"est\">{chip}</span>" : chip);
+    }
+    var i = Model.Offset;
+}
+@foreach (var p in Model.Rows)
+{
+    i++;
+    var href = Menu.PageHref("player", p.Id.ToString());
+    <tr data-href="@href">
+        <td>@i</td>
+        <td><div class="pl-cell">
+            @if (p.Team is { } team && p.TeamName is not null){<a class="pl-badge-link" href="/club/@team" title="@p.TeamName" aria-label="@p.TeamName">@Markup.Crest(team, p.TeamName, "club-logo pl-badge")</a>}else{<span class="club-logo pl-badge" title="Club not known"></span>}@Markup.PersonChip(p.Name)
+            <div class="pl-text">
+                <div class="pl-name"><a class="player-link" href="@href" title="@p.Name"><span class="pn-full">@p.Name</span><span class="pn-short">@p.Short</span></a>@if (!string.IsNullOrEmpty(p.Nat)){if (p.Flag is not null){<a class="pl-flag" href="@Menu.PageHref("nation", p.Nat)" title="@p.Nat" aria-label="@p.Nat national team"><img class="flag" src="https://flagcdn.com/w40/@(p.Flag).png" alt="" loading="lazy" /></a>}else{<a class="nat-link" href="@Menu.PageHref("nation", p.Nat)">@p.Nat</a>}}</div>
+                <div class="pl-club">@(p.TeamName ?? "Club not known")@(p.League != "" ? $" · {p.League}" : "")</div>
+            </div>
+        </div></td>
+        <td class="num">@p.Pos</td>
+        <td class="num col-age">@if (p.Age is { } age){@age}else{@Dash()}</td>
+        <td class="num col-wrank">@if (p.World is { } w){@Js.Num(w)}else{@Dash()}</td>
+        <td class="num col-lrank" title="@(p.Lg is { } l and not 0 && p.LgOf is { } of and not 0 ? $"{Markup.Ordinal(l)} of {of} in the {p.League}" : null)">@if (p.Lg is { } lg){@lg}else{@Dash()}</td>
+        <td class="num col-ga">@if (p.Ga is { } ga){@($"{ga.Goals}G {ga.Assists}A")}else{@Dash()}</td>
+        @for (var k = shown - 1; k >= 0; k--)
+        {
+            if (k == 0 && Model.Groups.Count > 0)
+            {
+                <td class="num col-posrank">@Chip(p.PosRank)</td>
+            }
+            else
+            {
+                <td class="num col-season col-s@(k) tip-cell@(k == 0 ? " col-now" : "")" data-player="@p.Id" data-back="@k">@Chip(p.Seasons is { } s && k < s.Length ? s[k] : null, p.Estimated.Contains(k))</td>
+            }
+        }
+        @for (var j = 0; j < future; j++)
+        {
+            <td class="num col-season col-future col-f@(j)">@Chip(p.Future is { } f && j < f.Length ? f[j] : null)</td>
+        }
+    </tr>
+}

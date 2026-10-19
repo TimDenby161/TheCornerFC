@@ -31,35 +31,37 @@ try {
 await open('/players');
 check('opens with 100 rows', (await rows()) === 100, await first());
 // scroll the list's box to its foot: more rows arrive
-await run(`(() => { const b = document.querySelector('.table-scroll'); b.scrollTop = b.scrollHeight; window.scrollTo(0, document.body.scrollHeight); })()`); await sleep(1800);
+await run(`(() => { const b = document.querySelector('.table-scroll'); b.scrollTop = b.scrollHeight; window.scrollTo(0, document.body.scrollHeight); })()`); await until(`document.querySelectorAll('table.players tbody tr').length >= 200`);
 check('more rows on scroll', (await rows()) >= 200, `${await rows()} rows`);
 
 // age slider: drag the upper handle down to 21
-await run(`(() => { const el = document.querySelector('#age-max'); el.value = 5; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); })()`); await sleep(1500);
+await run(`(() => { const el = document.querySelector('#age-max'); el.value = 5; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); })()`); await until(`location.search.includes('age=-21') && document.querySelector('#age-filter .rng-val')?.textContent === '16–21'`);
 check('age slider writes the address', (await run('location.search')).includes('age=-21'), await run('location.search'));
 check('age label follows', (await run(`document.querySelector('#age-filter .rng-val')?.textContent`)) === '16–21');
 check('the list is the under-21s', (await first()) === 'Lamine Yamal' && (await run(`[...document.querySelectorAll('table.players tbody tr td.col-age')].every((td) => Number(td.textContent) <= 21)`)), `${await rows()} rows`);
 check('menu count follows the age', Number(await run(`document.querySelector('#table-filters .menu-trigger .cnt')?.textContent`)) < 2000, await run(`document.querySelector('#table-filters .menu-trigger .cnt')?.textContent`));
 
 // position: press ST on the pitch
-await run(`document.querySelector('#pos-filter .pos[value="ST"]')?.click()`); await sleep(1500);
+await run(`document.querySelector('#pos-filter .pos[value="ST"]')?.click()`); await until(`location.search.includes('pos=ST') && !!document.querySelector('th.col-posrank')`);
 check('position pick in the address', (await run('location.search')).includes('pos=ST'), await run('location.search'));
 check('"As ST" takes Ability\'s place', (await run(`document.querySelector('th.col-posrank')?.textContent.trim()`))?.startsWith('As ST'));
 
 // club box: focus, the list loads, open the first league, pick its first club
-await send('Emulation.setFocusEmulationEnabled', { enabled: true }); await run(`document.querySelector('#club-input').focus()`); await sleep(1800);
+await send('Emulation.setFocusEmulationEnabled', { enabled: true }); await run(`document.querySelector('#club-input').focus()`); await until(`document.querySelectorAll('#club-menu .who-league').length > 0`);
 check('club list opens with leagues', (await run(`document.querySelectorAll('#club-menu .who-league').length`)) > 10, `${await run(`document.querySelectorAll('#club-menu .who-league').length`)} leagues`);
 await run(`document.querySelector('#club-menu .who-league')?.click()`); await sleep(300);
 const clubName = await run(`document.querySelector('#club-menu .who-opt:not(.who-league) .nm')?.textContent`);
-await run(`document.querySelector('#club-menu .who-opt:not(.who-league)')?.click()`); await sleep(1500);
+await run(`document.querySelector('#club-menu .who-opt:not(.who-league)')?.click()`); await until(`location.search.includes('club=') && !!document.querySelector('#who-chips .who-chip')`);
 check('club pick in the address and as a chip', (await run('location.search')).includes('club=') && (await run(`document.querySelector('#who-chips .who-chip')?.textContent`))?.includes(clubName), `${clubName} · ${await run('location.search')}`);
 check('list stays open for another pick', (await run(`document.querySelector('#club-menu').hidden`)) === false);
 // type in the nationality box and press Enter on the best match
-await run(`(() => { const el = document.querySelector('#nat-input'); el.focus(); el.value = 'engl'; el.dispatchEvent(new Event('input', { bubbles: true })); })()`); await sleep(400);
-await run(`document.querySelector('#nat-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`); await sleep(1500);
+// (typed as keys: a value set from a script is what React's boxes, on the C# site, don't hear)
+await run(`document.querySelector('#nat-input').focus()`); await send('Input.insertText', { text: 'engl' });
+await until(`[...document.querySelectorAll('#nat-menu .who-opt .nm')].some((x) => x.textContent === 'England')`, 3000);
+await run(`document.querySelector('#nat-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`); await until(`location.search.includes('nat=')`);
 check('nationality typed and picked with Enter', decodeURIComponent(await run('location.search')).includes('nat=England'), decodeURIComponent(await run('location.search')));
 // clear the picks
-await run(`document.querySelector('#who-filter .pos-clear')?.click()`); await sleep(1200);
+await run(`document.querySelector('#who-filter .pos-clear')?.click()`); await until(`!/club=|nat=/.test(location.search)`);
 check('Clear drops both picks', !/club=|nat=/.test(await run('location.search')), await run('location.search'));
 
 // search as typed
