@@ -1,5 +1,6 @@
 import type { FunctionComponent } from 'react';
 import { createRoot } from 'react-dom/client';
+import { accountBox, type AccountProps } from './AccountBox.tsx';
 import { DualRange, PlayerRanges } from './DualRange.tsx';
 import { matchCards } from './MatchCards.tsx';
 import { RankChart } from './RankChart.tsx';
@@ -29,3 +30,8 @@ for (const el of document.querySelectorAll<HTMLElement>('[data-island]')) {
 
 // Match cards: their line-ups, model detail and squads, wherever a page has them
 matchCards();
+
+// The account box, on every page: opened by the menu's button and the "What subscribers get" links
+const account = document.getElementById('account-root');
+const accountData = account?.querySelector(':scope > script[type="application/json"]');
+if (account && accountData) accountBox(account, JSON.parse(accountData.textContent || '{}') as AccountProps);

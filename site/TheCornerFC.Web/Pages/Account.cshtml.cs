@@ -11,7 +11,15 @@ namespace TheCornerFC.Web.Pages;
 public sealed record Subscription(bool Paywall, [property: JsonPropertyName("signed_in")] bool SignedIn, bool Subscriber, string? Status, string? Plan,
     [property: JsonPropertyName("renews_at")] string? RenewsAt, bool Ends)
 {
-    public static async Task<Subscription?> Of(Database db, Visitor visitor)
+    // (asked once a request: the page and the layout's account box both want it)
+    public static Task<Subscription?> Of(Database db, HttpContext context)
+    {
+        if (context.Items.TryGetValue(nameof(Subscription), out var kept) && kept is Task<Subscription?> t) return t;
+        var asked = Ask(db, Visitor.Of(context));
+        context.Items[nameof(Subscription)] = asked;
+        return asked;
+    }
+    static async Task<Subscription?> Ask(Database db, Visitor visitor)
     {
         if (!visitor.SignedIn) return null;
         try { return await db.SiteAsk<Subscription?>("my_subscription", new { }, visitor.Token); }
@@ -39,6 +47,9 @@ public sealed class AccountModel(AuthClient auth, Database db) : PageModel
     // whether subscriptions can be bought yet: not until payments come across (the rebuild's step 7c),
     // as on the live site today
     public const bool Pay = false;
+    // what a subscription costs (owner, 2026-10-07): the words on the buttons; the charge itself is
+    // the price set in Stripe, and the two must be changed together
+    public static readonly (string Monthly, string Yearly) Prices = ("£4.99 a month", "£49 a year");
     const string NoCheck = "Wait for the check above the button to finish, then try again.";
 
     public Visitor Who => Visitor.Of(HttpContext);
@@ -56,7 +67,7 @@ public sealed class AccountModel(AuthClient auth, Database db) : PageModel
 
     async Task Load()
     {
-        Sub = await Subscription.Of(db, Who);
+        Sub = await Subscription.Of(db, HttpContext);
         ViewData["Title"] = $"{Titles[View]} · The Corner FC";
     }
 

@@ -46,6 +46,10 @@ public static class Sessions
         var auth = context.RequestServices.GetRequiredService<AuthClient>();
         var clock = context.RequestServices.GetRequiredService<TimeProvider>();
         var request = context.Request;
+        // The account page's forms by the current site's addresses (/account?/signin, SvelteKit's
+        // form for an action): the same handler here (?handler=signin)
+        if (request.Path == "/account" && request.QueryString.Value is { } qs && qs.StartsWith("?/") && qs.Length > 2)
+            request.QueryString = new QueryString($"?handler={Uri.EscapeDataString(qs[2..].Split('&')[0])}");
         var q = request.Query;
 
         // A form may only be sent here from this site's own pages (as SvelteKit checks every form

@@ -13,6 +13,16 @@
     var menu = Menu.Main.Concat(visitor.Admin || visitor.Owner ? [Menu.Owner] : []).Concat(visitor.Admin ? [Menu.Admin] : []);
     var nonce = Context.Nonce();
     var mark = (visitor.Email ?? "").Trim() is { Length: > 0 } email ? char.ToUpperInvariant(email[0]).ToString() : "";
+    // what the account box (React, AccountBox.tsx) opens with: who is signed in and what the
+    // database says of their subscription (asked for each page, as the current site does)
+    var sub = await TheCornerFC.Web.Pages.Subscription.Of(Db, Context);
+    var accountProps = System.Text.Json.JsonSerializer.Serialize(new
+    {
+        user = visitor.SignedIn ? new { email = visitor.Email } : null,
+        sub = sub is null ? null : new { paywall = sub.Paywall, subscriber = sub.Subscriber, status = sub.Status, plan = sub.Plan, renewsAt = sub.RenewsAt, ends = sub.Ends },
+        botCheck = Env.BotCheck, pay = TheCornerFC.Web.Pages.AccountModel.Pay,
+        prices = new { monthly = TheCornerFC.Web.Pages.AccountModel.Prices.Monthly, yearly = TheCornerFC.Web.Pages.AccountModel.Prices.Yearly },
+    }).Replace("<", "\\u003c");
 }
 <!doctype html>
 <html lang="en">
@@ -102,7 +112,11 @@
     }
     <footer class="site-links"><a href="/methodology">How the models work</a> · <a href="/privacy">Privacy, corrections &amp; security</a> · <a href="/terms">Terms of use</a></footer>
 </main>
+<!-- the account box opens here, over the page (its props: the JSON) -->
+<div id="account-root"><script type="application/json">@Html.Raw(accountProps)</script></div>
 <script src="/site.js" nonce="@nonce"></script>
 @await RenderSectionAsync("Scripts", required: false)
+<!-- the React parts: the account box on every page, and each page's own (data-island) -->
+<script type="module" src="/client/islands.js" nonce="@nonce"></script>
 </body>
 </html>

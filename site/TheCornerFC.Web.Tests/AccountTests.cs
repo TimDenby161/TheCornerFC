@@ -192,4 +192,12 @@ public class AccountTests
         Assert.Null(SetCookie(r, Sessions.Cookie));
         Assert.Equal("?redirect_to=https%3A%2F%2Fthecornerfc.com%2F", site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/auth/v1/signup").RequestUri!.Query);
     }
+
+    [Fact]
+    public async Task The_current_sites_form_addresses_reach_the_same_handlers()
+    {
+        using var site = Site();
+        var r = await Client(site).SendAsync(Post("/account?/signin", new() { ["email"] = "a@b.c", ["password"] = "pw" }, json: true));
+        Assert.Contains("Wait for the check above the button to finish", await r.Content.ReadAsStringAsync());
+    }
 }
