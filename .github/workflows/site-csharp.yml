@@ -1,42 +1,32 @@
 name: C# site
 
-# The C# site (site/, T-048) to its staging app in Azure, on every push to staging that touches
-# it or what it takes from web/ (the stylesheets, icons, each page's intro, the text pages, and
-# the shared logic the React parts import). Its tests first: a
-# failing test deploys nothing. The live app (thecornerfc) gets its deploy at the switch-over,
-# not before (audit plan step 9).
+# The C# site (site/, T-048) to Azure on every push: the staging branch to the staging app, main
+# to the live app (thecornerfc). Every push, not only those touching site/, so each site's
+# /version names the commit its branch is on, as the Staging check and the promotion expect.
+# Its tests first: a failing test deploys nothing.
 #
 # No password is stored anywhere: GitHub proves to Azure that this is a run of this repository in
-# its Staging environment, and Azure lets that deploy to the two web apps only
+# its Staging or Production environment, and Azure lets that deploy to the two web apps only
 # (site/azure/setup.sh; the app registration thecornerfc-github-deploy). The ids below name the
 # account; they are not secrets.
 on:
   push:
-    branches: [staging]
-    paths:
-      - "site/**"
-      - "web/src/lib/**"
-      - "web/static/**"
-      - "web/src/styles/**"
-      - "web/src/app.css"
-      - "web/src/lib/*.css"
-      - "web/src/lib/tabInfo.json"
-      - "web/src/lib/names.json"
-      - "web/src/text/**"
-      - ".github/workflows/site-csharp.yml"
+    branches: [staging, main]
   workflow_dispatch:
 
 concurrency:
-  group: site-csharp-staging
-  cancel-in-progress: true
+  group: site-csharp-${{ github.ref_name }}
+  # a newer staging push replaces one still deploying; a live deploy is never cut off
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions: {}
 
 jobs:
-  deploy-staging:
-    # Staging's branch only, said here and by the Staging environment's own branch rule
-    if: github.ref == 'refs/heads/staging'
-    environment: Staging
+  deploy:
+    # Each branch to its own app, in its own environment, whose branch rule says the same: only
+    # main may use Production, only staging Staging
+    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
+    environment: ${{ github.ref == 'refs/heads/main' && 'Production' || 'Staging' }}
     permissions:
       contents: read
       id-token: write       # the token Azure checks in place of a password
@@ -84,5 +74,5 @@ jobs:
 
       - uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3.0.8
         with:
-          app-name: thecornerfc-staging
+          app-name: ${{ github.ref == 'refs/heads/main' && 'thecornerfc' || 'thecornerfc-staging' }}
           package: publish
