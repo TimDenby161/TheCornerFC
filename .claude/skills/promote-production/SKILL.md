@@ -5,7 +5,8 @@ description: Promote what staging has tested to production for The Corner FC - c
 
 # Promoting staging to production
 
-Production is `main`: Cloudflare builds the live site from it and the scheduled jobs run it.
+Production is `main`: the C# site workflow deploys the live site from it (`site-csharp.yml`, to
+the Azure web app `thecornerfc`) and the scheduled jobs run it.
 Promotion moves `main` forward to the commit `staging` is on. It is never a merge and never new
 work. GitHub refuses the push unless that commit passed `python`, `site` and `staging-check` and
 was deployed to the `staging` environment; the checks below are so nothing is sent that would
@@ -26,12 +27,13 @@ be refused, and so the owner sees what is going live.
 6. **Model versions.** If a fingerprinted file is in the diff, say which model versions will be
    new on the next run.
 7. **Cost.** Say what going live adds to each service (`guide/costs.md`): API-Football calls a
-   day, database size and reads, Worker requests and CPU. Anything that would raise a bill the
+   day, database size and reads, the site's load on its one B1 plan. Anything that would raise a bill the
    owner has not agreed to holds the promotion.
 8. **Report and stop.** The commits, the checks, the migrations in order, the cost, and what the push
    does. Push only if the owner asks for this promotion now.
 9. **The push**, exactly: `git push origin origin/staging:main`. No other form reaches `main`.
-10. **Afterwards.** `https://thecornerfc.com/version` names the commit once Cloudflare has built
+10. **Afterwards.** `https://thecornerfc.com/version` names the commit once the C# site workflow has deployed
    it (a few minutes). Tell the owner to watch the next Match day run. If the site is wrong:
-   Cloudflare → Workers → thecornerfc → Deployments → Rollback, then fix through `staging`. If
+   run the "C# site" workflow on `main` at the last good commit (or redeploy it in Azure → thecornerfc
+   → Deployment Center), then fix through `staging`. If
    a job is wrong: revert on `staging` and promote the revert.

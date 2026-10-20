@@ -29,12 +29,12 @@ or from Google, and reading who is signed in) and the account page,
   (`thecornerfc/privacy/accounts.py`; the privacy page promises the same). Confirmed accounts are kept
   until their owner deletes them.
 - **Bot check (on since 2026-10-07, enforced by Supabase).** The sign-in, sign-up and reset
-  forms carry a Cloudflare Turnstile check (`web/src/lib/components/BotCheck.svelte`), whose
+  forms carry a Cloudflare Turnstile check (`BotCheck` in `site/TheCornerFC.Web/Pages/Account.cshtml`, drawn by `AccountBox.tsx` in the sign-in box), whose
   token Supabase verifies before it acts. All three steps below are done. To set it up again,
   in this order:
   1. Cloudflare dashboard → Turnstile → add a widget for `thecornerfc.com` (and `localhost` for
      the local preview), mode Managed. It gives a site key (public) and a secret key.
-  2. Put the site key in `BotCheck.svelte`. The security policy in `web/vite.config.ts` must
+  2. Put the site key in `Site/SiteEnvironment.cs` (production's `BotCheck`). The security policy in `Site/Gate.cs` must
      allow `https://challenges.cloudflare.com` in `script-src` and `frame-src` (it does). The
      privacy page (`web/src/text/privacy.html`) says that the account forms load Cloudflare
      Turnstile, which sees the visitor's IP address and browser details. Deploy.

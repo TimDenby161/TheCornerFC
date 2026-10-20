@@ -27,8 +27,8 @@ fresh clone or a cloud session), carry on from this file and `guide/`.
 |---|---|
 | `thecornerfc/` | The Python jobs, run as `python -m thecornerfc <command>`. Six folders: `pipeline/` (fetch from API-Football, the database, the nightly and match-day runs), `models/` (ranks, ratings, predictions, bets), `evidence/` (model versions and the append-only snapshots), `fantasy_games/` (FPL and Fantasy EFL), `publish/` (the export to the database), `privacy/` (accounts, retention, removals). `config.py` and `__main__.py` stay at the top. |
 | `db/` | `schema.sql` and dated files in `migrations/`. A Supabase Postgres database. |
-| `web/` | The site: SvelteKit, deployed as the Cloudflare Worker `thecornerfc` (`web/wrangler.jsonc`). Its stylesheets are in `src/styles`, its text pages in `src/text`. |
-| `site/` | The site being rebuilt in C#: ASP.NET Core on .NET 10, React for the interactive parts, to run on Azure App Service. Seen at next.thecornerfc.com (staging, behind Access); until it replaces `web/`, it takes `web/`'s stylesheets, icons, page text and shared tables (`names.json`, `tabInfo.json`) as it builds, and its React parts (`site/client`) import `web/src/lib`. `dotnet test` from `site/`, `npm test` from `site/client`. |
+| `site/` | The site: ASP.NET Core on .NET 10, React for the interactive parts (`site/client`), on Azure App Service behind Cloudflare: the web app `thecornerfc` (thecornerfc.com, from `main`) and `thecornerfc-staging` (staging.thecornerfc.com, behind Access, from `staging`), deployed by `.github/workflows/site-csharp.yml`. Live since 2026-10-20. |
+| `web/` | The SvelteKit site that was live until 2026-10-20. The C# site still takes its stylesheets (`src/styles`), icons, text pages (`src/text`) and shared tables (`names.json`, `tabInfo.json`) as it builds, and its React parts import `web/src/lib`. Its Workers stay deployed, without the live address, until about 2026-11-03. |
 | `guide/` | The written explanation, one page per topic. `README.md` is its contents list. |
 | `tests/` | Python unit tests, with stand-in database connections. |
 | `experiments/` | One folder per model experiment, with its evaluator and results. |
@@ -62,17 +62,17 @@ python -m thecornerfc export            # production mode: writes .export/ only.
 python db/check_local_access.py         # what this machine's database addresses may do
 ```
 
-Site, from `web/`:
+Site:
 
 ```bash
-npm run dev
-npm test                            # unit tests
-npm run check                       # types
-node scripts/browser-check.mjs [address]   # drives the pages in headless Chrome
+dotnet test                                     # from site/: the C# tests
+npm test && npm run check                       # from site/client, and from web/ (the shared logic)
+dotnet run --urls http://127.0.0.1:5280         # from site/TheCornerFC.Web
+node web/scripts/browser-check.mjs http://127.0.0.1:5280   # drives the pages in headless Chrome
 ```
 
-Run all three site checks before a push (`/pre-push` runs everything and reports each result
-line). `npm run build` runs the first two before it builds, which is what gates a deploy.
+Run the site checks before a push (`/pre-push` runs everything and reports each result line).
+The deploy workflow runs the React and C# tests before it publishes, which is what gates a deploy.
 `browser-check.mjs` catches crashes that fetching a page can't: add a step to it for each new
 interactive piece, and wait with its `until()`, not a fixed sleep. `scripts/fantasy-check.mjs`
 covers the fantasy pages.
@@ -84,7 +84,7 @@ Skills: `/new-migration` (any database change), `/model-experiment` (any change 
 
 - **Never add cost.** Before building any change, work out what it costs on each service it
   touches: API-Football (calls a day), Supabase (storage, Disk IO, egress, compute), Cloudflare
-  (Worker requests, CPU, builds) and GitHub (free only while public). Pick the design that adds
+  (requests, the timer Worker), Azure (the one B1 plan) and GitHub (free only while public). Pick the design that adds
   nothing; if a change would raise a bill or need a higher plan, ask the owner first and say the
   cost. Each plan's limits are in `guide/costs.md`.
 - **Production is never written from this machine**, and no local run calls API-Football.
@@ -112,10 +112,10 @@ Skills: `/new-migration` (any database change), `/model-experiment` (any change 
   server-rendered HTML. Any new use of that data is the owner's decision: ask first.
 - **New tables and views are reachable by the public key** unless shut: keep row-level security
   on and revoke `anon` from views.
-- **A signed-in visitor's requests** go through `askAs(fetch, locals.token, ...)`, never
-  `keptAsk`, and their pages answer `private, no-store`.
+- **A signed-in visitor's requests** go through `AskAs(token, ...)` with their own token, never
+  `KeptAsk`, and their pages answer `private, no-store`.
 - **The Admin area is the administrator's only** (`guide/admin-area.md`): the paper bets live in
-  `admin_docs`, read through `adminDoc(fetch, locals.token, ...)` on a page under `/admin`, never
+  `admin_docs`, read through `Admin.Doc(db, token, ...)` on a page under `/admin`, never
   in `site.docs`, `.export` or a public page, and so do the model switch and anything about
   matches still to be played. The model change record and its live tests are also public, on
   The Model (`/model`, owner's decision 2026-10-16), as `model.json` without the Admin notes
@@ -127,7 +127,7 @@ Skills: `/new-migration` (any database change), `/model-experiment` (any change 
 
 Each part's conventions are in a rule file that loads when you open a file there:
 
-- `.claude/rules/web.md`: the site (`web/`)
+- `.claude/rules/web.md`: the site (`site/`, and what it shares from `web/`)
 - `.claude/rules/python.md`: the jobs, tests and experiments, and the `publish/` import order
 - `.claude/rules/database.md`: migrations and what the public key may reach (`db/`)
 - `.claude/rules/environments.md`: production and staging, and how to tell which you are on

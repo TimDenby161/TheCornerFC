@@ -1,32 +1,43 @@
 ---
 paths:
+  - "site/**"
   - "web/**"
 ---
 
-# The site (`web/`)
+# The site (`site/`, with what it shares from `web/`)
+
+The live site is the C# app in `site/` (since 2026-10-20). `web/` was the SvelteKit site; it
+stays as the source of the stylesheets, icons, text pages, `tabInfo.json`, `names.json` and the
+logic in `web/src/lib` that the React parts import, so a change there changes the C# site too.
 
 - No back buttons on any page. Navigation is the menu and the browser.
-- Logic goes in tested `src/lib/*.ts`; database reads in `src/lib/server/`; pages stay thin.
+- Logic goes in tested `Site/*.cs` (or `web/src/lib/*.ts` when a React part needs it); database
+  reads go through `Data/Database.cs`; Razor pages stay thin.
+- React only where it earns it (the sign-in box, filters with sliders, the match card's panels,
+  the rank chart, the fantasy pages); small touches are plain JavaScript in `Assets/` (edit
+  there, never `wwwroot/`).
 - A page's choices live in its address, through GET forms. No inline styles: computed positions
-  are classes from `placed.css` (the security policy forbids inline styles).
-- Each page's intro and key come from `src/lib/tabInfo.ts`. Kick-off times go through
-  `LocalTime.svelte`.
+  are classes from `placed.css` (the security policy in `Site/Gate.cs` forbids inline styles).
+- Each page's intro and key come from `tabInfo.json` (`TabHead.For`). Kick-off times go through
+  `Markup.LocalTime` (`LocalTime.tsx` in React).
 - Keep `#ad-top` and `#ad-rail` free when laying out a page. Adverts never go on Home, the two
   betting pages, the fantasy pages or the text pages.
-- **No added cost** (`guide/costs.md`): count the database calls and Worker CPU a page adds;
-  keep requests within the free plan and don't turn off caching.
-- Heavy sums run in the browser, not the Worker (the free plan allows about 10 ms of CPU a
-  request).
-- Redirects to another site must name it: `redirect(..., { external: [...] })`.
-- Secrets are Cloudflare Worker secrets, declared in `src/env.ts`. None in the code.
-- A signed-in visitor's requests go through `askAs(fetch, locals.token, ...)`, never `keptAsk`,
-  and their pages answer `private, no-store`.
+- **No added cost** (`guide/costs.md`): count the database calls a page adds; keep what every
+  visitor shares in `KeptDoc`/`KeptAsk` and don't turn off Cloudflare's caching. The site runs
+  on one B1 plan with the staging app: no second instance or bigger plan without the owner.
+- Secrets are the Azure web app's settings. None in the code.
+- A signed-in visitor's requests go through `AskAs(token, ...)` with their own token, never
+  `KeptAsk`, and their pages answer `private, no-store`.
+- Fantasy data never goes into a page the server writes: the owner's browser asks for it.
 - Lists behind the paywall keep the subscriber's order with the ranks hidden.
+- No fault text on any page: faults go to the logs only.
 
 ## Checks
 
-From `web/`: `npm test`, `npm run check`, `node scripts/browser-check.mjs [address]`.
-`npm run build` runs the first two before it builds, and Cloudflare's build runs `npm run build`,
-so a failing test or type error stops a deploy. Add a step to `browser-check.mjs` for each new
-interactive piece, and wait with its `until()`, not a fixed sleep. `scripts/fantasy-check.mjs`
-covers the fantasy pages.
+From `site/`: `dotnet test`. From `site/client`: `npm test`, `npm run check`. From `web/`
+(its shared logic): `npm test`, `npm run check`. Then run the site (`dotnet run --urls
+http://127.0.0.1:5280` from `site/TheCornerFC.Web`) and `node web/scripts/browser-check.mjs
+http://127.0.0.1:5280`; `node web/scripts/fantasy-check.mjs "" http://127.0.0.1:5280` for the
+fantasy pages. The deploy workflow runs the React and C# tests first, so a failing test stops a
+deploy. Add a step to `browser-check.mjs` for each new interactive piece, and wait with its
+`until()`, not a fixed sleep.

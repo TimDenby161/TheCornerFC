@@ -26,7 +26,7 @@ model against the bookmakers, market by market, was already public on the Stats 
   `model_changes`), read only through `admin_doc()`, which answers `{"ok": false}` to anyone
   but an administrator and can't be called with the public key at all. So a page that forgot
   the gate would still be sent nothing.
-- **No key that skips the check exists in the site.** The Worker holds the public key only;
+- **No key that skips the check exists in the site.** The site holds the public key only;
   every read carries the visitor's token. The documents are never kept between requests and
   the pages answer `private, no-store`. The menu shows the Admin group only when the database
   has said yes for that request.

@@ -6,20 +6,22 @@ and what deploys. One screen; the topic pages listed in `README.md` have the det
 ## The parts
 
 ```
-API-Football ──► Python jobs (GitHub Actions) ──► Supabase Postgres ──► SvelteKit site
-   (the only        thecornerfc/                               db/schema.sql        web/ (Cloudflare
-    match data)     fetch, model, record, export                                    Worker)
+API-Football ──► Python jobs (GitHub Actions) ──► Supabase Postgres ──► C# site
+   (the only        thecornerfc/                               db/schema.sql        site/ (Azure App
+    match data)     fetch, model, record, export                                    Service, behind
+                                                                                     Cloudflare)
 ```
 
 | Part | Where | Runs |
 |---|---|---|
 | Jobs | `thecornerfc/`, started as `python -m thecornerfc <command>` (`__main__.py`) | GitHub Actions, on a schedule, from `main` |
 | Database | `db/schema.sql`, `db/migrations/` | Supabase. The owner applies migrations by hand |
-| Site | `web/` (SvelteKit, `adapter-cloudflare`) | Cloudflare Worker `thecornerfc`, built from `main` |
+| Site | `site/` (ASP.NET Core on .NET 10, React for the interactive parts) | Azure App Service: the web app `thecornerfc`, deployed from `main`; `thecornerfc-staging` from `staging` |
+| Shared site files | `web/` (the SvelteKit site, live until 2026-10-20): its stylesheets, icons, text pages, `tabInfo.json`, `names.json` and the logic in `src/lib` that the React parts import | Not deployed as the site; its Workers are kept until about 2026-11-03 so going back is one DNS change |
 | Experiments | `experiments/` | By hand, read-only. They judge model changes and are never part of a job |
 
-There is no API server, queue or long-running process of our own: the jobs are batch runs, and
-the site's server code is the Worker.
+There is no queue of our own: the jobs are batch runs, and the site is one long-running ASP.NET
+Core server per environment, on one B1 App Service plan.
 
 ## Inside the jobs
 
@@ -69,30 +71,33 @@ deliberate version.
    only then replaces `.export/` and writes it to the database: `site.docs` (one row per page's
    JSON), `site.matches`, `site.players`, `site.lineup_history`. A failed check leaves the last
    export in place. Fantasy data goes to `fpl_owner_docs` for the owner's sign-in only.
-5. **Read.** A page's server code (`web/src/lib/server/`) asks the database through functions
-   with fixed SQL that the public key may call (`site_doc`, `site_matches`, `site_players` ...).
-   The browser talks only to thecornerfc.com. What every visitor shares is kept for a minute
-   in the Worker; a signed-in visitor's request carries their own token and is never kept, so
+5. **Read.** A page's server code (`site/TheCornerFC.Web/Data/Database.cs`) asks the database
+   through functions with fixed SQL that the public key may call (`site_doc`, `site_matches`,
+   `site_players` ...). The browser talks only to thecornerfc.com. What every visitor shares is
+   kept for a minute in the server's memory; a signed-in visitor's request carries their own token and is never kept, so
    the database decides what a subscriber sees ([Site data](site-data.md), [Paid tier](paid-tier.md)).
 
 ## Inside the site
 
-`web/src/routes/` holds thin pages; logic is in tested `web/src/lib/*.ts`; every database read
-is in `web/src/lib/server/`; `hooks.server.ts` finishes sign-ins and sets the cache headers;
-`vite.config.ts` holds the security policy; secrets are Worker secrets declared in `src/env.ts`.
-Conventions: `.claude/rules/web.md`.
+In `site/TheCornerFC.Web`: `Pages/` holds thin Razor pages; logic is in tested `Site/*.cs`;
+every database read goes through `Data/Database.cs`; `Site/Sessions.cs` keeps sign-ins in an
+HttpOnly cookie, renews them and checks each form's origin; `Site/Gate.cs` sets the security
+policy and headers; small touches are plain JavaScript in `Assets/`; the React parts are in
+`site/client` (built into `wwwroot/client`, one file plus the fantasy pages' own). Secrets are
+the app's settings in Azure. Conventions: `.claude/rules/web.md`.
 
 ## What deploys, and what gates it
 
 | What | Deploys when | Gate |
 |---|---|---|
-| The site | `main` moving forward to the commit `staging` tested ([Production and staging](environments.md)): Cloudflare runs the build and deploys the Worker. A push to `staging` does the same for the staging site | `npm run build` runs the unit tests and the type check before `vite build`. A failure fails the build and the last deployment stays live. This holds while Cloudflare's build command is `npm run build` (Workers & Pages → thecornerfc → Settings → Build; the owner confirmed it on 2026-10-12) |
+| The site | `main` moving forward to the commit `staging` tested ([Production and staging](environments.md)): `.github/workflows/site-csharp.yml` builds and deploys to the `thecornerfc` app. A push to `staging` does the same for `thecornerfc-staging` | The workflow runs the React parts' tests and `dotnet test` before it publishes; a failure deploys nothing and the last deployment stays live |
 | The jobs | Whatever is on `main` when the timer starts them (`timer/`, a Cloudflare Worker with Cron Triggers, because GitHub's schedules ran hours late and dropped about 9 in 10 match-day runs; GitHub's schedules stay as the back-up, and each job skips a slot another run has already worked: `scripts/already_ran.py`): nightly 01:17 UTC (two later tries), match day every 30 minutes, FPL at 07:00, 13:00 and 19:00, two backfills by hand | Each job runs `python -m unittest discover -s tests` straight after installing, with no secrets, and stops before it fetches or writes anything if a test fails. The site goes on showing the last export |
 | The database | The owner runs a migration in the SQL editor | A test asserts each migration is word for word in `db/schema.sql` |
 
 `.github/workflows/tests.yml` runs both suites on every push and pull request, for an early
-answer. The browser check (`web/scripts/browser-check.mjs`) is run by hand before a push: it
-needs Chrome and the live database.
+answer. The browser check (`web/scripts/browser-check.mjs [address]`) is run by hand before a
+push, against the C# site run locally (`dotnet run` from `site/TheCornerFC.Web`): it needs
+Chrome and the database.
 
 The jobs share one concurrency group, so two never write at once. All actions are pinned to
 commit SHAs and each job asks for `contents: read` only; nothing is committed by a job.

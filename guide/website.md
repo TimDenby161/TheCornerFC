@@ -1,15 +1,15 @@
 # Website
 
-The site is the SvelteKit app in `web/`, running as the Cloudflare Worker `thecornerfc` at thecornerfc.com. This page says how it is put together and what each page shows. How it deploys and what gates a deploy are in [Architecture](architecture.md); the rules for changing it are in `.claude/rules/web.md`.
+The site is the ASP.NET Core app in `site/` (C#, .NET 10, with React for the interactive parts), running on Azure App Service behind Cloudflare at thecornerfc.com since 2026-10-20. It replaced the SvelteKit app in `web/` page for page, keeping its addresses, ids and classes, and still takes `web/`'s stylesheets, icons, text pages, `tabInfo.json`, `names.json` and the logic in `web/src/lib` that its React parts import. This page says how it is put together and what each page shows. How it deploys and what gates a deploy are in [Architecture](architecture.md); the rules for changing it are in `.claude/rules/web.md`.
 
 ## How it is built
 
-- **Pages.** `web/src/routes/(app)/` holds one folder per page: `clubs`, `players`, `leagues`, `nations`, `matches`, `stats`, `lineups`, `admin` (the administrator's: `changes`, `model-vs-market`, `simulation`; [The Admin area](admin-area.md)), the pages for one `club/[id]`, `player/[id]`, `league/[id]`, `country/[name]`, `nation/[name]` and `match/[id]`, the owner's `fpl`, `my-fpl-team` and `efl-fantasy`, and `account`. `(text)/` holds methodology, privacy and terms, whose words are in `web/src/text/`. The menu is `web/src/lib/menu.ts`: Ratings, Predictions, Against the market, and Fantasy for the owner only.
-- **A page is rendered on the server.** Its `+page.server.ts` asks the database (`web/src/lib/server/`, through `siteDoc`, `keptDoc`, `keptAsk` and `askAs` in `database.ts`) and hands the page what it draws. The browser talks only to thecornerfc.com. Logic is in tested `web/src/lib/*.ts`, and pages stay thin; heavy sums, such as the FPL planner (`web/src/lib/fplPlanner.js`), run in the browser because the Worker's free plan allows about 10 ms of CPU a request.
+- **Pages.** `site/TheCornerFC.Web/Pages/` holds one Razor page per page (the SvelteKit routes in `web/src/routes/(app)/` were the model): `clubs`, `players`, `leagues`, `nations`, `matches`, `stats`, `lineups`, `admin` (the administrator's: `changes`, `model-vs-market`, `simulation`; [The Admin area](admin-area.md)), the pages for one `club/[id]`, `player/[id]`, `league/[id]`, `country/[name]`, `nation/[name]` and `match/[id]`, the owner's `fpl`, `my-fpl-team` and `efl-fantasy`, and `account`. Methodology, privacy and terms take their words from `web/src/text/`. The menu is `Site/Menu.cs`: Ratings, Predictions, Against the market, and Fantasy for the owner only.
+- **A page is rendered on the server.** Its page model (`*.cshtml.cs`) asks the database (`Data/Database.cs`: `KeptDoc`, `KeptAsk`, `AskAs`) and hands the page what it draws. The browser talks only to thecornerfc.com. Logic is in tested `Site/*.cs`, and pages stay thin. The interactive parts are React islands (`site/client`, `data-island="..."`) that take over a part the server drew; the owner's fantasy pages are drawn wholly in the browser from data only the owner's sign-in can read, and the FPL planner (`web/src/lib/fplPlanner.js`) runs there too.
 - **What it reads.** The rows `python -m thecornerfc export` writes: `site.docs` (one row per page's JSON, such as `rankings`, `stats`, `clubs/42`, `leagues/39`), `site.matches`, `site.players` and `site.lineup_history`, through database functions with fixed SQL that the public key may call ([Site data](site-data.md)). The site holds no database credential of its own for reading. The matches shown are the last 21 days and the next 60.
-- **Who is asking.** `web/src/hooks.server.ts` reads the sign-in cookie. A signed-in visitor's requests carry their own token, so the database decides what a subscriber sees, and their pages are never cached ([Accounts](accounts.md), [Paid tier](paid-tier.md)).
+- **Who is asking.** `Site/Sessions.cs` reads the sign-in cookie (HttpOnly, renewed before it runs out). A signed-in visitor's requests carry their own token, so the database decides what a subscriber sees, and their pages are never cached ([Accounts](accounts.md), [Paid tier](paid-tier.md)).
 - **Old addresses still work.** The old site's `#/clubs?...` addresses and `/terms.html`-style files are sent to the page here (`oldAddress` and `oldFile` in `menu.ts`): the pages kept their names and their choices' names.
-- **To run it on this machine:** in `web/`, `npm run dev`, or `npm run build` then `npm run preview -- --port 4517` (the address `scripts/browser-check.mjs` expects). Either reads the live database with the public key, so it shows the published data; a local `export` in `.export/` is not read by the site.
+- **To run it on this machine:** in `site/TheCornerFC.Web`, `dotnet run --urls http://127.0.0.1:5280` (it builds the React parts when their sources change, so Node must be on the path), then `node web/scripts/browser-check.mjs http://127.0.0.1:5280`. It reads the database `python scripts/environment.py` has selected, with the public key; a local `export` in `.export/` is not read by the site.
 
 ## What the pages show
 
@@ -81,14 +81,14 @@ The weighted total is rounded, and a 0 counts as 1. The overall rating and the f
   name. A new column or term goes in the key.
 - **Addresses.** A page's choices ride in its address (`/matches?d=2026-10-11`, `/stats?r=90d`,
   `/nations?c=UEFA`), and a sub-tab is part of the path (`/club/42/matches`). An address that
-  names no page gets the "Page not found" page (`web/src/routes/(app)/+error.svelte`). There are
+  names no page gets the "Page not found" page (`Pages/Error.cshtml`), with no fault text. There are
   no back buttons: navigation is the menu and the browser.
 - **The export's manifest.** `export.write_manifest` writes a short hash of each top-level
   export file, and the export sends to the database only the rows whose file changed. Anything
   that writes a top-level file must rewrite the manifest (`tests/test_manifest.py`). The site
   itself does not use the hashes.
-- **Times and places.** Kick-off times go through `LocalTime.svelte`, so each visitor sees their
+- **Times and places.** Kick-off times go through `Markup.LocalTime` (and `LocalTime.tsx` in the React parts), so each visitor sees their
   own. Computed positions (a pitch, a chart) are classes from `placed.css`, because the security
   policy allows no inline styles.
 - **Adverts.** `#ad-top` and `#ad-rail` are kept free on every page and are switched off
-  (`ADS` in `web/src/lib/config.ts`).
+  (drawn empty in `Pages/Shared/_Layout.cshtml`).

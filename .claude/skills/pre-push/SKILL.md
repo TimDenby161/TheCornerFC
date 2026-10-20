@@ -5,8 +5,8 @@ description: Run every check The Corner FC needs before a push and report each o
 
 # Before a push
 
-Work is pushed to `staging`, which builds the staging site and is what the Staging workflow
-checks. `main` is production: it moves only by promotion (`/promote-production`), never by a
+Work is pushed to `staging`, which deploys the staging site (`site-csharp.yml`) and is what the
+Staging workflow checks. `main` is production: it moves only by promotion (`/promote-production`), never by a
 push of new work. Never push without being asked, and never force-push: give the owner the
 command.
 
@@ -22,28 +22,29 @@ Run each check on its own, not chained through a pipe, and read its own result l
    `python -m unittest discover -s tests`
    The line to read is `OK` (or `OK (skipped=21)` without numpy and scipy), with the count on
    the `Ran N tests` line above it. Log lines printed after it are not the result.
-4. **Site unit tests**, from `web/`: `npm test`. Read `Test Files  N passed` and
-   `Tests  N passed`.
-5. **Types**, from `web/`: `npm run check`. Read `0 ERRORS 0 WARNINGS`. It needs the site's
-   environment named, which the switch writes in `web/`: with none it fails, as it should.
-6. **Browser**, from `web/`: `npm run build`, then `npm run preview -- --port 4517` in the
-   background, then `node scripts/browser-check.mjs`; `node scripts/fantasy-check.mjs` if a
-   fantasy page changed. Every line should start `ok`. It reads the selected environment's
-   database through the app: run it once. Its checks expect production's data (every league,
-   the paywall on, named players), so run it with **production** selected (read-only), and
-   switch back to staging afterwards. Against staging's four leagues about ten of its lines
-   fail for want of data, not because anything is broken; staging's own check is
-   `scripts/staging-smoke.mjs`, which the Staging workflow runs.
+4. **Site tests.** From `site/`: `dotnet test`; read `Passed!  - Failed: 0`. From
+   `site/client`: `npm test` (read `Tests  N passed`) and `npm run check` (no output, exit 0).
+   From `web/`, whose `src/lib` the React parts import: `npm test` and `npm run check` (read
+   `0 ERRORS 0 WARNINGS`; it needs the site's environment named, which the switch writes).
+5. **Browser.** From `site/TheCornerFC.Web`, `dotnet run --urls http://127.0.0.1:5280` in the
+   background, then `node web/scripts/browser-check.mjs http://127.0.0.1:5280`, and
+   `node web/scripts/fantasy-check.mjs "" http://127.0.0.1:5280` if a fantasy page changed.
+   Every line should start `ok`. It reads the selected environment's database: run it once. Its
+   checks expect production's data (every league, the paywall on, named players), so run it with
+   **production** selected (read-only), and switch back to staging afterwards. Against staging's
+   four leagues about ten of its lines fail for want of data, not because anything is broken;
+   staging's own check is `web/scripts/staging-smoke.mjs`, which the Staging workflow runs.
+6. **Nothing left running.** Stop the local server afterwards.
 7. **If a model file changed**: `tests/test_model_fingerprints.py` passed in step 3 only if
    its table was updated on purpose. Say which model versions will be new.
 8. **If a migration is waiting**: say so, whether it has been applied to staging, and whether
    the Python it needs is on `main`.
 
 9. **Cost** (`guide/costs.md`): for each service the diff touches (API-Football, Supabase,
-   Cloudflare, GitHub), say what it adds or saves. If it adds cost the owner has not agreed to,
+   Cloudflare, Azure, GitHub), say what it adds or saves. If it adds cost the owner has not agreed to,
    say so and stop.
 
 Then report: each check with its result line, anything skipped and why, and what the push will
-do (Cloudflare builds the staging site; the Staging workflow waits for that build and checks
-it). Stop there. Push only if the owner has asked for this push; a general go-ahead from earlier
+do (the C# site workflow deploys the staging app; the Staging workflow waits for that deploy
+and checks it). Stop there. Push only if the owner has asked for this push; a general go-ahead from earlier
 does not count. After a push, the result to wait for is the `staging-check` job.
