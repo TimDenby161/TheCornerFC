@@ -4,7 +4,9 @@ namespace TheCornerFC.Web.Site;
 // web/src/lib/environments.ts has them. Nothing here is secret: a project's id and its
 // publishable key only identify it, and the database decides what the key may do. The Python
 // jobs name the same projects (PROJECTS in thecornerfc/config.py); a test holds the lists together.
-public sealed record SiteEnvironment(string Name, string Project, string Key, string Host, string BotCheck)
+// Analytics: the live site's Cloudflare Web Analytics token (public: it is in every page), none
+// for staging, so testing there isn't counted.
+public sealed record SiteEnvironment(string Name, string Project, string Key, string Host, string BotCheck, string? Analytics = null)
 {
     public string Url => $"https://{Project}.supabase.co";
     public bool IsProduction => Name == "production";
@@ -12,7 +14,7 @@ public sealed record SiteEnvironment(string Name, string Project, string Key, st
     public static readonly IReadOnlyDictionary<string, SiteEnvironment> All = new Dictionary<string, SiteEnvironment>
     {
         ["production"] = new("production", "bookkurhdabdeccckjbn", "sb_publishable_JZ_oJVHIO75SFbFc95LQew_3wmKuvM7",
-            "thecornerfc.com", "0x4AAAAAAFQgIiqxiuE9dqIM"),
+            "thecornerfc.com", "0x4AAAAAAFQgIiqxiuE9dqIM", "4abd63bf4c214b11a52e0977656d8d12"),
         // Turnstile's published test key, which always passes: staging has no widget of its own
         ["staging"] = new("staging", "sjvzmlbdowebylnzvisa", "sb_publishable_eLnEE_9Qx_BLV4kWpSQACA_-xn1YXNj",
             "staging.thecornerfc.com", "1x00000000000000000000AA"),

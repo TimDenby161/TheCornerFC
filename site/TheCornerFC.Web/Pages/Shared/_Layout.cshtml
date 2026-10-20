@@ -121,5 +121,6 @@
 @await RenderSectionAsync("Scripts", required: false)
 <!-- the React parts: the account box on every page, and each page's own (data-island) -->
 <script type="module" src="/client/islands.js" nonce="@nonce"></script>
+<partial name="_Analytics" />
 </body>
 </html>

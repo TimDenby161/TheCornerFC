@@ -25,7 +25,32 @@ public class SiteTests
         // the page's own script carries the nonce the policy names
         var nonce = System.Text.RegularExpressions.Regex.Match(policy, "'nonce-([0-9a-f]{32})'").Groups[1].Value;
         Assert.NotEmpty(nonce);
-        Assert.Contains($"<script src=\"/site.js\" nonce=\"{nonce}\">", await r.Content.ReadAsStringAsync());
+        var body = await r.Content.ReadAsStringAsync();
+        Assert.Contains($"<script src=\"/site.js\" nonce=\"{nonce}\">", body);
+        // the live site's visitor counter, allowed by the policy and named by the nonce
+        Assert.Contains("script-src 'self' 'nonce-" + nonce + "' https://challenges.cloudflare.com https://static.cloudflareinsights.com;", policy);
+        Assert.Contains("connect-src 'self' https://cloudflareinsights.com;", policy);
+        var beacon = System.Text.RegularExpressions.Regex.Match(body, "<script defer src=\"https://static.cloudflareinsights.com/beacon.min.js\"[^>]*>").Value;
+        Assert.Equal($"<script defer src=\"https://static.cloudflareinsights.com/beacon.min.js\" data-cf-beacon=\"{{&quot;token&quot;: &quot;{SiteEnvironment.All["production"].Analytics}&quot;}}\" nonce=\"{nonce}\">", beacon);
+    }
+
+    [Fact]
+    public async Task The_live_sites_other_pages_count_visitors_too()
+    {
+        using var site = new SiteFactory("production");
+        var body = await (await Client(site, "thecornerfc.com").GetAsync("/no-such-page")).Content.ReadAsStringAsync();
+        Assert.Contains("<nav class=\"tabs\"", body);           // (the site's own layout, not a text page's)
+        Assert.Contains("src=\"https://static.cloudflareinsights.com/beacon.min.js\"", body);
+    }
+
+    [Fact]
+    public async Task Staging_counts_no_visitors()
+    {
+        using var site = new SiteFactory("staging");
+        var r = await Client(site, "staging.thecornerfc.com").GetAsync("/privacy");
+        var policy = r.Headers.GetValues("Content-Security-Policy").Single();
+        Assert.DoesNotContain("cloudflareinsights", policy);
+        Assert.DoesNotContain("beacon.min.js", await r.Content.ReadAsStringAsync());   // (the page's text names the service)
     }
 
     [Fact]

@@ -24,15 +24,16 @@ public static class Gate
     public static string Nonce(this HttpContext context) => (string)context.Items[NonceKey]!;
 
     // What a page may load and run. Scripts: this site's own files, the ones it writes into the
-    // page (named by a one-off nonce) and Cloudflare's bot check. No inline styles, nothing framed
-    // by another site, and the browser talks to this server only: the database is asked from here.
+    // page (named by a one-off nonce) and Cloudflare's bot check; on the live site, Cloudflare Web
+    // Analytics' counter and where it reports. No inline styles, nothing framed by another site, and
+    // otherwise the browser talks to this server only: the database is asked from here.
     public static string Policy(SiteEnvironment env, string nonce) => string.Join("; ",
         "default-src 'self'",
-        $"script-src 'self' 'nonce-{nonce}' https://challenges.cloudflare.com",
+        $"script-src 'self' 'nonce-{nonce}' https://challenges.cloudflare.com{(env.Analytics is not null ? " https://static.cloudflareinsights.com" : "")}",
         "frame-src https://challenges.cloudflare.com",
         "style-src 'self'",
         "img-src 'self' https://flagcdn.com",
-        "connect-src 'self'",
+        $"connect-src 'self'{(env.Analytics is not null ? " https://cloudflareinsights.com" : "")}",
         "manifest-src 'self'",
         "object-src 'none'",
         "base-uri 'self'",

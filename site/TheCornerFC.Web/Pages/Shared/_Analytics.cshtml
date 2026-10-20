@@ -1,0 +1,7 @@
+@inject SiteEnvironment Env
+@* Visitor counts on every page (Cloudflare Web Analytics, the live site only): no cookies, nothing
+   kept in the browser. The policy in Site/Gate.cs lets this script in and lets it report. *@
+@if (Env.Analytics is { } token)
+{
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="@($"{{\"token\": \"{token}\"}}")" nonce="@Context.Nonce()"></script>
+}
