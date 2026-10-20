@@ -1,0 +1,92 @@
+@page "/admin/simulation"
+@model SimulationModel
+@removeTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    ViewData["Title"] = "Paper Simulation · The Corner FC";
+    ViewData["Description"] = "A paper record of the model's selections against the bookmakers, as if each had been backed with the same stake. No real money.";
+    ViewData["NoIndex"] = true;
+    var visitor = Visitor.Of(HttpContext);
+    (string, string)[] strategy = [("all", "All"), ("early", "Night before"), ("late", "Pre-kickoff")], view = [("all", "All bets"), ("cautious", "Cautious")];
+    (string, string)[] market = [("all", "All markets"), ("1X2", "Result"), ("OU15", "O/U 1.5"), ("OU25", "O/U 2.5"), ("OU35", "O/U 3.5"), ("OU45", "O/U 4.5"), ("BTTS", "Both score")];
+}
+@functions {
+    void Chips(string key, string now, (string Value, string Label)[] list)
+    {
+        foreach (var (value, label) in list)
+        {
+            <a role="button" class="filter-chip" href="@Model.Address(key, value)" aria-pressed="@(now == value ? "true" : "false")">@label</a>
+        }
+    }
+    void Lines(string first, List<SimulationModel.Line> rows)
+    {
+        <table class="calib-table"><thead><tr><th>@first</th><th>Bets</th><th>Won</th><th>Profit</th><th>Return</th></tr></thead>
+            <tbody>
+                @foreach (var x in rows)
+                {
+                    <tr class="@(x.On ? "u-bold" : null)"><td>@if (x.League is { } id){<a class="team-link" href="@Model.Address("c", x.On ? "all" : id.ToString())">@x.Label</a>}else{@x.Label}</td>
+                        <td>@x.Bets@if (x.Pending != 0){<text> </text><span class="dim">+@x.Pending</span>}</td><td>@x.Won</td>
+                        <td>@if (x.Profit is { } p){<span class="@p.Cls">@p.Text</span>}else{<text>–</text>}</td><td>@if (x.Roi is { } r){<span class="@r.Cls">@r.Text</span>}else{<text>–</text>}</td></tr>
+                }
+            </tbody></table>
+    }
+}
+<section class="panel" data-tab="bets" data-active="true">
+    <div id="bet-side">
+        <div class="side-stick">@if (Model.Menu is { } menu){@await Html.PartialAsync("_FilterMenu", (menu, "bet-filters", "/admin/simulation", Model.Without("c"), "c"))}</div>
+    </div>
+    <div class="filter-row range-row" id="bet-strategy" role="group" aria-label="When the bet was taken"><span class="filter-label" aria-hidden="true">Taken</span>@{ Chips("s", Model.Ch.Strategy, strategy); }</div>
+    <div class="filter-row u-mb8" id="bet-view" role="group" aria-label="Which bets"><span class="filter-label" aria-hidden="true">Bets</span>@{ Chips("v", Model.Ch.View, view); }</div>
+    <div class="filter-row u-mb10" id="bet-market" role="group" aria-label="Market"><span class="filter-label" aria-hidden="true">Market</span>@{ Chips("m", Model.Ch.Market, market); }</div>
+    <div id="bets-body">
+        @await Html.PartialAsync("_GamblingNote")
+        @if (!Model.Any)
+        {
+            <div class="empty-state">No simulated paper bets yet.</div>
+        }
+        else
+        {
+            <div class="sim-banner">Simulated: paper bets only, no real money staked. Every figure here is a simulation at recorded prices. Past simulated results don't predict future results.</div>
+            <div class="stats-grid">
+                @foreach (var (label, value, note, extra) in Model.Cards)
+                {
+                    <div class="stats-card"><div class="stats-label">@label</div>
+                        <div class="stats-value">@if (label == "Simulated profit" && extra != ""){<span class="@extra">@value</span>}else{@value@if (label == "Won" && extra != ""){<span class="u-sub"> @extra</span>}}</div>
+                        <div class="stats-note">@note</div></div>
+                }
+            </div>
+            @if (Model.Leagues.Count > 0)
+            {
+                <div class="stats-card u-mb12"><div class="stats-label">By league</div>
+                    @{ Lines("League", Model.Leagues); }
+                    <div class="stats-note">Tap a league to see only its bets (tap again for all). Bets = settled <span class="dim">+ pending</span>. For how accurate the predictions are in a league, pick it on the Stats page.</div></div>
+            }
+            @if (Model.MarketLines.Count > 0)
+            {
+                <div class="stats-card u-mb12"><div class="stats-label">By market</div>
+                    @{ Lines("Market", Model.MarketLines); }
+                    <div class="stats-note">Paper bets, no real money: @Model.Stake on every bet from a @Model.Bank bank. A match gets at most one bet of each kind (result, goal line, both teams score): of several, the best is kept, judged as if the true chance were halfway between the model's and the bookmakers'. If both the night-before and pre-kickoff runs bet the same kind on a match, All counts only the night-before bet. All bets are simulated at a UK bookmaker's recorded odds. A paper bet is taken when the model's probability × that price is at least @Model.MinEdge% better than even, at odds up to @Model.MaxOdds.ToString(System.Globalization.CultureInfo.InvariantCulture): a disagreement with the market, which the results below test rather than assume. Return = profit ÷ staked. Profit needs a few hundred settled bets before it means much.</div></div>
+            }
+            @if (Model.SettledBets.Count > 0)
+            {
+                <div class="modal-section">Settled (@Model.SettledCount)</div>
+                <div class="bets-list">
+                    @foreach (var b in Model.SettledBets)
+                    {
+                        var at = DateTimeOffset.Parse(b.Kickoff);
+                        <div class="bet-row @b.Result">
+                            <div class="bet-top"><span>@Markup.LocalTime(at, "day", visitor) @Markup.LocalTime(at, "time", visitor) · @b.Comp</span><span>@b.When</span></div>
+                            <div class="bet-match">@b.Match@if (b.Score is { Length: > 0 } sc){<text> </text><span class="u-muted">(@sc)</span>}</div>
+                            <div class="bet-pick"><span><span class="tip-badges">@foreach (var t in b.Teams){@Markup.Crest(t.Id, t.Name, href: b.Intl ? null : $"/club/{t.Id}")}</span>@Model.Stake on @b.Pick @@ <b>@b.Odds</b></span><span class="@b.Outcome.Cls">@b.Outcome.Text</span></div>
+                            <div class="bet-sub">@b.Sub</div>
+                        </div>
+                    }
+                </div>
+            }
+            @if (Model.Empty){<div class="empty-state">No bets match this filter yet.</div>}
+            @if (Model.Pending != 0){<div class="stats-note u-mt12">@Model.Pending paper bet@(Model.Pending == 1 ? "" : "s") still to be played: see <a href="/admin/model-vs-market">Model vs Market</a>.</div>}
+        }
+    </div>
+</section>
+@section Scripts {
+    <script src="/table.js" nonce="@HttpContext.Nonce()"></script>
+}

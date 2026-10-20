@@ -255,10 +255,12 @@
 		addEventListener('popstate', () => swapTo(location.href, { history: 'none' }));
 	}
 
-	// ---- The Matches page: a competition's (or a day's) matches fold away under its name
-	document.querySelectorAll('.comp-group-header').forEach((h) => {
+	// ---- The Matches page: a competition's (or a day's) matches fold away under its name; on
+	// Model vs Market a day's competitions fold under the day
+	document.querySelectorAll('.comp-group-header, .tip-day').forEach((h) => {
+		const box = h.classList.contains('tip-day') ? h.nextElementSibling : h.parentElement;
 		const fold = () => {
-			const closed = h.parentElement.classList.toggle('collapsed');
+			const closed = box.classList.toggle('collapsed');
 			h.setAttribute('aria-expanded', String(!closed));
 			h.querySelector('.comp-group-caret').textContent = closed ? '▸' : '▾';
 		};

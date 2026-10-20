@@ -1,0 +1,74 @@
+@page "/admin/model-vs-market"
+@model ModelVsMarketModel
+@removeTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    ViewData["Title"] = "Model vs Market · The Corner FC";
+    ViewData["Description"] = "Where the model and the bookmakers disagree most on upcoming matches, and how the model has done against the market so far. Paper selections only.";
+    ViewData["NoIndex"] = true;
+    var visitor = Visitor.Of(HttpContext);
+}
+<section class="panel" data-tab="tips" data-active="true">
+    <div id="tips-top">
+        @await Html.PartialAsync("_GamblingNote")
+        <div class="tips-overview">
+            @foreach (var t in Model.Tiles)
+            {
+                <div class="kpi" title="@t.Title"><div class="kpi-head"><span class="stats-label">@t.Label</span><span class="kpi-pill@(t.Ok == true ? " good" : t.Ok == false ? " bad" : "")">@t.Pill</span></div>
+                    <div class="kpi-value">@t.Value@if (t.Small is not null){<small>@t.Small</small>}</div>
+                    <div class="kpi-rows">@foreach (var (k, v) in t.Rows){<div><span>@k</span><b>@v</b></div>}</div></div>
+            }
+        </div>
+        <div class="stats-note past-note">Past simulated results don't predict future results.</div>
+    </div>
+    <div id="tips-body">
+        <div class="sim-banner">Model probability against market fair probability for the paper simulation's open selections. A difference is a disagreement with the market, not proven value. The price shown is a UK bookmaker's recorded price; no real money. More can appear up to 75 minutes before kickoff, after late team news.</div>
+        @foreach (var d in Model.Days)
+        {
+            <div class="tip-day" role="button" tabindex="0" aria-expanded="true">
+                <span class="comp-group-caret" aria-hidden="true">▾</span><span>@d.Name</span><span class="comp-group-count">@d.Count</span></div>
+            <div class="tip-day-body">
+                @foreach (var c in d.Comps)
+                {
+                    <div class="comp-group">
+                        <div class="comp-group-header" role="button" tabindex="0" aria-expanded="true">
+                            <span class="comp-group-caret" aria-hidden="true">▾</span><span class="comp-group-name">@c.Name</span><span class="comp-group-count">@c.Count</span></div>
+                        <div class="card-list">
+                            @foreach (var m in c.Matches)
+                            {
+                                var several = m.Picks.Count > 1 ? new HtmlString($"<span class=\"match-meta\">{m.Picks.Count} selections</span>") : HtmlString.Empty;
+                                <div class="match-card">
+                                    @if (m.Card is { } card)
+                                    {
+                                        var meta = new HtmlContentBuilder().AppendHtml(Markup.LocalTime(DateTimeOffset.Parse(card.Kickoff), "time", visitor))
+                                            .Append(card.Round is { } rd ? $" · {System.Text.RegularExpressions.Regex.Replace(rd, "^Regular Season - ", "Round ")}" : "");
+                                        @await Html.PartialAsync("_MatchHead", new MatchHeadModel(card.Home, card.Away, card.Status, card.Hg, card.Ag, card.PenH, card.PenA, card.HomeXg, card.AwayXg, card.Likely, card.Source, meta, several))
+                                        @if (card.Probs is not null){@await Html.PartialAsync("_ProbBars", new ProbBarsModel(card.Probs, card.Market, Diff: true))}
+                                    }
+                                    else
+                                    {
+                                        <div class="bet-top"><span>@Markup.LocalTime(DateTimeOffset.Parse(m.Kickoff), "time", visitor)</span>@several</div>
+                                        <div class="bet-match">@m.Home v @m.Away</div>
+                                    }
+                                    <div class="tip-picks">
+                                        @foreach (var p in m.Picks)
+                                        {
+                                            <div class="tip-pick"><span class="tip-left"><span class="tip-badges">@foreach (var t in p.Teams){@Markup.Crest(t.Id, t.Name, href: m.Intl ? null : $"/club/{t.Id}")}</span>
+                                                <span><span class="sel">@p.Label</span><span class="win">@p.Probs</span></span></span><span class="odds">@p.Odds</span></div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        @if (Model.Days.Count == 0)
+        {
+            <div class="empty-state">No open selections right now. New ones are added the night before and shortly before kickoff.</div>
+        }
+    </div>
+</section>
+@section Scripts {
+    <script src="/table.js" nonce="@HttpContext.Nonce()"></script>
+}
