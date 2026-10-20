@@ -63,12 +63,22 @@ app.MapGet("/robots.txt", (HttpContext c) =>
     return Results.Text(Crawlers.Robots(env, c.Request.Host.Host), "text/plain; charset=utf-8");
 });
 // The live site's sitemap. Anywhere else there is none.
-app.MapGet("/sitemap.xml", async (HttpContext c, Database db) =>
+app.MapGet("/sitemap.xml", async (HttpContext c, Database db, TimeProvider clock) =>
 {
     if (!env.IsProduction || c.Request.Host.Host != env.Host) return Results.NotFound();
     var doc = await db.KeptDoc<Rankings>("rankings");
+    // the last 7 days' and the next 7 days' matches; without them if the database doesn't answer
+    IEnumerable<int> matches = [];
+    try
+    {
+        var (from, to) = Crawlers.SitemapDays(clock.GetUtcNow());
+        var site = await db.KeptDoc<SiteDoc>("site");
+        var answer = await db.KeptAsk<MatchesAnswer>("site_matches", new { p_from = from, p_to = to }, TimeSpan.FromHours(6));
+        if (site is not null && answer?.Matches is not null) matches = Crawlers.SitemapMatches(ClubData.MatchRows(site, answer)).ToList();
+    }
+    catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
     c.Response.Headers.CacheControl = "public, max-age=86400";
-    return Results.Text(Crawlers.Sitemap($"https://{env.Host}", doc.Clubs()), "application/xml; charset=utf-8");
+    return Results.Text(Crawlers.Sitemap($"https://{env.Host}", doc.Clubs(), matches), "application/xml; charset=utf-8");
 });
 
 // What the Players page's club and nationality boxes list, asked for when one is first opened

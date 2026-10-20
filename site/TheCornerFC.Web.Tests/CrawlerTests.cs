@@ -23,6 +23,26 @@ public class CrawlerTests
     }
 
     [Fact]
+    public void The_sitemap_adds_each_main_competition_match_once_after_the_clubs_and_leaves_out_those_called_off()
+    {
+        var xml = Crawlers.Sitemap("https://thecornerfc.com", [(42, 39)], [1002, 1001, 1002]);
+        Assert.EndsWith("<url><loc>https://thecornerfc.com/club/42</loc></url>\n<url><loc>https://thecornerfc.com/match/1001</loc></url>\n" +
+                        "<url><loc>https://thecornerfc.com/match/1002</loc></url>\n</urlset>\n", xml);
+        Data.Match M(int id, string status, int league = 39) => new(id, "", league, null, 1, 2, status, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, 0, [], null, null, null, null);
+        Assert.Equal([1, 2, 4], Crawlers.SitemapMatches([M(1, "NS"), M(2, "FT"), M(3, "PST"), M(4, "1H"), M(5, "CANC")]));
+        // only the competitions the site lists first: the Premier League and the Champions League, not the Allsvenskan
+        Assert.Equal([6, 7], Crawlers.SitemapMatches([M(6, "NS", 39), M(7, "NS", 2), M(8, "NS", 113)]));
+    }
+
+    [Fact]
+    public void The_sitemaps_matches_run_from_7_days_back_to_7_days_ahead_in_whole_days()
+    {
+        Assert.Equal(("2026-10-13T00:00:00.000Z", "2026-10-28T00:00:00.000Z"), Crawlers.SitemapDays(DateTimeOffset.Parse("2026-10-20T15:42:00+00:00")));
+        Assert.Equal(Crawlers.SitemapDays(DateTimeOffset.Parse("2026-10-20T00:00:01+00:00")), Crawlers.SitemapDays(DateTimeOffset.Parse("2026-10-20T23:59:59+00:00")));
+    }
+
+    [Fact]
     public void Search_engines_are_let_in_at_the_live_address_only()
     {
         var live = Crawlers.Robots(Live, "thecornerfc.com");
@@ -30,6 +50,7 @@ public class CrawlerTests
         Assert.Contains("Sitemap: https://thecornerfc.com/sitemap.xml", live);
         Assert.StartsWith("User-agent: SemrushBot\nDisallow: /\n\nUser-agent: AhrefsBot\nDisallow: /\n", live);
         Assert.Contains("\nUser-agent: *\nDisallow: /account\n", live);
+        Assert.Contains("\nDisallow: /match/*/\n", live);          // the card panels' data, not the match pages
         Assert.Equal("User-agent: *\nDisallow: /\n", Crawlers.Robots(Live, "thecornerfc.azurewebsites.net"));
         Assert.Equal("User-agent: *\nDisallow: /\n", Crawlers.Robots(Staging, "staging.thecornerfc.com"));
     }

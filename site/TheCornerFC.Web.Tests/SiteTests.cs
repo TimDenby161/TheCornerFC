@@ -86,6 +86,16 @@ public class SiteTests
         var xml = await Client(site, "thecornerfc.com").GetStringAsync("/sitemap.xml");
         Assert.Contains("<loc>https://thecornerfc.com/league/39/table</loc>", xml);
         Assert.Contains("<loc>https://thecornerfc.com/club/7</loc>", xml);
+        Assert.DoesNotContain("/match/", xml);              // (the database gave no matches)
+        using var withMatches = new SiteFactory("production", r =>
+            r.RequestUri!.AbsolutePath.EndsWith("site_matches") ? StubHandler.Json("""{"matches":[[1001,"NS",39],[1003,"PST",39],[1004,"NS",113]]}""")
+            : r.RequestUri.Query.Contains("p_key=rankings") ? StubHandler.Json("""{"fields":["team","league","current"],"rankings":[[42,39,1500.0]]}""")
+            : r.RequestUri.Query.Contains("p_key=site&") ? StubHandler.Json("""{"generated_at":"","competitions":{},"teams":{},"match_fields":["id","status","league"]}""")
+            : StubHandler.Json("null"));
+        var listed = await Client(withMatches, "thecornerfc.com").GetStringAsync("/sitemap.xml");
+        Assert.Contains("<loc>https://thecornerfc.com/match/1001</loc>", listed);
+        Assert.DoesNotContain("/match/1003", listed);
+        Assert.DoesNotContain("/match/1004", listed);       // (not a main competition)
         using var staging = new SiteFactory("staging");
         Assert.Equal(HttpStatusCode.NotFound, (await Client(staging, "staging.thecornerfc.com").GetAsync("/sitemap.xml")).StatusCode);
     }
