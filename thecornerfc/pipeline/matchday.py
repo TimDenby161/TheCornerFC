@@ -60,7 +60,11 @@ def run_matchday(api, conn):
     if upcoming:
         predictions.update_predictions(conn, [f for f, _ in upcoming])
         match_trees.update_safely(conn, [f for f, _ in upcoming])          # before anything reads them
-        fantasy_snapshots.capture_safely(conn, [f for f, _ in upcoming])   # evidence only
+        # evidence only, Premier League only: without one in the window it still read the league's
+        # whole player history first, 48 runs a day (Supabase egress 0.5 to 4.3 GB a day, 2026-10-17)
+        pl = [f for f, league in upcoming if league == fantasy_snapshots.PL]
+        if pl:
+            fantasy_snapshots.capture_safely(conn, pl)
     if upcoming or national:      # a national match keeps the nightly run's projection
         betting.place_late(conn)
     betting.settle_bets(conn)
