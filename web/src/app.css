@@ -268,6 +268,16 @@ body[data-tab="changes"] main { max-width: none; }
 .mc-progress + .mc-progress { margin-top: 4px; }
 .mc-bar { position: relative; display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: var(--chip-bg); overflow: hidden; }
 .mc-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--series-blue); }
+/* the research dashboard */
+.mc-line.band { stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.mc-key.band { border-top-color: var(--text-muted); border-top-style: dashed; }
+.mc-line.model-priced, .mc-dot.model-priced { stroke: var(--series-blue); stroke-dasharray: 2 3; }
+.mc-key.model-priced { border-top-color: var(--series-blue); border-top-style: dotted; }
+.rs-charts, .rs-challengers { display: grid; gap: 14px; }
+.rs-reliability-wrap { display: grid; gap: 14px; align-items: start; }
+.mc-chart.rs-reliability svg { max-width: 300px; margin: 0 auto; }
+.rs-picked td { font-weight: 800; }
+@media (min-width: 900px) { .rs-charts, .rs-reliability-wrap { grid-template-columns: 1fr 1fr; } }
 .mc-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .mc-two td, .mc-two th, .mc-apart td, .mc-apart th { font-variant-numeric: tabular-nums; }
 .mc-apart td { white-space: nowrap; } .mc-apart td:nth-child(2) { white-space: normal; min-width: 160px; }

@@ -213,6 +213,28 @@
 			]
 		]
 	},
+	"research": {
+		"intro": "How the match model is doing, looked at closely: accuracy month by month, whether its chances come true as often as it says, how it compares with the bookmakers in each competition, and every challenger's running score on live matches.",
+		"more": "",
+		"key": [
+			[
+				"Log loss",
+				"How surprised the model was by what happened. Lower is better."
+			],
+			[
+				"Reliability",
+				"Whether things the model calls 30% happen about 30% of the time. On the diagonal is right."
+			],
+			[
+				"Gap",
+				"Model minus bookmakers in log loss on the same matches. Minus means the model was ahead."
+			],
+			[
+				"Gain",
+				"The live model's log loss minus the challenger's. Plus is better for the challenger."
+			]
+		]
+	},
 	"changes": {
 		"intro": "Every change to a model that was proposed: what it was expected to do, what testing showed, what was decided, and how it has done since.",
 		"more": "",

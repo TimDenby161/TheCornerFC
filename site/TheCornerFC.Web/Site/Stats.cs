@@ -1,11 +1,31 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace TheCornerFC.Web.Site;
 
 // The Stats page's figures by range and competition (the "stats" row: ranges["30d"]["39"], with
 // "all" for every competition together; web/src/lib/stats.ts)
-public sealed record StatsDoc(Dictionary<string, Dictionary<string, StatsDoc.Stats>> Ranges)
+// (Monthly: the same sums by calendar month for "all", "eng" and each competition, as short arrays
+// named by MonthColumns, which only the Admin area's research dashboard reads)
+public sealed record StatsDoc(Dictionary<string, Dictionary<string, StatsDoc.Stats>> Ranges,
+    [property: JsonPropertyName("month_columns")] List<string>? MonthColumns = null, Dictionary<string, List<JsonElement[]>>? Monthly = null)
 {
+    public sealed record Month(string Key, int N, double? Correct, double? LogLoss, double? Brier, MarketPair? Market);
+    // one group's months, read by column name
+    public List<Month>? MonthsOf(string key)
+    {
+        if (Monthly is null || MonthColumns is null) return null;
+        if (!Monthly.TryGetValue(key, out var rows)) return [];
+        int At(string name) => MonthColumns.IndexOf(name);
+        double? D(JsonElement[] r, string name) => At(name) is var i && i >= 0 && i < r.Length && r[i].ValueKind == JsonValueKind.Number ? r[i].GetDouble() : null;
+        return rows.Select(r =>
+        {
+            var priced = (int)(D(r, "market_n") ?? 0);
+            return new Month(r[At("month")].GetString()!, (int)(D(r, "n") ?? 0), D(r, "correct"), D(r, "log_loss"), D(r, "brier"),
+                priced > 0 ? new MarketPair(priced, D(r, "model_ll"), D(r, "market_ll"), D(r, "model_correct"), D(r, "market_correct")) : null);
+        }).ToList();
+    }
+
     public sealed record Stats
     {
         public int N { get; init; }

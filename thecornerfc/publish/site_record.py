@@ -83,6 +83,31 @@ def _stats(rows):
     }
 
 
+MONTH_COLUMNS = ["month", "n", "correct", "log_loss", "brier", "market_n", "model_ll", "market_ll", "model_correct", "market_correct"]
+
+
+def _monthly(rows):
+    """{group: [[month, n, correct, log_loss, brier, market_n, model_ll, market_ll, model_correct,
+    market_correct]]} by calendar month (UTC), for the Admin area's research dashboard: the same
+    rows and sums as the Stats tab (`_stats`), for "all", "eng" and each competition, as short
+    arrays to keep the document small (MONTH_COLUMNS; the market figures are null for a month
+    without prices). rows as export_stats builds them (kickoff first, the league second, the
+    fixture id second to last)."""
+    groups = {}
+    for r in rows:
+        month = (r[0] if r[0].tzinfo is None else r[0].astimezone(timezone.utc)).strftime("%Y-%m")
+        for g in ("all", "eng" if r[1] in ENGLISH else None, str(r[1])):
+            if g:
+                groups.setdefault(g, {}).setdefault(month, []).append((*r[2:-2], r[-1]))
+
+    def line(month, rs):
+        st = _stats(rs)
+        mk = st["market"] or {}
+        return [month, st["n"], st["correct"], st["log_loss"], st["brier"], mk.get("n", 0),
+                mk.get("model_ll"), mk.get("market_ll"), mk.get("model_correct"), mk.get("market_correct")]
+    return {g: [line(m, rs) for m, rs in sorted(months.items())] for g, months in groups.items()}
+
+
 # Stats tab, model vs bookmakers per market: market -> (bet id, API line or "", selections)
 STAT_MARKETS = {
     "1X2": (1, "", ("Home", "Draw", "Away")),
@@ -219,7 +244,8 @@ def export_stats(conn, out_dir=OUT_DIR):
             if g in stats[key]:
                 stats[key][g]["markets"] = _market_stats([per_fixture[r[-2]] for r in rs if r[-2] in per_fixture])
     (out_dir / "stats.json").write_text(json.dumps(
-        {"generated_at": now.isoformat(), "ranges": stats}, separators=(",", ":")), encoding="utf-8")
+        {"generated_at": now.isoformat(), "ranges": stats,
+         "month_columns": MONTH_COLUMNS, "monthly": _monthly(rows)}, separators=(",", ":")), encoding="utf-8")
     log.info("Exported prediction stats for %d finished fixtures", len(rows))
 
 

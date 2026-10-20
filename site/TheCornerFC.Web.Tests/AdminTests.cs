@@ -41,10 +41,23 @@ public class AdminTests
          "scores":{"MC-0031":{"n":310,"log_loss":0.97,"right":0.53,"against_log_loss":0.9712,"against_right":0.52}}}
         """;
 
+    const string SiteDocJson = """{"generated_at":"2026-10-18T01:40:00+00:00","competitions":{"39":{"name":"Premier League","country":"England","type":"League"}},"teams":{}}""";
+    const string Stats = """
+        {"generated_at":"2026-10-19T02:00:00+00:00",
+         "ranges":{"365d":{
+           "all":{"n":900,"correct":0.52,"log_loss":0.98,"market":{"n":600,"model_ll":0.99,"market_ll":0.97,"model_correct":0.51,"market_correct":0.53},
+             "calibration":[[100,0.05,0.04],[200,0.15,0.17],[0,null,null],[0,null,null],[0,null,null],[0,null,null],[0,null,null],[0,null,null],[0,null,null],[50,0.95,0.9]]},
+           "39":{"n":300,"correct":0.55,"log_loss":0.95,"market":{"n":300,"model_ll":0.96,"market_ll":0.95,"model_correct":0.55,"market_correct":0.56},"calibration":[]}}},
+         "month_columns":["month","n","correct","log_loss","brier","market_n","model_ll","market_ll","model_correct","market_correct"],
+         "monthly":{"all":[["2026-09",400,0.5,0.99,0.59,250,1.0,0.98,0.5,0.52],["2026-10",500,0.54,0.97,0.58,0,null,null,null,null]]}}
+        """;
+
     // a stand-in whose am_admin says `admin`, with the two documents and the model switch
     static SiteFactory Site(bool admin) => new("production", r => Fn(r) switch
     {
         "am_admin" => StubHandler.Json(admin ? "true" : "false"),
+        _ when r.RequestUri!.Query.Contains("p_key=stats") => StubHandler.Json(Stats),
+        _ when r.RequestUri!.Query.Contains("p_key=site") => StubHandler.Json(SiteDocJson),
         "admin_doc" => StubHandler.Json(r.Content!.ReadAsStringAsync().Result.Contains("model_changes") ? $$"""{"ok":true,"doc":{{Changes}}}""" : $$"""{"ok":true,"doc":{{Live}}}"""),
         "admin_match_model" => StubHandler.Json("""{"ok":true,"live":"base","switches":[{"at":"2026-10-14T09:00:00+00:00","live":"base"}]}"""),
         "admin_set_match_model" => StubHandler.Json("""{"ok":true,"live":"a18","switches":[]}"""),
@@ -110,6 +123,35 @@ public class AdminTests
         // the menu's Admin links, for them
         Assert.Contains("href=\"/admin/simulation\"", html);
         Assert.All(site.Handler.Sent.Where(x => Fn(x).StartsWith("admin_") || Fn(x) == "am_admin"), x => Assert.Equal("Bearer access-1", x.Headers.Authorization!.ToString()));
+    }
+
+    [Fact]
+    public async Task The_research_dashboard_sets_out_the_months_reliability_the_market_and_each_challenger()
+    {
+        using var site = Site(admin: true);
+        var r = await Client(site).SendAsync(Get("/admin/research"));
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.True(r.Headers.CacheControl is { Private: true, NoStore: true });
+        var html = await r.Content.ReadAsStringAsync();
+        Assert.Contains("<option value=\"39\">Premier League (300)</option>", html);
+        Assert.Contains("Accuracy month by month: All competitions", html);
+        Assert.Contains("<tr><td>2026-09</td><td>400</td><td>50.0%</td><td>0.990</td><td>250</td><td>1.000</td><td>0.980</td>", html);
+        Assert.Contains("<span class=\"neg\">&#x2B;0.020</span>", html);                  // behind the bookmakers that month
+        Assert.Contains("aria-label=\"Reliability: chance said against how often it happened\"", html);
+        Assert.Contains("<td>10–20%</td><td>200</td><td>15.0%</td><td>17.0%</td>", html);
+        Assert.Contains("<a class=\"team-link\" href=\"/admin/research?c=39\">Premier League</a>", html);
+        Assert.Contains("<article class=\"mc-card mark-none\" id=\"rs-MC-0031\">", html);
+        Assert.Contains("Gain <b>&#x2B;0.00120</b> on 310 matches over 1 week", html);
+        Assert.Contains("MC-0031: gain in log loss".Replace("MC-0031", "A31"), html);
+        // another competition from the address; an unknown one falls back to all
+        var pl = await (await Client(site).SendAsync(Get("/admin/research?c=39"))).Content.ReadAsStringAsync();
+        Assert.Contains("<option value=\"39\" selected=\"selected\">", pl);
+        Assert.Contains("No finished matches with a prediction in this competition", pl);
+        var odd = await (await Client(site).SendAsync(Get("/admin/research?c=nope"))).Content.ReadAsStringAsync();
+        Assert.Contains("Accuracy month by month: All competitions", odd);
+        // and nobody else gets it
+        using var other = Site(admin: false);
+        Assert.Equal(HttpStatusCode.NotFound, (await Client(other).SendAsync(Get("/admin/research"))).StatusCode);
     }
 
     [Fact]

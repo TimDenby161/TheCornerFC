@@ -29,6 +29,7 @@ public static partial class Menu
     // under /admin is refused to anyone else by the server and by the database.
     public static readonly MenuGroup Admin = new("Admin", [
         new("changes", "Model Change Tracker", "/admin/changes"),
+        new("research", "Research", "/admin/research"),
         new("tips", "Model vs Market", "/admin/model-vs-market"),
         new("bets", "Paper Simulation", "/admin/simulation"),
     ]);

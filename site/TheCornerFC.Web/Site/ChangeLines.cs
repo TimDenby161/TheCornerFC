@@ -54,7 +54,10 @@ public static class ChangeLines
         foreach (var v in marks) svg.Append($"<line x1=\"{L}\" x2=\"{W - R}\" y1=\"{F1(y(v))}\" y2=\"{F1(y(v))}\" />");
         svg.Append("</g><g class=\"chart-axis\">");
         foreach (var v in marks) svg.Append($"<text x=\"{L - 6}\" y=\"{F1(y(v) + 3)}\" text-anchor=\"end\">{Js.ToFixed(v, places)}</text>");
-        for (var i = 0; i < xs.Count; i++) if (i % every == 0) svg.Append($"<text x=\"{F1(X(xs[i]))}\" y=\"{H - 8}\" text-anchor=\"middle\">{E(xs[i])}</text>");
+        // (the labels at the two ends are anchored inside the chart, so they aren't cut off)
+        for (var i = 0; i < xs.Count; i++)
+            if (i % every == 0)
+                svg.Append($"<text x=\"{F1(X(xs[i]))}\" y=\"{H - 8}\" text-anchor=\"{(xs.Count > 1 && i == 0 ? "start" : xs.Count > 1 && i == xs.Count - 1 ? "end" : "middle")}\">{E(xs[i])}</text>");
         svg.Append("</g>");
         if (zero) svg.Append($"<line class=\"mc-zero\" x1=\"{L}\" x2=\"{W - R}\" y1=\"{F1(y(0))}\" y2=\"{F1(y(0))}\" />");
         foreach (var s in series)

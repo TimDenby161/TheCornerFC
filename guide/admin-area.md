@@ -1,7 +1,7 @@
 # The Admin area and the model change record
 
-Three pages under `/admin` are the site administrator's only: **Model Change Tracker**,
-**Model vs Market** and **Paper Simulation**. The two betting pages were public until
+Four pages under `/admin` are the site administrator's only: **Model Change Tracker**,
+**Research**, **Model vs Market** and **Paper Simulation**. The two betting pages were public until
 2026-10-13 (owner's decision). Nothing here changes a model, a bet or a stored prediction.
 
 **The record is public too (owner's decision 2026-10-16, the most transparent model).** The
@@ -87,6 +87,13 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   and says of the rest why they are not run. Both are judged by a confidence sequence, which holds
   however often it is looked at, so the ranges are wide. A future release rebases P17 by a dated
   amendment in the same commit instead of closing it.
+- **Research** (`/admin/research`, `Site/Research.cs`). For the competition in the address
+  (`?c=`): % right and log loss month by month, beside the bookmakers' on the priced matches; a
+  reliability chart of the last 12 months (each 10% band of stated chance against how often it
+  happened); the model against the bookmakers in every competition, furthest behind first; and
+  every challenger's gain week by week with its range. The months are `monthly` in the "stats"
+  document, short arrays named by `month_columns`, summed by `export_stats` from the rows it
+  already reads (no extra query); the rest is the "stats" ranges and `live_tracking`.
 - **The tracker's cards** (`Pages/Shared/_ChangeCard.cshtml`, `ModelRecord.Cards`). Each change
   is a card on both the tracker and The Model: what it does (the register's `what`), how it
   learns once running (`ModelRecord.Learns`, written from the experiments' code), and its past

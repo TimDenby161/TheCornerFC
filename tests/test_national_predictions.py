@@ -267,6 +267,22 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(out["5"]["market"]["market_correct"], 0.0)          # a 0-0 draw; the market had the home side
         self.assertEqual((out["5"]["markets"]["1X2"]["n"], out["5"]["markets"]["1X2"]["open_n"]), (1, 0))
 
+    def test_the_months_hold_the_same_sums_by_competition(self):
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d, \
+                patch.object(site_record, "datetime", Mock(now=lambda tz: KICKOFF + timedelta(days=1))):
+            export.export_stats(self.conn(odds=True), Path(d))
+            doc = json.loads((Path(d) / "stats.json").read_text())
+        month = KICKOFF.strftime("%Y-%m")
+        self.assertEqual([m[0] for m in doc["monthly"]["all"]], [month])
+        for g in ("all", "eng", "39", "5"):
+            m = dict(zip(doc["month_columns"], doc["monthly"][g][0]))
+            self.assertEqual((m["n"], m["correct"], m["log_loss"]), tuple(doc["ranges"]["7d"][g][k] for k in ("n", "correct", "log_loss")))
+        five = dict(zip(doc["month_columns"], doc["monthly"]["5"][0]))
+        self.assertEqual((five["market_n"], five["market_correct"]), (1, 0.0))
+        self.assertEqual(dict(zip(doc["month_columns"], doc["monthly"]["39"][0]))["model_ll"], None)
+
     def test_before_the_national_tables_exist_only_clubs_count(self):
         out = self.export(self.conn(tables=False))
         self.assertEqual((out["all"]["n"], "5" in out), (1, False))
