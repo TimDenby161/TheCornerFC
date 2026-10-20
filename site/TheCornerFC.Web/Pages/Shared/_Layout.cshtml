@@ -11,7 +11,9 @@
     var current = Menu.Current(path);
     var head = ViewData["TabHead"] as TabHead;
     var fresh = await Freshness.Read(Db);
-    var menu = Menu.Main.Concat(visitor.Admin || visitor.Owner ? [Menu.Owner] : []).Concat(visitor.Admin ? [Menu.Admin] : []);
+    // (the Admin links: the database's answer for this visitor's own token, asked once a request)
+    var admin = visitor.Admin || (visitor.SignedIn && await Admin.IsAdmin(Db, Context));
+    var menu = Menu.Main.Concat(admin || visitor.Owner ? [Menu.Owner] : []).Concat(admin ? [Menu.Admin] : []);
     var nonce = Context.Nonce();
     var mark = (visitor.Email ?? "").Trim() is { Length: > 0 } email ? char.ToUpperInvariant(email[0]).ToString() : "";
     // what the account box (React, AccountBox.tsx) opens with: who is signed in and what the

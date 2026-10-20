@@ -46,9 +46,9 @@ public static class Sessions
         var auth = context.RequestServices.GetRequiredService<AuthClient>();
         var clock = context.RequestServices.GetRequiredService<TimeProvider>();
         var request = context.Request;
-        // The account page's forms by the current site's addresses (/account?/signin, SvelteKit's
-        // form for an action): the same handler here (?handler=signin)
-        if (request.Path == "/account" && request.QueryString.Value is { } qs && qs.StartsWith("?/") && qs.Length > 2)
+        // A form by the current site's addresses (/account?/signin, ?/switch: SvelteKit's form for an
+        // action): the same page's handler here (?handler=signin)
+        if (request.QueryString.Value is { } qs && qs.StartsWith("?/") && qs.Length > 2)
             request.QueryString = new QueryString($"?handler={Uri.EscapeDataString(qs[2..].Split('&')[0])}");
         var q = request.Query;
 
@@ -102,9 +102,12 @@ public static class Sessions
         var visitor = Visitor.For(context, session);
         context.Items[nameof(Visitor)] = visitor;
 
-        // a signed-in visitor's pages are never kept, by the browser or anything between
-        if (visitor.SignedIn)
+        // a signed-in visitor's pages are never kept, by the browser or anything between; nor is
+        // anything in the Admin area, whoever asks
+        if (visitor.SignedIn || Admin.IsAdminPath(request.Path.Value ?? ""))
             context.Response.OnStarting(() => { context.Response.Headers.CacheControl = "private, no-store"; return Task.CompletedTask; });
+        // the Admin area: the administrator's only, checked here before any of it runs (Site/Admin.cs)
+        if (!await Admin.Gate(context)) return;
         await next(context);
     });
 }

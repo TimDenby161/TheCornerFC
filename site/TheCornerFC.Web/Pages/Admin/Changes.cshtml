@@ -1,0 +1,110 @@
+@page "/admin/changes"
+@model ChangesModel
+@removeTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@using AdminSite = TheCornerFC.Web.Site.Admin
+@{
+    ViewData["Title"] = "Model Change Tracker · The Corner FC";
+    ViewData["NoIndex"] = true;
+    var visitor = Visitor.Of(HttpContext);
+    IHtmlContent When(string iso, string show) => Markup.LocalTime(DateTimeOffset.Parse(iso), show, visitor);
+    static string Num(int? n) => n is { } x ? Js.Num(x) : "–";
+}
+<section class="panel mc" data-tab="changes" data-active="true">
+    @if (!Model.Ready)
+    {
+        <div class="empty-state">The model change record has not been stored yet. It is written by the next export after the Admin migration is applied.</div>
+    }
+    else
+    {
+        var doc = Model.Doc;
+        <p class="mc-env" id="mc-env">@(doc.Environment == "production" ? "Production" : doc.Environment == "staging" ? "Staging: test data, not the live record" : "Environment not named") · updated @When(doc.GeneratedAt, "short") @When(doc.GeneratedAt, "time")</p>
+        <div class="stats-grid mc-tiles" id="mc-tiles">
+            @foreach (var t in Model.Tiles)
+            {
+                <div class="stats-card"><div class="stats-label">@t.Label</div><div class="stats-value mc-value"><span class="@t.Cls">@t.Value</span></div><div class="stats-note">@t.Note</div></div>
+            }
+        </div>
+        @if (Model.Model is { } model)
+        {
+            <div class="stats-card mc-switch" id="mc-switch"><div class="stats-value mc-value">Model Comparison</div>
+                @if (Model.Vs is { } v)
+                {
+                    <div class="mc-compare" id="mc-compare">
+                        @if (v.Scores is { N: > 0 } || v.PastScores.Rows.Count > 0)
+                        {
+                            <div class="mc-scroll"><table class="calib-table mc-rows mc-two" id="mc-two"><thead><tr><th>Measure</th><th>Bookmakers</th><th>Base</th><th>A18</th><th>A18 − Bookmakers</th><th>A18 − Base</th></tr></thead>
+                                @if (v.PastScores.Rows.Count > 0)
+                                {
+                                    <tbody><tr class="mc-group"><th colspan="6">Past matches@(v.PastScores.Period is [var from, var to, ..] ? $", {from} to {to}" : "")</th></tr>
+                                        <tr class="mc-count"><td>Matches</td><td>–</td><td>@Num(v.PastScores.N)</td><td>@Num(v.PastScores.N)</td><td>–</td><td>@Num(v.PastScores.N)</td></tr>
+                                        @foreach (var r in v.PastScores.Rows){<tr><td>@r.Label</td><td>–</td><td>@r.Base</td><td>@r.A18</td><td>–</td><td><span class="mc-pill @r.Mark">@r.Gap</span></td></tr>}</tbody>
+                                }
+                                @if (v.Scores is not { N: > 0 })
+                                {
+                                    <tbody><tr class="mc-group"><th colspan="6">Live matches@(v.Start is { Length: > 0 } s ? $", from {s}" : "")</th></tr><tr><td colspan="6">No finished matches yet</td></tr></tbody>
+                                }
+                                else
+                                {
+                                    var sc = v.Scores;
+                                    <tbody><tr class="mc-group"><th colspan="6">Live matches@(v.Start is { Length: > 0 } s2 ? $", from {s2}" : "")</th></tr>
+                                    <tr class="mc-count"><td>Matches</td><td>@(sc.Priced == 0 ? "–" : sc.Priced.ToString())</td><td>@sc.N</td><td>@sc.N</td><td>@(sc.Priced == 0 ? "–" : sc.Priced.ToString())</td><td>@sc.N</td></tr>
+                                        @foreach (var r in sc.Rows)
+                                        {
+                                            <tr><td>@r.Label</td><td>@(r.Market ?? "No prices")</td><td>@r.Base</td><td>@r.A18</td>
+                                                <td>@if (r.MarketGap is not null){<span class="mc-pill @r.MarketMark">@r.MarketGap</span>@if (r.MarketNote != ""){<span class="mc-sub">@r.MarketNote</span>}}else{<text>–</text>}</td>
+                                                <td><span class="mc-pill @r.Mark">@r.Gap</span></td></tr>
+                                        }</tbody>
+                                }</table></div>
+                            <div class="stats-note">Both models’ live predictions were stored before kickoff; the past period had been looked at before, so the live matches are the real test. The bookmakers are their closing prices with the margin taken out, averaged; there are no clean stored prices for the past period, so it has none@(v.Scores is { Priced: > 0 } p && p.Priced < p.N ? $". Only {p.Priced} of the {p.N} matches have prices, so the Bookmakers column and A18 − Bookmakers are on those {p.Priced}, with A18's own figure on them under the gap" : ""). Minus is better for A18 on log loss and Brier, plus on right results.</div>
+                        }
+                        @if (v.Apart.Count > 0)
+                        {
+                            <details class="mc-fold" id="mc-apart-fold"><summary>Where they differ most: the @v.Apart.Count upcoming fixtures furthest apart</summary>
+                            <div class="stats-note">Home · draw · away chances, with each model's expected goals under them.</div>
+                            <div class="mc-scroll"><table class="calib-table mc-rows mc-apart" id="mc-apart"><thead><tr><th>Kick-off</th><th>Match</th><th>Bookmakers</th><th>Base</th><th>A18</th><th>Gap</th></tr></thead>
+                                <tbody>@foreach (var r in v.Apart){<tr class="@(r.Differ ? "mc-differ" : null)"><td>@When(r.Kickoff, "short")</td><td><a class="team-link" href="/match/@r.Fixture">@r.Match</a><span class="mc-sub">@r.League@(r.Differ ? " · different favourite" : "")</span></td>
+                                    <td>@(r.Market ?? "No prices yet")</td><td>@r.Base<span class="mc-sub">xG @r.BaseXg</span></td><td>@r.A18<span class="mc-sub">xG @r.A18Xg</span></td><td>@r.Gap</td></tr>}</tbody></table></div>
+                            </details>
+                        }
+                    </div>
+                }
+                <p class="mc-para mc-live-now">Live now: <strong>@AdminSite.MatchModelLabels[model.Live]</strong></p>
+                <form method="POST" action="?/switch"><input type="hidden" name="live" value="@AdminSite.OtherModel(model.Live)" />
+                    <button type="submit" class="mt-btn">Make live: @AdminSite.MatchModelLabels[AdminSite.OtherModel(model.Live)]</button></form>
+                @if (Model.Refused != ""){<div class="sim-banner mc-alert" role="alert">@Model.Refused</div>}
+                <div class="stats-note">The live model is the one the site, the paper bets and the fantasy models use, from the next run of the predictions (several a day). Both models' predictions are stored before every kickoff whichever is live, and compared on the same matches (P18).@if (model.Switches.Count > 0){<text> Last switched @When(model.Switches[0].At, "short") @When(model.Switches[0].At, "time").</text>}</div></div>
+        }
+        @if (doc.Stored != true){<div class="sim-banner mc-alert" role="alert">This copy was read from the register's files and could not be recorded in the database, so nothing here is yet protected from later edits.</div>}
+        @if (doc.Differs is { Count: > 0 } differs)
+        {
+            <div class="sim-banner mc-alert" role="alert">A file in the register no longer matches what was first recorded. The record below is the first version; put a mistake right with a correction, not an edit.
+                <ul>@foreach (var line in differs){<li>@line</li>}</ul></div>
+        }
+
+        <div class="mc-sections" id="mc-charts">
+            <div class="stats-card"><div class="stats-label">Each change against the current version, log loss</div>
+                @if (Model.Deltas.Count > 0)
+                {
+                    <table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Past matches</th><th>Past gain</th><th>Current → with the change</th><th>Live matches</th><th>Live gain</th><th>On live matches</th></tr></thead>
+                        <tbody>@foreach (var d in Model.Deltas)
+                        {
+                            <tr class="mark-@d.Mark@(d.Ready ? " mc-ready" : "")"><td class="mc-no">@ModelRecord.ShortId(d.Id)</td>
+                                <td><a class="team-link" href="/admin/changes/@d.Id">@d.Title</a>@if (d.ReadyNote != ""){<span class="mc-sub@(d.Ready ? " mc-ready-note" : "")">@d.ReadyNote</span>}</td>
+                                <td>@(d.N is { } n ? Js.Num(n) : "–")</td>
+                                <td>@if (d.Gain is { } g){<span class="mc-gain mark-@d.Mark">@ModelRecord.Signed(g)</span>}else{<text>–</text>}@if (d.Expected is { } ex){<span class="mc-sub">Expected @ModelRecord.Signed(ex)</span>}</td>
+                                <td>@(d.Before is { } b && d.After is { } a ? $"{Js.ToFixed(b, 5)} → {Js.ToFixed(a, 5)}" : d.Gain is null ? "–" : "Not recorded")</td>
+                                <td>@(d.LiveRecord is { } lr ? Js.Num(lr.N) : "–")</td>
+                                <td class="mc-live">@if (d.LiveRecord?.Gain is { } lg){@ModelRecord.Signed(lg)@if (d.LiveRecord.Low is { } lo && d.LiveRecord.High is { } hi){<span class="mc-sub">@ModelRecord.Signed(lo) to @ModelRecord.Signed(hi)</span>}}else{<text>–</text>}</td>
+                                <td class="mc-live-say" title="@d.LiveWhy">@d.LiveText@if (d.LiveWhy != ""){<span class="mc-sub">@d.LiveWhy</span>}</td></tr>
+                        }</tbody></table>
+                    <div class="stats-note">@if (Model.Live is { } l){<text>Live matches: @Js.Num(l.N) finished since @l.Start@(l.To is { } to ? $" (to {to})" : ""), over @l.Weeks week@(l.Weeks == 1 ? "" : "s"), for the @l.Tracked change@(l.Tracked == 1 ? "" : "s") tracked (@l.Protocol). Updated @(l.Generated is { } gen ? When(gen, "short") : HtmlString.Empty). Nothing is called on live matches before @l.Matches matches and @l.MinWeeks weeks.</text>}else{<text>The live record has not been stored yet: it is written by the Live tracking job, on Mondays and Thursdays.</text>} The live gain is the candidate against the current model on the same live matches, with the range it could still lie in; it is judged by a method that allows looking at any time, which is why its range is wide and a call takes many matches.</div>
+                    <div class="stats-note"><b>Green means one thing: implement this.</b> A row is green when there is statistical evidence that the change makes the model better, however small the gain: on live matches, or on a test that was not the matches it was built on, and it has been neither rejected nor deployed. No other change is marked green anywhere on this page. A gain that is large but unproven, or rejected, has no colour and says why under its name. Red is a change a test has proven worse. Releasing a green change is still your decision. Green rows come first, then proven gains, then the unproven, then the proven losses. Gain is how much lower the log loss is with the change, so a plus is an improvement. Past figures are each change's own historical test on its own matches, never a production result.</div>
+                }
+                else
+                {
+                    <div class="stats-note">No change outside production in this selection has a result on log loss.</div>
+                }
+            </div>
+        </div>
+    }
+</section>

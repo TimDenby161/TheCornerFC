@@ -40,11 +40,12 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 app.UseGate(env);
-// who is signed in, before any page runs (Site/Sessions.cs)
-app.UseSessions();
 // A page that fails: the fault goes to the server's log, never onto the page
 app.UseExceptionHandler("/error/500");
 app.UseStatusCodePagesWithReExecute("/error/{0}");
+// who is signed in, before any page runs (Site/Sessions.cs); after the error pages, so the Admin
+// gate's "no such page" is the site's own not-found page
+app.UseSessions();
 app.UseRouting();
 app.MapStaticAssets();
 app.MapRazorPages().WithStaticAssets();

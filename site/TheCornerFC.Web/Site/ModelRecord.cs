@@ -8,18 +8,34 @@ namespace TheCornerFC.Web.Site;
 // The Model's document (the "model" row, written nightly by thecornerfc/publish/site_record.py,
 // public_model): the Model Change Tracker's record and the live tests' results, without the Admin
 // area's own notes, and one finished match worked through step by step
+// (The Admin area's "model_changes" document is the same record in full: the environment it came
+// from, whether it could be stored, and any file that no longer matches what was first recorded.)
 public sealed record ModelDoc(
     [property: JsonPropertyName("generated_at")] string GeneratedAt, ModelDoc.CurrentRecord? Current, List<ModelDoc.SeriesPoint>? Series,
-    List<ModelDoc.Change> Changes, ModelDoc.LiveDoc? Tracking, ModelDoc.WorkedExample? Example)
+    List<ModelDoc.Change> Changes, ModelDoc.LiveDoc? Tracking, ModelDoc.WorkedExample? Example,
+    string? Environment = null, bool? Stored = null, List<string>? Differs = null)
 {
-    public sealed record ExpectedMetric(string Metric, double Delta);
-    public sealed record Expected(List<ExpectedMetric>? Metrics);
-    public sealed record Result(string? Type, string Evaluation, string Metric, double Delta, int? N, double? Baseline, double? After, double[]? Interval);
+    public sealed record ExpectedMetric(string Metric, double Delta, double? Low = null, double? High = null, string? Source = null);
+    public sealed record Expected(List<ExpectedMetric>? Metrics, string? Improves = null, string? Betting = null, string? Confidence = null, string? Evidence = null);
+    public sealed record MarketGap(int N, [property: JsonPropertyName("model_minus_market")] double ModelMinusMarket, string? Note = null);
+    public sealed record Result(string? Type, string Evaluation, string Metric, double Delta, int? N, double? Baseline, double? After, double[]? Interval,
+        string? Date = null, string? Unseen = null, string? Label = null, string[]? Period = null,
+        [property: JsonPropertyName("interval_level")] double? IntervalLevel = null, [property: JsonPropertyName("vs_market")] MarketGap? VsMarket = null,
+        string? Meaningful = null, string? Source = null);
+    public sealed record Code(string? Commit, string? Experiment, [property: JsonPropertyName("model_version")] string? ModelVersion);
+    public sealed record WindowMarket(int N, [property: JsonPropertyName("model_minus_market")] double ModelMinusMarket);
+    public sealed record Window(int N, [property: JsonPropertyName("log_loss")] double? LogLoss, double? Brier, [property: JsonPropertyName("vs_market")] WindowMarket? VsMarket);
+    public sealed record Forward(string? From, string? To, Window? After, Window? Before, string Verdict, string Why, [property: JsonPropertyName("deployed_with")] List<string>? DeployedWith);
     // a registered test on matches played after the change was fixed: how far it has got
     public sealed record LiveTest(string Protocol, string Start, int Target, int Matches);
     public sealed record Change(string Id, string Title, string? Model, string Status, string Stage, bool Deployed,
         [property: JsonPropertyName("deployed_on")] string? DeployedOn, [property: JsonPropertyName("released_in")] string? ReleasedIn,
-        Expected? Expected, List<Result>? Results, List<LiveTest>? Live);
+        Expected? Expected, List<Result>? Results, List<LiveTest>? Live,
+        string? Date = null, string? Recorded = null, bool Retrospective = false, string? Component = null, string? Kind = null,
+        string? What = null, string? Why = null, string? How = null, string? Hypothesis = null,
+        [property: JsonPropertyName("success_criteria")] string? SuccessCriteria = null, Code? Code = null,
+        [property: JsonPropertyName("recorded_at")] string? RecordedAt = null, [property: JsonPropertyName("deployed_day_known")] bool? DeployedDayKnown = null,
+        List<JsonElement>? Events = null, Forward? Forward = null);
     public sealed record VsMarket(int N, [property: JsonPropertyName("model_log_loss")] double ModelLogLoss, [property: JsonPropertyName("market_log_loss")] double MarketLogLoss);
     public sealed record Period(string From, string To);
     public sealed record CurrentRecord(string? Version, int? N, Period? Period, [property: JsonPropertyName("log_loss")] double? LogLoss, double? Brier,
@@ -28,10 +44,13 @@ public sealed record ModelDoc(
         double? Home, double? Draw, double? Away);
     // the live running record: each change scored on every finished match since it began, judged by
     // a confidence sequence; gain is production's log loss minus the change's (plus is better)
-    public sealed record LiveRecord(int N, int Weeks, double? Gain, double? Low, double? High, string? Verdict);
+    public sealed record Called(string Verdict, int Week, int N, double Gain);
+    public sealed record LivePoint(int Week, int N, double Gain, double? Low, double? High);
+    public sealed record LiveRecord(int N, int Weeks, double? Gain, double? Low, double? High, string? Verdict, Called? Called = null, List<LivePoint>? Series = null);
     public sealed record Minimum(int Matches, int Weeks);
     public sealed record LiveDoc(string Protocol, string Start, Minimum Minimum, int N, int Weeks, string? To,
-        Dictionary<string, LiveRecord> Changes, [property: JsonPropertyName("not_run")] Dictionary<string, string>? NotRun);
+        Dictionary<string, LiveRecord> Changes, [property: JsonPropertyName("not_run")] Dictionary<string, string>? NotRun,
+        [property: JsonPropertyName("generated_at")] string? GeneratedAt = null);
     // its match as site.matches holds it, by field name
     public sealed record WorkedExample(Dictionary<string, JsonElement> Match, [property: JsonPropertyName("home_name")] string? HomeName,
         [property: JsonPropertyName("away_name")] string? AwayName, string? Competition, Why? Why);
@@ -87,10 +106,10 @@ public static class ModelRecord
 
     // Ready to implement: a test (not the matches it was built on) proves the change better, by any
     // amount, and it has been neither rejected nor already deployed
-    static bool Ready(ModelDoc.Change c, ModelDoc.Result r) =>
+    public static bool Ready(ModelDoc.Change c, ModelDoc.Result r) =>
         !c.Deployed && c.Status != "Rejected" && c.Status != "Reverted" && r.Evaluation != "development" && Tone(r) == "better";
     // Why a proven gain is not green, in a few words; '' where there is nothing to explain
-    static string NotReadyNote(ModelDoc.Change c, ModelDoc.Result r)
+    public static string NotReadyNote(ModelDoc.Change c, ModelDoc.Result r)
     {
         if (Ready(c, r) || Tone(r) != "better") return "";
         if (c.Deployed) return "Already in production";
@@ -101,14 +120,18 @@ public static class ModelRecord
     // A row for each change with a result on the measure, best first: changes proven better lead, by
     // gain; then the ones not proven either way, by gain; then the ones proven worse.
     // Mark: the page's one colour rule (ready, worse or none)
+    // (Expected: the gain the change wrote down before it was tested, on the same measure, as a gain;
+    // Before and After: the measure without and with it, where recorded)
     public sealed record DeltaRow(string Id, string Title, string? Evaluation, double? Gain, string Tone, int? N, bool Ready, string ReadyNote,
-        string Mark, ModelDoc.LiveRecord? LiveRecord, string LiveText, string LiveWhy);
+        string Mark, ModelDoc.LiveRecord? LiveRecord, string LiveText, string LiveWhy, double? Expected = null, double? Before = null, double? After = null);
     static readonly Dictionary<string, int> Order = new() { ["better"] = 0, ["unclear"] = 1, ["worse"] = 2 };
     public static List<DeltaRow> DeltaRows(List<ModelDoc.Change> changes, string metric, ModelDoc.LiveDoc? liveDoc = null)
     {
         var rows = changes.SelectMany(c =>
         {
             var r = Headline(c, metric);
+            var hoped = c.Expected?.Metrics?.FirstOrDefault(m => m.Metric == metric);
+            double? expected = hoped is null ? null : Gain(metric, hoped.Delta);
             // the live record speaks for log loss only, and never for a change already in production
             var now = LiveStanding(metric == "log_loss" ? liveDoc : null, c.Id);
             bool liveReady = now.Record?.Verdict == "better" && !c.Deployed, liveWorse = now.Record?.Verdict == "worse";
@@ -117,7 +140,7 @@ public static class ModelRecord
                 // a change with no past result is listed only for its live record
                 if (now.Record is null) return [];
                 var note = c.Deployed ? "In production: checked on live matches" : liveReady ? "Ready: proven on live matches" : "";
-                return new[] { new DeltaRow(c.Id, c.Title, null, null, "unclear", null, liveReady, note, liveReady ? "ready" : liveWorse ? "worse" : "none", now.Record, now.Text, now.Why) };
+                return new[] { new DeltaRow(c.Id, c.Title, null, null, "unclear", null, liveReady, note, liveReady ? "ready" : liveWorse ? "worse" : "none", now.Record, now.Text, now.Why, expected) };
             }
             var past = Ready(c, r);
             var ok = past || liveReady;
@@ -125,7 +148,7 @@ public static class ModelRecord
                 : c.Status == "Testing" ? "Ready on the historical test; being confirmed on new matches" : "Ready on the historical test";
             var tone = Tone(r);
             return [new DeltaRow(c.Id, c.Title, r.Evaluation, Gain(metric, r.Delta), tone, r.N, ok, readyNote,
-                ok ? "ready" : liveWorse ? "worse" : tone == "worse" ? "worse" : "none", now.Record, now.Text, now.Why)];
+                ok ? "ready" : liveWorse ? "worse" : tone == "worse" ? "worse" : "none", now.Record, now.Text, now.Why, expected, r.Baseline, r.After)];
         }).ToList();
         static int Compare(DeltaRow a, DeltaRow b)
         {
@@ -222,6 +245,45 @@ public static class ModelRecord
                 next is not null ? "pos" : ""),
             new("Right results", cur?.Accuracy is { } acc ? $"{Js.ToFixed(100 * acc, 1)}%" : "Not recorded", "The outcome the model made most likely happened, on the same matches"),
         ];
+    }
+
+    // ---- One change's own page (the Admin area)
+    public const string NotSpecified = "Not specified";
+    public static readonly Dictionary<string, string> MetricLabels = new()
+    {
+        ["log_loss"] = "Log loss", ["brier"] = "Brier score", ["rps"] = "Ranked probability score", ["accuracy"] = "Right result", ["calibration_error"] = "Calibration error",
+        ["goal_markets_log_loss"] = "Goal markets log loss", ["mse"] = "Squared error", ["mae"] = "Absolute error", ["roi"] = "Return", ["other"] = "Other measure",
+    };
+    public static readonly Dictionary<string, string> ToneWords = new() { ["better"] = "Better", ["worse"] = "Worse", ["unclear"] = "Unclear" };
+    public static readonly Dictionary<string, string> EvaluationLabels = new() { ["prospective"] = "Prospective test", ["backtest"] = "Historical backtest", ["development"] = "Development figure" };
+    public static readonly Dictionary<string, string> UnseenLabels = new() { ["yes"] = "Matches the change had not seen", ["partly"] = "Held out, but looked at before", ["no"] = "The matches it was built on" };
+    public static string MarkOf(bool ready, string tone) => ready ? "ready" : tone == "worse" ? "worse" : "none";
+
+    // The change as a share of the figure before it, where that figure was recorded
+    public static string? Percent(ModelDoc.Result r)
+    {
+        if (r.Baseline is not { } b || b == 0) return null;
+        var p = 100 * r.Delta / b;
+        return $"{(p < 0 ? "−" : "+")}{Js.ToFixed(Math.Abs(p), 2)}%";
+    }
+    public static string? IntervalText(ModelDoc.Result r, int places = 5) => r.Interval is [var lo, var hi, ..]
+        ? $"{Signed(lo, places)} to {Signed(hi, places)}{(r.IntervalLevel is { } level && level != 0 ? $" ({JsNumber(double.Parse(Js.ToFixed(100 * level, 1), System.Globalization.CultureInfo.InvariantCulture))}%)" : "")}"
+        : null;
+    // a number as JavaScript writes it (`${v}`, +v.toFixed(1)): 95, 99.6
+    static string JsNumber(double x) => x == Math.Floor(x) ? ((long)x).ToString(System.Globalization.CultureInfo.InvariantCulture) : x.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+    // A live test's progress in words: "312 of 9,400 (P13)"
+    public static string LiveText(ModelDoc.LiveTest t) => $"{Js.Num(t.Matches)} of {Js.Num(t.Target)} ({t.Protocol})";
+
+    // The forward record in a sentence each: what was expected, what the backtest gave, what has
+    // been seen since, and how far the last is from the first
+    public sealed record ForwardSummary(double? Expected, double? Backtest, double? Observed, double? Gap);
+    public static ForwardSummary ForwardOf(ModelDoc.Change c, string metric = "log_loss")
+    {
+        var expected = c.Expected?.Metrics?.FirstOrDefault(m => m.Metric == metric)?.Delta;
+        var tested = (c.Results ?? []).FirstOrDefault(r => r.Metric == metric && r.Evaluation == "backtest")?.Delta;
+        var f = c.Forward;
+        double? observed = f?.After?.VsMarket is { } a && f.Before?.VsMarket is { } b ? a.ModelMinusMarket - b.ModelMinusMarket : null;
+        return new(expected, tested, observed, observed is { } o && expected is { } e ? o - e : null);
     }
 
     // The worked example's match, from its row by field name (as a row of site_matches, so it is read

@@ -1,0 +1,108 @@
+@page "/admin/changes/{id}"
+@model ChangeModel
+@{
+    var c = Model.C;
+    ViewData["Title"] = $"{ModelRecord.ShortId(c.Id)}: {c.Title} · The Corner FC";
+    ViewData["NoIndex"] = true;
+    var visitor = Visitor.Of(HttpContext);
+    IHtmlContent Short(string iso) => Markup.LocalTime(DateTimeOffset.Parse(iso), "short", visitor);
+    var stage = new Dictionary<string, string> { ["Deployed to production"] = "deployed", ["Tested and rejected"] = "rejected", ["Being tested"] = "testing", ["Reverted"] = "reverted" };
+    var env = Model.Doc.Environment;
+    var said = ChangeModel.Said;
+}
+<section class="panel mc mc-detail" data-tab="changes" data-active="true">
+    <p class="mc-env">@(env == "production" ? "Production" : env == "staging" ? "Staging: test data, not the live record" : "Environment not named") · @ModelRecord.ShortId(c.Id) (@c.Id) · @c.Component · @c.Kind</p>
+    <h2 class="mc-title" id="mc-title">@c.Title</h2>
+    <p><span class="mc-stage @(stage.GetValueOrDefault(c.Stage) ?? "other")">@c.Stage</span> <span class="mc-sub mc-inline">Status: @c.Status · proposed @c.Date@if (c.DeployedOn is { } on){<text> · deployed @(c.DeployedDayKnown == true ? on : on[..7])</text>}</span></p>
+    @if (Model.IsReady){<div class="sim-banner mc-ready-banner">Ready to implement: a test has statistical evidence that this makes the model better, however small the gain. Releasing it is your decision.</div>}
+    else if (Model.Why != ""){<div class="sim-banner">Not marked ready. @Model.Why.</div>}
+    @if (c.Kind == "experiment"){<div class="sim-banner">An experiment. Its results are tests on past or held-out matches and were never production results; nothing here was deployed.</div>}
+    @if (c.Retrospective){<div class="sim-banner">Recorded on @c.Recorded, after the test had been run: the hypothesis and expectation below were taken from the experiment's own files, not written here beforehand.</div>}
+    @if (Model.Differs.Count > 0){<div class="sim-banner mc-alert" role="alert">The register's file no longer matches this record: @string.Join("; ", Model.Differs)</div>}
+
+    <div class="mc-cols">
+        <div class="stats-card"><div class="stats-label">The change</div>
+            <dl class="mc-dl"><dt>What was changed</dt><dd>@c.What</dd><dt>Why it was proposed</dt><dd>@c.Why</dd><dt>How it works</dt><dd>@c.How</dd>
+                <dt>Code</dt><dd>Commit: @said(c.Code?.Commit)@if (c.Code?.Experiment is { Length: > 0 } exp){<text> · </text><code>@exp</code>} · model version: @said(c.Code?.ModelVersion)</dd></dl></div>
+        <div class="stats-card"><div class="stats-label">Expected, before testing</div>
+            <dl class="mc-dl"><dt>Hypothesis</dt><dd>@c.Hypothesis</dd><dt>Expected to improve</dt><dd>@said(c.Expected?.Improves)</dd>
+                <dt>Expected size</dt><dd>@if (c.Expected?.Metrics is { Count: > 0 } ms){foreach (var m in ms){<span class="mc-line-item">@(ModelRecord.MetricLabels.GetValueOrDefault(m.Metric)) @ModelRecord.Signed(m.Delta)@if (m.Low is { } lo && m.High is { } hi){<text> (@ModelRecord.Signed(lo) to @ModelRecord.Signed(hi))</text>}<span class="mc-sub">@m.Source</span></span>}}else{<text>Not specified</text>}</dd>
+                <dt>Effect on betting</dt><dd>@said(c.Expected?.Betting)</dd><dt>Confidence</dt><dd>@said(c.Expected?.Confidence)</dd><dt>Evidence behind it</dt><dd>@said(c.Expected?.Evidence)</dd>
+                <dt>Success criteria</dt><dd>@said(c.SuccessCriteria)</dd></dl></div>
+    </div>
+
+    <div class="stats-card" id="mc-results"><div class="stats-label">What testing showed</div>
+        @if (Model.Results.Count > 0)
+        {
+            foreach (var r in Model.Results)
+            {
+                <div class="mc-result">
+                    <p class="mc-result-head"><span class="mc-pill mark-@r.Mark">@r.Word @r.Delta</span> <b>@r.Label</b> <span class="mc-sub mc-inline">@r.Kind · @r.Unseen · @r.Date</span></p>
+                    <table class="calib-table"><thead><tr><th>@r.Metric</th><th>Before</th><th>After</th><th>Change</th><th>Interval</th><th>Matches</th><th>Period</th></tr></thead>
+                        <tbody><tr><td></td><td>@r.Before</td><td>@r.After</td><td>@r.Delta@if (r.Percent is { } pc){<text> (@pc)</text>}</td><td>@(r.Interval ?? "Not recorded")</td><td>@r.N</td><td>@r.Period</td></tr></tbody></table>
+                    <p class="stats-note"><b>Meaningful?</b> @r.Meaningful <b>Against bookmakers:</b> @r.Market. <span class="mc-sub mc-inline">Source: @r.Source</span></p>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="stats-note">No result has been recorded for this change.</div>
+        }
+    </div>
+
+    @if (Model.Running is { } t)
+    {
+        <div class="stats-card" id="mc-tracking"><div class="stats-label">On live matches</div>
+            @if (t.Why != "")
+            {
+                <p class="stats-note"><b>@t.Text.</b> @t.Why.</p>
+            }
+            else
+            {
+                <table class="calib-table"><thead><tr><th></th><th>Live matches</th><th>Weeks</th><th>Gain on them</th><th>Range it could still lie in</th><th>Standing</th></tr></thead>
+                    <tbody><tr><td>Log loss</td><td>@Js.Num(t.N)</td><td>@t.Weeks</td><td>@(t.Gain ?? "–")</td><td>@(t.Range ?? "–")</td><td>@t.Text</td></tr></tbody></table>
+                @if (t.Called is not null){<p class="stats-note"><b>@t.Called.</b> A call stands once made.</p>}
+                @if (t.Gains.Count >= 2)
+                {
+                    @Html.Raw(ChangeLines.Svg([new("Gain so far", "live", t.Gains), new("Range: lowest", "recon", t.Lows), new("Range: highest", "recon", t.Highs)], "Gain on live matches by week, with its range", 4, zero: true))
+                }
+                <p class="stats-note">@(c.Deployed ? "Released, and scored against the model it replaced, re-created on the same snapshot, on every finished match since" : "Scored on top of the live model on every finished match since") @t.Start@(t.To is { } to ? $" (to {to})" : "") that has a prediction stored before kickoff, with the setting its experiment fixed. Plus is better. The range is the kind that stays valid however often it is looked at, so it is wide; the change is proven when the whole range is on one side of zero, and nothing is called before @t.MinMatches matches and @t.MinWeeks weeks. Updated @(t.Generated is { } gen ? Short(gen) : HtmlString.Empty).</p>
+            }
+        </div>
+    }
+
+    @if (Model.Live.Count > 0)
+    {
+        <div class="stats-card" id="mc-live"><div class="stats-label">Registered live tests</div>
+            <table class="calib-table"><thead><tr><th>Protocol</th><th>Counting from</th><th>Live matches so far</th><th>Read or planned at</th><th>Reached</th></tr></thead>
+                <tbody>@foreach (var lt in Model.Live){<tr><td>@lt.Protocol</td><td>@lt.Start</td><td>@Js.Num(lt.Matches)</td><td>@Js.Num(lt.Target)</td><td>@(lt.Share)%</td></tr>}</tbody></table>
+            <p class="stats-note">Finished matches played since each test began that have a prediction stored before kickoff. P13 and P14 were each to be read once, at their targets, and P15 was the running record of every candidate; all three closed when the club-rank release (MC-0028) changed the model they were compared with. P16 is the running record of that release, and P17 of every idea on top of the live model; neither has a target: the figure is where a call is expected, or where the interval is tightest.</p>
+        </div>
+    }
+
+    @if (Model.Forward is { } fw)
+    {
+        var f = fw.F;
+        <div class="stats-card" id="mc-forward"><div class="stats-label">Since deployment</div>
+            <table class="calib-table"><thead><tr><th></th><th>Expected</th><th>Backtest</th><th>Seen since</th><th>Seen less expected</th><th>Matches since</th></tr></thead>
+                <tbody><tr><td>Log loss</td><td>@fw.Expected</td><td>@fw.Backtest</td><td>@(fw.Observed ?? "Cannot be measured")</td><td>@(fw.Gap ?? "–")</td><td>@(f.After is { } af ? Js.Num(af.N) : "–")</td></tr></tbody></table>
+            <p class="stats-note"><b>@f.Verdict.</b> @f.Why</p>
+            @if (f.After is { } after && f.Before is { } before)
+            {
+                <table class="calib-table"><thead><tr><th>Live record</th><th>Matches</th><th>Log loss</th><th>Brier</th><th>Model less market</th><th>Matches with prices</th></tr></thead>
+                    <tbody>@foreach (var (name, w) in new[] { ("Before", before), ($"Since {f.From}", after) })
+                    {
+                        <tr><td>@name</td><td>@Js.Num(w.N)</td><td>@(w.LogLoss is { } ll ? Js.ToFixed(ll, 5) : "–")</td><td>@(w.Brier is { } br ? Js.ToFixed(br, 5) : "–")</td><td>@(w.VsMarket is { } vm ? Js.ToFixed(vm.ModelMinusMarket, 5) : "–")</td><td>@(w.VsMarket is { } vm2 ? Js.Num(vm2.N) : "–")</td></tr>
+                    }</tbody></table>
+            }
+            <p class="stats-note">"Seen since" is the change in the model's distance from the bookmakers' prices between the live record just before deployment and the record since, each on its own matches. The raw scores are shown but not compared: two periods have different fixtures. @if (f.DeployedWith is { Count: > 0 } with){<text>Deployed on the same day as @string.Join(", ", with), so their effects cannot be told apart. </text>}Other changes, new data and the run of fixtures can all move these figures; none of it is credited to this change alone.</p>
+        </div>
+    }
+
+    <div class="stats-card" id="mc-events"><div class="stats-label">What happened, in order</div>
+        <table class="calib-table mc-events"><thead><tr><th>#</th><th>Date</th><th>Event</th><th>Recorded</th></tr></thead>
+            <tbody>@foreach (var e in Model.Events){<tr><td>@e.N</td><td>@(e.Month && e.Date.Length >= 7 ? e.Date[..7] : e.Date)</td><td>@e.Text</td><td>@if (e.RecordedAt is { } ra){@Short(ra)}else{<text>Not yet</text>}</td></tr>}</tbody></table>
+        <p class="stats-note">The registration and each event are kept as first recorded@(c.RecordedAt is { } rec ? new HtmlContentBuilder().Append(" (the registration on ").AppendHtml(Short(rec)).Append(")") : HtmlString.Empty); the database refuses any edit or removal. A mistake is put right by a correction, which is a new event.</p>
+    </div>
+    <p class="stats-note"><a href="/admin/changes">All changes</a></p>
+</section>
