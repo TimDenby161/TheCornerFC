@@ -217,7 +217,7 @@ class LineupHistoryExportTests(unittest.TestCase):
         rows = self.export(record_conn(history=[(7, 2, list(range(11)), ["CB"] * 11, T1, 39, 1, 2)], starters=starters))
         self.assertEqual(rows, [])
 
-    def test_the_table_is_rewritten_whole_in_one_transaction(self):
+    def test_only_changed_rows_are_written_in_one_transaction(self):
         starters = [(7, 2, i, self.ROLES[i], None) for i in range(11)]
         conn = record_conn(history=[(7, 2, list(range(11)), self.ROLES, T1, 39, 1, 2)], starters=starters)
         cur = MagicMock()
@@ -226,11 +226,14 @@ class LineupHistoryExportTests(unittest.TestCase):
         copy = cur.copy.return_value.__enter__.return_value
         conn.cursor.return_value = cur
         rows = self.export(conn, writable=True)
-        # the rows, then the whole-history counts the function reads, then one commit
-        self.assertEqual([c[0][0] for c in cur.execute.call_args_list],
-                         ["delete from site.lineup_history", "select to_regprocedure('site.lineup_history_refresh()')",
-                          "select site.lineup_history_refresh()"])
-        self.assertIn("copy site.lineup_history (fixture_id, team_id, kickoff, day,", cur.copy.call_args[0][0])
+        # the rows that changed, then the whole-history counts the function reads, then one commit
+        sent = [c[0][0].split("\n")[0] for c in cur.execute.call_args_list]
+        self.assertTrue(sent[-4].startswith("delete from site.lineup_history t where not exists (select 1 from _incoming n "
+                                            "where n.fixture_id = t.fixture_id and n.team_id = t.team_id)"))
+        self.assertTrue(sent[-3].startswith("insert into site.lineup_history as t (fixture_id, team_id, kickoff, day,"))
+        self.assertEqual(sent[-2:], ["select to_regprocedure('site.lineup_history_refresh()')",
+                                     "select site.lineup_history_refresh()"])
+        self.assertIn("copy _incoming (fixture_id, team_id, kickoff, day,", cur.copy.call_args[0][0])
         copy.write_row.assert_called_once_with(rows[0])
         conn.commit.assert_called_once()
 

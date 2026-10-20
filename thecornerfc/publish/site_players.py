@@ -22,6 +22,7 @@ from .site_files import (
     _paid_rows,
     _paywall_on,
     _r,
+    _sync_table,
     _write_json_file,
 )
 
@@ -416,13 +417,12 @@ def store_players(conn, players):
         raise ExportValidationError(f"only {len(players)} players to store; expected at least {MIN_PLAYERS}")
     with conn.cursor() as cur:
         _check_table_collapse(cur, "site.players", len(players))
-        cur.execute("delete from site.players")
-        with cur.copy(f"copy site.players ({', '.join(columns)}) from stdin") as copy:
-            for p in players:
-                copy.write_row([text(p[c]) if c in ("pos_ranks", "data", "data_free") else p[c] for c in columns])
+        gone, written = _sync_table(cur, "site.players", ["player_id"], columns,
+                                    ([text(p[c]) if c in ("pos_ranks", "data", "data_free") else p[c] for c in columns]
+                                     for p in players))
         cur.execute("analyze site.players")
     conn.commit()
-    log.info("Stored %d players", len(players))
+    log.info("Stored %d players (%d new or changed, %d removed)", len(players), written, gone)
     return True
 
 

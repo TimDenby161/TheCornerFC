@@ -336,6 +336,36 @@ def _check_table_collapse(cur, table, rows):
     (was,) = cur.execute(f"select count(*) from {table}").fetchone()
     if was >= 10 and rows < was * COLLAPSE_RATIO:
         raise ExportValidationError(f"{table} would collapse from {was} to {rows} rows")
+
+
+def _sync_table(cur, table, key, columns, rows):
+    """Make a site table hold exactly these rows, writing only what changed: rows gone from the
+    export are deleted, new ones inserted, and a row whose values are all the same is left alone.
+    Emptying the table and copying every row in again rewrote it whole on every run (the
+    database's Disk IO, 2026-10-20). The rows go first into a temporary table that is dropped at
+    commit. json columns are compared as text: the export writes them the same way each time.
+    Returns (deleted, inserted or changed)."""
+    json_columns = {name for (name,) in cur.execute(
+        """select attname from pg_attribute where attrelid = %s::regclass and atttypid = 'json'::regtype
+           and not attisdropped""", [table]).fetchall()}
+    listed = ", ".join(columns)
+    cur.execute("drop table if exists _incoming")
+    cur.execute(f"create temp table _incoming on commit drop as select {listed} from {table} with no data")
+    with cur.copy(f"copy _incoming ({listed}) from stdin") as copy:
+        for row in rows:
+            copy.write_row(row)
+    same_key = " and ".join(f"n.{k} = t.{k}" for k in key)
+    cur.execute(f"delete from {table} t where not exists (select 1 from _incoming n where {same_key})")
+    deleted = cur.rowcount
+    value = lambda side, c: f"{side}.{c}::text" if c in json_columns else f"{side}.{c}"
+    changing = [c for c in columns if c not in key]
+    cur.execute(f"""insert into {table} as t ({listed}) select {listed} from _incoming
+                    on conflict ({', '.join(key)}) do update set {', '.join(f'{c} = excluded.{c}' for c in changing)}
+                    where row({', '.join(value('t', c) for c in changing)})
+                          is distinct from row({', '.join(value('excluded', c) for c in changing)})""")
+    return deleted, cur.rowcount
+
+
 PAID_PREFIX = "paid_"        # files in a directory named so are stored as paid rows of site.docs (mirror_site_docs)
 
 

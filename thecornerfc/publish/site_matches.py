@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from .. import config
 from ..models import national_lineups, national_predictions, predictions
-from .site_files import _check_table_collapse, _r, _table_exists
+from .site_files import _check_table_collapse, _r, _sync_table, _table_exists
 
 # the export's one log, whichever module writes to it
 log = logging.getLogger("thecornerfc.publish.export")
@@ -262,18 +262,20 @@ def store_matches(conn, matches, explained=None):
     paid = has("data_locked")
     with conn.cursor() as cur:
         _check_table_collapse(cur, "site.matches", len(matches))
-        cur.execute("delete from site.matches")
-        with cur.copy(f"""copy site.matches (fixture_id, kickoff, league_id, home_id, away_id, status, intl, data, reasons, why
-                          {', data_free, data_locked' if paid else ''}) from stdin""") as copy:
-            for row in matches:
-                why = explained.get(str(row[at["id"]]))
-                copy.write_row((row[at["id"]], row[at["kickoff"]], row[at["league"]], row[at["home"]], row[at["away"]],
-                                row[at["status"]], bool(row[at["intl"]]), text(row), text(why and why["reasons"]), text(why),
-                                *((text(blanked(row, MATCH_PAID_DEPTH)),
-                                   text(blanked(row, MATCH_PAID_DEPTH + MATCH_PAID_CHANCES))) if paid else ())))
+        columns = ["fixture_id", "kickoff", "league_id", "home_id", "away_id", "status", "intl", "data", "reasons", "why",
+                   *(["data_free", "data_locked"] if paid else [])]
+
+        def stored(row):
+            why = explained.get(str(row[at["id"]]))
+            return (row[at["id"]], row[at["kickoff"]], row[at["league"]], row[at["home"]], row[at["away"]],
+                    row[at["status"]], bool(row[at["intl"]]), text(row), text(why and why["reasons"]), text(why),
+                    *((text(blanked(row, MATCH_PAID_DEPTH)),
+                       text(blanked(row, MATCH_PAID_DEPTH + MATCH_PAID_CHANCES))) if paid else ()))
+        gone, written = _sync_table(cur, "site.matches", ["fixture_id"], columns, map(stored, matches))
         cur.execute("analyze site.matches")
     conn.commit()
-    log.info("Stored %d matches (%d with model detail)", len(matches), sum(str(m[0]) in explained for m in matches))
+    log.info("Stored %d matches (%d with model detail; %d new or changed, %d removed)", len(matches),
+             sum(str(m[0]) in explained for m in matches), written, gone)
     return True
 
 

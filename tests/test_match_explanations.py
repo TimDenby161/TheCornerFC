@@ -219,7 +219,9 @@ class FixturePageTests(unittest.TestCase):
         cur.execute.return_value.fetchone.return_value = (3,)
         with patch.object(export.config, "require_db_write"):
             self.assertTrue(store_matches(conn, [self.match(11), self.match(12, status="FT")], why))
-        self.assertEqual(cur.execute.call_args_list[1][0][0], "delete from site.matches")        # rewritten whole
+        sent = [c[0][0] for c in cur.execute.call_args_list]
+        self.assertTrue(any(q.startswith("delete from site.matches t where not exists") for q in sent))   # only what left
+        self.assertTrue(any(q.startswith("insert into site.matches as t") and "is distinct from" in q for q in sent))
         first, second = [c[0][0] for c in copy.write_row.call_args_list]
         self.assertEqual(first[:7], (11, "2026-10-10T14:00:00+00:00", 39, 1, 2, "NS", False))
         self.assertEqual(json.loads(first[7]), self.match(11))

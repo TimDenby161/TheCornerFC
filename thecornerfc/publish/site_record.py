@@ -13,7 +13,7 @@ from .. import config
 from ..models import national_predictions
 from ..models.betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_cautious
 from ..models.predictions import GOAL_LINES, goal_lines
-from .site_files import OUT_DIR, _r, _read_json, _table_exists, _write_json_file, store_admin_doc
+from .site_files import OUT_DIR, _r, _read_json, _sync_table, _table_exists, _write_json_file, store_admin_doc
 from .site_matches import market_probabilities, site_freshness
 
 # the export's one log, whichever module writes to it
@@ -449,11 +449,9 @@ def export_lineup_history(conn, out_dir=OUT_DIR, now=None):
                     "the reconstructed line-up history wasn't stored")
         return rows
     with conn.cursor() as cur:
-        cur.execute("delete from site.lineup_history")
-        with cur.copy("""copy site.lineup_history (fixture_id, team_id, kickoff, day, league_id, opponent_id, home,
-                              correct, roles_right, roles_known, lines, missed, wrong) from stdin""") as copy:
-            for row in rows:
-                copy.write_row(row)
+        _sync_table(cur, "site.lineup_history", ["fixture_id", "team_id"],
+                    ["fixture_id", "team_id", "kickoff", "day", "league_id", "opponent_id", "home",
+                     "correct", "roles_right", "roles_known", "lines", "missed", "wrong"], rows)
         (refresh,) = cur.execute("select to_regprocedure('site.lineup_history_refresh()')").fetchone()
         if refresh is not None:
             cur.execute("select site.lineup_history_refresh()")

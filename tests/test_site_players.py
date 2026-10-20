@@ -86,7 +86,9 @@ class SitePlayerRows(unittest.TestCase):
         cur.execute.return_value.fetchone.return_value = (70,)
         with patch.object(export.config, "require_db_write"):
             self.assertTrue(store_players(conn, rows))
-        self.assertEqual(cur.execute.call_args_list[1][0][0], "delete from site.players")        # rewritten whole
+        sent = [c[0][0] for c in cur.execute.call_args_list]
+        self.assertTrue(any(q.startswith("delete from site.players t where not exists") for q in sent))   # only what left
+        self.assertTrue(any(q.startswith("insert into site.players as t") and "is distinct from" in q for q in sent))
         first, second = [c[0][0] for c in copy.write_row.call_args_list][:2]
         self.assertEqual(first[:8], [1, 0, "a. player", "a player", 1, 39, None, None])
         self.assertEqual(first[8], ["ST"])                         # an array column, not text
