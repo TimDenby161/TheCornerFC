@@ -47,7 +47,7 @@ check('position pick in the address', (await run('location.search')).includes('p
 check('"As ST" takes Ability\'s place', (await run(`document.querySelector('th.col-posrank')?.textContent.trim()`))?.startsWith('As ST'));
 
 // club box: focus, the list loads, open the first league, pick its first club
-await send('Emulation.setFocusEmulationEnabled', { enabled: true }); await run(`document.querySelector('#club-input').focus()`); await until(`document.querySelectorAll('#club-menu .who-league').length > 0`);
+await send('Emulation.setFocusEmulationEnabled', { enabled: true }); await run(`document.querySelector('#club-input').focus()`); await until(`document.querySelectorAll('#club-menu .who-league').length > 10`);
 check('club list opens with leagues', (await run(`document.querySelectorAll('#club-menu .who-league').length`)) > 10, `${await run(`document.querySelectorAll('#club-menu .who-league').length`)} leagues`);
 await run(`document.querySelector('#club-menu .who-league')?.click()`); await sleep(300);
 const clubName = await run(`document.querySelector('#club-menu .who-opt:not(.who-league) .nm')?.textContent`);
@@ -184,11 +184,17 @@ check('opening another card\'s model detail closes the first card', (await run(`
 	const heads = await run(`[...document.querySelectorAll('#matches-list .why-detail .why-sec-hd')].map((h) => h.firstChild?.textContent?.trim()).join('|')`);
 	check('a model detail works through the steps to the chances, where the export has written them', !/Chances/.test(heads) || (/Each side's usual goals/.test(heads) && /Projected goals/.test(heads)), /Chances/.test(heads) ? 'steps shown' : 'no steps written yet');
 }
+// a match's own page, from its card's link: the card with its line-ups and model detail open
+const matchHref = await run(`document.querySelector('#matches-list .match-card .match-page-link')?.getAttribute('href') || ''`);
 await run(`document.querySelector('.secondary-filters a.today-btn')?.click()`); await sleep(1800);
 check('Next goes to the round to come, where the paid parts are locked', (await run('location.search')) === '?c=39' && (await run(`document.querySelectorAll('#matches-list .paid-lock').length`)) > 0);
 await run(`document.querySelector('#matches-list .paid-lock .link-btn')?.click()`); await sleep(500);
 check('"What subscribers get" opens the account box there', (await run(`document.querySelector('#account-title')?.textContent`)) === 'Subscribe');
 await run(`document.querySelector('#account-modal .modal-close')?.click()`); await sleep(300);
+check('each card links to the match\'s own page', /^\/match\/\d+$/.test(matchHref), matchHref);
+if (matchHref) await open(matchHref);
+const matchPage = await until(`document.querySelectorAll('.match-page .fixture-lineup-panel .xi-spot').length === 22 && document.querySelectorAll('.match-page .why-detail .why-sec').length >= 2`);
+check('a match\'s own page: its card with the line-ups and model detail open, both sides in its name', matchPage && / v /.test(await run(`document.querySelector('h1.app-title')?.textContent`)) && / v .* · /.test(await run('document.title')), `${await run('location.pathname')} · ${await run('document.title')}`);
 
 // Leagues: the list, a league's page and its tabs, a country's page
 await open('/leagues');

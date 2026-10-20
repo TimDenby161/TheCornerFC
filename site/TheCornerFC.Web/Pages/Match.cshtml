@@ -1,0 +1,14 @@
+@page "/match/{id}"
+@model MatchModel
+@{
+    var visitor = Visitor.Of(HttpContext);
+    var kickoff = DateTimeOffset.Parse(Model.Card.Kickoff);
+}
+<section class="panel match-page" data-active="true">
+    <p class="match-page-head">
+        @if (Model.CompetitionHref is not null){<a href="@Model.CompetitionHref">@Model.Competition</a>}else{@Model.Competition}
+        · @Markup.LocalTime(kickoff, "day", visitor)
+    </p>
+    @await Html.PartialAsync("_MatchCard", new MatchCardModel(Model.Card, When: "day", Page: true))
+    <p class="match-page-foot"><a href="/matches">All matches</a> · <a href="/model">How the model works and how good it is</a></p>
+</section>

@@ -43,7 +43,7 @@ public static partial class Menu
     static IEnumerable<Section> Every => Main.Append(Owner).Append(Admin).SelectMany(g => g.Sections);
 
     // The section a page belongs to: its menu entry, or for a club's, player's, competition's,
-    // country's or nation's page "club"; anything else is "home".
+    // country's, nation's or match's page "club"; anything else is "home".
     public static string TabFor(string path)
     {
         foreach (var s in Every)
@@ -66,7 +66,7 @@ public static partial class Menu
         return !m.Success ? null : m.Groups[1].Value == "index" ? "/" : $"/{m.Groups[1].Value}";
     }
 
-    [GeneratedRegex(@"^/(club|player|league|country|nation)/")]
+    [GeneratedRegex(@"^/(club|player|league|country|nation|match)/")]
     private static partial Regex OwnPage();
 
     [GeneratedRegex(@"^/(index|methodology|terms|privacy)\.html$")]

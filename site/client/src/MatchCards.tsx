@@ -147,6 +147,9 @@ export function matchCards() {
 	for (const card of document.querySelectorAll<HTMLElement>('.match-card[data-fixture]')) {
 		const id = Number(card.dataset.fixture);
 		const slot = card.querySelector<HTMLElement>(':scope > [data-card-panels]');
+		// a match's own page: its line-ups and model detail open from the start
+		if (slot && card.dataset.open === '1')
+			open = { id, lineups: !!card.querySelector('.lineup-toggle'), why: !!card.querySelector('.why-toggle') };
 		if (slot) {
 			const data = slot.querySelector(':scope > script[type="application/json"]');
 			const rating: Rating | null = data ? JSON.parse(data.textContent || 'null') : null;

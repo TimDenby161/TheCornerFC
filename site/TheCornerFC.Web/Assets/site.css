@@ -1,3 +1,11 @@
 /* What the C# site adds to web/'s stylesheets (copied in at build) */
 /* staging only: a strip that can't be missed, clear of the menu and of the advert spaces */
 #staging-strip { position: fixed; left: 0; bottom: 0; z-index: 1000; margin: 0; padding: 4px 12px; background: #b00020; color: #fff; font: 700 12px/1.4 system-ui, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; pointer-events: none; }
+/* a match card's link to the match's own page, beside its toggles; and that page's lines above and below the card */
+.match-page-link { margin-left: auto; padding: 6px 0; min-height: 32px; display: inline-flex; align-items: center; color: var(--text-secondary);
+  font-stretch: 76%; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; }
+.match-page-link:hover { color: var(--text-primary); }
+.match-page-link::after { content: " ›"; }
+.match-page-head, .match-page-foot { margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }
+.match-page-foot { margin: 12px 0 0; }
+@media (pointer: coarse) { .match-page-link { min-height: 44px; } }

@@ -20,7 +20,7 @@
         : null;
     if (m.Tag != "") right.AppendHtml($"<span class=\"status-tag{(m.Live ? " live" : "")}\">{System.Net.WebUtility.HtmlEncode(m.Tag)}</span>");
 }
-<div class="match-card @(m.Rating is { } r ? $"rated acc-{r.Score}" : "")@(canLineups ? " lineup-card" : "")" data-fixture="@m.Id" data-lineups="@(canLineups ? "1" : null)" data-squads="@(m.CanSquads ? "1" : null)" data-finished="@(m.Finished ? "1" : null)">
+<div class="match-card @(m.Rating is { } r ? $"rated acc-{r.Score}" : "")@(canLineups ? " lineup-card" : "")" data-fixture="@m.Id" data-lineups="@(canLineups ? "1" : null)" data-squads="@(m.CanSquads ? "1" : null)" data-finished="@(m.Finished ? "1" : null)" data-open="@(Model.Page ? "1" : null)">
     @await Html.PartialAsync("_MatchHead", new MatchHeadModel(m.Home, m.Away, m.Status, m.Hg, m.Ag, m.PenH, m.PenA, m.HomeXg, m.AwayXg, m.Likely, m.Source, meta, right))
     @if (m.Probs is not null){@await Html.PartialAsync("_ProbBars", new ProbBarsModel(m.Probs, m.Market))}
     @if (m.Lock is not null)
@@ -34,11 +34,13 @@
             <ul class="why-list">@foreach (var x in m.Reasons){<li><span>@x.Text</span><b>@x.Size</b></li>}</ul>
         </div>
     }
-    @if (canLineups || m.CanDetail)
+    @if (canLineups || m.CanDetail || !Model.Page)
     {
         <div class="card-toggles">
             @if (canLineups){<button type="button" class="lineup-toggle" aria-expanded="false">@(m.Finished ? "Line-ups" : "Predicted line-ups")</button>}
             @if (m.CanDetail){<button type="button" class="why-toggle" aria-expanded="false">@(m.Finished ? "Pre-match model detail" : "Model detail")</button>}
+            @* the match's own page, to share or come back to *@
+            @if (!Model.Page){<a class="match-page-link" href="/match/@m.Id">Match page</a>}
         </div>
     }
     @if (canLineups || m.CanDetail || m.Rating is not null)
