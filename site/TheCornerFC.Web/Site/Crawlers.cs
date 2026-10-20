@@ -23,7 +23,7 @@ public static class Crawlers
     // main competitions' matches of the last 7 days and the next 7 (SitemapMatches). Players and nations are reached
     // through the links on those pages.
     public static readonly IReadOnlyList<string> MainPages =
-        ["/", "/clubs", "/players", "/matches", "/leagues", "/nations", "/stats", "/lineups", "/model", "/methodology", "/privacy", "/terms"];
+        ["/", "/clubs", "/players", "/matches", "/leagues", "/nations", "/stats", "/lineups", "/model", "/methodology", "/assumptions", "/privacy", "/terms"];
 
     public static string Sitemap(string origin, IEnumerable<(int Team, int? League)> clubs, IEnumerable<int>? matches = null)
     {

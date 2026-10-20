@@ -51,6 +51,7 @@ public class TextPageTests
     [Theory]
     [InlineData("/terms", "Terms of use · The Corner FC")]
     [InlineData("/privacy", "Privacy, corrections and security · The Corner FC")]
+    [InlineData("/assumptions", "What the models assume · The Corner FC")]
     public async Task Serves_each_text_page_from_the_sites_own_file_without_the_menu(string path, string title)
     {
         using var site = new SiteFactory("production");
@@ -61,5 +62,23 @@ public class TextPageTests
         Assert.Contains("href=\"/styles/page.css\"", html);
         Assert.DoesNotContain("class=\"menu-link\"", html);
         Assert.Contains($"<link rel=\"canonical\" href=\"https://thecornerfc.com{path}\" />", html);
+    }
+
+    [Fact]
+    public async Task What_the_models_assume_labels_each_assumption_and_links_into_this_site()
+    {
+        using var site = new SiteFactory("production");
+        var html = await site.CreateClient(new() { BaseAddress = new Uri("https://thecornerfc.com") }).GetStringAsync("/assumptions");
+        // each assumption says how it was checked, in one of three labels
+        foreach (var label in new[] { "<span class=\"badge hist-badge\">Tested on past matches</span>", "<span class=\"badge live-badge\">Checked on live matches</span>", "<span class=\"badge\">Judgement</span>" })
+            Assert.Contains(label, html);
+        foreach (var section in new[] { "data", "clubs", "players", "lineups", "matches", "unseen" })
+            Assert.Contains($"<h2 id=\"{section}\">", html);
+        // the old site's links point at this one's pages
+        foreach (var link in new[] { "href=\"/methodology\"", "href=\"/methodology#freshness\"", "href=\"/model\"", "href=\"/lineups\"", "href=\"/stats\"", "href=\"/privacy#corrections\"" })
+            Assert.Contains(link, html);
+        Assert.DoesNotContain("href=\"./#/", html);
+        Assert.DoesNotContain(".html\"", html.Replace("player-ranks.md", ""));
+        Assert.DoesNotContain("betting tip", html, StringComparison.OrdinalIgnoreCase);
     }
 }

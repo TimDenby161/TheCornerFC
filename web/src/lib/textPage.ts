@@ -7,7 +7,7 @@ export function textPage(html: string) {
 		description: /<meta name="description" content="([^"]*)"/.exec(html)?.[1] ?? '',
 		html: main
 			.replace(/href="\.\/#\/([\w-]+)"/g, 'href="/$1"')                              // a section of the site
-			.replace(/href="(terms|privacy|methodology)\.html(#[\w-]+)?"/g, (_, p, hash) => `href="/${p}${hash ?? ''}"`)
+			.replace(/href="(terms|privacy|methodology|assumptions)\.html(#[\w-]+)?"/g, (_, p, hash) => `href="/${p}${hash ?? ''}"`)
 			.replace(/href="\.\/"/g, 'href="/"')
 			.replace(/href="\.well-known\//g, 'href="/.well-known/')
 	};

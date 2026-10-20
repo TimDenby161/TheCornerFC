@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace TheCornerFC.Web.Site;
 
-// The plain text pages (terms, privacy, how the models work) are whole HTML files in web/src/text,
+// The plain text pages (terms, privacy, how the models work, what the models assume) are whole HTML files in web/src/text,
 // as the old site wrote them, read by both sites (web/src/lib/textPage.ts). This takes one's text
 // out of its file and points its links at this site.
 public sealed partial record TextPage(string Title, string Description, string Html)
@@ -47,6 +47,6 @@ public sealed partial record TextPage(string Title, string Description, string H
     [GeneratedRegex(@"<title>([^<]*)</title>")] private static partial Regex TitlePart();
     [GeneratedRegex("<meta name=\"description\" content=\"([^\"]*)\"")] private static partial Regex DescriptionPart();
     [GeneratedRegex(@"href=""\./#/([\w-]+)""")] private static partial Regex SectionLink();
-    [GeneratedRegex(@"href=""(terms|privacy|methodology)\.html(#[\w-]+)?""")] private static partial Regex PageLink();
+    [GeneratedRegex(@"href=""(terms|privacy|methodology|assumptions)\.html(#[\w-]+)?""")] private static partial Regex PageLink();
     [GeneratedRegex(@"<div id=""([\w-]+-live)""[^>]*>[\s\S]*?</div>")] private static partial Regex LiveBox();
 }

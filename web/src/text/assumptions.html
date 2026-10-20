@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Scripts: only assets/theme.js, which applies the Light / Dark choice made in the site menu. No inline script or style. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>What the models assume · The Corner FC</title>
+<meta name="description" content="Every assumption behind The Corner FC's club ratings, player ratings, predicted line-ups and match predictions: what each one assumes, why, and how it has been checked.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script src="assets/theme.js"></script>
+<link rel="stylesheet" href="assets/page.css">
+</head>
+<body>
+<main>
+<h1>What the models assume</h1>
+<p class="updated">Page last updated 20 October 2026</p>
+
+<p>Every model rests on assumptions: things it takes to be true so that it can work at all. This
+page lists the ones behind the club ratings, the player ratings, the predicted line-ups and the
+match predictions. For each one it says what is assumed, why, and how it has been checked.
+How the numbers are worked out is on <a href="methodology.html">How the models work</a>; how the
+model is doing, and every change made to it, is on <a href="./#/model">The Model</a>.</p>
+
+<p>Each assumption carries one of three labels, so you can see how much weight it bears:</p>
+<dl>
+  <dt><span class="badge hist-badge">Tested on past matches</span></dt>
+  <dd>Compared with the alternatives by re-running the model on past matches, using only what was
+    known before each one, with the setting chosen on one period and scored on a later one. Useful
+    evidence, but not proof: those seasons had been looked at before.</dd>
+  <dt><span class="badge live-badge">Checked on live matches</span></dt>
+  <dd>Measured on predictions saved before kick-off, which can't be edited afterwards. The
+    strongest evidence there is, but the record only began on 26 September 2026.</dd>
+  <dt><span class="badge">Judgement</span></dt>
+  <dd>A choice that seemed sensible and has not been tested against results, usually because the
+    data can't test it. These are the ones most worth questioning.</dd>
+</dl>
+
+<div class="callout">
+  <p>Nothing here is betting advice, and betting is left out of this page. The model's predictions
+  are probabilities, not guarantees.</p>
+</div>
+
+<h2 id="data">The data</h2>
+
+<h3>The data we receive is right, and complete enough</h3>
+<p><span class="badge">Judgement</span> <span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> results, line-ups, player statistics, xG, shots and injury lists from
+our one data source, API-Football, are correct.</p>
+<p><strong>Why:</strong> it is the only source we use, and every model is built on it.</p>
+<p><strong>Checked:</strong> league tables worked out from the results were compared with
+API-Football's own standings, all 1,129 rows, on 6 October 2026: they agreed everywhere except
+where API-Football's table was behind its own results. The gaps we know of are listed on
+<a href="methodology.html#freshness">How the models work</a>: injury lists in only some leagues, xG for
+about a third to a half of matches. Anything the source gets wrong, we get wrong.</p>
+
+<h3>Only what was known before kick-off</h3>
+<p><span class="badge live-badge">Checked on live matches</span></p>
+<p><strong>Assumes:</strong> a prediction uses nothing that happened after the moment it was made.</p>
+<p><strong>Why:</strong> otherwise a model looks better than it is.</p>
+<p><strong>Checked:</strong> every prediction is saved before kick-off with the time it was made,
+and the database refuses any change to it afterwards. Tests on past matches replay every match in
+kick-off order, so each one sees only the matches before it. One known leak: some past inputs were
+rebuilt later with today's data, which is why a test on past matches is treated as the best the
+model could hope for, not what to expect.</p>
+
+<h3>xG says more about how well a side played than goals do</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> where a match has xG (expected goals, the quality of the chances
+each side had), it is a better guide to how well each side played than the score.</p>
+<p><strong>Why:</strong> goals are rare, so one deflection or one save changes a score; the quality
+of the chances moves far less with luck.</p>
+<p><strong>Checked:</strong> rating clubs on 70% xG and 30% score beat goals alone in each of
+2023/24, 2024/25 and 2025/26 taken separately, and beat xG alone. The score is kept at 30%
+because xG can't see everything (a finisher who really is better, say).</p>
+
+<h3>Shots can stand in for xG where xG is missing</h3>
+<p><span class="badge hist-badge">Tested on past matches</span> <span class="badge live-badge">Checked on live matches</span></p>
+<p><strong>Assumes:</strong> where a match has shot counts but no xG (about 40% of matches), an xG
+worked out from shots, shots on target and shots in the box says something real.</p>
+<p><strong>Why:</strong> otherwise those matches move the ratings on the score alone.</p>
+<p><strong>Checked:</strong> chosen on July 2022 to June 2024 and scored on July 2024 to October
+2026, it improved the predictions, and it went live on 14 October 2026 in one release with the two
+changes under <a href="#newclubs">new and promoted clubs</a>. That release is being compared with
+the version before it on live matches, and can be undone if it does worse.</p>
+
+<h2 id="clubs">Club strength</h2>
+
+<h3>One number captures how strong a club is</h3>
+<p><span class="badge hist-badge">Tested on past matches</span> <span class="badge live-badge">Checked on live matches</span></p>
+<p><strong>Assumes:</strong> a club's strength can be summed up in one rating (Current Strength),
+on a scale where 100 points is worth about one goal a game, with attack, defence and a home edge
+worked out alongside it.</p>
+<p><strong>Why:</strong> it is the simplest thing that works, and it lets a club be compared with
+any other, in any competition.</p>
+<p><strong>Checked:</strong> the whole match model rests on it. Run on nothing but dates, clubs and
+scores, the ratings alone keep 96% of the model's gain over guessing the usual share of home wins,
+draws and away wins. The model's live record is on <a href="./#/model">The Model</a>.</p>
+
+<h3>Home advantage is about the same for everyone</h3>
+<p><span class="badge hist-badge">Tested on past matches</span> <span class="badge live-badge">Checked on live matches</span></p>
+<p><strong>Assumes:</strong> playing at home is worth 0.3 goals for every club in every
+competition, plus a small edge of each club's own learned from its results, and 0.2 goals more in
+the Champions League, Europa League and Conference League.</p>
+<p><strong>Why:</strong> past results put it at about 0.3 goals almost everywhere. A spreadsheet
+method the model started from gave strong clubs 0.4 to 1.1 goals, which was too much.</p>
+<p><strong>Checked:</strong> each club's own edge helped a little on past matches, and most clubs'
+edges are within a few points. A different home advantage for each competition helped a little on
+past matches but has not been proven, and is being scored on live matches.</p>
+
+<h3>A big win says no more than a three-goal win</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> a 7–0 counts as 3–0 when ratings are updated.</p>
+<p><strong>Why:</strong> a side that is already well ahead eases off, or the other side gives up;
+a freak score shouldn't swing a rating.</p>
+<p><strong>Checked:</strong> with the cap and smaller steps, the error in predicted goal difference
+fell from 1.77 to 1.68 goals a match.</p>
+
+<h3>Strength changes a little after every match</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> after each match a club moves by how much better or worse it did than
+expected, by a fixed step: larger when the match has xG or shots, since those say more. A club's
+Baseline Strength, its long-term level over about its last 100 matches, moves more slowly.</p>
+<p><strong>Why:</strong> clubs do change, but one result is mostly noise.</p>
+<p><strong>Checked:</strong> the step sizes were chosen on past matches. Different steps for the
+first matches after the summer, and pulling ratings towards their league's level after it, were
+tried and didn't help. Using the strength of the starting XI in the update was tried and didn't
+help either.</p>
+
+<h3 id="newclubs">New and promoted clubs</h3>
+<p><span class="badge hist-badge">Tested on past matches</span> <span class="badge live-badge">Checked on live matches</span></p>
+<p><strong>Assumes:</strong> a club with few matches behind it is less well known, so it moves
+further after each one (half as far again for its first, close to normal after 120). A club
+promoted or relegated is moved halfway to the average of the division it joins when it starts
+playing there. A club seen for the first time starts at a level set for its league.</p>
+<p><strong>Why:</strong> otherwise a promoted club carries its old rating into a stronger division,
+and a new club takes months to find its level.</p>
+<p><strong>Checked:</strong> the first two went live with shots for xG (above) on 14 October 2026
+and are being checked on live matches. The starting level for each league is a judgement.</p>
+
+<h3>A match today depends more on current form</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> for a match today, a club's strength is 60% Current Strength and 40%
+Baseline Strength; for a match further away it leans more on the baseline, down to 20% current a
+year or more ahead.</p>
+<p><strong>Why:</strong> form fades, so the further away a match is, the more the long-term level
+tells you.</p>
+<p><strong>Checked:</strong> 60/40 beat every other mix tried in both 2022/23 and 2024 onwards; with
+ratings as they stood months before a match, a lower current share did best.</p>
+
+<h3>Curtain-raisers count for a third</h3>
+<p><span class="badge">Judgement</span></p>
+<p><strong>Assumes:</strong> the Community Shield and the UEFA Super Cup move ratings a third as much
+as other matches.</p>
+<p><strong>Why:</strong> clubs treat them as pre-season. A third is the ratio a well-known rating of
+national teams uses for friendlies.</p>
+<p><strong>Checked:</strong> not tested: there are only two or three a year.</p>
+
+<h2 id="players">Player ratings</h2>
+
+<h3>Being a regular for a strong club is evidence of quality</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> a player's Ability starts from the long-term strength of the clubs he
+has been a regular for, and his stats then move him up or down by up to about 15 points (more at
+the strongest clubs).</p>
+<p><strong>Why:</strong> strong clubs choose their players with far more information than we have,
+and stats depend heavily on the team around a player.</p>
+<p><strong>Checked:</strong> an earlier version built this way repeated from one season to the next
+better than the one before it, including for players who changed club. Versions with club
+strength taken out did no better at predicting players' later seasons and did worse at predicting
+match results. The current version has not been through that check again.</p>
+
+<h3>Counted stats show what a player does, and each position needs its own mix</h3>
+<p><span class="badge">Judgement</span></p>
+<p><strong>Assumes:</strong> counted stats per 90 minutes, such as tackles, passes, key passes,
+shots on target and goals, compared with other players in the same position, measure a player's
+contribution. Each position has its own mix; every weight is listed in
+<a href="https://github.com/TimDenby161/TheCornerFC/blob/main/guide/player-ranks.md" rel="noopener">the
+player ratings guide</a>, with the model's code.</p>
+<p><strong>Why:</strong> a centre-back and a striker are asked to do different things.</p>
+<p><strong>Checked:</strong> the mixes were set by judgement in October 2026, by looking at where
+well-known players landed, starting from mixes that had been checked against results and against
+how well each stat repeats from season to season. The final mixes themselves have not been tested
+against results. A data provider's own match ratings are not used.</p>
+
+<h3>Positions are worth different amounts</h3>
+<p><span class="badge">Judgement</span></p>
+<p><strong>Assumes:</strong> being in the top few percent of strikers counts for more than being
+in the top few percent of full-backs, so stats count fully for strikers, wingers and attacking
+midfielders and less for midfielders and defenders.</p>
+<p><strong>Why:</strong> without it, a very good full-back ranked above a very good striker.</p>
+<p><strong>Checked:</strong> not testable with our data: the starting XIs' ratings add almost
+nothing to the club ratings when predicting results, so results can't say what a position is
+worth.</p>
+
+<h3>The less we have seen of a player, the lower we rate him</h3>
+<p><span class="badge">Judgement</span></p>
+<p><strong>Assumes:</strong> a player with few minutes is pulled towards a level below an average
+regular until he has played more, and only his last 20 appearances within 18 months count towards
+his current form.</p>
+<p><strong>Why:</strong> players who don't play usually aren't picked for a reason, and a few good
+games are mostly luck.</p>
+<p><strong>Checked:</strong> the amount (worth about 900 minutes) is a judgement.</p>
+
+<h3>Players improve, peak, then decline</h3>
+<p><span class="badge">Judgement</span></p>
+<p><strong>Assumes:</strong> players improve up to about 24, hold their level, then decline from
+31 (33 for goalkeepers), faster each year. Teenagers get a set step up each year.</p>
+<p><strong>Why:</strong> this is the shape the data shows, and it lets a player with no minutes this
+season still have a rating.</p>
+<p><strong>Checked:</strong> the curve after the teenage years is measured from players' ratings in
+consecutive seasons; the teenage steps are set by hand. Neither has been tested against results.</p>
+
+<h3>A goalkeeper's stats say little</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> a keeper's rating is mostly his club's level, with his stats moving
+him by up to about 10 points, and a keeper who hasn't played this season at a club that has is a
+backup and is marked down.</p>
+<p><strong>Why:</strong> save percentage barely repeats from one season to the next (0.18), so it is
+mostly luck.</p>
+<p><strong>Checked:</strong> how well each keeper stat repeats was measured; the split between club
+and stats is a judgement.</p>
+
+<h3>Ratings only where there is match-by-match data</h3>
+<p><span class="badge">Judgement</span></p>
+<p><strong>Assumes:</strong> players are rated only in the 13 leagues with match-by-match player
+data, always compared with players in the original 10, so adding a league doesn't move everyone
+else.</p>
+<p><strong>Why:</strong> a rating needs per-match stats and minutes. The ratings can't see what the
+data doesn't record: work off the ball, or a player carrying an injury.</p>
+
+<h2 id="lineups">Predicted line-ups</h2>
+
+<h3>Who has been playing will play</h3>
+<p><span class="badge live-badge">Checked on live matches</span></p>
+<p><strong>Assumes:</strong> a club starts one goalkeeper and the ten outfield players with the most
+minutes over its last five matches, in the shape it has been using. For cup matches, minutes in the
+league count.</p>
+<p><strong>Why:</strong> recent minutes are the best guide we have before the team sheet is out.</p>
+<p><strong>Checked:</strong> every prediction saved before kick-off is scored against the official
+XI on the <a href="./#/lineups">Line-up record</a>. Managers rotate, and late news isn't always
+reported, so it will sometimes be wrong.</p>
+
+<h3>Anyone on the injury list doesn't start</h3>
+<p><span class="badge">Judgement</span></p>
+<p><strong>Assumes:</strong> every player listed as injured, suspended or doubtful is left out, and
+so is a player whose latest match was for the opponent.</p>
+<p><strong>Why:</strong> it is simpler and safer than guessing which doubts will clear. Doubtful
+players do sometimes play, so this is a known source of error.</p>
+
+<h2 id="matches">Match predictions</h2>
+
+<h3>Goals follow a Poisson pattern, with a boost for draws</h3>
+<p><span class="badge hist-badge">Tested on past matches</span> <span class="badge live-badge">Checked on live matches</span></p>
+<p><strong>Assumes:</strong> once each side's expected goals are known, the number it scores follows
+a Poisson distribution (the usual pattern for rare events), separately for each side. Because
+that under-counts draws, the draw is raised by up to 10% in close games, fading to nothing at a
+1.5-goal margin.</p>
+<p><strong>Why:</strong> it is the standard approach for football scores and needs only two numbers
+a match.</p>
+<p><strong>Checked:</strong> the chances it gives match how often things happen in the middle of the
+range; strong favourites win a little more often than it says. Sharpening the chances and
+refitting the draw boost helped slightly on past matches and are being scored on live matches;
+a model that lets the two sides' goals depend on each other has been tried too.</p>
+
+<h3>The last 12 months tell you how many goals a club scores and concedes</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> each side's usual goals for and against, at home or away as the match
+is, over the last 12 months (xG where a match has it), pulled towards the competition's average
+as if it had played six more average games; and mostly (75%) each club's attack and defence
+ratings for how open a game will be.</p>
+<p><strong>Why:</strong> a short record is mostly luck, so it is pulled towards the average.</p>
+<p><strong>Checked:</strong> the attack and defence part improved every market on past matches.</p>
+
+<h3>A missing player matters by how much he plays</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> each player listed out or doubtful counts by his share of his club's
+minutes over its last ten matches; one ever-present player missing is worth 0.1 goals. Only in the
+10 leagues with injury history.</p>
+<p><strong>Why:</strong> a regular's absence matters more than a squad player's. A long-term absentee
+has no recent minutes, so he already isn't in the side's recent results.</p>
+<p><strong>Checked:</strong> trained on 2021/22 to 2023/24 and tested on 2024/25 onwards, it helped
+a little, but consistently. Weighting by rating or by position made no real difference.</p>
+
+<h3>The predicted XIs matter a little</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> the gap between the two predicted XIs' ratings in defence, midfield and
+attack moves the expected margin slightly (0.005 goals per point in each line). The goalkeeper is
+left out.</p>
+<p><strong>Why:</strong> much of what a line-up tells you is already in the club's rating.</p>
+<p><strong>Checked:</strong> it helped a little on past matches, and using the real team sheets
+instead helped only slightly more. Counting the goalkeeper made predictions worse.</p>
+
+<h3>The same rules everywhere</h3>
+<p><span class="badge hist-badge">Tested on past matches</span> <span class="badge live-badge">Checked on live matches</span></p>
+<p><strong>Assumes:</strong> the same settings work in every league and cup we cover, apart from
+the European home bonus.</p>
+<p><strong>Why:</strong> most competitions have too few matches to set their own.</p>
+<p><strong>Checked:</strong> accuracy is shown competition by competition on the
+<a href="./#/stats">Stats</a> page. Widening the gaps between leagues in cup ties helped in one
+period and hurt in another, so it isn't used.</p>
+
+<h3>Bookmakers' odds are not an input</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> the model is built from football data alone.</p>
+<p><strong>Why:</strong> so its record says how good its own reading of the game is. The bookmakers
+are more accurate so far; blending their odds in hasn't yet helped on the matches available, and
+will be tested again with more.</p>
+
+<h3>A change is made only when it is proven better</h3>
+<p><span class="badge live-badge">Checked on live matches</span></p>
+<p><strong>Assumes:</strong> the settings above stay fixed until a change is shown to be better on
+matches it wasn't tuned on, with how it would be judged written down before the result was seen.
+A challenger, the same model with boosted trees correcting its past errors, runs beside it on
+every match, and both are recorded.</p>
+<p><strong>Checked:</strong> every change, with its tests, is on <a href="./#/model">The Model</a>.</p>
+
+<h2 id="unseen">What none of the models can see</h2>
+<ul>
+  <li>Team news that hasn't been reported: illness, rotation, a player carrying a knock.</li>
+  <li>Tactics, motivation (a dead rubber, a cup run), a new manager's first weeks.</li>
+  <li>Weather, pitch, travel and referees.</li>
+  <li>Anything the data source doesn't record, or records late or wrongly.</li>
+</ul>
+<p>If you think an assumption here is wrong, or one is missing, please
+<a href="privacy.html#corrections">tell us</a>.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,10 @@
+@page "/assumptions"
+@{
+    // The words are the site's own file, web/src/text/assumptions.html (TextPage): every assumption
+    // the models make, why, and how each has been checked (owner's request 2026-10-16)
+    Layout = "_TextLayout";
+    var text = TextPage.Named("assumptions");
+    ViewData["Title"] = text.Title;
+    ViewData["Description"] = text.Description;
+}
+@Html.Raw(text.Html)
