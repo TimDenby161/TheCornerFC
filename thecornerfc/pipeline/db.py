@@ -57,7 +57,8 @@ def init_schema(conn):
 def upsert(conn, table, rows, key_cols, update_cols=None, touch_updated_at=True):
     """Insert rows (list of dicts) and update non-key columns on conflict.
 
-    Pass update_cols=[] to do nothing on conflict.
+    Pass update_cols=[] to do nothing on conflict. A row whose update columns already hold the
+    same values is left alone (updated_at included), so re-fetching unchanged data writes nothing.
     """
     rows = suppression.keep_rows(rows)      # people removed on request are never stored again
     if not rows:
@@ -68,13 +69,15 @@ def upsert(conn, table, rows, key_cols, update_cols=None, touch_updated_at=True)
         update_cols = [c for c in cols if c not in key_cols]
 
     placeholders = ", ".join(f"%({c})s" for c in cols)
-    sql = f"insert into {table} ({', '.join(cols)}) values ({placeholders}) " \
+    sql = f"insert into {table} as t ({', '.join(cols)}) values ({placeholders}) " \
           f"on conflict ({', '.join(key_cols)}) "
     if update_cols:
         sets = [f"{c} = excluded.{c}" for c in update_cols]
         if touch_updated_at:
             sets.append("updated_at = now()")
-        sql += "do update set " + ", ".join(sets)
+        old = ", ".join(f"t.{c}" for c in update_cols)
+        new = ", ".join(f"excluded.{c}" for c in update_cols)
+        sql += "do update set " + ", ".join(sets) + f" where row({old}) is distinct from row({new})"
     else:
         sql += "do nothing"
 
