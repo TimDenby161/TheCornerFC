@@ -3,8 +3,9 @@
 // /fantasy/data answered here. Checks the pages draw and their controls work; not the real figures.
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-//   node scripts/fantasy-check.mjs [folder for screenshots]     against npm run preview -- --port 4517
-const port = 9334, base = 'http://localhost:4517', shots = process.argv[2];
+//   node scripts/fantasy-check.mjs [folder for screenshots] [address]   against npm run preview -- --port 4517,
+//   or the C# site's address (site/: dotnet run), which reads the same stand-in session
+const port = 9334, base = process.argv[3] || 'http://localhost:4517', shots = process.argv[2] || null;
 const chrome = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ['--headless=new', '--disable-gpu', `--remote-debugging-port=${port}`, '--window-size=1440,1100', '--user-data-dir=/tmp/claude-cdp-' + Date.now(), 'about:blank'], { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let target;
@@ -63,15 +64,22 @@ const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const exp = Math.floor(Date.now() / 1000) + 3600;
 const session = { access_token: `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: 'u1', exp, role: 'authenticated' })}.x`, refresh_token: 'r', expires_at: exp, expires_in: 3600, token_type: 'bearer', user: { id: 'u1', email: 'owner@example.com', aud: 'authenticated' } };
 await send('Network.setCookie', { name: 'sb-bookkurhdabdeccckjbn-auth-token', value: 'base64-' + b64(session), url: base });
+// (the C# site's session cookie)
+await send('Network.setCookie', { name: 'sb-session', value: Buffer.from(JSON.stringify({ access_token: session.access_token, refresh_token: 'r', expires_at: exp, user_id: 'u1', email: 'owner@example.com' })).toString('base64'), url: base });
 const out = []; const check = (name, ok, detail = '') => out.push(`${ok ? 'ok  ' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`);
 const until = async (expression, ms = 8000) => { for (let t = 0; t < ms; t += 250) { if (await run(expression)) return true; await sleep(250); } return false; };
 const shot = async (name) => { if (!shots) return; const { result } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip: { x: 0, y: 0, width: 1440, height: 2600, scale: 0.6 } }); writeFileSync(`${shots}/${name}.png`, Buffer.from(result.data, 'base64')); };
 const text = (sel) => run(`document.querySelector(${JSON.stringify(sel)})?.textContent.replace(/\\s+/g, ' ').trim()`);
+// a value set as typing or dragging sets it, so React's inputs see it too
+const setValue = (sel, v, ev, i = 0) => run(`(() => { const el = document.querySelectorAll(${JSON.stringify(sel)})[${i}]; Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, ${JSON.stringify(v)}); el.dispatchEvent(new Event('${ev}', { bubbles: true })); })()`);
 const click = (sel) => run(`document.querySelector(${JSON.stringify(sel)})?.click()`);
 try {
 	await send('Page.navigate', { url: base + '/fpl' });
 	check('FPL: the table draws', await until(`document.querySelectorAll('#fpl-list tbody tr').length === 30`), `${await run(`document.querySelectorAll('#fpl-list tbody tr').length`)} rows`);
-	check('menu has the Fantasy group', (await run(`[...document.querySelectorAll('nav .menu-link')].map((a) => a.textContent).join()`)).includes('FPL,My FPL team,EFL Fantasy'));
+	// (the C# site's menu, drawn by the server, has the group from the next page on)
+	if (!(await run(`[...document.querySelectorAll('nav .menu-link')].some((a) => a.textContent === 'FPL')`))) await send('Page.reload');
+	check('menu has the Fantasy group', await until(`[...document.querySelectorAll('nav .menu-link')].map((a) => a.textContent).join().includes('FPL,My FPL team,EFL Fantasy')`));
+	check('the table again', await until(`document.querySelectorAll('#fpl-list tbody tr').length === 30`));
 	check('findings below', (await text('.fpl-verdict-line'))?.includes('checks pass'), await text('.fpl-verdict-line'));
 	check('first row', true, await text('#fpl-list tbody tr'));
 	check('marks from the account', (await text('#fpl-next .fpl-filters:nth-of-type(3)'))?.includes('My team 1') || (await run(`document.querySelector('#fpl-next').textContent.includes('My team 1')`)));
@@ -81,13 +89,13 @@ try {
 	check('points open their parts', (await run(`document.querySelectorAll('.fpl-part').length`)) > 3, await text('.fpl-parts'));
 	await run(`(() => { const el = document.querySelector('#fpl-list input[type=checkbox]'); el.click(); })()`); await sleep(400);
 	check('a tick is saved', posted.some((p) => p.startsWith('/fantasy/mark')), posted.join(' | '));
-	await run(`(() => { const el = document.querySelectorAll('#fpl-price input')[1]; el.value = 4; el.dispatchEvent(new Event('input', { bubbles: true })); })()`); await sleep(300);
+	await setValue('#fpl-price input', '4', 'input', 1); await sleep(300);
 	check('price slider', (await text('#fpl-price .rng-val'))?.startsWith('Up to'), await text('#fpl-price .rng-val'));
 	await run(`[...document.querySelectorAll('#fpl-next .filter-chip')].find((b) => b.textContent === 'Next 5').click()`); await sleep(400);
 	check('Next 5: gameweek columns', (await run(`document.querySelectorAll('#fpl-list thead th').length`)) === 11, await text('#fpl-list thead tr'));
 	check('frozen column measured', (await run(`document.querySelector('.fpl-table.multi')?.style.getPropertyValue('--fz2')`))?.endsWith('px'));
 	await shot('fpl-multi');
-	await run(`(() => { const el = document.querySelector('#fpl-q'); el.value = 'club c'; el.dispatchEvent(new Event('input', { bubbles: true })); })()`); await sleep(300);
+	await setValue('#fpl-q', 'club c', 'input'); await sleep(300);
 	check('search', (await run(`document.querySelectorAll('#fpl-list tbody tr').length`)) > 0 && (await run(`document.activeElement?.id !== 'nope'`)), `${await run(`document.querySelectorAll('#fpl-list tbody tr').length`)} rows`);
 
 	// to My FPL team by the menu (no reload: the data is kept)
@@ -100,7 +108,7 @@ try {
 	await shot('myteam');
 	await click('#mt-lock'); check('lock in', await until(`!!document.querySelector('.mt-locked')`, 20000), `${await text('.mt-locked')} · ${posted.filter((p) => p.startsWith('/fantasy/lock')).join(' | ')}`);
 	await click('#mt-unlock'); check('undo', await until(`!!document.querySelector('#mt-lock')`, 20000));
-	await run(`(() => { const el = document.querySelector('#mt-ft'); el.value = '0'; el.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+	await setValue('#mt-ft', '0', 'change');
 	check('free transfers changed: replans', await until(`document.querySelector('.mt-plan tbody tr td:nth-child(2)')?.textContent === '0'`, 20000));
 
 	await run(`[...document.querySelectorAll('nav .menu-link')].find((a) => a.textContent === 'EFL Fantasy').click()`);

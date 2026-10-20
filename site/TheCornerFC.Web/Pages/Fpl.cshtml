@@ -1,0 +1,9 @@
+@page "/fpl"
+@model FplModel
+@{
+    ViewData["Title"] = "FPL · The Corner FC";
+    ViewData["NoIndex"] = true;
+}
+<section class="panel" data-tab="fpl" data-active="true">
+    @await Html.PartialAsync("_OwnerIsland", new OwnerIslandModel("fpl", "fpl-body", "Predictions", new { email = Visitor.Of(HttpContext).Email, findings = Model.Findings }))
+</section>

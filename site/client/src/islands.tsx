@@ -18,15 +18,24 @@ const ISLANDS: Record<string, FunctionComponent<any>> = {
 	'who-picker': WhoPicker
 };
 
-for (const el of document.querySelectorAll<HTMLElement>('[data-island]')) {
-	const Island = ISLANDS[el.dataset.island ?? ''];
+// The owner's fantasy pages, fetched only where one of them is on the page
+const LATER: Record<string, () => Promise<FunctionComponent<any>>> = {
+	fpl: () => import('./FplPage.tsx').then((m) => m.FplPage),
+	myteam: () => import('./MyTeamPage.tsx').then((m) => m.MyTeamPage),
+	efl: () => import('./EflPage.tsx').then((m) => m.EflPage)
+};
+
+async function mount(el: HTMLElement) {
+	const name = el.dataset.island ?? '';
+	const Island = ISLANDS[name] ?? (LATER[name] ? await LATER[name]() : null);
 	const data = el.querySelector(':scope > script[type="application/json"]');
-	if (!Island || !data) continue;
+	if (!Island || !data) return;
 	const root = createRoot(el);
 	const draw = (props: Record<string, unknown>) => root.render(<Island {...props} />);
 	draw(JSON.parse(data.textContent || '{}'));
 	el.addEventListener('island-props', (e) => draw((e as CustomEvent<Record<string, unknown>>).detail));
 }
+for (const el of document.querySelectorAll<HTMLElement>('[data-island]')) void mount(el);
 
 // Match cards: their line-ups, model detail and squads, wherever a page has them
 matchCards();

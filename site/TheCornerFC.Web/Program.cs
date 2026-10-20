@@ -94,6 +94,7 @@ app.MapGet("/players/seasons", async (HttpContext c, Database db) =>
 
 // What a match card asks for as it is opened or comes into view
 MatchEndpoints.Map(app);
+FantasyEndpoints.Map(app);
 // Stripe's webhook: off until the server has payments' secrets
 StripeWebhook.Map(app);
 

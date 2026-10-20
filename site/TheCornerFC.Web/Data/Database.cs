@@ -69,6 +69,25 @@ public sealed class Database(HttpClient http, SiteEnvironment env, TimeProvider 
         return JsonSerializer.Deserialize<T>(await r.Content.ReadAsStringAsync(stop), Json)!;
     }
 
+    // The same, with the answer handed back as the database wrote it, unread (the fantasy pages'
+    // data: large, and nothing here needs to open it)
+    public async Task<string> SiteAskText(string fn, object parameters, string token, CancellationToken stop = default)
+    {
+        var json = JsonSerializer.Serialize(parameters, Json);
+        using var r = await Ask(() =>
+        {
+            var m = new HttpRequestMessage(HttpMethod.Post, $"{env.Url}/rest/v1/rpc/{fn}")
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
+            m.Headers.Add("apikey", env.Key);
+            m.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return m;
+        }, stop);
+        if (!r.IsSuccessStatusCode) throw new DatabaseException(fn, (int)r.StatusCode);
+        return await r.Content.ReadAsStringAsync(stop);
+    }
+
     // A database function that does something and answers nothing (delete_my_account): asked as the
     // signed-in visitor, whose token the database checks
     public async Task SiteCall(string fn, object parameters, string token, CancellationToken stop = default)

@@ -1,0 +1,12 @@
+@page "/efl-fantasy"
+@{
+    // The site owner's, and its data is never written here: the owner's browser asks for it
+    // (/fantasy/data), and the database answers nobody else
+    ViewData["Title"] = "EFL Fantasy · The Corner FC";
+    ViewData["NoIndex"] = true;
+    ViewData["TabHead"] = TabHead.For("EFL Fantasy", "efl");
+}
+<section class="panel" data-tab="efl" data-active="true">
+    @await Html.PartialAsync("_OwnerIsland", new OwnerIslandModel("efl", "efl-body", "Predictions", new { email = Visitor.Of(HttpContext).Email },
+        "Fantasy EFL's terms don't allow the game to be used commercially, so this is kept off the public site"))
+</section>

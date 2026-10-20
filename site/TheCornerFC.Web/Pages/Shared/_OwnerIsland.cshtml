@@ -1,0 +1,22 @@
+@model TheCornerFC.Web.Site.OwnerIslandModel
+@using System.Text.Json
+@{
+    // A fantasy page's body (site/client: FplPage, MyTeamPage, EflPage). Its data is the owner's
+    // and FPL's, so the server never writes it: drawn here is only what anyone sees before the
+    // owner's browser has asked for it (OwnerGate.svelte), and the page's React part takes over.
+    var signedIn = Visitor.Of(Context).SignedIn;
+    var why = Model.Why ?? "it's built on FPL's own data (prices, positions, availability and gameweeks), which FPL's terms don't allow us to republish";
+}
+<div data-island="@Model.Island"><script type="application/json">@Html.Raw(JsonSerializer.Serialize(Model.Props, TheCornerFC.Web.Data.Database.Json).Replace("<", "\\u003c"))</script>
+    <div id="@Model.BodyId"><div class="stats-card"><div class="stats-label">@Model.Label</div>
+        @if (signedIn)
+        {
+            <div class="stats-note">Loading…</div>
+        }
+        else
+        {
+            <div class="stats-note">Shown to the site owner only: @why.</div>
+            <div class="mt-lock"><a role="button" class="mt-btn owner-signin" href="/account?view=signin">Sign in</a></div>
+        }
+    </div></div>
+</div>

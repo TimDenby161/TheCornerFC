@@ -10,6 +10,8 @@ export default defineConfig({
 	// this folder's tsconfig for every file, the ones imported from web/ too (web's own extends the
 	// one svelte-kit sync writes, which a fresh checkout doesn't have)
 	tsconfig: 'tsconfig.json',
+	// served from /client/, where the fantasy pages' parts are fetched from as they are needed
+	base: '/client/',
 	build: {
 		outDir: '../TheCornerFC.Web/wwwroot/client',
 		emptyOutDir: true,
