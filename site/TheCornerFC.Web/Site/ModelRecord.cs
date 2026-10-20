@@ -48,9 +48,13 @@ public sealed record ModelDoc(
     public sealed record LivePoint(int Week, int N, double Gain, double? Low, double? High);
     public sealed record LiveRecord(int N, int Weeks, double? Gain, double? Low, double? High, string? Verdict, Called? Called = null, List<LivePoint>? Series = null);
     public sealed record Minimum(int Matches, int Weeks);
+    // descriptive, outside the verdict: the change's mean log loss and share of right results on the
+    // live matches, and the same for the model it is compared with (experiments/prospective/live_tracking.py)
+    public sealed record LiveScore(int N, [property: JsonPropertyName("log_loss")] double LogLoss, double Right,
+        [property: JsonPropertyName("against_log_loss")] double AgainstLogLoss, [property: JsonPropertyName("against_right")] double AgainstRight);
     public sealed record LiveDoc(string Protocol, string Start, Minimum Minimum, int N, int Weeks, string? To,
         Dictionary<string, LiveRecord> Changes, [property: JsonPropertyName("not_run")] Dictionary<string, string>? NotRun,
-        [property: JsonPropertyName("generated_at")] string? GeneratedAt = null);
+        [property: JsonPropertyName("generated_at")] string? GeneratedAt = null, Dictionary<string, LiveScore>? Scores = null);
     // its match as site.matches holds it, by field name
     public sealed record WorkedExample(Dictionary<string, JsonElement> Match, [property: JsonPropertyName("home_name")] string? HomeName,
         [property: JsonPropertyName("away_name")] string? AwayName, string? Competition, Why? Why);
@@ -245,6 +249,96 @@ public static class ModelRecord
                 next is not null ? "pos" : ""),
             new("Right results", cur?.Accuracy is { } acc ? $"{Js.ToFixed(100 * acc, 1)}%" : "Not recorded", "The outcome the model made most likely happened, on the same matches"),
         ];
+    }
+
+    // ---- The tracker's cards: one per change, its past test beside its live record in plain figures
+
+    // How the live model learns, in a sentence
+    public const string LiveModelLearns = "Each club's Current Strength moves after every result, in the next run of the jobs, and its Baseline Strength is its long-term level. "
+        + "Goals records cover the last 12 months, and injuries and predicted line-ups are read again before every match. "
+        + "The model's settings change only when a tested change is released.";
+    const string Fixed = "Nothing of its own: its setting was fixed on past matches and stays fixed. The live model under it learns from every result.";
+    // How each change learns once it is running, where it has a way of its own; a change in the model
+    // learns as the model does. (From the experiments' code: experiments/prospective/live_p17.py,
+    // thecornerfc/models/match_trees.py.)
+    public static readonly Dictionary<string, string> Learns = new()
+    {
+        ["MC-0003"] = Fixed, ["MC-0007"] = Fixed, ["MC-0008"] = Fixed, ["MC-0009"] = Fixed, ["MC-0010"] = Fixed, ["MC-0011"] = Fixed,
+        ["MC-0017"] = "Refitted every week on all the matches before, the recent ones counting more.",
+        ["MC-0018"] = "Two sets of boosted trees learn where the live model's goals have been wrong, from every match before; they are retrained twice a year, on 1 January and 1 July. The Poisson model they read is refitted every week.",
+        ["MC-0019"] = "Its mix is fixed, but two of the three models in it learn as they go: the weekly Poisson model and the trees.",
+        ["MC-0020"] = "Follows how far scoring has run above or below the forecast, updated after every match, recent matches counting more.",
+        ["MC-0021"] = "Each competition's home edge follows how home sides have done against the forecast, updated after every match.",
+        ["MC-0025"] = "The formula is refitted twice a year, on 1 January and 1 July, on every match before.",
+        ["MC-0027"] = "The formula is refitted twice a year on every match before; the goal level follows recent scoring after every match.",
+        ["MC-0028"] = "It is the club rank itself: each club's strength moves after every result.",
+        ["MC-0029"] = "The trees are retrained on 1 January and 1 July on every match before, and the Poisson model they read every 7 days.",
+    };
+    public static string? LearnsOf(ModelDoc.Change c) => Learns.GetValueOrDefault(c.Id) ?? (InProduction(c) ? "It is part of the live model, and learns as the live model does." : null);
+
+    // A gain in log loss as a share of the log loss it started from, in words: "0.28% better"
+    public static string Share(double gain, double from)
+    {
+        var p = Js.ToFixed(Math.Abs(100 * gain / from), 2);
+        return double.Parse(p, System.Globalization.CultureInfo.InvariantCulture) == 0 ? "No different" : $"{p}% {(gain > 0 ? "better" : "worse")}";
+    }
+    // a range of gains, low to high, as shares: "between 1.30% worse and 1.21% better"
+    public static string ShareRange(double low, double high, double from) => $"between {Share(low, from).ToLowerInvariant()} and {Share(high, from).ToLowerInvariant()}";
+    public static string Percent1(double share) => $"{Js.ToFixed(100 * share, 1)}%";
+
+    public sealed record PastSide(int? N, string? Before, string? After, string? Better, string? Range, bool About, string Proven, string? Label,
+        string? Right = null, string? AgainstRight = null);
+    public sealed record LiveSide(int N, int Need, int Weeks, int NeedWeeks, int MatchShare, int WeekShare, string? Before, string? After,
+        string? Better, string? Range, string? Right, string? AgainstRight, string Text);
+    public sealed record Card(DeltaRow Row, string? What, string? Learns, PastSide? Past, LiveSide? Live, string Status, string Against);
+
+    // What each live comparison is against: the release against the club rank before it, the stored
+    // challenger against the base model, every other change against the live model
+    static string Against(string id) => id == "MC-0028" ? "the club rank before it" : id == "MC-0029" ? "the base model" : "the live model";
+
+    // The cards, in the rows' order. `from` is the live model's log loss, used for a past test that
+    // didn't record where it started (its share is then marked as "about")
+    public static List<Card> Cards(List<ModelDoc.Change> changes, List<DeltaRow> rows, ModelDoc.LiveDoc? live, double? from)
+    {
+        var byId = changes.ToDictionary(c => c.Id);
+        return rows.Select(d =>
+        {
+            var c = byId[d.Id];
+            PastSide? past = null;
+            if (d.Gain is { } g)
+            {
+                var r = Headline(c)!;
+                var start = d.Before ?? from;
+                string? range = r.Interval is [var lo, var hi, ..] && start is { } s0 ? ShareRange(-hi, -lo, s0) : null;
+                past = new(d.N, d.Before is { } b ? Js.ToFixed(b, 4) : null, d.After is { } a ? Js.ToFixed(a, 4) : null,
+                    start is { } s ? Share(g, s) : null, range, d.Before is null,
+                    d.Tone == "better" ? "Proven" : d.Tone == "worse" ? "Proven worse" : "Not proven", EvaluationLabels.GetValueOrDefault(r.Evaluation));
+                // right results, where the same test recorded them
+                if (Headline(c, "accuracy") is { Baseline: { } rb, After: { } ra } && r.Evaluation == Headline(c, "accuracy")!.Evaluation)
+                    past = past with { Right = Percent1(ra), AgainstRight = Percent1(rb) };
+            }
+            LiveSide? now = null;
+            if (d.LiveRecord is { } lr && live is not null)
+            {
+                var sc = live.Scores?.GetValueOrDefault(d.Id);
+                var start = sc?.AgainstLogLoss ?? from;
+                int need = live.Minimum.Matches, weeks = live.Minimum.Weeks;
+                now = new(lr.N, need, lr.Weeks, weeks, ClubPage.Pct(100.0 * lr.N / need), ClubPage.Pct(100.0 * lr.Weeks / weeks),
+                    sc is null ? null : Js.ToFixed(sc.AgainstLogLoss, 4), sc is null ? null : Js.ToFixed(sc.LogLoss, 4),
+                    lr.Gain is { } lg && start is { } s ? Share(lg, s) : null,
+                    lr.Low is { } lo && lr.High is { } hi && start is { } s2 ? ShareRange(lo, hi, s2) : null,
+                    sc is null ? null : Percent1(sc.Right), sc is null ? null : Percent1(sc.AgainstRight), d.LiveText);
+            }
+            return new Card(d, c.What, LearnsOf(c), past, now, Status(c, d), Against(d.Id));
+        }).ToList();
+    }
+
+    // The card's verdict in a few words
+    static string Status(ModelDoc.Change c, DeltaRow d)
+    {
+        if (InProduction(c)) return "In the model";
+        if (d.ReadyNote != "") return d.ReadyNote;
+        return d.LiveRecord is not null ? d.LiveText : d.Tone == "worse" ? "Proven worse on the past test" : "Not proven on the past test";
     }
 
     // ---- One change's own page (the Admin area)

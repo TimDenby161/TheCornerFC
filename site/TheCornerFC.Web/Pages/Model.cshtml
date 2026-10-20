@@ -24,6 +24,7 @@
                 <div class="stats-card"><div class="stats-label">@t.Label</div><div class="stats-value mc-value"><span class="@t.Cls">@t.Value</span></div><div class="stats-note">@t.Note</div></div>
             }
         </div>
+        <p class="mc-para" id="model-learns"><b>How it learns:</b> @ModelRecord.LiveModelLearns</p>
         <p class="stats-note">The model against the bookmakers on every bet market, competition by competition, is on the <a href="/stats">Stats</a> page.</p>
 
         @if (Model.Worked is { } ex)
@@ -35,24 +36,26 @@
 
         <h2 class="mc-h2">Every change, and the test behind it</h2>
         <p class="stats-note">@Model.Registered changes are on the record. Each was written down, with how it would be judged, before its result was seen. Past figures are each change's own test on earlier matches; live figures are on matches played after it was written down.</p>
-        @foreach (var (id, title, rows) in new[] { ("model-in", "In the model now", Model.InModel), ("model-tried", "Tried, or being tested", Model.Tried) })
+        @foreach (var (id, title, cards, fold) in new[]
         {
-            if (rows.Count == 0) { continue; }
-            <div class="stats-card"><div class="stats-label">@title</div>
-                <div class="mc-scroll"><table class="calib-table mc-rows mc-versus" id="@id"><thead><tr><th>No.</th><th>Change</th><th>Past matches</th><th>Past gain</th><th>Live matches</th><th>Live gain</th><th>On live matches</th></tr></thead>
-                    <tbody>@foreach (var d in rows)
-                    {
-                        <tr class="mark-@d.Mark"><td class="mc-no">@ModelRecord.ShortId(d.Id)</td>
-                            <td>@d.Title@if (d.ReadyNote != ""){<span class="mc-sub">@d.ReadyNote</span>}</td>
-                            <td>@(d.N is { } n ? Js.Num(n) : "–")</td>
-                            <td>@if (d.Gain is { } g){<span class="mc-gain mark-@d.Mark">@ModelRecord.Signed(g)</span>}else{<text>–</text>}</td>
-                            <td>@(d.LiveRecord is { } lr ? Js.Num(lr.N) : "–")</td>
-                            <td class="mc-live">@if (d.LiveRecord?.Gain is { } lg){@ModelRecord.Signed(lg)@if (d.LiveRecord.Low is { } lo && d.LiveRecord.High is { } hi){<span class="mc-sub">@ModelRecord.Signed(lo) to @ModelRecord.Signed(hi)</span>}}else{<text>–</text>}</td>
-                            <td class="mc-live-say">@d.LiveText@if (d.LiveWhy != ""){<span class="mc-sub">@d.LiveWhy</span>}</td></tr>
-                    }</tbody></table></div>
-            </div>
+            ("model-in", "In the model now", Model.InModel, false),
+            ("model-tried", "Being tested on live matches", Model.Tried.Where(c => c.Live is not null).ToList(), false),
+            ("model-past", "Tested on past matches only", Model.Tried.Where(c => c.Live is null).ToList(), true),
+        })
+        {
+            if (cards.Count == 0) { continue; }
+            if (fold)
+            {
+                <details class="mc-fold" id="@id"><summary>@title (@cards.Count)</summary>
+                    @foreach (var c in cards){@await Html.PartialAsync("_ChangeCard", (c, false))}</details>
+            }
+            else
+            {
+                <h3 class="mc-h3">@title (@cards.Count)</h3>
+                <div class="mc-cards" id="@id">@foreach (var c in cards){@await Html.PartialAsync("_ChangeCard", (c, false))}</div>
+            }
         }
-        <p class="stats-note">Gain is how much lower the log loss is with the change, so a plus is an improvement. Green: statistical evidence the change makes the model better. Red: evidence it makes it worse. No colour: not proven either way yet.
+        <p class="stats-note">How much better is the fall in log loss as a share of the log loss without the change; “about” marks a past test that didn’t record where it started, shared out of the live model’s log loss instead. Right results: how often the outcome given the highest chance happened. Green: statistical evidence the change makes the model better. Red: evidence it makes it worse. No colour: not proven either way yet.
             @if (Model.LiveTests is { } lt){<text>Live tests: @Js.Num(lt.N) finished matches since @lt.Start, over @lt.Weeks week@(lt.Weeks == 1 ? "" : "s"), for @lt.Tracked change@(lt.Tracked == 1 ? "" : "s") (@lt.Protocol). Nothing is called before @lt.Matches matches and @lt.MinWeeks weeks, and the method allows looking at any time, which is why its ranges are wide.</text>}</p>
 
         <h2 class="mc-h2">Check it yourself</h2>

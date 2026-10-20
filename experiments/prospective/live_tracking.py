@@ -6,11 +6,14 @@ as the one administrator's document `live_tracking` that the Model Change Tracke
     python experiments/prospective/live_tracking.py --store    # and stores it
 
 Each protocol's evaluator is its own file, pinned and registered in PROTOCOLS.md; this only runs
-them and puts their records together.
+them and puts their records together. It adds `scores`, descriptive and outside every verdict:
+each tracked change's mean log loss and share of right results on the live matches, beside the
+model it is compared with, so the tracker can show both in plain figures.
 """
 import argparse
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -42,6 +45,25 @@ def together(release_and_ideas, challenger):
     return out
 
 
+def scores(pairs):
+    """{change: its log loss and right results on the live matches, and the same for the model it is
+    compared with}, from {change: (its probabilities, the other's, outcomes)}, each a list of
+    (home, draw, away) rows. Right: the outcome given the highest chance happened (the first of a tie)."""
+    def measure(probs, ys):
+        loss = sum(-math.log(max(float(p[y]), 1e-15)) for p, y in zip(probs, ys)) / len(ys)
+        right = sum(max(range(3), key=lambda k: float(p[k])) == y for p, y in zip(probs, ys)) / len(ys)
+        return loss, right
+
+    out = {}
+    for cid, (mine, theirs, ys) in pairs.items():
+        ys = [int(y) for y in ys]
+        if not ys:
+            continue
+        (loss, right), (against, against_right) = measure(mine, ys), measure(theirs, ys)
+        out[cid] = {"n": len(ys), "log_loss": loss, "right": right, "against_log_loss": against, "against_right": against_right}
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--store", action="store_true", help="store the record for the Admin area (needs a run that may write)")
@@ -50,10 +72,20 @@ def main():
     doc = p16.extract()
     rows, excluded, checks = p16.build(doc)
     release = p16.record(rows, excluded, checks, environment=doc["database_says"], generated_at=doc["extracted_at"])
-    ideas = p17.record(*p17.build(doc))
+    idea_rows, idea_excluded = p17.build(doc)
+    ideas = p17.record(idea_rows, idea_excluded)
     with p16.p13.connect() as conn:
-        challenger = p18.record(p18.extract(conn))
+        challenged = p18.extract(conn)
+    challenger = p18.record(challenged)
     out = together(p17.combined(release, ideas), challenger)
+    compared = {}
+    if rows is not None:
+        compared[p16.CHANGE] = (rows["released"], rows["before"], rows["y"])
+    if idea_rows is not None:
+        compared.update({cid: (p, idea_rows["production"], idea_rows["y"]) for cid, p in idea_rows["candidates"].items()})
+    pairs = p18.pairs(challenged)[0]
+    compared[p18.CHANGE] = ([probs["a18"] for _, _, probs, _ in pairs], [probs["base"] for _, _, probs, _ in pairs], [y for _, y, _, _ in pairs])
+    out["scores"] = scores(compared)
     print(json.dumps({"n": out["n"], "weeks": out["weeks"], "to": out["to"], "exclusions": out["exclusions"], "checks": checks,
                       "called": {cid: c["called"] for cid, c in out["changes"].items() if c["called"]}}, indent=2, default=str))
     if args.store:

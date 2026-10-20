@@ -16,8 +16,8 @@ public sealed class ModelModel(Database db) : PageModel
     public string Generated { get; private set; } = "";
     public string? Version { get; private set; }
     public List<ModelRecord.Tile> Tiles { get; private set; } = [];
-    public List<ModelRecord.DeltaRow> InModel { get; private set; } = [];
-    public List<ModelRecord.DeltaRow> Tried { get; private set; } = [];
+    public List<ModelRecord.Card> InModel { get; private set; } = [];
+    public List<ModelRecord.Card> Tried { get; private set; } = [];
     public int Registered { get; private set; }
     public Example? Worked { get; private set; }
     public Live? LiveTests { get; private set; }
@@ -44,8 +44,9 @@ public sealed class ModelModel(Database db) : PageModel
             var note = inModel ? "In the model" : d.ReadyNote.EndsWith(": see why on its page") ? d.ReadyNote[..^": see why on its page".Length] : d.ReadyNote;
             return (Row: d with { ReadyNote = note }, InModel: inModel);
         }).ToList();
-        InModel = rows.Where(r => r.InModel).Select(r => r.Row).ToList();
-        Tried = rows.Where(r => !r.InModel).Select(r => r.Row).ToList();
+        var cards = ModelRecord.Cards(doc.Changes, rows.Select(r => r.Row).ToList(), live, doc.Current?.LogLoss);
+        InModel = cards.Where((_, i) => rows[i].InModel).ToList();
+        Tried = cards.Where((_, i) => !rows[i].InModel).ToList();
         Registered = doc.Changes.Count;
         // one finished match worked through step by step (site_matches.worked_example)
         if (doc.Example is { Why.Steps: not null } ex)

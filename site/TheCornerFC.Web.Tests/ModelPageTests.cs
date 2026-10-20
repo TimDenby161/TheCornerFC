@@ -40,9 +40,13 @@ public class ModelPageTests
         Assert.Contains("Live model: match-prediction 9afa9ed", html);
         Assert.Contains("<span class=\"neg\">&#x2B;0.0200</span>", html);                      // behind the market
         Assert.Contains("Improvement</div><div class=\"stats-value mc-value\"><span class=\"pos\">−0.00210</span>", html);
-        Assert.Contains("<td class=\"mc-no\">A28</td>", html);
-        Assert.Contains("In the model", html);
+        Assert.Contains("<span class=\"mc-no\">A28</span>", html);
+        Assert.Contains("<span class=\"mc-pill mark-none\">In the model</span>", html);
+        Assert.Contains("How it learns:</b> It is the club rank itself", html);
+        Assert.Contains("<b>0.21% better</b>", html);                                          // 0.0021 of 0.99
         Assert.Contains("Proven on this test, but rejected</span>", html);                     // the Admin area's pointer taken off
+        Assert.DoesNotContain("see why on its page", html);
+        Assert.DoesNotContain("/admin/changes", html);                                         // no links into the Admin area
         Assert.Contains("One match, step by step", html);
         Assert.Contains("Final score: Arsenal 2–0 Leeds", html);
         Assert.Contains("<div class=\"why-row\"><span>Home goals, Arsenal</span><b>(1.62 &#x2B; 1.39) ÷ 2 = 1.51</b></div>", html);

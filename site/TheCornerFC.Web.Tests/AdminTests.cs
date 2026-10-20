@@ -37,7 +37,8 @@ public class AdminTests
     const string Live = """
         {"protocol":"P17","generated_at":"2026-10-18T04:00:00+00:00","start":"2026-10-14","minimum":{"matches":500,"weeks":8},"n":310,"weeks":1,"to":"2026-10-18",
          "changes":{"MC-0031":{"n":310,"weeks":1,"gain":0.0012,"low":-0.01,"high":0.012,"verdict":null,
-           "series":[{"week":202642,"n":120,"gain":0.002,"low":-0.02,"high":0.024},{"week":202643,"n":310,"gain":0.0012,"low":-0.01,"high":0.012}]}},"not_run":{}}
+           "series":[{"week":202642,"n":120,"gain":0.002,"low":-0.02,"high":0.024},{"week":202643,"n":310,"gain":0.0012,"low":-0.01,"high":0.012}]}},"not_run":{},
+         "scores":{"MC-0031":{"n":310,"log_loss":0.97,"right":0.53,"against_log_loss":0.9712,"against_right":0.52}}}
         """;
 
     // a stand-in whose am_admin says `admin`, with the two documents and the model switch
@@ -92,9 +93,20 @@ public class AdminTests
         Assert.Contains("Make live: The base model with A18’s boosted trees", html);
         Assert.Contains("<a class=\"team-link\" href=\"/admin/changes/MC-0031\">Shots in the attack rating</a>", html);
         Assert.Contains("Ready on the historical test; being confirmed on new matches", html);
-        Assert.Contains("0.99000 → 0.98890", html);
-        Assert.Contains("Expected &#x2B;0.00070", html);
         Assert.Contains("Too early: needs 500 matches and 8 weeks", html);
+        // its card: the past test beside the live record, in plain figures, and how far the live record has got
+        Assert.Contains("<h3 class=\"mc-h3\">Ready to implement (1)</h3>", html);
+        Assert.Contains("<article class=\"mc-card mark-ready\" id=\"card-MC-0031\">", html);
+        Assert.Contains("<b>What it does:</b> Adds shots", html);
+        Assert.Contains("<td>0.9900 → 0.9889</td>", html);
+        Assert.Contains("<td>0.9712 → 0.9700</td>", html);
+        Assert.Contains("<b>0.11% better</b><span class=\"mc-sub\">Proven: between 0.02% better and 0.20% better</span>", html);
+        Assert.Contains("<b>0.12% better</b><span class=\"mc-sub\">So far, between 1.03% worse and 1.24% better</span>", html);
+        Assert.Contains("<b>53.0%</b><span class=\"mc-sub\">The live model: 52.0%</span>", html);
+        Assert.Contains("<span>310 of 500</span><span class=\"mc-bar\"><span class=\"mc-fill sw-62\"></span>", html);
+        Assert.Contains("<span>week 1 of 8</span><span class=\"mc-bar\"><span class=\"mc-fill sw-13\"></span>", html);
+        Assert.Contains("<b>How the live model learns:</b>", html);
+        Assert.Contains("<b>How A18 learns:</b>", html);
         // the menu's Admin links, for them
         Assert.Contains("href=\"/admin/simulation\"", html);
         Assert.All(site.Handler.Sent.Where(x => Fn(x).StartsWith("admin_") || Fn(x) == "am_admin"), x => Assert.Equal("Bearer access-1", x.Headers.Authorization!.ToString()));

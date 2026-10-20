@@ -247,7 +247,7 @@ await open('/model');
 await until(`document.querySelector('#model-tiles .stats-card') || document.querySelector('#model-empty')`);
 {
 	const tiles = await run(`document.querySelectorAll('#model-tiles .stats-card').length`), empty = await run(`!!document.querySelector('#model-empty')`);
-	check('The Model shows its eight figures and the changes, or says it is being prepared', tiles === 8 ? (await run(`document.querySelectorAll('#model-in tbody tr, #model-tried tbody tr').length`)) > 0 : empty, tiles === 8 ? `${tiles} figures` : 'being prepared');
+	check('The Model shows its eight figures and the changes, or says it is being prepared', tiles === 8 ? (await run(`document.querySelectorAll('#model-in .mc-card, #model-tried .mc-card').length`)) > 0 : empty, tiles === 8 ? `${tiles} figures` : 'being prepared');
 	check('The Model has no model switch and no upcoming fixtures', !(await run(`!!document.querySelector('form[action*="switch"], #mc-switch, #mc-apart')`)));
 	// one finished match worked through step by step, once the nightly export has picked one
 	const steps = await run(`document.querySelectorAll('#model-example .why-sec').length`);

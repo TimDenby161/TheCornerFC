@@ -22,6 +22,7 @@ public sealed class ChangesModel(Database db) : PageModel
     public ModelDoc Doc { get; private set; } = null!;
     public List<ModelRecord.Tile> Tiles { get; private set; } = [];
     public List<ModelRecord.DeltaRow> Deltas { get; private set; } = [];
+    public List<ModelRecord.Card> Cards { get; private set; } = [];
     public TheCornerFC.Web.Site.Admin.MatchModel? Model { get; private set; }
     public Versus? Vs { get; private set; }
     public LiveSummary? Live { get; private set; }
@@ -56,6 +57,7 @@ public sealed class ChangesModel(Database db) : PageModel
         // the table is for deciding what to add, so changes already in production, themselves or
         // inside a release, are left out of it
         Deltas = ModelRecord.DeltaRows(doc.Changes.Where(x => !ModelRecord.InProduction(x)).ToList(), "log_loss", live);
+        Cards = ModelRecord.Cards(doc.Changes, Deltas, live, doc.Current?.LogLoss);
         if (live is not null)
             Live = new(live.N, live.Weeks, live.Start, live.To, live.GeneratedAt, live.Changes.Count, live.Protocol, live.Minimum.Matches, live.Minimum.Weeks);
         return Page();

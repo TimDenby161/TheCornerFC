@@ -5,8 +5,8 @@ Three pages under `/admin` are the site administrator's only: **Model Change Tra
 2026-10-13 (owner's decision). Nothing here changes a model, a bet or a stored prediction.
 
 **The record is public too (owner's decision 2026-10-16, the most transparent model).** The
-public page **The Model** (`/model`) shows the tracker's eight figures and every change with its
-past and live results, from `model.json`: the nightly export writes it beside the Admin copy
+public page **The Model** (`/model`) shows the tracker's eight figures and every change as a card
+with its past and live results, from `model.json`: the nightly export writes it beside the Admin copy
 (`site_record.public_model`), leaving out which database wrote it and the register's internal
 mismatch notes. What stays here only: the model switch, where the two models part on matches to
 come (both database functions, not documents), the paper bets and the Model vs Market tips. The
@@ -87,6 +87,18 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   and says of the rest why they are not run. Both are judged by a confidence sequence, which holds
   however often it is looked at, so the ranges are wide. A future release rebases P17 by a dated
   amendment in the same commit instead of closing it.
+- **The tracker's cards** (`Pages/Shared/_ChangeCard.cshtml`, `ModelRecord.Cards`). Each change
+  is a card on both the tracker and The Model: what it does (the register's `what`), how it
+  learns once running (`ModelRecord.Learns`, written from the experiments' code), and its past
+  test beside its live record: matches (live ones as progress to the 500 matches and 8 weeks a
+  call needs), log loss without and with it, how much better as a share of the log loss without
+  it, and right results. The live log loss and right results come from `scores` in
+  `live_tracking`, which `experiments/prospective/live_tracking.py` works out from the
+  probabilities the evaluators already built: descriptive, outside every verdict, and no evaluator
+  or pinned file changed. A past test that didn't record where it started is shared out of the
+  live model's log loss and marked "about". The tracker groups the cards as ready to implement,
+  being tested on live matches, and tested on past matches only; The Model as in the model now,
+  being tested, and past only.
 - **The live match model** (MC-0029, `db/migrations/20261014_challenger_model.sql`, with
   `20261014_match_model_switch_fix.sql` mending the switch card's answer, and
   `20261014_match_model_compare.sql` the comparison above the button; how an idea

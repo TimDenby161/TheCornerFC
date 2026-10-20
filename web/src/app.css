@@ -248,6 +248,26 @@ body[data-tab="changes"] main { max-width: none; }
 .mc .calib-table td { vertical-align: top; }
 .mc-compare { margin: 12px 0 14px; }
 .mc-para { margin: 6px 0 10px; font-size: 14px; line-height: 1.45; }
+/* the tracker's cards: one per change, past test beside live record */
+.mc-h3 { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; margin: 22px 0 10px; }
+.mc-cards { display: grid; gap: 14px; }
+.mc-card { border-top: 2px solid var(--text-primary); padding: 10px 0 14px; min-width: 0; }
+.mc-fold .mc-card { margin-top: 12px; }
+.mc-card.mark-ready { border-top-color: var(--status-good); box-shadow: inset 4px 0 0 var(--status-good); padding-left: 12px; background: color-mix(in srgb, var(--status-good) 10%, transparent); }
+.mc-card.mark-worse { border-top-color: var(--status-critical); }
+.mc-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 4px; min-width: 0; }
+.mc-card-head .mc-pill { white-space: normal; max-width: 100%; }
+.mc-card .mc-para { overflow-wrap: anywhere; }
+.mc-card-title { font-size: 16px; font-weight: 800; margin: 0; flex: 1 1 200px; min-width: 0; }
+.mc-card.mark-ready .mc-no { color: var(--good-text); } .mc-card.mark-worse .mc-no { color: var(--critical-text); }
+.mc-card-table { width: 100%; margin-top: 6px; }
+.mc-card-table th:first-child, .mc-card-table td:first-child { text-align: left; width: 30%; color: var(--text-secondary); font-weight: 700; }
+.mc-card-table th, .mc-card-table td { text-align: left; }
+.mc-card-say { margin: 8px 0 0; }
+.mc-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mc-progress + .mc-progress { margin-top: 4px; }
+.mc-bar { position: relative; display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: var(--chip-bg); overflow: hidden; }
+.mc-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--series-blue); }
 .mc-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .mc-two td, .mc-two th, .mc-apart td, .mc-apart th { font-variant-numeric: tabular-nums; }
 .mc-apart td { white-space: nowrap; } .mc-apart td:nth-child(2) { white-space: normal; min-width: 160px; }

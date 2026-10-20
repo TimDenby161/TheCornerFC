@@ -24,9 +24,11 @@
                 <div class="stats-card"><div class="stats-label">@t.Label</div><div class="stats-value mc-value"><span class="@t.Cls">@t.Value</span></div><div class="stats-note">@t.Note</div></div>
             }
         </div>
+        <p class="mc-para" id="mc-learns"><b>How the live model learns:</b> @ModelRecord.LiveModelLearns</p>
         @if (Model.Model is { } model)
         {
             <div class="stats-card mc-switch" id="mc-switch"><div class="stats-value mc-value">Model Comparison</div>
+                <p class="mc-para"><b>How A18 learns:</b> @ModelRecord.Learns["MC-0018"]</p>
                 @if (Model.Vs is { } v)
                 {
                     <div class="mc-compare" id="mc-compare">
@@ -82,29 +84,35 @@
         }
 
         <div class="mc-sections" id="mc-charts">
-            <div class="stats-card"><div class="stats-label">Each change against the current version, log loss</div>
-                @if (Model.Deltas.Count > 0)
+            <h2 class="mc-h2">Each change against the live model</h2>
+            @if (Model.Cards.Count > 0)
+            {
+                <p class="stats-note"><b>Green means one thing: implement this.</b> A card is green when there is statistical evidence that the change makes the model better, however small the gain: on live matches, or on a test that was not the matches it was built on, and it has been neither rejected nor deployed. Red is a change a test has proven worse. Releasing a green change is still your decision.</p>
+                @foreach (var (id, title, cards, fold) in new[]
                 {
-                    <table class="calib-table mc-rows mc-versus" id="mc-versus"><thead><tr><th>No.</th><th>Change</th><th>Past matches</th><th>Past gain</th><th>Current → with the change</th><th>Live matches</th><th>Live gain</th><th>On live matches</th></tr></thead>
-                        <tbody>@foreach (var d in Model.Deltas)
-                        {
-                            <tr class="mark-@d.Mark@(d.Ready ? " mc-ready" : "")"><td class="mc-no">@ModelRecord.ShortId(d.Id)</td>
-                                <td><a class="team-link" href="/admin/changes/@d.Id">@d.Title</a>@if (d.ReadyNote != ""){<span class="mc-sub@(d.Ready ? " mc-ready-note" : "")">@d.ReadyNote</span>}</td>
-                                <td>@(d.N is { } n ? Js.Num(n) : "–")</td>
-                                <td>@if (d.Gain is { } g){<span class="mc-gain mark-@d.Mark">@ModelRecord.Signed(g)</span>}else{<text>–</text>}@if (d.Expected is { } ex){<span class="mc-sub">Expected @ModelRecord.Signed(ex)</span>}</td>
-                                <td>@(d.Before is { } b && d.After is { } a ? $"{Js.ToFixed(b, 5)} → {Js.ToFixed(a, 5)}" : d.Gain is null ? "–" : "Not recorded")</td>
-                                <td>@(d.LiveRecord is { } lr ? Js.Num(lr.N) : "–")</td>
-                                <td class="mc-live">@if (d.LiveRecord?.Gain is { } lg){@ModelRecord.Signed(lg)@if (d.LiveRecord.Low is { } lo && d.LiveRecord.High is { } hi){<span class="mc-sub">@ModelRecord.Signed(lo) to @ModelRecord.Signed(hi)</span>}}else{<text>–</text>}</td>
-                                <td class="mc-live-say" title="@d.LiveWhy">@d.LiveText@if (d.LiveWhy != ""){<span class="mc-sub">@d.LiveWhy</span>}</td></tr>
-                        }</tbody></table>
-                    <div class="stats-note">@if (Model.Live is { } l){<text>Live matches: @Js.Num(l.N) finished since @l.Start@(l.To is { } to ? $" (to {to})" : ""), over @l.Weeks week@(l.Weeks == 1 ? "" : "s"), for the @l.Tracked change@(l.Tracked == 1 ? "" : "s") tracked (@l.Protocol). Updated @(l.Generated is { } gen ? When(gen, "short") : HtmlString.Empty). Nothing is called on live matches before @l.Matches matches and @l.MinWeeks weeks.</text>}else{<text>The live record has not been stored yet: it is written by the Live tracking job, on Mondays and Thursdays.</text>} The live gain is the candidate against the current model on the same live matches, with the range it could still lie in; it is judged by a method that allows looking at any time, which is why its range is wide and a call takes many matches.</div>
-                    <div class="stats-note"><b>Green means one thing: implement this.</b> A row is green when there is statistical evidence that the change makes the model better, however small the gain: on live matches, or on a test that was not the matches it was built on, and it has been neither rejected nor deployed. No other change is marked green anywhere on this page. A gain that is large but unproven, or rejected, has no colour and says why under its name. Red is a change a test has proven worse. Releasing a green change is still your decision. Green rows come first, then proven gains, then the unproven, then the proven losses. Gain is how much lower the log loss is with the change, so a plus is an improvement. Past figures are each change's own historical test on its own matches, never a production result.</div>
-                }
-                else
+                    ("mc-ready", "Ready to implement", Model.Cards.Where(c => c.Row.Ready).ToList(), false),
+                    ("mc-live", "Being tested on live matches", Model.Cards.Where(c => !c.Row.Ready && c.Live is not null).ToList(), false),
+                    ("mc-past", "Tested on past matches only", Model.Cards.Where(c => !c.Row.Ready && c.Live is null).ToList(), true),
+                })
                 {
-                    <div class="stats-note">No change outside production in this selection has a result on log loss.</div>
+                    if (cards.Count == 0) { continue; }
+                    if (fold)
+                    {
+                        <details class="mc-fold" id="@id"><summary>@title (@cards.Count)</summary>
+                            @foreach (var c in cards){@await Html.PartialAsync("_ChangeCard", (c, true))}</details>
+                    }
+                    else
+                    {
+                        <h3 class="mc-h3">@title (@cards.Count)</h3>
+                        <div class="mc-cards" id="@id">@foreach (var c in cards){@await Html.PartialAsync("_ChangeCard", (c, true))}</div>
+                    }
                 }
-            </div>
+                <div class="stats-note">@if (Model.Live is { } l){<text>Live matches: @Js.Num(l.N) finished since @l.Start@(l.To is { } to ? $" (to {to})" : ""), over @l.Weeks week@(l.Weeks == 1 ? "" : "s"), for the @l.Tracked change@(l.Tracked == 1 ? "" : "s") tracked (@l.Protocol). Updated @(l.Generated is { } gen ? When(gen, "short") : HtmlString.Empty). Nothing is called on live matches before @l.Matches matches and @l.MinWeeks weeks.</text>}else{<text>The live record has not been stored yet: it is written by the Live tracking job, on Mondays and Thursdays.</text>} The live range is where the gain could still lie; it is judged by a method that allows looking at any time, which is why it is wide and a call takes many matches. How much better is the fall in log loss as a share of the log loss without the change; “about” marks a past test that didn’t record where it started, shared out of the live model’s log loss instead. Right results: how often the outcome given the highest chance happened. Past figures are each change’s own test on its own matches, never a production result.</div>
+            }
+            else
+            {
+                <div class="stats-note">No change outside production in this selection has a result on log loss.</div>
+            }
         </div>
     }
 </section>

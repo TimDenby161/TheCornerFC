@@ -60,6 +60,18 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(sorted(set(out['changes']) | set(out['not_run'])), ids)
         json.dumps(out, allow_nan=False)
 
+    def test_the_scores_give_log_loss_and_right_results_beside_the_other_model(self):
+        mine = [(0.6, 0.2, 0.2), (0.2, 0.5, 0.3)]
+        theirs = [(0.3, 0.3, 0.4), (0.5, 0.25, 0.25)]
+        out = runner.scores({'MC-0018': (mine, theirs, [0, 1]), 'MC-0003': ([], [], [])})
+        self.assertEqual(set(out), {'MC-0018'})          # nothing to score, nothing written
+        s = out['MC-0018']
+        self.assertEqual(s['n'], 2)
+        self.assertAlmostEqual(s['log_loss'], -(math.log(0.6) + math.log(0.5)) / 2)
+        self.assertAlmostEqual(s['against_log_loss'], -(math.log(0.3) + math.log(0.25)) / 2)
+        self.assertEqual((s['right'], s['against_right']), (1.0, 0.0))
+        json.dumps(out, allow_nan=False)
+
 
 if __name__ == '__main__':
     unittest.main()

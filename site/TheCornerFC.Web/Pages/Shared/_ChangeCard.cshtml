@@ -1,0 +1,29 @@
+@model (TheCornerFC.Web.Site.ModelRecord.Card Card, bool Admin)
+@{
+    // One change on the tracker (the Admin area's and The Model's): what it does, how it learns, and
+    // its past test beside its live record in plain figures, with how far the live record has got
+    var (c, admin) = Model;
+    var d = c.Row;
+}
+<article class="mc-card mark-@d.Mark" id="card-@d.Id">
+    <div class="mc-card-head"><span class="mc-no">@TheCornerFC.Web.Site.ModelRecord.ShortId(d.Id)</span>
+        <h3 class="mc-card-title">@if (admin){<a class="team-link" href="/admin/changes/@d.Id">@d.Title</a>}else{@d.Title}</h3>
+        <span class="mc-pill mark-@d.Mark">@c.Status</span></div>
+    @if (c.What is { Length: > 0 } what){<p class="mc-para"><b>What it does:</b> @what</p>}
+    @if (c.Learns is { } learns){<p class="mc-para"><b>How it learns:</b> @learns</p>}
+    <div class="mc-scroll"><table class="calib-table mc-rows mc-card-table"><thead><tr><th></th><th>Past test</th><th>Live so far</th></tr></thead>
+        <tbody>
+            <tr><td>Matches</td><td>@(c.Past?.N is { } pn ? Js.Num(pn) : "–")</td>
+                <td>@if (c.Live is { } l){<span class="mc-progress"><span>@Js.Num(l.N) of @Js.Num(l.Need)</span><span class="mc-bar"><span class="mc-fill sw-@l.MatchShare"></span></span></span>
+                    <span class="mc-progress"><span>week @l.Weeks of @l.NeedWeeks</span><span class="mc-bar"><span class="mc-fill sw-@l.WeekShare"></span></span></span>}else{<text>Not run live</text>}</td></tr>
+            <tr><td>Log loss<span class="mc-sub">without → with it</span></td><td>@(c.Past is { Before: { } pb, After: { } pa } ? $"{pb} → {pa}" : "–")</td>
+                <td>@(c.Live is { Before: { } lb, After: { } la } ? $"{lb} → {la}" : "–")</td></tr>
+            <tr><td>How much better</td>
+                <td>@if (c.Past?.Better is { } pbt){<b>@(c.Past.About ? "About " + pbt.ToLowerInvariant() : pbt)</b>@if (c.Past.Range is { } pr){<span class="mc-sub">@c.Past.Proven: @pr</span>}}else{<text>–</text>}</td>
+                <td>@if (c.Live?.Better is { } lbt){<b>@lbt</b>@if (c.Live.Range is { } lrg){<span class="mc-sub">So far, @lrg</span>}}else{<text>–</text>}</td></tr>
+            <tr><td>Right results</td><td>@if (c.Past?.Right is { } pright){<b>@pright</b><span class="mc-sub">Without it: @c.Past.AgainstRight</span>}else{<text>–</text>}</td>
+                <td>@if (c.Live?.Right is { } right){<b>@right</b><span class="mc-sub">@(char.ToUpperInvariant(c.Against[0]) + c.Against[1..]): @c.Live.AgainstRight</span>}else{<text>–</text>}</td></tr>
+        </tbody></table></div>
+    @if (c.Live is { } lv){<p class="mc-sub mc-card-say">Live: @lv.Text. Against @c.Against, on the same matches.</p>}
+    else if (d.LiveWhy != ""){<p class="mc-sub mc-card-say">@d.LiveWhy</p>}
+</article>
