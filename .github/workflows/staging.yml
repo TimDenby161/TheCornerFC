@@ -3,7 +3,8 @@ name: Staging
 # The check a commit must hold before it can be promoted to main (guide/environments.md). It
 # runs only on a push to the staging branch, and passes only when the staging site is serving
 # this very commit and works: so "staging-check passed" on a commit means it was built, deployed
-# and seen working on staging. Cloudflare builds the staging site itself from the same push.
+# and seen working on staging. The C# site workflow (site-csharp.yml) deploys the staging site from
+# the same push.
 #
 # This is its own workflow, with no other trigger, on purpose: a job that is skipped counts as
 # passed, so the check must never exist as a skipped job on some other branch's commit.

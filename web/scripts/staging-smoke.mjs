@@ -3,7 +3,7 @@
 //
 //   node web/scripts/staging-smoke.mjs <address> <commit>
 //   STAGING_ACCESS_CLIENT_ID / STAGING_ACCESS_CLIENT_SECRET: the Cloudflare Access service token
-//   WAIT_MINUTES: how long to wait for Cloudflare's build of this commit (default 15)
+//   WAIT_MINUTES: how long to wait for this commit's deploy (default 15)
 //
 // It only reads. Every line it prints starts "ok" or "FAILED".
 import { readFileSync } from 'node:fs';
@@ -27,7 +27,7 @@ check('the two projects are recorded and differ', !!production && !!staging && p
 check('the check has its Access token', !!id && !!secret);
 if (failed) process.exit(1);
 
-// Cloudflare builds the same push: wait until the site answers with this commit
+// the same push deploys the site: wait until it answers with this commit
 const until = Date.now() + Number(process.env.WAIT_MINUTES || 15) * 60_000;
 let version = null, last = '';
 while (Date.now() < until) {
