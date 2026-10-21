@@ -1,0 +1,30 @@
+{
+ "id": "MC-0030",
+ "registration": {
+  "recorded": "2026-10-21",
+  "retrospective": false,
+  "date": "2026-10-21",
+  "title": "Skill ranks: players ranked on single skills, and each position a mix of skills",
+  "component": "Player ranks",
+  "model": "player",
+  "kind": "experiment",
+  "what": "Eight skills (finishing, creating, passing, dribbling, ball-winning, duels, defensive solidity, goalkeeping), each one recipe of counted stats for every position. Each position's rank becomes a mix of skills, starting from the shares today's weights give each skill. Every outfield player gets a 0 to 100 score in each skill, for lists on the site.",
+  "why": "The owner wants players ranked by skill, and positions built from a mix of skills he can tune.",
+  "how": "SKILLS and SKILL_MIX in player_ratings.py; WEIGHTS worked out from them. Recipes by a fixed rule from today's weights (experiments/skill_ranks/DESIGN.md).",
+  "hypothesis": "Re-expressing the position weights as skills keeps the ranks where they are (Spearman 0.98+ per group), no less repeatable from season to season, with keepers untouched and the match model's XI ratings barely moved.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/skill_ranks/DESIGN.md"
+  },
+  "success_criteria": "experiments/skill_ranks/run.py: all four checks in DESIGN.md pass. The owner then tunes the mixes by eye, each tuning a change of its own.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/skill_ranks",
+   "model_version": null
+  }
+ },
+ "events": []
+}
