@@ -309,3 +309,4 @@ body[data-tab="changes"] main { max-width: none; }
 .skill-pick[aria-pressed="true"] { background: var(--text-primary); color: var(--page-plane); border-color: var(--text-primary); }
 .skill-pick:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
 
+table.leaderboard.players :is(th, td).col-skill { width: 108px; text-align: center; white-space: nowrap; padding-left: 2px; padding-right: 2px; }

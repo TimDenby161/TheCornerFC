@@ -1,4 +1,4 @@
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-21, to staging and to production.
 -- Skill ranks (owner, 2026-10-21, MC-0030, experiments/skill_ranks): every listed outfield player
 -- has a 0 to 100 score in seven skills (finishing, creating, passing, dribbling, ball-winning,
 -- duels, defensive solidity), and the Players tab can list players by any of them.
