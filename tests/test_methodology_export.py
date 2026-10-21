@@ -37,8 +37,10 @@ class MethodologyExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d, \
                 patch.object(evaluation, "load_matches", return_value=(list(matches), {"missing_regulation_score": 2})) as lm, \
                 patch.object(evaluation, "load_lineups", return_value=(list(lineups), {"missing_or_incomplete_official_xi": 1})), \
-                patch.object(site_record, "export_lineup_record") as record:
+                patch.object(site_record, "export_lineup_record") as record, \
+                patch.object(site_record, "store_prediction_record") as stored:
             export_methodology(conn, Path(d), now=T2)
+            self.stored = stored
             self.load_matches = lm
             record.assert_called_once()
             return json.loads((Path(d) / "methodology.json").read_text())
@@ -56,6 +58,7 @@ class MethodologyExportTests(unittest.TestCase):
         self.assertEqual(m["period"], {"from": T1.isoformat(), "to": T2.isoformat()})
         self.assertEqual(m["versions"], [{"name": "match-v1", "n": 2}])
         self.assertEqual(m["excluded_no_regulation_score"], 2)
+        self.assertEqual(len(self.stored.call_args[0][1]), 2)      # the same rows go to the prediction record
         self.assertEqual(sum(b[1] for b in m["calibration"]), 6)  # 3 outcomes per match, pooled
         # P6 (model vs market) stays blinded: no market figure is published
         self.assertNotIn("market", json.dumps(out))

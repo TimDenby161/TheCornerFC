@@ -1,0 +1,66 @@
+@page "/record"
+@model RecordModel
+@removeTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    ViewData["Title"] = "Prediction record · The Corner FC";
+    ViewData["Description"] = "Every prediction The Corner FC's match model made, as it was locked before kick-off, beside the result: check every call.";
+    var visitor = Visitor.Of(HttpContext);
+    string[] said = ["Home", "Draw", "Away"];
+}
+<section class="panel mc" data-tab="record" data-active="true">
+    @if (Model.State == "waiting")
+    {
+        <div class="empty-state" id="record-empty">The prediction record is being prepared. It is written by the nightly run.</div>
+    }
+    else
+    {
+        <p class="stats-note">Every finished club match the model predicted, with the chances it stored before kick-off. The database refuses any change to a stored prediction, so none of these can be edited after the result. Each one carries its stored time, the model version that made it and its fingerprint.</p>
+        <form method="get" action="/record" class="mc-filters" id="record-pick">
+            <label>Month<select name="m"><option value="all" selected="@(Model.Month == "all")">All months</option>@foreach (var (key, name) in Model.Months){<option value="@key" selected="@(key == Model.Month)">@name</option>}</select></label>
+            <label>Competition<select name="c"><option value="all" selected="@(Model.Comp == "all")">All competitions</option>@foreach (var (key, name) in Model.Comps){<option value="@key" selected="@(key == Model.Comp)">@name</option>}</select></label>
+            <button type="submit" class="mt-btn">Show</button>
+        </form>
+
+        <div class="stats-grid" id="record-tiles">
+            <div class="stats-card"><div class="stats-label">Matches</div><div class="stats-value">@Js.Num(Model.Total)</div><div class="stats-note">Finished, with a prediction stored before kick-off</div></div>
+            <div class="stats-card"><div class="stats-label">Right results</div><div class="stats-value">@PredictionRecord.Share(Model.Right, Model.Total)</div><div class="stats-note">@Js.Num(Model.Right) where the outcome given the highest chance happened</div></div>
+            <div class="stats-card"><div class="stats-label">Log loss</div><div class="stats-value">@(Model.LogLoss is { } ll ? Js.ToFixed(ll, 3) : "–")</div><div class="stats-note">Lower is better. Giving every match the usual home, draw and away rates scores about 1.07</div></div>
+        </div>
+
+        @if (Model.State == "empty")
+        {
+            <div class="empty-state" id="record-none">No finished matches with a stored prediction for this choice.</div>
+        }
+        else
+        {
+            <div class="mc-scroll"><table class="calib-table mc-rows record-table" id="record-rows">
+                <thead><tr><th>Kick-off</th><th>Match</th><th>Competition</th><th>Home</th><th>Draw</th><th>Away</th><th>Likely</th><th>Result</th><th>Log loss</th><th>Stored</th></tr></thead>
+                <tbody>@foreach (var r in Model.Rows)
+                {
+                    var called = PredictionRecord.Called(r.Chances);
+                    <tr id="rec-@r.Fixture">
+                        <td>@Markup.LocalTime(r.Kickoff, "short", visitor)</td>
+                        <td><a class="team-link" href="@Menu.PageHref("club", r.Home.ToString())">@Model.TeamName(r.Home)</a> <b>@r.Hg–@r.Ag</b> <a class="team-link" href="@Menu.PageHref("club", r.Away.ToString())">@Model.TeamName(r.Away)</a></td>
+                        <td>@Model.Site.LeagueName(r.League)</td>
+                        @for (var k = 0; k < 3; k++)
+                        {
+                            <td class="@(k == called ? (r.Right ? "gap-ok" : "gap-off") : null)">@if (k == called){<b>@PredictionRecord.Pct(r.Chances[k])</b>}else{@PredictionRecord.Pct(r.Chances[k])}</td>
+                        }
+                        <td>@(r.Likely ?? "–")</td>
+                        <td>@said[r.Outcome]@(r.Right ? " ✓" : "")</td>
+                        <td>@Js.ToFixed(r.LogLoss, 3)</td>
+                        <td><span title="@r.Version · fingerprint @r.Hash">@PredictionRecord.Before(r.Stored, r.Kickoff) before</span></td>
+                    </tr>
+                }</tbody></table></div>
+            @if (Model.Pages > 1)
+            {
+                <nav class="filter-row" id="record-pages" aria-label="Pages">
+                    @if (Model.PageNo > 1){<a role="button" class="filter-chip" href="@Model.Address(page: Model.PageNo - 1)">Newer</a>}
+                    <span class="stats-note">Page @Model.PageNo of @Model.Pages</span>
+                    @if (Model.PageNo < Model.Pages){<a role="button" class="filter-chip" href="@Model.Address(page: Model.PageNo + 1)">Older</a>}
+                </nav>
+            }
+            <p class="stats-note">The highest chance is in bold: green where it happened, red where it didn't. Results are after 90 minutes, as the model predicts them. Log loss is minus the log of the chance given to what happened. Stored is how long before kick-off the prediction was saved; hold a pointer over it for the model version and the snapshot's fingerprint. What the measures mean: <a href="/methodology">How the models work</a>.</p>
+        }
+    }
+</section>

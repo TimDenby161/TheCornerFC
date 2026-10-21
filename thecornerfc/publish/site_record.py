@@ -13,7 +13,8 @@ from .. import config
 from ..models import national_predictions
 from ..models.betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_cautious
 from ..models.predictions import GOAL_LINES, goal_lines
-from .site_files import OUT_DIR, _r, _read_json, _sync_table, _table_exists, _write_json_file, store_admin_doc
+from .site_files import (OUT_DIR, _check_table_collapse, _r, _read_json, _sync_table, _table_exists, _write_json_file,
+                         store_admin_doc)
 from .site_matches import market_probabilities, site_freshness
 
 # the export's one log, whichever module writes to it
@@ -308,6 +309,7 @@ def export_methodology(conn, out_dir=OUT_DIR, now=None):
                 "calibration": [[b, v["n"], _r(v["mean_probability"], 3), _r(v["observed_rate"], 3)]
                                 for b, v in evaluation.calibration(probs, hits).items()],
                 "excluded_no_regulation_score": coverage["missing_regulation_score"]}
+            store_prediction_record(conn, rows)
     if _table_exists(conn, "lineup_prediction_snapshots") and _table_exists(conn, "official_lineup_snapshots"):
         rows, coverage = evaluation.load_lineups(conn, args)
         if rows:
@@ -321,6 +323,54 @@ def export_methodology(conn, out_dir=OUT_DIR, now=None):
     log.info("Exported the methodology live record (%s matches, %s lineups)",
              (out["matches"] or {}).get("n", 0), (out["lineups"] or {}).get("n", 0))
     export_lineup_record(conn, out_dir, now)
+
+
+PREDICTION_RECORD_COLUMNS = ["fixture_id", "kickoff", "league_id", "home_id", "away_id", "p_home", "p_draw", "p_away",
+                             "likely", "home_xg", "away_xg", "hg", "ag", "outcome", "right_call", "log_loss",
+                             "captured_at", "version", "hash"]
+
+
+def prediction_record_rows(conn, rows):
+    """One row of site.prediction_record per finished match: its last prospective snapshot before
+    kick-off, as evaluation.load_matches selects and scores it for the methodology record (the
+    score after 90 minutes; right and log loss as evaluation.probability_metrics counts them), with
+    the version's name. In PREDICTION_RECORD_COLUMNS order, oldest first."""
+    ids = list({r["model_version_id"] for r in rows})
+    names = dict(conn.execute("select model_version_id, version_name from model_versions where model_version_id = any(%s)",
+                              [ids]).fetchall()) if ids else {}
+    out = []
+    for r in sorted(rows, key=lambda r: (r["effective_at"], r["fixture_id"])):
+        p, y = r["probabilities"], r["outcome"]
+        hg, ag = (int(x) for x in r["actual_score"].split("-"))
+        out.append((r["fixture_id"], r["effective_at"], r["league_id"], r["home_team_id"], r["away_team_id"],
+                    _r(p[0], 4), _r(p[1], 4), _r(p[2], 4), r.get("likely_score"), _r(r["home_xg"], 2), _r(r["away_xg"], 2),
+                    hg, ag, y, max(range(3), key=p.__getitem__) == y, _r(-math.log(max(p[y], 1e-15)), 4),
+                    r["captured_at"], names.get(r["model_version_id"], r["model_version_id"]), r["content_hash"]))
+    return out
+
+
+def store_prediction_record(conn, rows):
+    """Every finished match's prediction as locked before kick-off, for the Prediction record page
+    (owner, 2026-10-21): site.prediction_record, written only where a row changed
+    (db/migrations/20261021_prediction_record.sql). Nothing on a read-only run or before the
+    migration. Returns the rows."""
+    stored = prediction_record_rows(conn, rows)
+    try:
+        config.require_db_write("store the prediction record")
+    except config.SafetyError as exc:
+        log.info("Prediction record not stored: %s", exc)
+        return stored
+    (table,) = conn.execute("select to_regclass(%s)", ["site.prediction_record"]).fetchone()
+    if table is None:
+        log.warning("site.prediction_record isn't there yet (db/migrations/20261021_prediction_record.sql): "
+                    "the prediction record wasn't stored")
+        return stored
+    with conn.cursor() as cur:
+        _check_table_collapse(cur, "site.prediction_record", len(stored))
+        gone, written = _sync_table(cur, "site.prediction_record", ["fixture_id"], PREDICTION_RECORD_COLUMNS, stored)
+    conn.commit()
+    log.info("Stored the prediction record (%d matches; %d new or changed, %d removed)", len(stored), written, gone)
+    return stored
 
 
 LINEUP_RECORD_FIELDS = ["fixture", "kickoff", "league", "team", "opponent", "home", "correct",

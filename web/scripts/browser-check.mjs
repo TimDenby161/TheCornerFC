@@ -269,6 +269,19 @@ await until(`document.querySelector('#model-tiles .stats-card') || document.quer
 		check('... and a competition picked from the list', (await run(`location.search.startsWith('?c=') && location.hash === '#accuracy' && document.querySelector('#rs-pick select').value === new URLSearchParams(location.search).get('c')`)) && !(await run(`!!document.querySelector('a[href^="/admin"]')`)), `${await run('location.search')} ${await run(`document.querySelector('#accuracy h2')?.textContent`)}`);
 	}
 }
+// The Prediction record (/record): every locked prediction beside its result, or the note that the
+// nightly run hasn't written it yet; a month picked from the list comes back in the address
+await open('/record');
+await until(`document.querySelector('#record-rows') || document.querySelector('#record-empty') || document.querySelector('#record-none')`);
+{
+	const listed = await run(`document.querySelectorAll('#record-rows tbody tr').length`);
+	check('The Prediction record lists the locked predictions, or says it is being prepared', listed > 0 ? (await run(`document.querySelectorAll('#record-tiles .stats-card').length`)) === 3 : await run(`!!document.querySelector('#record-empty')`), listed > 0 ? `${listed} matches` : 'being prepared');
+	if (listed > 0) {
+		await run(`(() => { const s = document.querySelector('#record-pick select[name="m"]'); s.value = s.options[1].value; document.querySelector('#record-pick').submit(); })()`);
+		await until(`location.search.startsWith('?m=') && !!document.querySelector('#record-pick')`);
+		check('... and a month picked from the list', (await run(`document.querySelector('#record-pick select[name="m"]').value === new URLSearchParams(location.search).get('m') && !!(document.querySelector('#record-rows') || document.querySelector('#record-none'))`)), await run('location.search'));
+	}
+}
 await open('/lineups');
 check('the line-up record saved before kick-off', (await run(`document.querySelectorAll('#lineup-body .stats-card').length`)) >= 10 && /of 11/.test(await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`)), await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`));
 await run(`[...document.querySelectorAll('#lineup-source a')].find((a) => a.textContent === 'Reconstructed history')?.click()`);

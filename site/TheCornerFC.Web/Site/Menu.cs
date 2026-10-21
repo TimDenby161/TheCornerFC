@@ -20,6 +20,7 @@ public static partial class Menu
         new("Predictions", [
             new("matches", "Matches", "/matches"),
             new("stats", "Stats", "/stats"),
+            new("record", "Prediction record", "/record"),
             new("lineups", "Line-up record", "/lineups"),
             new("model", "The Model", "/model"),
         ]),

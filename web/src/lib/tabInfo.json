@@ -173,6 +173,24 @@
 			]
 		]
 	},
+	"record": {
+		"intro": "Every prediction the model made, as it was locked before kick-off, beside what happened.",
+		"more": "evidence",
+		"key": [
+			[
+				"Locked before kick-off",
+				"Each prediction is stored before the match starts, and the database refuses any change to it afterwards."
+			],
+			[
+				"Right result",
+				"The outcome given the highest chance happened."
+			],
+			[
+				"Fingerprint",
+				"A hash of the stored prediction: the same prediction always gives the same fingerprint."
+			]
+		]
+	},
 	"lineups": {
 		"intro": "How often the line-ups the model predicted matched the team sheets.",
 		"more": "lineups",
