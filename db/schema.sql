@@ -4328,7 +4328,7 @@ NOTIFY pgrst, 'reload schema';
 --   select count(skills), count(*) from site.players;                                    -- most outfield players, about 7,500
 --   select public.site_players(p_sort => 'k_finishing', p_limit => 3)::json->'rows';     -- three of the best finishers
 
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-21.
 -- Every prediction on record (owner, 2026-10-21, T-058: transparency before marketing): every
 -- finished club match's prediction as it was locked before kick-off, beside what happened, for
 -- anyone to check, filtered by competition, club and dates.

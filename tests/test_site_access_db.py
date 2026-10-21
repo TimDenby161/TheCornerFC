@@ -38,6 +38,7 @@ ANON_FUNCTIONS = {
     "public.site_next_xi(p_team integer)",
     "public.site_player_facets()",
     "public.site_player_page(p_id integer)",
+    "public.site_prediction_record(p_from date, p_to date, p_leagues integer[], p_team integer, p_limit integer, p_offset integer)",
     "public.site_players(p_ids integer[], p_leagues integer[], p_teams integer[], p_nats text[], "
     "p_not_leagues integer[], p_positions text[], p_age integer[], p_ab integer[], p_crank integer[], "
     "p_mins integer[], p_q text, p_words text[], p_sort text, p_groups text[], p_limit integer, "
