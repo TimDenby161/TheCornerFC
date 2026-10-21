@@ -27,6 +27,11 @@
         <p class="mc-para" id="model-learns"><b>How it learns:</b> @ModelRecord.LiveModelLearns</p>
         <p class="stats-note">The model against the bookmakers on every bet market, competition by competition, is on the <a href="/stats">Stats</a> page.</p>
 
+        @if (Model.Accuracy is { } acc)
+        {
+            <div id="accuracy"><p class="stats-note">How often the model has been right, month by month, how well its chances match what happened, and how it compares with the bookmakers, for any competition with a year's record. All from finished matches, with predictions stored before kick-off.</p>@await Html.PartialAsync("_Accuracy", (acc, "/model", "#accuracy"))</div>
+        }
+
         @if (Model.Worked is { } ex)
         {
             <h2 class="mc-h2">One match, step by step</h2>
@@ -57,6 +62,12 @@
         }
         <p class="stats-note">How much better is the fall in log loss as a share of the log loss without the change; “about” marks a past test that didn’t record where it started, shared out of the live model’s log loss instead. Right results: how often the outcome given the highest chance happened. Green: statistical evidence the change makes the model better. Red: evidence it makes it worse. No colour: not proven either way yet.
             @if (Model.LiveTests is { } lt){<text>Live tests: @Js.Num(lt.N) finished matches since @lt.Start, over @lt.Weeks week@(lt.Weeks == 1 ? "" : "s"), for @lt.Tracked change@(lt.Tracked == 1 ? "" : "s") (@lt.Protocol). Nothing is called before @lt.Matches matches and @lt.MinWeeks weeks, and the method allows looking at any time, which is why its ranges are wide.</text>}</p>
+
+        @if (Model.Challengers.Count > 0)
+        {
+            <h2 class="mc-h2">Each live test, week by week</h2>
+            @await Html.PartialAsync("_Challengers", (Model.Challengers, (string?)null, false))
+        }
 
         <h2 class="mc-h2">Check it yourself</h2>
         <ul class="stats-note" id="model-check">

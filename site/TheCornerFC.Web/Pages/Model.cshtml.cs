@@ -21,6 +21,8 @@ public sealed class ModelModel(Database db) : PageModel
     public int Registered { get; private set; }
     public Example? Worked { get; private set; }
     public Live? LiveTests { get; private set; }
+    public Research.Accuracy? Accuracy { get; private set; }
+    public List<Research.Challenger> Challengers { get; private set; } = [];
 
     public async Task OnGet()
     {
@@ -28,13 +30,18 @@ public sealed class ModelModel(Database db) : PageModel
         if (!Visitor.Of(HttpContext).SignedIn) Response.Headers.CacheControl = "public, max-age=300";
         var docTask = db.KeptDocOrNull<ModelDoc>("model", TimeSpan.FromMinutes(5));
         var siteTask = db.KeptDoc<SiteDoc>("site");
-        await Task.WhenAll(docTask, siteTask);
+        var statsTask = Quiet(db.KeptDocOrNull<StatsDoc>("stats", TimeSpan.FromMinutes(5)));
+        await Task.WhenAll(docTask, siteTask, statsTask);
         if (docTask.Result is not { } doc) return;
         Ready = true;
         Generated = doc.GeneratedAt;
         Version = doc.Current?.Version;
         Tiles = ModelRecord.ScoreTiles(doc);
+        // the research dashboard's accuracy figures and live tests, in public (owner, 2026-10-21):
+        // all of it about finished matches, from the Stats page's document and this one
+        if (statsTask.Result is { } stats) Accuracy = Research.AccuracyOf(stats, siteTask.Result, Request.Query["c"].ToString());
         var live = doc.Tracking;
+        Challengers = Research.Challengers(live, doc.Changes);
         // every change with a result: what is in the model now, then what was tried and where it
         // stands. The Admin area's notes speak to the owner deciding what to release, and point to
         // pages only it has: here a change in the model just says so
@@ -57,5 +64,11 @@ public sealed class ModelModel(Database db) : PageModel
         }
         if (live is not null)
             LiveTests = new(live.N, live.Weeks, live.Start, live.Changes.Count, live.Protocol, live.Minimum.Matches, live.Minimum.Weeks);
+    }
+
+    static async Task<T?> Quiet<T>(Task<T?> t) where T : class
+    {
+        try { return await t; }
+        catch (DatabaseException) { return null; }
     }
 }

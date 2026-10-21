@@ -260,6 +260,14 @@ await until(`document.querySelector('#model-tiles .stats-card') || document.quer
 	const steps = await run(`document.querySelectorAll('#model-example .why-sec').length`);
 	const example = await run(`!!document.querySelector('#model-example')`);
 	check('The Model works one finished match through step by step', example ? steps >= 6 && (await run(`[...document.querySelectorAll('#model-example .why-row span')].some((s) => s.textContent === 'Final chances') && document.querySelectorAll('#model-example .why-tip').length > 5`)) : true, example ? `${steps} steps` : 'no example written yet');
+	// the accuracy figures in public: month by month, reliability, against the bookmakers, and a
+	// competition picked from the list comes back in the address, on the same place in the page
+	if (tiles === 8) {
+		check('The Model shows accuracy month by month, its reliability and the bookmakers by competition', await run(`!!(document.querySelector('#rs-months') || document.querySelector('#rs-months-empty')) && !!document.querySelector('#rs-pick select')`), `${await run(`document.querySelectorAll('#rs-months tbody tr').length`)} months, ${await run(`document.querySelectorAll('#rs-vs tbody tr').length`)} competitions`);
+		await run(`(() => { const s = document.querySelector('#rs-pick select'); s.value = s.options[Math.min(2, s.options.length - 1)].value; document.querySelector('#rs-pick').submit(); })()`);
+		await until(`location.search.startsWith('?c=') && !!document.querySelector('#rs-pick')`);
+		check('... and a competition picked from the list', (await run(`location.search.startsWith('?c=') && location.hash === '#accuracy' && document.querySelector('#rs-pick select').value === new URLSearchParams(location.search).get('c')`)) && !(await run(`!!document.querySelector('a[href^="/admin"]')`)), `${await run('location.search')} ${await run(`document.querySelector('#accuracy h2')?.textContent`)}`);
+	}
 }
 await open('/lineups');
 check('the line-up record saved before kick-off', (await run(`document.querySelectorAll('#lineup-body .stats-card').length`)) >= 10 && /of 11/.test(await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`)), await run(`document.querySelectorAll('#lineup-body .stats-value')[1]?.textContent`));

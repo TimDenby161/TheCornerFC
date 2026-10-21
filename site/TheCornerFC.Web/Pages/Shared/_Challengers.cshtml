@@ -1,0 +1,21 @@
+@model (List<TheCornerFC.Web.Site.Research.Challenger> List, string? Note, bool Admin)
+@using TheCornerFC.Web.Site
+@{
+    // Every challenger's running score on live matches, week by week (Site/Research.cs): the Admin
+    // area's research dashboard, where each links to its change page, and The Model's, where each
+    // links to its card on the same page
+    var (list, note, admin) = Model;
+}
+@if (note is not null){<p class="stats-note">@note</p>}
+<div class="rs-challengers" id="rs-challengers">
+    @foreach (var c in list)
+    {
+        <article class="mc-card mark-@c.Mark" id="rs-@c.Id">
+            <div class="mc-card-head"><span class="mc-no">@ModelRecord.ShortId(c.Id)</span><h3 class="mc-card-title"><a class="team-link" href="@(admin ? $"/admin/changes/{c.Id}" : $"#card-{c.Id}")">@c.Title</a></h3>
+                <span class="mc-pill mark-@c.Mark">@c.Standing</span></div>
+            <p class="mc-para">Gain <b>@c.Gain</b> on @Js.Num(c.N) matches over @c.Weeks week@(c.Weeks == 1 ? "" : "s"); it could still be @c.Range.</p>
+            @if (c.Chart is { } chart){@Html.Raw(chart)}
+        </article>
+    }
+</div>
+<p class="stats-note">Gain is the live model's log loss minus the challenger's on the same matches, so a plus is better for the challenger. The range is a confidence sequence: it holds however often it is looked at, which is why it is wide. Green: proven better. Red: proven worse.</p>

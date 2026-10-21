@@ -6,67 +6,7 @@
     ViewData["NoIndex"] = true;
 }
 <section class="panel mc" data-tab="research" data-active="true">
-    <form method="get" action="/admin/research" class="mc-filters" id="rs-pick">
-        <label>Competition<select name="c">@foreach (var (key, name) in Model.Choices){<option value="@key" selected="@(key == Model.Pick)">@name</option>}</select></label>
-        <button type="submit" class="mt-btn">Show</button>
-    </form>
-
-    <h2 class="mc-h2">Accuracy month by month: @Model.PickName</h2>
-    @if (Model.Months.Count == 0)
-    {
-        <div class="empty-state" id="rs-months-empty">@(Model.HasMonths ? "No finished matches with a prediction in this competition in the last 12 months." : "The months are written by the nightly export; they appear after its next run.")</div>
-    }
-    else
-    {
-        @if (Model.Charts is { } ch)
-        {
-            <div class="rs-charts"><div class="stats-card"><div class="stats-label">Right results, %</div>@Html.Raw(ch.Right)</div>
-                <div class="stats-card"><div class="stats-label">Log loss, lower is better</div>@Html.Raw(ch.LogLoss)</div></div>
-        }
-        <div class="mc-scroll"><table class="calib-table mc-rows rs-months" id="rs-months"><thead><tr><th>Month</th><th>Matches</th><th>Right</th><th>Log loss</th><th>Priced</th><th>Model</th><th>Bookmakers</th><th>Gap</th><th>Right, model</th><th>Right, bookmakers</th></tr></thead>
-            <tbody>@foreach (var m in Model.Months)
-            {
-                <tr><td>@m.Month</td><td>@Js.Num(m.N)</td><td>@m.Right</td><td>@m.LogLoss</td><td>@(m.Priced == 0 ? "–" : Js.Num(m.Priced))</td><td>@m.ModelLl</td><td>@m.MarketLl</td>
-                    <td>@if (m.Gap is { } g){<span class="@(m.GapCls == "" ? null : m.GapCls)">@g</span>}else{<text>–</text>}</td><td>@m.ModelRight</td><td>@m.MarketRight</td></tr>
-            }</tbody></table></div>
-        <p class="stats-note">Every finished match with a prediction, as the Stats page counts them (the month in UTC; the first and last months are part months). Priced: the matches with bookmakers' prices, where the model's log loss and the bookmakers' (margin taken out) are on the same matches. Gap is model minus bookmakers: minus means the model was ahead.</p>
-    }
-
-    <h2 class="mc-h2">Reliability: @Model.PickName, last 12 months</h2>
-    @if (Model.Reliability is { } rel)
-    {
-        <div class="rs-reliability-wrap">
-            <div class="stats-card">@Html.Raw(rel)</div>
-            <div class="mc-scroll"><table class="calib-table mc-rows" id="rs-bands"><thead><tr><th>Said</th><th>Calls</th><th>Average said</th><th>Happened</th><th>Off by</th></tr></thead>
-                <tbody>@foreach (var b in Model.Bands)
-                {
-                    var off = b.Hit - b.Said;
-                    <tr><td>@b.Name</td><td>@Js.Num((long)b.Count)</td><td>@Js.ToFixed(100 * b.Said, 1)%</td><td>@Js.ToFixed(100 * b.Hit, 1)%</td>
-                        <td class="@(Math.Abs(off) <= 0.03 ? "gap-ok" : Math.Abs(off) > 0.06 ? "gap-off" : null)">@(off > 0 ? "+" : off < 0 ? "−" : "")@Js.ToFixed(Math.Abs(100 * off), 1) pts</td></tr>
-                }</tbody></table></div>
-        </div>
-        <p class="stats-note">Every home win, draw and away win chance is one call, grouped in tens. On the diagonal, what the model said happened that often; above it, the model said too little; below, too much. The bigger the dot, the more calls.</p>
-    }
-    else
-    {
-        <div class="empty-state">No calls in this competition in the last 12 months.</div>
-    }
-
-    <h2 class="mc-h2">Model against the bookmakers, competition by competition</h2>
-    @if (Model.VsMarket.Count == 0)
-    {
-        <div class="empty-state">No matches with stored prices in the last 12 months.</div>
-    }
-    else
-    {
-        <div class="mc-scroll"><table class="calib-table mc-rows rs-vs" id="rs-vs"><thead><tr><th>Competition</th><th>Priced matches</th><th>Model</th><th>Bookmakers</th><th>Gap</th><th>Right, model</th><th>Right, bookmakers</th></tr></thead>
-            <tbody>@foreach (var v in Model.VsMarket)
-            {
-                <tr class="@(v.Key == Model.Pick ? "rs-picked" : null)"><td><a class="team-link" href="/admin/research?c=@v.Key">@v.Name</a></td><td>@Js.Num(v.Priced)</td><td>@v.ModelLl</td><td>@v.MarketLl</td>
-                    <td><span class="@(v.GapCls == "" ? null : v.GapCls)">@v.Gap</span></td><td>@v.ModelRight</td><td>@v.MarketRight</td></tr>
-            }</tbody></table></div>
-        <p class="stats-note">Result log loss over the last 12 months on the matches with stored prices, the bookmakers' closing prices with the margin taken out. Furthest behind the bookmakers first. Small competitions have few priced matches, so their gaps move a lot.</p>
-    }
+    @await Html.PartialAsync("_Accuracy", (Model.Accuracy, "/admin/research", ""))
 
     <h2 class="mc-h2">Every challenger's running score</h2>
     @if (Model.Challengers.Count == 0)
@@ -75,18 +15,6 @@
     }
     else
     {
-        @if (Model.LiveNote is { } note){<p class="stats-note">@note</p>}
-        <div class="rs-challengers" id="rs-challengers">
-            @foreach (var c in Model.Challengers)
-            {
-                <article class="mc-card mark-@c.Mark" id="rs-@c.Id">
-                    <div class="mc-card-head"><span class="mc-no">@ModelRecord.ShortId(c.Id)</span><h3 class="mc-card-title"><a class="team-link" href="/admin/changes/@c.Id">@c.Title</a></h3>
-                        <span class="mc-pill mark-@c.Mark">@c.Standing</span></div>
-                    <p class="mc-para">Gain <b>@c.Gain</b> on @Js.Num(c.N) matches over @c.Weeks week@(c.Weeks == 1 ? "" : "s"); it could still be @c.Range.</p>
-                    @if (c.Chart is { } chart){@Html.Raw(chart)}
-                </article>
-            }
-        </div>
-        <p class="stats-note">Gain is the live model's log loss minus the challenger's on the same matches, so a plus is better for the challenger. The range is a confidence sequence: it holds however often it is looked at, which is why it is wide. Green: proven better. Red: proven worse.</p>
+        @await Html.PartialAsync("_Challengers", (Model.Challengers, Model.LiveNote, true))
     }
 </section>

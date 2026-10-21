@@ -1,15 +1,36 @@
 using System.Net;
 using System.Text;
+using TheCornerFC.Web.Data;
 
 namespace TheCornerFC.Web.Site;
 
 // The Admin area's research dashboard (/admin/research): accuracy month by month for a competition,
 // how well its stated chances match what happened, the model against the bookmakers in every
-// competition, and every challenger's running score on live matches. Read from the "stats"
-// document (export_stats in thecornerfc/publish/site_record.py) and the administrator's
-// "live_tracking": nothing new is asked of the database.
+// competition, and every challenger's running score on live matches; The Model shows the same in
+// public (owner, 2026-10-21: the most transparent model). Read from the "stats"
+// document (export_stats in thecornerfc/publish/site_record.py) and the live tests (the
+// administrator's "live_tracking", or its public copy in the "model" document): nothing new is
+// asked of the database.
 public static class Research
 {
+    // ---- the three accuracy sections, for the competition picked (?c=): shared by the dashboard and
+    // The Model (/model), which shows them in public: the "stats" document is the Stats page's
+    public sealed record Accuracy(string Pick, string PickName, List<(string Key, string Name)> Choices, bool HasMonths, List<MonthRow> Months,
+        (string Right, string LogLoss)? Charts, List<Band> Bands, string? Reliability, List<VsRow> VsMarket);
+    public static Accuracy AccuracyOf(StatsDoc? stats, SiteDoc site, string requested)
+    {
+        string Name(string key) => key == "all" ? "All competitions" : key == "eng" ? "English competitions" : int.TryParse(key, out var id) ? site.LeagueName(id) : key;
+        if (stats is null) return new("all", Name("all"), [], false, [], null, [], null, []);
+        var year = stats.Ranges.GetValueOrDefault("365d") ?? [];
+        // every competition with a year's record, the most matches first
+        var choices = year.OrderBy(kv => kv.Key == "all" ? 0 : kv.Key == "eng" ? 1 : 2).ThenByDescending(kv => kv.Value.N).ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => (kv.Key, $"{Name(kv.Key)} ({Js.Num(kv.Value.N)})")).ToList();
+        var pick = year.ContainsKey(requested) ? requested : "all";
+        var bands = Bands(year.GetValueOrDefault(pick));
+        return new(pick, Name(pick), choices, stats.MonthsOf(pick) is not null, Months(stats, pick), MonthCharts(stats, pick),
+            bands, bands.Count > 0 ? ReliabilitySvg(bands) : null, AgainstMarket(stats, Name));
+    }
+
     static string Pct(double? x) => x is { } v ? $"{Js.ToFixed(100 * v, 1)}%" : "–";
     static string Ll(double? x) => x is { } v ? Js.ToFixed(v, 3) : "–";
     static string Signed(double v) => $"{(v > 0 ? "+" : v < 0 ? "−" : "")}{Js.ToFixed(Math.Abs(v), 3)}";
