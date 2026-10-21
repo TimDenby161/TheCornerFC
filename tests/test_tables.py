@@ -1,5 +1,6 @@
 import json
 import tempfile
+import re
 import unittest
 import unittest.mock
 from datetime import datetime, timedelta, timezone
@@ -239,12 +240,41 @@ class PaidPlayersTests(unittest.TestCase):
             self.assertEqual(got[f], None if f in export.PLAYER_PAID_FIELDS else whole[f], f)
         self.assertEqual((got["name"], got["team"], got["age"], got["minutes"], got["season"]), ("Player 070", 104, 24, 900, [900, 3, 2]))
 
+    def test_skills_come_last_and_are_paid(self):
+        from thecornerfc.publish import export
+        # every field the database reads by its place keeps it (20261006/20261007: world 15, lg 16, ord 20)
+        self.assertEqual([export.SITE_PLAYER_FIELDS.index(f) for f in ("world", "lg", "ord")], [15, 16, 20])
+        self.assertEqual(export.SITE_PLAYER_FIELDS[-1], "skills")
+        raw = [[i + 1, f"Player {i:03d}", "CM", 95 - i * 0.5, 900, 100, 39, [95 - i * 0.5, None], 24, [],
+                "England", ["CM"], {"CM": 95 - i * 0.5}, [90.0], [900, 3, 2]] for i in range(120)]
+        rows = export.site_player_rows(raw, (), {1: {"passing": 88.0}, 71: {"passing": 40.0}})
+        at = export.SITE_PLAYER_FIELDS.index("skills")
+        self.assertEqual((rows[0]["skills"], rows[0]["data"][at]), ({"passing": 88.0}, {"passing": 88.0}))
+        self.assertEqual((rows[70]["data"][at], rows[70]["data_free"][at]), ({"passing": 40.0}, None))   # outside the free slice
+        self.assertIsNone(rows[5]["skills"])
+
+    def test_the_skills_migration_sorts_by_each_skill_and_keeps_the_paywall(self):
+        from thecornerfc.models import player_ratings
+        root = Path(__file__).resolve().parents[1]
+        sql = (root / "db/migrations/20261021_player_skills.sql").read_text()
+        self.assertIn(sql, (root / "db/schema.sql").read_text())
+        outfield = sorted(k for k in player_ratings.SKILLS)
+        self.assertEqual(sorted(set(re.findall(r"'k_([a-z_]+)'", sql))), outfield)       # exactly the model's skills
+        self.assertIn("ADD COLUMN IF NOT EXISTS skills jsonb", sql)
+        before = (root / "db/migrations/20261007_paid_players_order.sql").read_text()
+        for line in ("CASE WHEN whole OR p.free THEN p.data ELSE p.data_free END AS data",
+                     "WHERE (whole OR p.free OR p.data_free IS NOT NULL)", "whole boolean := site.entitled();",
+                     "SET search_path = ''"):
+            self.assertIn(line, before)
+            self.assertIn(line, sql)
+
     def test_the_migration_blanks_the_same_fields_and_marks_the_same_slice(self):
         from thecornerfc.publish import export
         sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_paid_players.sql").read_text()
         at = export.SITE_PLAYER_FIELDS.index
         # it blanked his place in the export's order too, which 20261007_paid_players_order.sql puts back
-        self.assertIn(f"ARRAY[{','.join(str(i) for i in sorted(at(f) for f in (*export.PLAYER_PAID_FIELDS, 'ord')))}]", sql)
+        # (skills came after it, 2026-10-21, at the end of the row: the export blanks them in data_free)
+        self.assertIn(f"ARRAY[{','.join(str(i) for i in sorted(at(f) for f in (*export.PLAYER_PAID_FIELDS, 'ord') if f != 'skills'))}]", sql)
         self.assertIn(f"(p.data->>{at('world')})::integer <= {export.FREE_WORLD}", sql)
         self.assertIn(f"(p.data->>{at('lg')})::integer <= {export.FREE_LEAGUE}", sql)
         self.assertIn("WHERE (whole OR p.free OR p.data_free IS NOT NULL)", sql)      # never the whole row for want of a blanked one

@@ -244,6 +244,12 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
     for player, season, rank in conn.execute("select player_id, season, projected_rank from player_projected_ranks"):
         future[player][season] = float(rank)
     future_seasons = sorted({y for ys in future.values() for y in ys})
+    # his skill scores, 0-100 (player_ratings.skill_scores, MC-0030), once the column is there
+    # (db/migrations/20261021_player_skills.sql)
+    skills = {}
+    if _has_column(conn, "public.players", "skills"):
+        skills = dict(conn.execute("select player_id, skills from players where skills is not null and player_id = any(%s)",
+                                   [[r[0] for r in players]]).fetchall())
     rows = [[r[0], r[1], main_pos.get(r[0], r[2]), float(r[3]), r[4], r[5], r[6],
              [season_ranks[r[0]].get(y) for y in PLAYER_SEASONS], r[7],
              [i for i, y in enumerate(PLAYER_SEASONS) if y in estimated[r[0]]], r[8],
@@ -254,7 +260,7 @@ def export_players(conn, out_dir=OUT_DIR, rankings=()):
     teams = {t: n for t, n in conn.execute(
         "select team_id, name from teams where team_id = any(%s)", [list({r[5] for r in players if r[5]})])}
     log.info("Exported %d player ranks", len(players))
-    site_rows = site_player_rows(rows, rankings)
+    site_rows = site_player_rows(rows, rankings, skills)
     stored = store_players(conn, site_rows)
     # {player: his club}, for the club files' positions
     return {r[0]: r[5] for r in players}, {"stored": stored, "future_seasons": future_seasons, "teams": teams,
@@ -281,7 +287,8 @@ def shown_position_ranks(position, ability, ranks):
 # his page), and his place in the export's order (ord).
 PLAYER_FIELDS = ["id", "name", "position", "rank", "minutes", "team", "league", "seasons", "age", "estimated",
                  "nationality", "positions_12m", "position_ranks", "future", "season"]
-SITE_PLAYER_FIELDS = PLAYER_FIELDS + ["world", "lg", "lg_of", "lg_rank", "lg_n", "ord"]
+# (skills last, added 2026-10-21: the database functions read the earlier fields by their place)
+SITE_PLAYER_FIELDS = PLAYER_FIELDS + ["world", "lg", "lg_of", "lg_rank", "lg_n", "ord", "skills"]
 # The paid tier (db/migrations/20261006_paid_players.sql, 20261007_paid_players_order.sql): the
 # top FREE_WORLD players by Ability, the top FREE_LEAGUE of each league and the top FREE_POSITION
 # of each position on the Players tab's pitch are free (a position's: of the players listed under
@@ -294,7 +301,7 @@ SITE_PLAYER_FIELDS = PLAYER_FIELDS + ["world", "lg", "lg_of", "lg_rank", "lg_n",
 # were put after the ranked ones and a nation's page misled), every league's again and each
 # position's (2026-10-07, with the order kept).
 FREE_WORLD, FREE_LEAGUE, FREE_POSITION = 50, 10, 10
-PLAYER_PAID_FIELDS = ("rank", "seasons", "estimated", "position_ranks", "future", "world", "lg", "lg_rank")
+PLAYER_PAID_FIELDS = ("rank", "seasons", "estimated", "position_ranks", "future", "world", "lg", "lg_rank", "skills")
 
 
 def blanked_player(data):
@@ -327,11 +334,11 @@ def _decode(text):
     return re.sub(r"&(apos|#39|quot|amp|lt|gt);", lambda m: _ENTITIES[m.group(1)], text or "")
 
 
-def site_player_rows(rows, rankings=()):
+def site_player_rows(rows, rankings=(), skills=None):
     """The rows of site.players, one dict per player in rows (PLAYER_FIELDS order, the export's
     order): the columns site_players() filters and sorts on, and "data", his row in
     SITE_PLAYER_FIELDS order. rankings: the rows of rankings.json (club, ..., Baseline Strength
-    fifth), for his club's world rank. Places are counted as the site counted them from the
+    fifth), for his club's world rank. skills: {player: {skill: 0-100}}. Places are counted as the site counted them from the
     whole list: by Ability (this season's rank) among every listed player and within his
     league; a tie shares the higher place."""
     from ..models.positions import GROUPS
@@ -372,7 +379,8 @@ def site_player_rows(rows, rankings=()):
                               for role in plays)
         data = [*r, world[a] if placed else None,
                 league_place[league][a] if in_league else None, len(by_league[league]) if in_league else None,
-                club_place[league][r[at["rank"]]] if with_club else None, len(club_league[league]) if with_club else None, i]
+                club_place[league][r[at["rank"]]] if with_club else None, len(club_league[league]) if with_club else None, i,
+                (skills or {}).get(r[at["id"]])]
         out.append({
             "free": bool((placed and world[a] <= FREE_WORLD)
                          or (in_league and league_place[league][a] <= FREE_LEAGUE)
@@ -384,9 +392,16 @@ def site_player_rows(rows, rankings=()):
             "club_world": club_world.get(team), "minutes": r[at["minutes"]],
             "seasons": r[at["seasons"]], "future": r[at["future"]], "pos_ranks": r[at["position_ranks"]],
             "ga": None if season is None else goals + assists + goals / 1000,
+            "skills": (skills or {}).get(r[at["id"]]),
             "data": data,
         })
     return out
+
+
+def _has_column(conn, table, column):
+    """Whether table (schema.name) has column: a column a migration adds is used once it is there."""
+    return conn.execute("""select 1 from pg_attribute where attrelid = to_regclass(%s) and attname = %s
+                           and not attisdropped""", [table, column]).fetchone() is not None
 
 
 def store_players(conn, players):
@@ -410,15 +425,18 @@ def store_players(conn, players):
     columns = ["player_id", "ord", "name_lc", "name_fold", "team_id", "league_id", "age", "nationality", "plays",
                "ability", "club_world", "minutes", "seasons", "future", "pos_ranks", "ga", "data"]
     # the free slice and the blanked rows, once the paid tier's migration has added their columns
-    if conn.execute("""select 1 from pg_attribute where attrelid = 'site.players'::regclass and attname = 'data_free'
-                       and not attisdropped""").fetchone() is not None:
+    if _has_column(conn, "site.players", "data_free"):
         columns += ["free", "data_free"]
+    # the skill scores, for sorting by a skill, once 20261021_player_skills.sql has added the column
+    if _has_column(conn, "site.players", "skills"):
+        columns += ["skills"]
     if len(players) < MIN_PLAYERS:
         raise ExportValidationError(f"only {len(players)} players to store; expected at least {MIN_PLAYERS}")
     with conn.cursor() as cur:
         _check_table_collapse(cur, "site.players", len(players))
         gone, written = _sync_table(cur, "site.players", ["player_id"], columns,
-                                    ([text(p[c]) if c in ("pos_ranks", "data", "data_free") else p[c] for c in columns]
+                                    ([text(p[c]) if c in ("pos_ranks", "data", "data_free") or (c == "skills" and p[c] is not None)
+                                      else p[c] for c in columns]
                                      for p in players))
         cur.execute("analyze site.players")
     conn.commit()

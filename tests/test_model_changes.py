@@ -144,8 +144,11 @@ class RegisterTests(unittest.TestCase):
                     self.assertTrue((ROOT / e['source']).exists(), f"{c['id']}: {e['source']}")
 
     def test_an_entry_written_after_its_test_says_so(self):
+        # a result dated before the entry was recorded means the entry came after its test; one
+        # registered first (MC-0030) gets its results afterwards and is not retrospective
         for c in self.changes:
-            tested = any(e['type'] == 'result' and e['evaluation'] != 'development' for e in c['events'])
+            tested = any(e['type'] == 'result' and e['evaluation'] != 'development' and e['date'] < c['registration']['recorded']
+                         for e in c['events'])
             if tested:
                 self.assertTrue(c['registration']['retrospective'], c['id'])
 

@@ -30,6 +30,7 @@ def load(name):
 
 p17, p18 = load("live_p17"), load("live_p18")
 p16 = p17.p16
+LATER = "Registered after P17, so not one of its candidates: judged by its own evaluator (see its page)"
 
 
 def together(release_and_ideas, challenger):
@@ -38,6 +39,8 @@ def together(release_and_ideas, challenger):
     out["protocol"] = "P16, P17 and P18"
     out["changes"] = {**out["changes"], **challenger["changes"]}
     out["not_run"] = {cid: why for cid, why in out["not_run"].items() if cid not in out["changes"]}
+    # a change registered after P17 is none of its candidates: it is judged by its own evaluator
+    out["not_run"].update({cid: LATER for cid in p16.changes_in_register() if cid not in out["changes"] and cid not in out["not_run"]})
     out["comparisons"] = {**out["comparisons"], "P18": challenger["comparisons"]}
     out["exclusions"] = {**out["exclusions"], "P18": challenger["exclusions"]}
     out["settings"] = {**out["settings"], **challenger["settings"]}

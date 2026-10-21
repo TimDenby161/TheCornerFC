@@ -1,0 +1,218 @@
+{
+ "database": "production",
+ "base": "65703faa1",
+ "checks": {
+  "keepers_untouched": true,
+  "ranks_start_where_they_are": true,
+  "no_less_repeatable": true,
+  "match_inputs_barely_move": true
+ },
+ "passed": true,
+ "recipes": {
+  "finishing": {
+   "goals": 0.5439,
+   "shots_on": 0.4561
+  },
+  "creating": {
+   "key_passes": 0.6643,
+   "assists": 0.3357
+  },
+  "passing": {
+   "passes": 0.6836,
+   "pass_acc": 0.3164
+  },
+  "dribbling": {
+   "dribbles_won": 0.8393,
+   "dribbles_lost": -0.1607
+  },
+  "ball_winning": {
+   "tackles_int": 0.8781,
+   "blocks": 0.1219
+  },
+  "duels": {
+   "duels_pct": 1.0
+  },
+  "solidity": {
+   "dribbled_past": -0.8497,
+   "team_xga": -0.1503
+  }
+ },
+ "mixes": {
+  "CB": {
+   "passing": 0.2963,
+   "ball_winning": 0.2346,
+   "duels": 0.2346,
+   "solidity": 0.2345
+  },
+  "FB": {
+   "creating": 0.26,
+   "passing": 0.21,
+   "solidity": 0.15,
+   "ball_winning": 0.13,
+   "finishing": 0.11,
+   "dribbling": 0.1,
+   "duels": 0.04
+  },
+  "WB": {
+   "creating": 0.34,
+   "passing": 0.16,
+   "finishing": 0.13,
+   "dribbling": 0.13,
+   "ball_winning": 0.12,
+   "solidity": 0.07,
+   "duels": 0.05
+  },
+  "DM": {
+   "passing": 0.3253,
+   "ball_winning": 0.2289,
+   "duels": 0.1807,
+   "creating": 0.1205,
+   "solidity": 0.1205,
+   "finishing": 0.0241
+  },
+  "CM": {
+   "passing": 0.2966,
+   "creating": 0.2519,
+   "finishing": 0.1627,
+   "duels": 0.1312,
+   "ball_winning": 0.0919,
+   "dribbling": 0.0656
+  },
+  "AM": {
+   "creating": 0.37,
+   "finishing": 0.357,
+   "passing": 0.105,
+   "dribbling": 0.105,
+   "duels": 0.063
+  },
+  "W": {
+   "finishing": 0.4713,
+   "creating": 0.2989,
+   "dribbling": 0.1149,
+   "passing": 0.0575,
+   "duels": 0.0575
+  },
+  "ST": {
+   "finishing": 0.6445,
+   "creating": 0.1667,
+   "duels": 0.0889,
+   "passing": 0.0556,
+   "dribbling": 0.0444
+  }
+ },
+ "current_rank_spearman_by_group": {
+  "CB": 0.9973,
+  "FB": 0.9971,
+  "WB": 0.9969,
+  "DM": 0.9983,
+  "CM": 0.9991,
+  "AM": 0.997,
+  "W": 0.9988,
+  "ST": 0.9994
+ },
+ "current_rank_moves": {
+  "all": {
+   "n": 8359,
+   "mean": 0.25,
+   "p95": 0.9,
+   "largest": 8.6,
+   "two_or_more": 0.0024
+  },
+  "CB": {
+   "n": 1712,
+   "mean": 0.36,
+   "p95": 1.1,
+   "largest": 2.3,
+   "two_or_more": 0.0041
+  },
+  "FB": {
+   "n": 886,
+   "mean": 0.4,
+   "p95": 1.1,
+   "largest": 2.2,
+   "two_or_more": 0.0023
+  },
+  "WB": {
+   "n": 384,
+   "mean": 0.36,
+   "p95": 1.0,
+   "largest": 1.8,
+   "two_or_more": 0.0
+  },
+  "DM": {
+   "n": 473,
+   "mean": 0.32,
+   "p95": 0.9,
+   "largest": 1.9,
+   "two_or_more": 0.0
+  },
+  "CM": {
+   "n": 1411,
+   "mean": 0.18,
+   "p95": 0.6,
+   "largest": 2.5,
+   "two_or_more": 0.0028
+  },
+  "AM": {
+   "n": 458,
+   "mean": 0.28,
+   "p95": 0.7,
+   "largest": 8.6,
+   "two_or_more": 0.0044
+  },
+  "W": {
+   "n": 1031,
+   "mean": 0.23,
+   "p95": 0.7,
+   "largest": 2.1,
+   "two_or_more": 0.0019
+  },
+  "ST": {
+   "n": 1414,
+   "mean": 0.13,
+   "p95": 0.4,
+   "largest": 2.2,
+   "two_or_more": 0.0021
+  }
+ },
+ "top_10_kept": {
+  "CB": 10,
+  "FB": 9,
+  "WB": 9,
+  "DM": 9,
+  "CM": 10,
+  "AM": 10,
+  "W": 9,
+  "ST": 10
+ },
+ "season_to_season": {
+  "base": {
+   "all": 0.8828,
+   "all_n": 12704,
+   "movers": 0.837,
+   "movers_n": 449
+  },
+  "changed": {
+   "all": 0.8809,
+   "all_n": 12704,
+   "movers": 0.8384,
+   "movers_n": 449
+  }
+ },
+ "predicted_xi_rating_mean_abs_change": 0.15,
+ "team_matches": 71378,
+ "predicted_xis_with_a_different_player": 0,
+ "keepers": 590,
+ "skill_top_withheld": {
+  "why": "Each skill's top 10 named players with their scores: skill scores are paid figures (the paywall rule), and this repository is public. Kept outside the repository; how many were listed per skill:",
+  "listed": {
+   "ball_winning": 10,
+   "creating": 10,
+   "dribbling": 10,
+   "duels": 10,
+   "finishing": 10,
+   "passing": 10,
+   "solidity": 10
+  }
+ }
+}

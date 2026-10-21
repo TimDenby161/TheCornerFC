@@ -6,7 +6,7 @@ using TheCornerFC.Web.Site;
 namespace TheCornerFC.Web.Pages;
 
 // What the list's table needs to draw rows: the page and its "more rows" both use it
-public sealed record PlayerRowsView(List<PlayerRow> Rows, int Offset, bool Years, List<string> Groups, int[] Seasons, int[] Future);
+public sealed record PlayerRowsView(List<PlayerRow> Rows, int Offset, bool Years, List<string> Groups, int[] Seasons, int[] Future, string? Skill = null);
 
 // Players: every ranked player by Ability, with the competition menu, Exclude, ranges, age,
 // position, club and nationality, a search, and a sort on any season (web/src/routes/(app)/players).
@@ -55,7 +55,8 @@ public sealed class PlayersModel(Database db) : PageModel
     // a slider's range as the address would have it (null: both ends open)
     public string? RangeNow(string k) => Players.RangeText(Players.HandlesRange(Sliders[k].Stops, Sliders[k].A, Sliders[k].B));
     public int RangesOn => Players.RangeKeys.Count(k => RangeNow(k) is not null);
-    public int FiltersOn => RangesOn + Ch.ExcludedList.Count + (RangeNow("age") is not null ? 1 : 0) + Ch.Positions.Count + Ch.Clubs.Count + Ch.Nats.Count;
+    public int FiltersOn => RangesOn + Ch.ExcludedList.Count + (RangeNow("age") is not null ? 1 : 0) + Ch.Positions.Count + Ch.Clubs.Count + Ch.Nats.Count
+        + (Players.SkillOf(Ch.Sort) is not null ? 1 : 0);
 
     // The page's choices as they go in the address, a default left out; `without` drops some
     public Dictionary<string, string> Choices(params string[] without)
@@ -92,7 +93,7 @@ public sealed class PlayersModel(Database db) : PageModel
     public string PosToggled(string pos) =>
         string.Join(',', Ch.Positions.Contains(pos) ? Ch.Positions.Where(x => x != pos) : Ch.Positions.Append(pos));
 
-    public PlayerRowsView RowsView => new(Rows, 0, B.Years, B.Groups, Seasons, Future);
+    public PlayerRowsView RowsView => new(Rows, 0, B.Years, B.Groups, Seasons, Future, Players.SkillOf(Ch.Sort));
     public bool Wide => Ch.Search != "" || Ch.Filter == "all" || !Ch.Filter.All(char.IsAsciiDigit);
 }
 
@@ -107,6 +108,6 @@ public sealed class PlayerRowsModel(Database db) : PageModel
         var b = await Players.Load(db, Request.Query);
         var (_, _, rows) = await Players.Page(db, b, offset, visitor.Token);
         Response.Headers.CacheControl = visitor.Token is not null ? "private, no-store" : "public, max-age=60";
-        return Partial("_PlayerRows", new PlayerRowsView(rows, offset, b.Years, b.Groups, b.Site.PlayerSeasons!, b.Site.PlayerFutureSeasons ?? []));
+        return Partial("_PlayerRows", new PlayerRowsView(rows, offset, b.Years, b.Groups, b.Site.PlayerSeasons!, b.Site.PlayerFutureSeasons ?? [], Players.SkillOf(b.Choices.Sort)));
     }
 }

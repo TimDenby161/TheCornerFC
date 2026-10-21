@@ -32,6 +32,7 @@
         <td class="num col-wrank">@if (p.World is { } w){@Js.Num(w)}else{@Dash()}</td>
         <td class="num col-lrank" title="@(p.Lg is { } l and not 0 && p.LgOf is { } of and not 0 ? $"{Markup.Ordinal(l)} of {of} in the {p.League}" : null)">@if (p.Lg is { } lg){@lg}else{@Dash()}</td>
         <td class="num col-ga">@if (p.Ga is { } ga){@($"{ga.Goals}G {ga.Assists}A")}else{@Dash()}</td>
+        @if (Model.Skill is not null){<td class="num col-skill">@Chip(p.Skill)</td>}
         @for (var k = shown - 1; k >= 0; k--)
         {
             if (k == 0 && Model.Groups.Count > 0)

@@ -54,7 +54,7 @@
     }
 }
 @* a choice made on the page swaps these parts for the server's new ones, in place (table.js) *@
-<section class="panel" data-tab="table" data-active="true" data-swap-forms data-swap="exclude-filter pos-filter table-filters filters-n search-keep">
+<section class="panel" data-tab="table" data-active="true" data-swap-forms data-swap="exclude-filter pos-filter skill-filter table-filters filters-n search-keep">
     <div id="table-side">
         <div class="side-stick">
             <div class="more-panel" id="more-panel">
@@ -81,6 +81,19 @@
                             @foreach (var (pos, x, y) in Names.PitchSpots)
                             {
                                 <button type="submit" name="pos" value="@Model.PosToggled(pos)" class="pos sx-@x sy-@y" aria-pressed="@(Model.Ch.Positions.Contains(pos) ? "true" : "false")" title="@pos: @(Model.B.Facets.Positions.GetValueOrDefault(pos)) players">@pos</button>
+                            }
+                        </div>
+                    </form>
+                </div>
+                <div id="skill-filter">
+                    <form class="contents" method="get" action="/players">
+                        @foreach (var (k, v) in Model.Choices("sort")) { <input type="hidden" name="@k" value="@v" /> }
+                        <div class="pos-head"><span>Skill</span>
+                            @if (Players.SkillOf(Model.Ch.Sort) is not null){<button type="submit" name="sort" value="" class="pos-clear">Clear</button>}</div>
+                        <div class="skill-picks">
+                            @foreach (var s in Players.Skills)
+                            {
+                                <button type="submit" name="sort" value="k_@s.Key" class="skill-pick" aria-pressed="@(Model.Ch.Sort == "k_" + s.Key ? "true" : "false")" title="@s.Tip">@s.Label</button>
                             }
                         </div>
                     </form>
@@ -123,6 +136,10 @@
                             <th class="num col-wrank" data-tip="World rank: his place among every listed player by Ability, whatever this list is filtered or sorted by.">World</th>
                             <th class="num col-lrank" data-tip="League rank: his place by Ability among the listed players in his club's league.">Lg</th>
                             @{ SortTh("ga", "col-ga", "Goals and assists this season, all his clubs (7G 4A). Sorts by the two added together. Click to sort.", "G/A"); }
+                            @if (Players.SkillOf(Model.Ch.Sort) is { } sk && Players.Skills.First(s => s.Key == sk) is var skill)
+                            {
+                                SortTh(Model.Ch.Sort, "col-skill", $"{skill.Label}, 0 to 100: {skill.Tip}, over his last 20 appearances, as a percentile among every outfield regular in any position (50 is average). Players with few minutes are marked down.", skill.Label);
+                            }
                             @for (var i = shown - 1; i >= 0; i--)
                             {
                                 var y = seasons[i];

@@ -46,7 +46,7 @@ IN_PRODUCTION = "In production since 2026-10-14, as part of the club-rank releas
 NOT_RUN = {**p15.NOT_RUN, **{cid: IN_PRODUCTION for cid in ("MC-0013", "MC-0014", "MC-0016", "MC-0024")}}
 # The files that define the candidates and both ranks, as they were at registration
 PINNED = {**p15.PINNED, **p16.PINNED,
-          HERE / "live_p16.py": "210c490e0da74f609117e6b0d543870267d126e5f93c1164a853f7e8da9723a2"}
+          HERE / "live_p16.py": "5635b8d136e48b327681633d065a0b91dcb4573d6f6f05454bd58a92c208b491"}
 
 
 def check_pins():

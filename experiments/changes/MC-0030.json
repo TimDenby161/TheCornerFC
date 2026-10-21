@@ -26,5 +26,23 @@
    "model_version": null
   }
  },
- "events": []
+ "events": [
+  {
+   "date": "2026-10-21",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "Season-to-season repeatability of season rank (Spearman, 1,500+ minutes both seasons), all players",
+   "metric": "other",
+   "delta": -0.0019,
+   "n": null,
+   "baseline": 0.8828,
+   "after": 0.8809,
+   "interval": null,
+   "meaningful": "Within the registered bar (no more than 0.01 lower); players who changed club 0.837 to 0.838. All four checks passed: keepers untouched, current-rank Spearman 0.997 to 0.999 per position, predicted-XI ratings 0.15 points on average with no XI changed",
+   "source": "experiments/skill_ranks/results.json",
+   "period": null,
+   "vs_market": null
+  }
+ ]
 }

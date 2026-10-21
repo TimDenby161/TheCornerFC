@@ -46,6 +46,13 @@ await run(`document.querySelector('#pos-filter .pos[value="ST"]')?.click()`); aw
 check('position pick in the address', (await run('location.search')).includes('pos=ST'), await run('location.search'));
 check('"As ST" takes Ability\'s place', (await run(`document.querySelector('th.col-posrank')?.textContent.trim()`))?.startsWith('As ST'));
 
+// skill: press Finishing, the list sorts by it with its column, the position kept; then clear it
+await run(`document.querySelector('#skill-filter .skill-pick[value="k_finishing"]')?.click()`); await until(`location.search.includes('sort=k_finishing') && !!document.querySelector('th.col-skill')`);
+check('skill pick sorts the list and adds its column', (await run('location.search')).includes('sort=k_finishing') && (await run('location.search')).includes('pos=ST')
+	&& (await run(`document.querySelector('th.col-skill')?.textContent.trim()`)) === 'Finishing' && (await run(`document.querySelector('#skill-filter .skill-pick[value="k_finishing"]')?.getAttribute('aria-pressed')`)) === 'true', await run('location.search'));
+await run(`document.querySelector('#skill-filter .pos-clear')?.click()`); await until(`!location.search.includes('sort=k_') && !document.querySelector('th.col-skill')`);
+check('clearing the skill goes back to the position rank', !(await run('location.search')).includes('sort=k_') && !!(await run(`document.querySelector('th.col-posrank')`)));
+
 // club box: focus, the list loads, open the first league, pick its first club
 await send('Emulation.setFocusEmulationEnabled', { enabled: true }); await run(`document.querySelector('#club-input').focus()`); await until(`document.querySelectorAll('#club-menu .who-league').length > 10`);
 check('club list opens with leagues', (await run(`document.querySelectorAll('#club-menu .who-league').length`)) > 10, `${await run(`document.querySelectorAll('#club-menu .who-league').length`)} leagues`);

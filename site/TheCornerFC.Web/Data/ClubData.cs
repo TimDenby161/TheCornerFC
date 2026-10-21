@@ -29,7 +29,8 @@ public sealed record ClubMatch(string Date, double Rank, int Opponent, int Home,
 public sealed record Player(int Id, string Name, string? Position, double? Rank, int? Team, double? Ord,
     Dictionary<string, double>? PositionRanks, string[]? Positions12m, PlayerSeason? Season, bool Locked,
     int? League = null, string? Nationality = null, int? Age = null, int? LgRank = null, int? LgN = null,
-    double?[]? Seasons = null, int[]? Estimated = null, double?[]? Future = null, int? World = null, int? Lg = null, int? LgOf = null);
+    double?[]? Seasons = null, int[]? Estimated = null, double?[]? Future = null, int? World = null, int? Lg = null, int? LgOf = null,
+    Dictionary<string, double>? Skills = null);
 public sealed record PlayerSeason(int? Minutes, int? Goals, int? Assists);
 public sealed record PlayersAnswer(int Total, bool? Paywall, JsonElement[][] Rows);
 
@@ -84,6 +85,8 @@ public static class ClubData
             var season = At("season") is { ValueKind: JsonValueKind.Array } s ? new Named(seasonFields, s.EnumerateArray().ToArray()) : null;
             var ranks = At("position_ranks") is { ValueKind: JsonValueKind.Object } pr
                 ? pr.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.Number).ToDictionary(p => p.Name, p => p.Value.GetDouble()) : null;
+            var skills = At("skills") is { ValueKind: JsonValueKind.Object } sk
+                ? sk.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.Number).ToDictionary(p => p.Name, p => p.Value.GetDouble()) : null;
             var pos12 = At("positions_12m") is { ValueKind: JsonValueKind.Array } ps ? ps.EnumerateArray().Select(e => e.GetString()!).ToArray() : null;
             double?[]? Doubles(string f) => At(f) is { ValueKind: JsonValueKind.Array } a
                 ? a.EnumerateArray().Select(e => e.ValueKind == JsonValueKind.Number ? e.GetDouble() : (double?)null).ToArray() : null;
@@ -91,7 +94,7 @@ public static class ClubData
                 season is null ? null : new PlayerSeason(season.I("minutes"), season.I("goals"), season.I("assists")),
                 At("seasons") is not { ValueKind: not JsonValueKind.Null },
                 n.I("league"), n.S("nationality"), n.I("age"), n.I("lg_rank"), n.I("lg_n"), Doubles("seasons"),
-                Doubles("estimated")?.Where(x => x is not null).Select(x => (int)x!.Value).ToArray(), Doubles("future"), n.I("world"), n.I("lg"), n.I("lg_of"));
+                Doubles("estimated")?.Where(x => x is not null).Select(x => (int)x!.Value).ToArray(), Doubles("future"), n.I("world"), n.I("lg"), n.I("lg_of"), skills);
         }).ToList();
     }
 

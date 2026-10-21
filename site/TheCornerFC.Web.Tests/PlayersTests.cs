@@ -178,6 +178,20 @@ public class PlayersTests
     }
 
     [Fact]
+    public void A_skill_sorts_the_list_by_its_score_and_an_unknown_one_is_ignored()
+    {
+        Assert.Equal("k_finishing", Key("k_finishing"));
+        Assert.Equal("k_ball_winning", Key("k_ball_winning", false, ["CB"]));     // with positions picked and seasons closed
+        Assert.Equal("s2026", Key("k_aerial"));                                  // no such skill (the data has no aerial duels)
+        Assert.Equal("k_passing", Ask(Choose(sort: "k_passing"))["p_sort"]);
+        Assert.Equal("passing", Players.SkillOf("k_passing"));
+        Assert.Null(Players.SkillOf("s2026"));
+        // the page's skills are the model's (player_ratings.SKILLS, in the migration's sort list)
+        var sql = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../db/migrations/20261021_player_skills.sql"));
+        Assert.All(Players.Skills, s => Assert.Contains($"'k_{s.Key}'", sql));
+    }
+
+    [Fact]
     public void The_list_asks_for_everyone_by_default_or_a_league_a_country_or_a_cups_clubs()
     {
         Assert.Equal("""{"p_sort":"s0"}""", Json(Ask(Choose())));

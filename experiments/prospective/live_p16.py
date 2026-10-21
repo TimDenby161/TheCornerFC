@@ -45,6 +45,11 @@ BEFORE = {
     "player_ratings.py": "73f8e45028493eae12ddbc566360795e09a6fa08cb1789f6bb7017e55d3fd898",
     "match_snapshots.py": "c4ce9c7df94d9c9f9f030c9dbb14ef2e0c558548ebeb2b3fba20de7b921ca566",
 }
+# Amendment 16 (2026-10-21): files a released version may also differ in. A player-rank change
+# (MC-0030 on, and the owner's later tuning of it) moves the predicted XIs' ratings, which reach the
+# match model, so it makes a new match version; it is in both sides of every paired comparison
+# here (both start from the same stored snapshot), so it can't tilt one
+MAY_ALSO_DIFFER = ("player_ratings.py",)
 CLOSED = "Live tracking of every candidate (P15) closed when MC-0028 changed production's club rank; P16 tracks the release"
 
 _spec = importlib.util.spec_from_file_location("live_p15", HERE / "live_p15.py")
@@ -76,12 +81,14 @@ def check_pins():
 
 
 def released(versions):
-    """The match-model version ids that are the release: ranking.py changed, nothing else."""
+    """The match-model version ids that are the release: ranking.py changed, and nothing else but
+    the files in MAY_ALSO_DIFFER (amendment 16)."""
     out = set()
     for vid, digests in versions:
         digests = digests or {}
         if digests.get("ranking.py") not in (None, BEFORE["ranking.py"]) and \
-                all(digests.get(name) == want for name, want in BEFORE.items() if name != "ranking.py"):
+                all(digests.get(name) == want for name, want in BEFORE.items()
+                    if name != "ranking.py" and name not in MAY_ALSO_DIFFER):
             out.add(vid)
     return out
 

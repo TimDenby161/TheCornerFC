@@ -88,6 +88,7 @@ Team ratings per fixture and team
 """
 import bisect
 import io
+import json
 import logging
 import math
 from collections import Counter, defaultdict, deque
@@ -159,44 +160,55 @@ SUMS = STATS + ("xga", "xg_mins")
 # judged on where known players land, starting from the weights that were tested against results
 # (2021-26, club rank as the baseline: shots on target, key passes, passing volume and duels won
 # added to it; goals, assists and save % beyond those mostly reflected luck that evened out).
+
+# Skills (owner, 2026-10-21, MC-0030, experiments/skill_ranks): each one recipe of counted stats
+# for every position (shares summing to 1 in size; negative = lower is better). A recipe's shares
+# are each stat's total weight across the outfield groups in the weights the owner set on
+# 2026-10-05 (above), so the skills start from them. There are no aerial duels, crosses or
+# per-player xG in the data: duels are all duels.
+SKILLS = {
+    "finishing": {"goals": .5439, "shots_on": .4561},
+    "creating": {"key_passes": .6643, "assists": .3357},
+    "passing": {"passes": .6836, "pass_acc": .3164},
+    "dribbling": {"dribbles_won": .8393, "dribbles_lost": -.1607},
+    "ball_winning": {"tackles_int": .8781, "blocks": .1219},
+    "duels": {"duels_pct": 1.0},
+    "solidity": {"dribbled_past": -.8497, "team_xga": -.1503},
+}
+# Each outfield position's rank is a mix of skills, shares summing to 1. Each started as the share
+# that position gave the skill's stats on 2026-10-05; the owner tunes them from here
+SKILL_MIX = {
+    "CB": {"passing": .2963, "ball_winning": .2346, "duels": .2346, "solidity": .2345},
+    "FB": {"creating": .26, "passing": .21, "solidity": .15, "ball_winning": .13, "finishing": .11, "dribbling": .10,
+           "duels": .04},
+    "WB": {"creating": .34, "passing": .16, "finishing": .13, "dribbling": .13, "ball_winning": .12, "solidity": .07,
+           "duels": .05},
+    "DM": {"passing": .3253, "ball_winning": .2289, "duels": .1807, "creating": .1205, "solidity": .1205,
+           "finishing": .0241},
+    "CM": {"passing": .2966, "creating": .2519, "finishing": .1627, "duels": .1312, "ball_winning": .0919,
+           "dribbling": .0656},
+    "AM": {"creating": .37, "finishing": .357, "passing": .105, "dribbling": .105, "duels": .063},
+    "W": {"finishing": .4713, "creating": .2989, "dribbling": .1149, "passing": .0575, "duels": .0575},
+    "ST": {"finishing": .6445, "creating": .1667, "duels": .0889, "passing": .0556, "dribbling": .0444},
+}
+
+
+def _skill_weights(mix):
+    """A position's weight on each stat: its share of each skill times the skill's recipe."""
+    out = defaultdict(float)
+    for skill, share in mix.items():
+        for k, w in SKILLS[skill].items():
+            out[k] += share * w
+    return dict(out)
+
+
 WEIGHTS = {
     # Keepers: save % (repeats 0.18 from one season to the next: noisy, but his own), pass
     # accuracy (0.69, and 0.54 for keepers who changed club: a trait, though partly style) and
-    # goals conceded (0.34; mostly the defence in front of him, kept at the owner's choice)
+    # goals conceded (0.34; mostly the defence in front of him, kept at the owner's choice).
+    # Goalkeeping is their one skill, with these as its recipe
     "GK": {"save_pct": .50, "pass_acc": .25, "conceded": -.25},
-    # Centre-backs: no goals or shots on target (season-to-season repeat 0.08 / 0.18 for CBs who
-    # changed club: luck and role). Times dribbled past repeats 0.55 across a move (a player
-    # trait); team xG conceded while he played 0.29 (mostly the team, a little him). Penalties
-    # conceded (0.02) is noise and left out
-    "CB": {"duels_pct": .2346, "passes": .1852, "tackles_int": .1605, "dribbled_past": -.1481, "pass_acc": .1111,
-           "team_xga": -.0864, "blocks": .0741},
-    # Full-backs: going forward (key passes, passing, assists, goals, dribbles won, shots on
-    # target) and defending (times dribbled past, tackles + interceptions, duels won); failed
-    # dribbles (attempts - won) count against him: giving the ball away
-    "FB": {"key_passes": .18, "dribbled_past": -.15, "tackles_int": .13, "passes": .12, "pass_acc": .09,
-           "assists": .08, "goals": .06, "dribbles_won": .06, "shots_on": .05, "dribbles_lost": -.04,
-           "duels_pct": .04},
-    # Wing-backs (LWB / RWB), a group of their own since 2026-10: the full-back stats leaning forward
-    # (assists above being dribbled past: the owner's pass over the list)
-    "WB": {"key_passes": .20, "assists": .14, "tackles_int": .12, "passes": .09, "dribbles_won": .08,
-           "dribbled_past": -.07, "pass_acc": .07, "goals": .07, "shots_on": .06, "duels_pct": .05,
-           "dribbles_lost": -.05},
-    # Defensive mids (repeat for all DMs, few changed club): passing volume (0.81), tackles +
-    # interceptions (0.76), times dribbled past (0.69), duels won (0.65), key passes (0.82). Out:
-    # goals, team xG conceded (negative across a move); shots on target only a sliver
-    "DM": {"passes": .2169, "tackles_int": .2048, "duels_pct": .1807, "key_passes": .1205, "dribbled_past": -.1205,
-           "pass_acc": .1084, "blocks": .0241, "shots_on": .0241},
-    # Centre mids: passing volume above key passes, and little for shots on target (an 8, not a 10)
-    "CM": {"passes": .2310, "key_passes": .1732, "duels_pct": .1312, "goals": .1050, "tackles_int": .0919,
-           "assists": .0787, "dribbles_won": .0656, "pass_acc": .0656, "shots_on": .0577},
-    # Goals per 90 repeat 0.44 for strikers who changed club (0.36 wingers, 0.27 attacking mids),
-    # near shots on target, so scoring counts more for attackers; conversion rate (0.17) is luck
-    "AM": {"key_passes": .2205, "shots_on": .1785, "goals": .1785, "assists": .1495, "dribbles_won": .1050,
-           "passes": .0735, "duels_pct": .0630, "pass_acc": .0315},
-    "W": {"goals": .2529, "shots_on": .2184, "key_passes": .2069, "dribbles_won": .1149, "assists": .0920,
-          "passes": .0575, "duels_pct": .0575},
-    "ST": {"goals": .3667, "shots_on": .2778, "key_passes": .1000, "duels_pct": .0889, "assists": .0667,
-           "passes": .0556, "dribbles_won": .0444},
+    **{group: _skill_weights(mix) for group, mix in SKILL_MIX.items()},
 }
 
 
@@ -376,6 +388,49 @@ def _norms(apps):
             sd = math.sqrt(sum((v - mean) ** 2 for v in vals) / len(vals)) or 1
             norms[pos][k] = (mean, sd)
     return norms
+
+
+def _skill_norms(apps):
+    """{metric: (mean, sd)} over every outfield player-season with 900+ minutes in
+    config.RATING_REFERENCE_LEAGUES, all positions together: a skill is compared across the
+    whole list, so a centre-back's finishing is set against everyone's."""
+    seasons = defaultdict(lambda: {"sums": dict.fromkeys(SUMS, 0.0), "roles": Counter(), "broad": Counter()})
+    for row in apps:
+        if row[9] in REFERENCE:
+            _add_season(seasons[(row[2], row[8])], row)
+    rows = [m for entry in seasons.values() if entry["sums"]["minutes"] >= 900 and season_group(entry) in SKILL_MIX
+            for m in [metrics(entry["sums"])] if m]
+    out = {}
+    for k in {k for recipe in SKILLS.values() for k in recipe}:
+        vals = [r[k] for r in rows if r[k] is not None]
+        mean = sum(vals) / len(vals) if vals else 0.0
+        sd = math.sqrt(sum((v - mean) ** 2 for v in vals) / len(vals)) if vals else 0.0
+        out[k] = (mean, sd or 1)
+    return out
+
+
+SKILL_SAMPLE_MINUTES = 900     # the players a skill score is a percentile among: listed outfield players with this many window minutes
+
+
+def skill_scores(players, norms):
+    """{player: {skill: 0-100}} for players {player: (window sums, role group)}: each skill's
+    recipe over his rating window, per 90, against every outfield regular (norms, _skill_norms),
+    pulled towards MINUTES_PRIOR with few minutes as a position score is, then as a percentile
+    among the listed outfield players with SKILL_SAMPLE_MINUTES or more. Keepers have none.
+    For the lists on the site: nothing in the ranks reads them."""
+    raw = {}
+    for player, (sums, pos) in players.items():
+        m = metrics(sums) if pos in SKILL_MIX else None
+        if not m:
+            continue
+        minutes = sums["minutes"]
+        raw[player] = (minutes, {skill: (sum(w * (m[k] - norms[k][0]) / norms[k][1] for k, w in recipe.items()
+                                             if m[k] is not None) * minutes + MINUTES_PRIOR * SHRINK_MINUTES)
+                                 / (minutes + SHRINK_MINUTES) for skill, recipe in SKILLS.items()})
+    sample = {skill: sorted(v[skill] for mins, v in raw.values() if mins >= SKILL_SAMPLE_MINUTES) for skill in SKILLS}
+    pct = lambda ref, x: 100 * bisect.bisect_left(ref, x) / len(ref) if ref else None
+    return {player: {skill: round(pct(sample[skill], x), 1) for skill, x in v.items() if sample[skill]}
+            for player, (_, v) in raw.items()}
 
 
 SOFT_FROM = 86             # ranks above this bend smoothly towards 100 instead of piling up at a hard
@@ -995,6 +1050,7 @@ def compute_player_ratings(conn):
     appearances = _appearances(conn)
     retired = retired_players(conn, appearances)
     norms = _norms(appearances)
+    skill_norms = _skill_norms(appearances)
     team_rank = {(r[0], r[1]): r[8] for r in rank_history(conn)}
     ranks = list(team_rank.values())
     tr_mean = sum(ranks) / len(ranks)
@@ -1190,6 +1246,7 @@ def compute_player_ratings(conn):
             projections[p] = {y: round(r * (1 - SQUAD_MARKDOWN), 1) for y, r in projections[p].items()}
         log.info("Player ratings: %d keepers marked down as backups", len(backups))
     now_rank = {p: r for p, y, r, _, _ in season_rows if y == this_season}
+    skills = skill_scores({p: (windows[p].sums, pos) for p, (_, pos, _) in listed.items()}, skill_norms)
     current, components = [], {}
     for player, (s, pos, minutes) in listed.items():     # retired players are off the list
         current.append((player, now_rank.get(player, to_rank(s, pos)), windows[player].label(), int(minutes)))
@@ -1205,11 +1262,11 @@ def compute_player_ratings(conn):
     lineup_snapshots.capture_predictions(conn, fixtures + cups, lineups, selection_inputs, live_availability,
                                          teams=cup_teams)
     _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_rows, position_ranks, projections,
-           components, history)
+           components, history, skills)
 
 
 def _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_rows, position_ranks, projections,
-           components=None, history=None):
+           components=None, history=None, skills=None):
     with conn.cursor() as cur:
         # Rebuilt with truncate + copy rather than updating fixture_players, so the big table
         # isn't rewritten (and bloated with dead rows) on every run
@@ -1238,14 +1295,21 @@ def _write(conn, appearance_scores, to_rank, team_out, lineups, current, season_
             with cur.copy("copy reconstructed_lineups (fixture_id, team_id, players, roles) from stdin") as cp:
                 cp.write("".join(f"{fid}\t{team}\t{array(p for p, _ in xi)}\t{array(r for _, r in xi)}\n"
                                  for fid, team, xi in history))
-        cur.execute("update players set current_rank = null, rank_position = null, rank_minutes = null")
-        cur.execute("create temp table tmp_cur (player_id int, r numeric(4,1), pos text, mins int) on commit drop")
+        # the skill scores go in players.skills once db/migrations/20261021_player_skills.sql is applied
+        with_skills = skills is not None and cur.execute(
+            """select 1 from information_schema.columns where table_schema = 'public' and table_name = 'players'
+               and column_name = 'skills'""").fetchone() is not None
+        cur.execute("update players set current_rank = null, rank_position = null, rank_minutes = null"
+                    + (", skills = null" if with_skills else ""))
+        cur.execute("create temp table tmp_cur (player_id int, r numeric(4,1), pos text, mins int, skills jsonb) on commit drop")
         buf = io.StringIO()
         for p, r, pos, mins in current:
-            buf.write(f"{p}\t{r}\t{pos}\t{mins}\n")
+            sk = (skills or {}).get(p)
+            buf.write(f"{p}\t{r}\t{pos}\t{mins}\t{json.dumps(sk, separators=(',', ':')) if sk else chr(92) + 'N'}\n")
         with cur.copy("copy tmp_cur from stdin") as cp:
             cp.write(buf.getvalue())
-        cur.execute("""update players pl set current_rank = t.r, rank_position = t.pos, rank_minutes = t.mins
+        cur.execute("""update players pl set current_rank = t.r, rank_position = t.pos, rank_minutes = t.mins"""
+                    + (", skills = t.skills" if with_skills else "") + """
                        from tmp_cur t where pl.player_id = t.player_id""")
         cur.execute("truncate player_season_ranks")
         with cur.copy("copy player_season_ranks (player_id, season, season_rank, minutes, team_id) from stdin") as cp:

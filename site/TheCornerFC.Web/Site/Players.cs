@@ -30,7 +30,7 @@ public sealed record Slider(List<double> Stops, int A, int B);
 // A player's row as the page draws it, names and all
 public sealed record PlayerRow(int Id, string Name, string Short, int? Team, string? TeamName, string League, string? Nat, string? Flag,
     string Pos, int? Age, int? World, int? Lg, int? LgOf, (int? Goals, int? Assists)? Ga,
-    double?[]? Seasons, int[] Estimated, double?[]? Future, double? PosRank);
+    double?[]? Seasons, int[] Estimated, double?[]? Future, double? PosRank, double? Skill = null);
 
 // The Players table: what it asks the database's site_players for, and its side filters (the
 // ranges and age as two-handled sliders, the position pitch, the club and nationality picks).
@@ -116,10 +116,25 @@ public static partial class Players
     // current season by default), a projected season ("f2028"), "age" (youngest first), "ga" (goals
     // and assists) or "pos" (his rank in the positions picked, which takes Ability's place while any
     // are). With the other seasons closed, only the current one can be sorted on.
+    // The skills a list can be sorted by (player_ratings.SKILLS, MC-0030): the sort key is
+    // "k_<skill>", and the column shows each player's 0 to 100 score in it
+    public static readonly (string Key, string Label, string Tip)[] Skills =
+    [
+        ("finishing", "Finishing", "Goals and shots on target per 90"),
+        ("creating", "Creating", "Key passes and assists per 90"),
+        ("passing", "Passing", "Passes per 90 and pass accuracy"),
+        ("dribbling", "Dribbling", "Dribbles won per 90, less the ones lost"),
+        ("ball_winning", "Ball-winning", "Tackles, interceptions and blocks per 90"),
+        ("duels", "Duels", "Share of duels won (all duels: the data doesn't split out aerial ones)"),
+        ("solidity", "Solidity", "Times dribbled past and his team's xG conceded while he plays, both per 90 (fewer is better)"),
+    ];
+    public static string? SkillOf(string sort) => sort.StartsWith("k_", StringComparison.Ordinal) && Skills.Any(s => "k_" + s.Key == sort) ? sort[2..] : null;
+
     public static string SortKey(string? asked, int[] seasons, int[] future, bool open, List<string> groups)
     {
         var now = groups.Count > 0 ? "pos" : $"s{seasons[0]}";
         if (asked is "age" or "ga") return asked;
+        if (asked is not null && SkillOf(asked) is not null) return asked;
         if (string.IsNullOrEmpty(asked) || !open || asked == "pos") return now;
         if (asked == $"s{seasons[0]}") return now;
         var ok = int.TryParse(asked[1..], NumberStyles.None, CultureInfo.InvariantCulture, out var y);
@@ -127,7 +142,7 @@ public static partial class Players
     }
     // the same for the database: seasons and projected seasons by their place, newest first
     static string SortParam(string key, int[] seasons, int[] future) =>
-        key is "age" or "ga" or "pos" ? key
+        key is "age" or "ga" or "pos" || SkillOf(key) is not null ? key
         : key[0] == 'f' ? $"f{Array.IndexOf(future, int.Parse(key[1..]))}" : $"s{Array.IndexOf(seasons, int.Parse(key[1..]))}";
 
     // ---- The page's choices, as its address has them
@@ -269,10 +284,10 @@ public static partial class Players
         p["p_limit"] = PageRows;
         p["p_offset"] = offset;
         var answer = await db.AskAs<PlayersAnswer>(token, "site_players", p);
-        return (answer.Total, answer.Paywall == true, ClubData.Players(b.Site, answer.Rows ?? []).Select(x => RowView(b.Site, x, b.Groups)).ToList());
+        return (answer.Total, answer.Paywall == true, ClubData.Players(b.Site, answer.Rows ?? []).Select(x => RowView(b.Site, x, b.Groups, SkillOf(b.Choices.Sort))).ToList());
     }
 
-    static PlayerRow RowView(SiteDoc site, Player p, List<string> groups) => new(
+    static PlayerRow RowView(SiteDoc site, Player p, List<string> groups, string? skill) => new(
         p.Id, p.Name, ClubPage.ShortName(p.Name), p.Team, p.Team is { } t and not 0 ? site.TeamName(t) : null,
         p.League is { } lg ? site.LeagueShort(lg) : "",
         p.Nationality, p.Nationality is { Length: > 0 } nat
@@ -281,7 +296,9 @@ public static partial class Players
         p.Age, p.World, p.Lg, p.LgOf, p.Season is { } s ? (s.Goals, s.Assists) : null,
         p.Seasons, p.Estimated ?? [], p.Future,
         // his rank in the positions picked: his best of them, null if he has started in none
-        groups.Count > 0 ? PosRank(p.PositionRanks, groups) : null);
+        groups.Count > 0 ? PosRank(p.PositionRanks, groups) : null,
+        // his score in the skill the list is sorted by
+        skill is null ? null : p.Skills?.GetValueOrDefault(skill) is { } v ? v : null);
 
     // ---- Club and nationality: what the two boxes list: clubs (the league added to a name two
     // clubs share), the same clubs under their leagues in the competition menu's order, and the
