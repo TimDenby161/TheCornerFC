@@ -1,0 +1,30 @@
+{
+ "id": "MC-0034",
+ "registration": {
+  "recorded": "2026-10-22",
+  "retrospective": false,
+  "date": "2026-10-22",
+  "title": "Skill scores pulled down by level, released in the player ratings",
+  "component": "Player ranks",
+  "model": "player",
+  "kind": "production change",
+  "what": "Production's skill scores take MC-0033 at the owner's setting: one way, 0.75 standard deviations per 100 points of club strength below the reference leagues' average, on top of MC-0032's league offsets. The ranks are unchanged.",
+  "why": "The owner's judgement, 2026-10-22, that lower-league output should count for less in the skill scores than the movers' data alone says.",
+  "how": "SKILL_LEVEL_PULL = 0.75, one way, in player_ratings.py (experiments/skill_level/DESIGN.md, amendment 1): one new player-model version.",
+  "hypothesis": "None to test: a judgement. Every rank stays as it was.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/skill_level/report.json"
+  },
+  "success_criteria": "No live test: nothing is predicted from the skill scores. The ranks must stay identical (checked by experiments/skill_level/report.py).",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/skill_level",
+   "model_version": null
+  }
+ },
+ "events": []
+}

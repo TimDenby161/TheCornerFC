@@ -42,3 +42,12 @@ projection and predicted XI identical (the data outputs, compared by name).
 ## Cost
 
 No new data, no API calls, nothing new stored. A few milliseconds in the nightly.
+
+## Amendment 1 (2026-10-22, after the first report)
+
+The first run of `report.py` (`report.json` as it was then) showed that a pull both ways also
+lifts every skill of players at strong clubs, including ones they don't show: at 0.5, V. van
+Dijk's dribbling went from 14 to 80 and E. Haaland's passing from 6 to 51. On the owner's
+decision the pull is **one way**: `SKILL_LEVEL_PULL × min(his level − reference level, 0) / 100`.
+A player at or above the reference level is not moved (his percentile can still change as others
+move). `report.py` is unchanged and is run again on the one-way model; the ranks check is the same.

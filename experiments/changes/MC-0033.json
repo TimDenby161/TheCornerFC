@@ -26,5 +26,29 @@
    "model_version": null
   }
  },
- "events": []
+ "events": [
+  {
+   "date": "2026-10-22",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "League Two regulars' average dribbling score (0 to 100) at the chosen pull, one way 0.75, against no pull; every rank and predicted XI identical",
+   "metric": "other",
+   "delta": -30.5,
+   "n": null,
+   "baseline": 49.1,
+   "after": 18.6,
+   "interval": null,
+   "meaningful": "A judgement: one way at 0.75 takes Markanday from 96.5 to 85 in dribbling and 88 to 76 in finishing, League Two's average dribbling from 49 to 19, the Premier League's from 60 to 76; V. van Dijk's dribbling rises from 14 to 48 as others move below him. Both-ways figures in report_both_ways.json",
+   "source": "experiments/skill_level/report.json",
+   "period": null,
+   "vs_market": null
+  },
+  {
+   "date": "2026-10-22",
+   "type": "decision",
+   "status": "Accepted",
+   "reason": "Owner, 2026-10-22: one way, at 0.75, chosen by eye from the report. A judgement, as Ability's club-strength start is; not a tested improvement."
+  }
+ ]
 }

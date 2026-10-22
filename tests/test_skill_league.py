@@ -44,6 +44,30 @@ class LeagueOffsetTests(unittest.TestCase):
         self.assertLess(adjusted[2]["finishing"], adjusted[1]["finishing"])     # ...until League Two's offset comes off
         self.assertGreaterEqual(adjusted[1]["finishing"], plain[1]["finishing"])   # a percentile: he can only gain a place
 
+    def test_the_level_pull_moves_scores_by_club_strength_from_the_reference_level(self):
+        # MC-0033: two players with the same numbers, one at reference-league clubs of 1,000, one in
+        # League Two at clubs of 800; a crowd at the reference level for the percentiles
+        norms = {k: (0.0, 1.0) for k in {k for r in pr.SKILLS.values() for k in r}}
+        base = dict.fromkeys(pr.SUMS, 0.0)
+        base.update(minutes=1800, goals=10, shots_on=30, passes=900, passes_accurate=800, duels=200, duels_won=100,
+                    dribbles=40, dribbles_won=20, tackles=30, interceptions=20, blocks=10, key_passes=30, assists=5)
+        players = {1: ({**base, "club_mins": 1000 * 1800, ("lg", PL): 1800}, "W"),
+                   2: ({**base, "club_mins": 800 * 1800, ("lg", L2): 1800}, "W")}
+        for p in range(3, 60):
+            players[p] = ({**base, "dribbles_won": p % 30, "club_mins": 1000 * 1800, ("lg", PL): 1800}, "W")
+        self.assertEqual(pr.skill_reference_level(players), 1000)               # League Two isn't in the reference
+        flat = pr.skill_scores(players, norms, level_pull=0)
+        pulled = pr.skill_scores(players, norms, level_pull=0.5)
+        self.assertEqual(flat[1]["dribbling"], flat[2]["dribbling"])
+        self.assertLess(pulled[2]["dribbling"], pulled[1]["dribbling"])          # 200 points below: down a whole sd
+        self.assertGreaterEqual(pulled[1]["dribbling"], flat[1]["dribbling"])   # at the reference level: only gains a place
+        # one way: a player above the reference level is not lifted (kept out of the reference
+        # group by his league, so the reference stays where the crowd puts it)
+        at = {**players, 1: ({**base, "club_mins": 1000 * 1800, ("lg", L2): 1800}, "W")}
+        above = {**players, 1: ({**base, "club_mins": 1300 * 1800, ("lg", L2): 1800}, "W")}
+        self.assertEqual(pr.skill_scores(above, norms, level_pull=0.5)[1]["dribbling"],
+                         pr.skill_scores(at, norms, level_pull=0.5)[1]["dribbling"])
+
     def test_the_window_keeps_and_drops_each_leagues_minutes(self):
         w = pr.Window()
         t = datetime(2026, 1, 1)

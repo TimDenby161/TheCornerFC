@@ -412,6 +412,28 @@ def _skill_norms(apps):
 SKILL_SAMPLE_MINUTES = 900     # the players a skill score is a percentile among: listed outfield players with this many window minutes
 SKILL_UNIT_MINUTES = 900       # a player's season in one league counts towards the league offsets from this many minutes
 SKILL_OFFSET_MOVERS = 30       # a league's offset is shrunk towards 0 by n / (n + this), n its units of players seen in another league
+SKILL_LEVEL_PULL = 0.75        # skill z moved down by this per 100 points of club strength below the reference level (MC-0033: the owner's judgement)
+
+
+def _club_level(sums):
+    """His minutes-weighted club strength over the window, or None with no minutes."""
+    return sums["club_mins"] / sums["minutes"] if sums.get("minutes") and "club_mins" in sums else None
+
+
+def skill_reference_level(players):
+    """The minutes-weighted club strength of the listed outfield players with SKILL_SAMPLE_MINUTES
+    or more whose window minutes are mostly in the reference leagues (MC-0033), or None."""
+    total = weight = 0.0
+    for sums, pos in players.values():
+        minutes = sums.get("minutes") or 0
+        if pos not in SKILL_MIX or minutes < SKILL_SAMPLE_MINUTES or "club_mins" not in sums:
+            continue
+        played = {k[1]: v for k, v in sums.items() if isinstance(k, tuple) and k[0] == "lg"}
+        if sum(v for lg, v in played.items() if lg in REFERENCE) * 2 <= sum(played.values()):
+            continue
+        total += sums["club_mins"]
+        weight += minutes
+    return total / weight if weight else None
 
 
 def _skill_z(m, norms, skill):
@@ -475,24 +497,31 @@ def skill_league_offsets(units):
     return dict(out)
 
 
-def skill_scores(players, norms, offsets=None):
+def skill_scores(players, norms, offsets=None, level_pull=None):
     """{player: {skill: 0-100}} for players {player: (window sums, role group)}: each skill's
     recipe over his rating window, per 90, against every outfield regular (norms, _skill_norms),
     less his leagues' offsets (skill_league_offsets, weighted by his window minutes in each:
-    MC-0031), pulled towards MINUTES_PRIOR with few minutes as a position score is, then as a
+    MC-0031), moved down by level_pull (SKILL_LEVEL_PULL unless given) per 100 points his club
+    strength sits below the reference level (skill_reference_level: MC-0033), pulled towards MINUTES_PRIOR with few minutes as a position score is, then as a
     percentile among the listed outfield players with SKILL_SAMPLE_MINUTES or more. Keepers have
     none. For the lists on the site: nothing in the ranks reads them."""
     raw = {}
+    pull = SKILL_LEVEL_PULL if level_pull is None else level_pull
+    reference = skill_reference_level(players) if pull else None
     for player, (sums, pos) in players.items():
         m = metrics(sums) if pos in SKILL_MIX else None
         if not m:
             continue
         minutes = sums["minutes"]
+        club = _club_level(sums)
+        # one way only (owner, 2026-10-22): below the reference level a player comes down, above it
+        # nobody is lifted, so a strong club doesn't hand out skills its players don't show
+        lift = pull * min(club - reference, 0.0) / 100 if reference is not None and club is not None else 0.0
         played = {k[1]: v for k, v in sums.items() if isinstance(k, tuple) and k[0] == "lg" and v > 0}
         total = sum(played.values())
         level = lambda skill: sum(v * (offsets or {}).get(lg, {}).get(skill, 0.0) for lg, v in played.items()) / total if total else 0.0
         raw[player] = (minutes, {skill: ((sum(w * (m[k] - norms[k][0]) / norms[k][1] for k, w in recipe.items()
-                                              if m[k] is not None) - level(skill)) * minutes + MINUTES_PRIOR * SHRINK_MINUTES)
+                                              if m[k] is not None) - level(skill) + lift) * minutes + MINUTES_PRIOR * SHRINK_MINUTES)
                                  / (minutes + SHRINK_MINUTES) for skill, recipe in SKILLS.items()})
     sample = {skill: sorted(v[skill] for mins, v in raw.values() if mins >= SKILL_SAMPLE_MINUTES) for skill in SKILLS}
     pct = lambda ref, x: 100 * bisect.bisect_left(ref, x) / len(ref) if ref else None

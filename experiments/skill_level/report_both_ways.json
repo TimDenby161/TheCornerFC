@@ -1,0 +1,944 @@
+{
+ "database": "production",
+ "base": "e51ef39c6",
+ "ranks_untouched": true,
+ "identical_outputs": {
+  "appearance_scores": true,
+  "team_out": true,
+  "lineups": true,
+  "current": true,
+  "season_rows": true,
+  "position_ranks": true,
+  "projections": true,
+  "components": true,
+  "history": true
+ },
+ "reference_level": 913.4881119645614,
+ "by_pull": {
+  "0": {
+   "players": {
+    "D. Markanday": {
+     "finishing": 88.1,
+     "creating": 83.3,
+     "passing": 26.5,
+     "dribbling": 96.5,
+     "ball_winning": 66.4,
+     "duels": 54.6,
+     "solidity": 14.0
+    },
+    "E. Haaland": {
+     "finishing": 99.4,
+     "creating": 81.3,
+     "passing": 6.0,
+     "dribbling": 77.7,
+     "ball_winning": 0.2,
+     "duels": 40.5,
+     "solidity": 97.8
+    },
+    "M. Salah": {
+     "finishing": 97.9,
+     "creating": 98.0,
+     "passing": 55.3,
+     "dribbling": 68.3,
+     "ball_winning": 10.0,
+     "duels": 4.2,
+     "solidity": 88.1
+    },
+    "V. van Dijk": {
+     "finishing": 84.1,
+     "creating": 29.4,
+     "passing": 98.5,
+     "dribbling": 13.6,
+     "ball_winning": 23.8,
+     "duels": 99.9,
+     "solidity": 100.0
+    }
+   },
+   "top": {
+    "dribbling": [
+     "Lamine Yamal (140): 100.0",
+     "Y. Diomande (78): 99.9",
+     "U. Charles (103): 99.9",
+     "A. Saint-Maximin (253): 99.9",
+     "J. Doku (39): 99.9",
+     "B. Gruda (78): 99.8",
+     "A. Fatawu (40): 99.8",
+     "A. Ounahi (140): 99.8",
+     "O. Maamma (40): 99.7",
+     "K. Yıldız (135): 99.7"
+    ],
+    "finishing": [
+     "L. Messi (253): 100.0",
+     "I. Toney (307): 99.9",
+     "V. Osimhen (203): 99.9",
+     "Raphinha (140): 99.9",
+     "H. Kane (78): 99.9",
+     "E. Lepaul (61): 99.8",
+     "P. Schick (78): 99.8",
+     "D. Malen (135): 99.8",
+     "B. Šeško (39): 99.7",
+     "J. Marriott (41): 99.7"
+    ]
+   },
+   "league_means": {
+    "88": {
+     "finishing": 44.8,
+     "creating": 50.2,
+     "passing": 48.3,
+     "dribbling": 36.0,
+     "ball_winning": 47.0,
+     "duels": 43.6,
+     "solidity": 51.9
+    },
+    "253": {
+     "finishing": 45.2,
+     "creating": 48.8,
+     "passing": 53.6,
+     "dribbling": 45.7,
+     "ball_winning": 52.5,
+     "duels": 48.3,
+     "solidity": 47.4
+    },
+    "140": {
+     "finishing": 59.0,
+     "creating": 60.3,
+     "passing": 62.8,
+     "dribbling": 55.8,
+     "ball_winning": 50.1,
+     "duels": 47.3,
+     "solidity": 47.7
+    },
+    "41": {
+     "finishing": 41.7,
+     "creating": 42.4,
+     "passing": 35.4,
+     "dribbling": 51.8,
+     "ball_winning": 52.2,
+     "duels": 52.0,
+     "solidity": 42.4
+    },
+    "61": {
+     "finishing": 56.1,
+     "creating": 56.2,
+     "passing": 57.8,
+     "dribbling": 55.2,
+     "ball_winning": 50.1,
+     "duels": 51.8,
+     "solidity": 59.0
+    },
+    "39": {
+     "finishing": 63.6,
+     "creating": 63.0,
+     "passing": 64.4,
+     "dribbling": 59.5,
+     "ball_winning": 47.1,
+     "duels": 56.0,
+     "solidity": 67.5
+    },
+    "307": {
+     "finishing": 53.7,
+     "creating": 47.5,
+     "passing": 53.6,
+     "dribbling": 65.2,
+     "ball_winning": 57.5,
+     "duels": 48.8,
+     "solidity": 38.2
+    },
+    "40": {
+     "finishing": 52.5,
+     "creating": 49.3,
+     "passing": 47.1,
+     "dribbling": 50.1,
+     "ball_winning": 46.9,
+     "duels": 52.2,
+     "solidity": 56.4
+    },
+    "103": {
+     "finishing": 35.2,
+     "creating": 43.1,
+     "passing": 37.1,
+     "dribbling": 39.3,
+     "ball_winning": 49.0,
+     "duels": 44.2,
+     "solidity": 41.2
+    },
+    "203": {
+     "finishing": 45.4,
+     "creating": 47.0,
+     "passing": 49.4,
+     "dribbling": 48.6,
+     "ball_winning": 49.3,
+     "duels": 46.5,
+     "solidity": 42.5
+    },
+    "135": {
+     "finishing": 58.8,
+     "creating": 52.9,
+     "passing": 61.0,
+     "dribbling": 51.8,
+     "ball_winning": 49.0,
+     "duels": 52.0,
+     "solidity": 56.9
+    },
+    "78": {
+     "finishing": 56.9,
+     "creating": 56.2,
+     "passing": 56.5,
+     "dribbling": 38.0,
+     "ball_winning": 50.3,
+     "duels": 51.7,
+     "solidity": 55.3
+    },
+    "42": {
+     "finishing": 39.3,
+     "creating": 38.1,
+     "passing": 30.1,
+     "dribbling": 49.1,
+     "ball_winning": 49.0,
+     "duels": 50.9,
+     "solidity": 42.4
+    }
+   }
+  },
+  "0.25": {
+   "players": {
+    "D. Markanday": {
+     "finishing": 84.2,
+     "creating": 75.8,
+     "passing": 18.5,
+     "dribbling": 93.8,
+     "ball_winning": 53.5,
+     "duels": 44.8,
+     "solidity": 10.0
+    },
+    "E. Haaland": {
+     "finishing": 99.6,
+     "creating": 88.3,
+     "passing": 28.2,
+     "dribbling": 90.4,
+     "ball_winning": 5.9,
+     "duels": 58.7,
+     "solidity": 99.1
+    },
+    "M. Salah": {
+     "finishing": 98.2,
+     "creating": 98.4,
+     "passing": 66.3,
+     "dribbling": 79.4,
+     "ball_winning": 16.4,
+     "duels": 8.6,
+     "solidity": 92.3
+    },
+    "V. van Dijk": {
+     "finishing": 89.6,
+     "creating": 52.2,
+     "passing": 99.1,
+     "dribbling": 61.4,
+     "ball_winning": 44.2,
+     "duels": 100.0,
+     "solidity": 99.9
+    }
+   },
+   "top": {
+    "dribbling": [
+     "Lamine Yamal (140): 100.0",
+     "Y. Diomande (78): 99.9",
+     "A. Saint-Maximin (253): 99.9",
+     "J. Doku (39): 99.9",
+     "Kylian Mbappé (140): 99.9",
+     "K. Yıldız (135): 99.8",
+     "B. Gruda (78): 99.8",
+     "Alisson Santos (135): 99.8",
+     "A. Fatawu (40): 99.7",
+     "J. Rowe (135): 99.7"
+    ],
+    "finishing": [
+     "H. Kane (78): 100.0",
+     "I. Toney (307): 99.9",
+     "V. Osimhen (203): 99.9",
+     "Raphinha (140): 99.9",
+     "L. Messi (253): 99.9",
+     "P. Schick (78): 99.8",
+     "Kylian Mbappé (140): 99.8",
+     "D. Malen (135): 99.8",
+     "Lamine Yamal (140): 99.7",
+     "E. Lepaul (61): 99.7"
+    ]
+   },
+   "league_means": {
+    "88": {
+     "finishing": 46.2,
+     "creating": 50.3,
+     "passing": 48.5,
+     "dribbling": 37.3,
+     "ball_winning": 46.8,
+     "duels": 43.6,
+     "solidity": 51.7
+    },
+    "253": {
+     "finishing": 44.7,
+     "creating": 47.6,
+     "passing": 51.7,
+     "dribbling": 43.1,
+     "ball_winning": 50.5,
+     "duels": 46.6,
+     "solidity": 45.4
+    },
+    "140": {
+     "finishing": 64.3,
+     "creating": 65.2,
+     "passing": 67.8,
+     "dribbling": 66.0,
+     "ball_winning": 56.7,
+     "duels": 52.5,
+     "solidity": 55.0
+    },
+    "41": {
+     "finishing": 36.8,
+     "creating": 37.7,
+     "passing": 31.3,
+     "dribbling": 41.4,
+     "ball_winning": 46.5,
+     "duels": 48.1,
+     "solidity": 36.9
+    },
+    "61": {
+     "finishing": 61.3,
+     "creating": 60.8,
+     "passing": 62.7,
+     "dribbling": 64.5,
+     "ball_winning": 55.9,
+     "duels": 56.1,
+     "solidity": 64.3
+    },
+    "39": {
+     "finishing": 72.0,
+     "creating": 71.3,
+     "passing": 73.3,
+     "dribbling": 75.5,
+     "ball_winning": 57.9,
+     "duels": 64.1,
+     "solidity": 76.3
+    },
+    "307": {
+     "finishing": 41.4,
+     "creating": 37.7,
+     "passing": 41.5,
+     "dribbling": 45.7,
+     "ball_winning": 46.4,
+     "duels": 39.7,
+     "solidity": 28.2
+    },
+    "40": {
+     "finishing": 52.2,
+     "creating": 49.4,
+     "passing": 47.5,
+     "dribbling": 50.1,
+     "ball_winning": 46.7,
+     "duels": 51.9,
+     "solidity": 55.8
+    },
+    "103": {
+     "finishing": 34.8,
+     "creating": 41.6,
+     "passing": 35.9,
+     "dribbling": 36.5,
+     "ball_winning": 46.3,
+     "duels": 42.3,
+     "solidity": 39.5
+    },
+    "203": {
+     "finishing": 45.3,
+     "creating": 46.3,
+     "passing": 48.3,
+     "dribbling": 47.1,
+     "ball_winning": 48.1,
+     "duels": 45.6,
+     "solidity": 42.1
+    },
+    "135": {
+     "finishing": 64.2,
+     "creating": 59.0,
+     "passing": 66.4,
+     "dribbling": 64.0,
+     "ball_winning": 55.9,
+     "duels": 57.2,
+     "solidity": 64.5
+    },
+    "78": {
+     "finishing": 63.4,
+     "creating": 62.1,
+     "passing": 62.7,
+     "dribbling": 52.3,
+     "ball_winning": 57.3,
+     "duels": 57.0,
+     "solidity": 63.2
+    },
+    "42": {
+     "finishing": 30.1,
+     "creating": 29.8,
+     "passing": 22.8,
+     "dribbling": 31.6,
+     "ball_winning": 39.4,
+     "duels": 43.9,
+     "solidity": 31.8
+    }
+   }
+  },
+  "0.5": {
+   "players": {
+    "D. Markanday": {
+     "finishing": 77.5,
+     "creating": 66.7,
+     "passing": 15.1,
+     "dribbling": 86.7,
+     "ball_winning": 42.1,
+     "duels": 36.3,
+     "solidity": 8.0
+    },
+    "E. Haaland": {
+     "finishing": 99.7,
+     "creating": 92.3,
+     "passing": 50.8,
+     "dribbling": 95.1,
+     "ball_winning": 18.0,
+     "duels": 74.3,
+     "solidity": 99.5
+    },
+    "M. Salah": {
+     "finishing": 98.4,
+     "creating": 98.7,
+     "passing": 73.2,
+     "dribbling": 84.0,
+     "ball_winning": 26.2,
+     "duels": 14.9,
+     "solidity": 93.1
+    },
+    "V. van Dijk": {
+     "finishing": 93.4,
+     "creating": 68.0,
+     "passing": 99.2,
+     "dribbling": 80.1,
+     "ball_winning": 68.2,
+     "duels": 100.0,
+     "solidity": 99.9
+    }
+   },
+   "top": {
+    "dribbling": [
+     "Lamine Yamal (140): 100.0",
+     "Y. Diomande (78): 99.9",
+     "K. Yıldız (135): 99.9",
+     "J. Doku (39): 99.9",
+     "Kylian Mbappé (140): 99.9",
+     "B. Gruda (78): 99.8",
+     "Alisson Santos (135): 99.8",
+     "M. Olise (78): 99.8",
+     "J. Rowe (135): 99.7",
+     "A. Ounahi (140): 99.7"
+    ],
+    "finishing": [
+     "H. Kane (78): 100.0",
+     "V. Osimhen (203): 99.9",
+     "Raphinha (140): 99.9",
+     "P. Schick (78): 99.9",
+     "L. Messi (253): 99.9",
+     "I. Toney (307): 99.8",
+     "Kylian Mbappé (140): 99.8",
+     "D. Malen (135): 99.8",
+     "Lamine Yamal (140): 99.7",
+     "E. Lepaul (61): 99.7"
+    ]
+   },
+   "league_means": {
+    "88": {
+     "finishing": 47.1,
+     "creating": 50.4,
+     "passing": 48.7,
+     "dribbling": 40.0,
+     "ball_winning": 46.7,
+     "duels": 43.9,
+     "solidity": 51.5
+    },
+    "253": {
+     "finishing": 44.5,
+     "creating": 46.7,
+     "passing": 50.0,
+     "dribbling": 42.1,
+     "ball_winning": 48.6,
+     "duels": 45.1,
+     "solidity": 44.1
+    },
+    "140": {
+     "finishing": 67.5,
+     "creating": 68.6,
+     "passing": 71.2,
+     "dribbling": 71.4,
+     "ball_winning": 62.5,
+     "duels": 57.2,
+     "solidity": 60.6
+    },
+    "41": {
+     "finishing": 33.8,
+     "creating": 34.4,
+     "passing": 28.7,
+     "dribbling": 35.2,
+     "ball_winning": 41.4,
+     "duels": 44.5,
+     "solidity": 33.0
+    },
+    "61": {
+     "finishing": 64.5,
+     "creating": 64.1,
+     "passing": 66.1,
+     "dribbling": 69.3,
+     "ball_winning": 61.0,
+     "duels": 59.9,
+     "solidity": 67.7
+    },
+    "39": {
+     "finishing": 77.0,
+     "creating": 76.8,
+     "passing": 79.0,
+     "dribbling": 82.4,
+     "ball_winning": 67.6,
+     "duels": 71.1,
+     "solidity": 81.8
+    },
+    "307": {
+     "finishing": 33.7,
+     "creating": 30.6,
+     "passing": 32.5,
+     "dribbling": 33.2,
+     "ball_winning": 36.2,
+     "duels": 32.2,
+     "solidity": 22.1
+    },
+    "40": {
+     "finishing": 51.9,
+     "creating": 49.5,
+     "passing": 48.0,
+     "dribbling": 50.2,
+     "ball_winning": 46.8,
+     "duels": 51.7,
+     "solidity": 55.2
+    },
+    "103": {
+     "finishing": 35.0,
+     "creating": 40.5,
+     "passing": 35.3,
+     "dribbling": 35.9,
+     "ball_winning": 44.1,
+     "duels": 40.8,
+     "solidity": 38.6
+    },
+    "203": {
+     "finishing": 45.1,
+     "creating": 45.9,
+     "passing": 47.5,
+     "dribbling": 46.4,
+     "ball_winning": 47.1,
+     "duels": 44.8,
+     "solidity": 42.1
+    },
+    "135": {
+     "finishing": 67.6,
+     "creating": 63.6,
+     "passing": 70.2,
+     "dribbling": 70.2,
+     "ball_winning": 62.1,
+     "duels": 61.9,
+     "solidity": 69.2
+    },
+    "78": {
+     "finishing": 67.3,
+     "creating": 66.3,
+     "passing": 67.1,
+     "dribbling": 61.8,
+     "ball_winning": 63.4,
+     "duels": 61.6,
+     "solidity": 68.2
+    },
+    "42": {
+     "finishing": 24.5,
+     "creating": 24.1,
+     "passing": 18.3,
+     "dribbling": 22.4,
+     "ball_winning": 31.0,
+     "duels": 37.3,
+     "solidity": 24.7
+    }
+   }
+  },
+  "0.75": {
+   "players": {
+    "D. Markanday": {
+     "finishing": 67.3,
+     "creating": 56.7,
+     "passing": 13.2,
+     "dribbling": 74.3,
+     "ball_winning": 33.2,
+     "duels": 30.1,
+     "solidity": 7.4
+    },
+    "E. Haaland": {
+     "finishing": 99.7,
+     "creating": 95.2,
+     "passing": 66.7,
+     "dribbling": 96.6,
+     "ball_winning": 37.7,
+     "duels": 84.4,
+     "solidity": 99.5
+    },
+    "M. Salah": {
+     "finishing": 98.6,
+     "creating": 98.7,
+     "passing": 77.8,
+     "dribbling": 86.4,
+     "ball_winning": 38.8,
+     "duels": 23.1,
+     "solidity": 93.0
+    },
+    "V. van Dijk": {
+     "finishing": 95.4,
+     "creating": 77.4,
+     "passing": 99.3,
+     "dribbling": 88.7,
+     "ball_winning": 82.5,
+     "duels": 100.0,
+     "solidity": 99.9
+    }
+   },
+   "top": {
+    "dribbling": [
+     "Lamine Yamal (140): 100.0",
+     "Y. Diomande (78): 99.9",
+     "M. Olise (78): 99.9",
+     "J. Doku (39): 99.9",
+     "Kylian Mbappé (140): 99.9",
+     "K. Yıldız (135): 99.8",
+     "B. Gruda (78): 99.8",
+     "K. Kvaratskhelia (61): 99.8",
+     "D. Doué (61): 99.7",
+     "Alisson Santos (135): 99.7"
+    ],
+    "finishing": [
+     "H. Kane (78): 100.0",
+     "V. Osimhen (203): 99.9",
+     "Raphinha (140): 99.9",
+     "Kylian Mbappé (140): 99.9",
+     "L. Messi (253): 99.9",
+     "Lamine Yamal (140): 99.8",
+     "P. Schick (78): 99.8",
+     "D. Malen (135): 99.8",
+     "E. Lepaul (61): 99.7",
+     "B. Šeško (39): 99.7"
+    ]
+   },
+   "league_means": {
+    "88": {
+     "finishing": 47.7,
+     "creating": 50.5,
+     "passing": 48.9,
+     "dribbling": 42.1,
+     "ball_winning": 46.8,
+     "duels": 44.2,
+     "solidity": 51.3
+    },
+    "253": {
+     "finishing": 44.1,
+     "creating": 46.0,
+     "passing": 48.6,
+     "dribbling": 41.6,
+     "ball_winning": 46.9,
+     "duels": 43.9,
+     "solidity": 43.3
+    },
+    "140": {
+     "finishing": 69.7,
+     "creating": 70.9,
+     "passing": 73.3,
+     "dribbling": 74.2,
+     "ball_winning": 67.0,
+     "duels": 61.2,
+     "solidity": 64.8
+    },
+    "41": {
+     "finishing": 31.7,
+     "creating": 31.9,
+     "passing": 27.2,
+     "dribbling": 31.7,
+     "ball_winning": 37.1,
+     "duels": 41.3,
+     "solidity": 30.4
+    },
+    "61": {
+     "finishing": 66.7,
+     "creating": 66.5,
+     "passing": 68.3,
+     "dribbling": 71.6,
+     "ball_winning": 64.8,
+     "duels": 63.1,
+     "solidity": 69.8
+    },
+    "39": {
+     "finishing": 80.5,
+     "creating": 80.5,
+     "passing": 82.4,
+     "dribbling": 85.8,
+     "ball_winning": 75.0,
+     "duels": 76.6,
+     "solidity": 84.9
+    },
+    "307": {
+     "finishing": 28.6,
+     "creating": 25.8,
+     "passing": 26.6,
+     "dribbling": 26.1,
+     "ball_winning": 28.5,
+     "duels": 26.4,
+     "solidity": 18.5
+    },
+    "40": {
+     "finishing": 51.6,
+     "creating": 49.6,
+     "passing": 48.4,
+     "dribbling": 50.4,
+     "ball_winning": 47.1,
+     "duels": 51.4,
+     "solidity": 54.6
+    },
+    "103": {
+     "finishing": 35.2,
+     "creating": 39.7,
+     "passing": 35.2,
+     "dribbling": 36.0,
+     "ball_winning": 42.3,
+     "duels": 39.6,
+     "solidity": 38.1
+    },
+    "203": {
+     "finishing": 44.9,
+     "creating": 45.7,
+     "passing": 46.9,
+     "dribbling": 46.0,
+     "ball_winning": 46.3,
+     "duels": 44.3,
+     "solidity": 42.2
+    },
+    "135": {
+     "finishing": 70.0,
+     "creating": 66.8,
+     "passing": 72.6,
+     "dribbling": 73.4,
+     "ball_winning": 66.9,
+     "duels": 65.8,
+     "solidity": 72.1
+    },
+    "78": {
+     "finishing": 70.0,
+     "creating": 69.3,
+     "passing": 70.1,
+     "dribbling": 67.0,
+     "ball_winning": 68.1,
+     "duels": 65.5,
+     "solidity": 71.4
+    },
+    "42": {
+     "finishing": 20.8,
+     "creating": 20.3,
+     "passing": 15.6,
+     "dribbling": 17.7,
+     "ball_winning": 24.8,
+     "duels": 31.7,
+     "solidity": 20.3
+    }
+   }
+  },
+  "1.0": {
+   "players": {
+    "D. Markanday": {
+     "finishing": 57.9,
+     "creating": 48.6,
+     "passing": 12.0,
+     "dribbling": 63.1,
+     "ball_winning": 27.4,
+     "duels": 25.4,
+     "solidity": 7.0
+    },
+    "E. Haaland": {
+     "finishing": 99.8,
+     "creating": 96.4,
+     "passing": 76.5,
+     "dribbling": 97.5,
+     "ball_winning": 57.6,
+     "duels": 90.1,
+     "solidity": 99.6
+    },
+    "M. Salah": {
+     "finishing": 98.6,
+     "creating": 98.7,
+     "passing": 80.2,
+     "dribbling": 87.6,
+     "ball_winning": 50.9,
+     "duels": 32.7,
+     "solidity": 93.0
+    },
+    "V. van Dijk": {
+     "finishing": 96.5,
+     "creating": 83.5,
+     "passing": 99.3,
+     "dribbling": 92.4,
+     "ball_winning": 89.0,
+     "duels": 100.0,
+     "solidity": 99.9
+    }
+   },
+   "top": {
+    "dribbling": [
+     "Lamine Yamal (140): 100.0",
+     "Y. Diomande (78): 99.9",
+     "M. Olise (78): 99.9",
+     "J. Doku (39): 99.9",
+     "Kylian Mbappé (140): 99.9",
+     "D. Doué (61): 99.8",
+     "L. Díaz (78): 99.8",
+     "K. Kvaratskhelia (61): 99.8",
+     "Fermín (140): 99.7",
+     "K. Yıldız (135): 99.7"
+    ],
+    "finishing": [
+     "H. Kane (78): 100.0",
+     "Lamine Yamal (140): 99.9",
+     "Raphinha (140): 99.9",
+     "P. Schick (78): 99.9",
+     "Kylian Mbappé (140): 99.9",
+     "V. Osimhen (203): 99.8",
+     "E. Haaland (39): 99.8",
+     "L. Messi (253): 99.8",
+     "B. Šeško (39): 99.7",
+     "M. Olise (78): 99.7"
+    ]
+   },
+   "league_means": {
+    "88": {
+     "finishing": 48.1,
+     "creating": 50.5,
+     "passing": 49.0,
+     "dribbling": 43.5,
+     "ball_winning": 47.0,
+     "duels": 44.6,
+     "solidity": 51.2
+    },
+    "253": {
+     "finishing": 43.8,
+     "creating": 45.4,
+     "passing": 47.6,
+     "dribbling": 41.5,
+     "ball_winning": 45.6,
+     "duels": 43.0,
+     "solidity": 42.7
+    },
+    "140": {
+     "finishing": 71.4,
+     "creating": 72.5,
+     "passing": 74.6,
+     "dribbling": 75.6,
+     "ball_winning": 70.1,
+     "duels": 64.4,
+     "solidity": 67.7
+    },
+    "41": {
+     "finishing": 30.2,
+     "creating": 30.2,
+     "passing": 26.2,
+     "dribbling": 29.6,
+     "ball_winning": 34.0,
+     "duels": 38.5,
+     "solidity": 28.7
+    },
+    "61": {
+     "finishing": 68.2,
+     "creating": 68.2,
+     "passing": 69.8,
+     "dribbling": 72.8,
+     "ball_winning": 67.5,
+     "duels": 65.6,
+     "solidity": 71.2
+    },
+    "39": {
+     "finishing": 82.9,
+     "creating": 82.9,
+     "passing": 84.6,
+     "dribbling": 87.5,
+     "ball_winning": 79.9,
+     "duels": 80.6,
+     "solidity": 86.8
+    },
+    "307": {
+     "finishing": 25.0,
+     "creating": 22.5,
+     "passing": 22.7,
+     "dribbling": 21.9,
+     "ball_winning": 23.3,
+     "duels": 22.4,
+     "solidity": 16.3
+    },
+    "40": {
+     "finishing": 51.4,
+     "creating": 49.7,
+     "passing": 48.7,
+     "dribbling": 50.5,
+     "ball_winning": 47.3,
+     "duels": 51.2,
+     "solidity": 54.1
+    },
+    "103": {
+     "finishing": 35.3,
+     "creating": 39.2,
+     "passing": 35.3,
+     "dribbling": 36.2,
+     "ball_winning": 41.1,
+     "duels": 38.7,
+     "solidity": 37.8
+    },
+    "203": {
+     "finishing": 44.9,
+     "creating": 45.5,
+     "passing": 46.5,
+     "dribbling": 45.7,
+     "ball_winning": 45.8,
+     "duels": 43.9,
+     "solidity": 42.3
+    },
+    "135": {
+     "finishing": 71.7,
+     "creating": 69.1,
+     "passing": 74.1,
+     "dribbling": 75.2,
+     "ball_winning": 70.3,
+     "duels": 68.8,
+     "solidity": 73.8
+    },
+    "78": {
+     "finishing": 71.8,
+     "creating": 71.4,
+     "passing": 72.1,
+     "dribbling": 70.1,
+     "ball_winning": 71.3,
+     "duels": 68.6,
+     "solidity": 73.4
+    },
+    "42": {
+     "finishing": 18.3,
+     "creating": 17.7,
+     "passing": 13.9,
+     "dribbling": 15.2,
+     "ball_winning": 20.5,
+     "duels": 27.3,
+     "solidity": 17.5
+    }
+   }
+  }
+ }
+}
