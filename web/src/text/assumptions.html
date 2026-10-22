@@ -15,7 +15,7 @@
 <body>
 <main>
 <h1>What the models assume</h1>
-<p class="updated">Page last updated 20 October 2026</p>
+<p class="updated">Page last updated 22 October 2026</p>
 
 <p>Every model rests on assumptions: things it takes to be true so that it can work at all. This
 page lists the ones behind the club ratings, the player ratings, the predicted line-ups and the
@@ -183,6 +183,20 @@ player ratings guide</a>, with the model's code.</p>
 well-known players landed, starting from mixes that had been checked against results and against
 how well each stat repeats from season to season. The final mixes themselves have not been tested
 against results. A data provider's own match ratings are not used.</p>
+
+<h3>A skill's numbers mean a little more in a harder league</h3>
+<p><span class="badge hist-badge">Tested on past matches</span></p>
+<p><strong>Assumes:</strong> the same player puts up slightly different numbers in different
+leagues, by a fixed amount for each league and skill. A player's skill scores (finishing,
+creating, passing and the rest, 0 to 100) have that amount taken off for the leagues he played
+in, measured from players who played regular minutes in more than one league.</p>
+<p><strong>Why:</strong> without it, a lower-league player's numbers were set against the Premier
+League's as they stood.</p>
+<p><strong>Checked:</strong> fitted on seasons up to 2024 and tested on 606 later moves between
+leagues, it predicted a player's numbers in his new league about 8% better than his old numbers
+did, in 6 of the 7 skills (not dribbling). The amounts are modest, and players who move after a
+good season can make a lower league look a little easier than it is. Only the skill scores use
+it: a player's Ability allows for level through the strength of his clubs instead.</p>
 
 <h3>Positions are worth different amounts</h3>
 <p><span class="badge">Judgement</span></p>

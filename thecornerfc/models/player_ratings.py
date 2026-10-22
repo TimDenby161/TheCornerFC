@@ -252,14 +252,14 @@ class Window:
 
     def __init__(self):
         self.apps = deque()                # (kickoff, stats dict, role, broad position)
-        self.sums = dict.fromkeys(SUMS + ("club_mins",), 0.0)   # club_mins: club rank x minutes
+        self.sums = dict.fromkeys(SUMS + ("club_mins",), 0.0)   # club_mins: club rank x minutes; ("lg", league): minutes there
         self.roles = Counter()             # starting roles (LB, DM, ...)
         self.broad = Counter()             # API positions (G/D/M/F)
 
     def add(self, kickoff, stats, role, broad):
         self.apps.append((kickoff, stats, role, broad))
         for k, v in stats.items():
-            self.sums[k] += v
+            self.sums[k] = self.sums.get(k, 0.0) + v
         if role:
             self.roles[role] += 1
         self.broad[broad] += 1
@@ -410,22 +410,89 @@ def _skill_norms(apps):
 
 
 SKILL_SAMPLE_MINUTES = 900     # the players a skill score is a percentile among: listed outfield players with this many window minutes
+SKILL_UNIT_MINUTES = 900       # a player's season in one league counts towards the league offsets from this many minutes
+SKILL_OFFSET_MOVERS = 30       # a league's offset is shrunk towards 0 by n / (n + this), n its units of players seen in another league
 
 
-def skill_scores(players, norms):
+def _skill_z(m, norms, skill):
+    """A skill's recipe over metrics m, per 90, against the skill norms (no pull towards the prior),
+    or None if none of its stats is known."""
+    known = [(k, w) for k, w in SKILLS[skill].items() if m[k] is not None]
+    return sum(w * (m[k] - norms[k][0]) / norms[k][1] for k, w in known) if known else None
+
+
+def skill_units(apps, norms):
+    """[(player, season, league, minutes, {skill: z})]: every outfield player's season in each
+    league with per-match data and SKILL_UNIT_MINUTES or more there (MC-0031)."""
+    seasons = defaultdict(lambda: {"sums": dict.fromkeys(SUMS, 0.0), "roles": Counter(), "broad": Counter()})
+    for row in apps:
+        _add_season(seasons[(row[2], row[8], row[9])], row)
+    out = []
+    for (player, season, league), entry in seasons.items():
+        if entry["sums"]["minutes"] < SKILL_UNIT_MINUTES or season_group(entry) not in SKILL_MIX:
+            continue
+        m = metrics(entry["sums"])
+        if m:
+            z = {skill: v for skill in SKILLS for v in [_skill_z(m, norms, skill)] if v is not None}
+            out.append((player, season, league, entry["sums"]["minutes"], z))
+    return out
+
+
+def skill_league_offsets(units):
+    """{league: {skill: offset}}: how much higher a skill's z runs in each league than in the
+    reference leagues for the same player (MC-0031, experiments/skill_league/DESIGN.md). For each
+    skill, z = player + league fitted by alternating means over the units, shifted so the reference
+    leagues' units average 0, each league's offset shrunk towards 0 by n / (n + SKILL_OFFSET_MOVERS)
+    with n its units whose player has a unit in another league."""
+    leagues_of = defaultdict(set)
+    for player, _, league, _, _ in units:
+        leagues_of[player].add(league)
+    movers = Counter(league for player, _, league, _, _ in units if len(leagues_of[player]) > 1)
+    out = defaultdict(dict)
+    for skill in SKILLS:
+        rows = [(player, league, z[skill]) for player, _, league, _, z in units if skill in z]
+        if not rows:
+            continue
+        lg = {league: 0.0 for _, league, _ in rows}
+        for _ in range(200):
+            by_p = defaultdict(list)
+            for player, league, z in rows:
+                by_p[player].append(z - lg[league])
+            pl = {player: sum(v) / len(v) for player, v in by_p.items()}
+            by_l = defaultdict(list)
+            for player, league, z in rows:
+                by_l[league].append(z - pl[player])
+            new = {league: sum(v) / len(v) for league, v in by_l.items()}
+            moved = max(abs(new[k] - lg[k]) for k in new)
+            lg = new
+            if moved <= 1e-6:
+                break
+        ref = [lg[league] for _, league, _ in rows if league in REFERENCE]
+        centre = sum(ref) / len(ref) if ref else 0.0
+        for league, v in lg.items():
+            n = movers[league]
+            out[league][skill] = (v - centre) * n / (n + SKILL_OFFSET_MOVERS)
+    return dict(out)
+
+
+def skill_scores(players, norms, offsets=None):
     """{player: {skill: 0-100}} for players {player: (window sums, role group)}: each skill's
     recipe over his rating window, per 90, against every outfield regular (norms, _skill_norms),
-    pulled towards MINUTES_PRIOR with few minutes as a position score is, then as a percentile
-    among the listed outfield players with SKILL_SAMPLE_MINUTES or more. Keepers have none.
-    For the lists on the site: nothing in the ranks reads them."""
+    less his leagues' offsets (skill_league_offsets, weighted by his window minutes in each:
+    MC-0031), pulled towards MINUTES_PRIOR with few minutes as a position score is, then as a
+    percentile among the listed outfield players with SKILL_SAMPLE_MINUTES or more. Keepers have
+    none. For the lists on the site: nothing in the ranks reads them."""
     raw = {}
     for player, (sums, pos) in players.items():
         m = metrics(sums) if pos in SKILL_MIX else None
         if not m:
             continue
         minutes = sums["minutes"]
-        raw[player] = (minutes, {skill: (sum(w * (m[k] - norms[k][0]) / norms[k][1] for k, w in recipe.items()
-                                             if m[k] is not None) * minutes + MINUTES_PRIOR * SHRINK_MINUTES)
+        played = {k[1]: v for k, v in sums.items() if isinstance(k, tuple) and k[0] == "lg" and v > 0}
+        total = sum(played.values())
+        level = lambda skill: sum(v * (offsets or {}).get(lg, {}).get(skill, 0.0) for lg, v in played.items()) / total if total else 0.0
+        raw[player] = (minutes, {skill: ((sum(w * (m[k] - norms[k][0]) / norms[k][1] for k, w in recipe.items()
+                                              if m[k] is not None) - level(skill)) * minutes + MINUTES_PRIOR * SHRINK_MINUTES)
                                  / (minutes + SHRINK_MINUTES) for skill, recipe in SKILLS.items()})
     sample = {skill: sorted(v[skill] for mins, v in raw.values() if mins >= SKILL_SAMPLE_MINUTES) for skill in SKILLS}
     pct = lambda ref, x: 100 * bisect.bisect_left(ref, x) / len(ref) if ref else None
@@ -1051,6 +1118,7 @@ def compute_player_ratings(conn):
     retired = retired_players(conn, appearances)
     norms = _norms(appearances)
     skill_norms = _skill_norms(appearances)
+    skill_offsets = skill_league_offsets(skill_units(appearances, skill_norms))
     team_rank = {(r[0], r[1]): r[8] for r in rank_history(conn)}
     ranks = list(team_rank.values())
     tr_mean = sum(ranks) / len(ranks)
@@ -1171,6 +1239,7 @@ def compute_player_ratings(conn):
         for a in apps.get(fid, []):
             st = _row_stats(a)
             st["club_mins"] = team_rank.get((fid, a["team"]), tr_mean) * (a["minutes"] or 0)
+            st[("lg", fixture_league.get(fid))] = a["minutes"] or 0
             windows[a["player"]].add(kickoff, st, a["role"], a["position"])
             if a["minutes"]:
                 last_team[a["player"]] = a["team"]
@@ -1246,7 +1315,7 @@ def compute_player_ratings(conn):
             projections[p] = {y: round(r * (1 - SQUAD_MARKDOWN), 1) for y, r in projections[p].items()}
         log.info("Player ratings: %d keepers marked down as backups", len(backups))
     now_rank = {p: r for p, y, r, _, _ in season_rows if y == this_season}
-    skills = skill_scores({p: (windows[p].sums, pos) for p, (_, pos, _) in listed.items()}, skill_norms)
+    skills = skill_scores({p: (windows[p].sums, pos) for p, (_, pos, _) in listed.items()}, skill_norms, skill_offsets)
     current, components = [], {}
     for player, (s, pos, minutes) in listed.items():     # retired players are off the list
         current.append((player, now_rank.get(player, to_rank(s, pos)), windows[player].label(), int(minutes)))

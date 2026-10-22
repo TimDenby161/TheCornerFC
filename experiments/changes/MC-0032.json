@@ -1,0 +1,30 @@
+{
+ "id": "MC-0032",
+ "registration": {
+  "recorded": "2026-10-22",
+  "retrospective": false,
+  "date": "2026-10-22",
+  "title": "Skill scores adjusted for league, released in the player ratings",
+  "component": "Player ranks",
+  "model": "player",
+  "kind": "production change",
+  "what": "Production's skill scores take MC-0031: each skill's per-90 score less the offsets of the leagues his window minutes were in, fitted each run from players with 900+ minutes a season in more than one league. The ranks are unchanged.",
+  "why": "MC-0031 predicted a player's skill numbers in another league about 7.7% better on later moves it hadn't seen, and the owner chose to release it on 2026-10-22.",
+  "how": "skill_units, skill_league_offsets and the window's league minutes in player_ratings.py, as in experiments/skill_league/DESIGN.md: one new player-model version.",
+  "hypothesis": "The skill scores are a fairer guide across leagues, with every rank as it was.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/skill_league/results.json"
+  },
+  "success_criteria": "No live test: nothing is predicted from the skill scores. The ranks must stay identical (checked by experiments/skill_league/run.py).",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/skill_league",
+   "model_version": null
+  }
+ },
+ "events": []
+}

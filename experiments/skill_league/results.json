@@ -1,0 +1,594 @@
+{
+ "database": "production",
+ "base": "73b96459d",
+ "checks": {
+  "enough_test_pairs": true,
+  "better_overall": true,
+  "better_in_most_skills": true,
+  "ranks_untouched": false
+ },
+ "passed": false,
+ "verdict": "failed",
+ "units": 25550,
+ "train_units": 20670,
+ "test_pairs": 606,
+ "test_players": 588,
+ "mean_squared_error": {
+  "base": 0.422729145909356,
+  "adjusted": 0.3901845999233928,
+  "difference": -0.03254454598596318,
+  "interval_95": [
+   -0.0423992921027051,
+   -0.023668779630114378
+  ]
+ },
+ "by_skill": {
+  "finishing": {
+   "base": 0.5480944562163256,
+   "adjusted": 0.47607321084151866,
+   "pairs": 606
+  },
+  "creating": {
+   "base": 0.5029299713928105,
+   "adjusted": 0.45581586743509,
+   "pairs": 606
+  },
+  "passing": {
+   "base": 0.26741196114923665,
+   "adjusted": 0.23604880412774906,
+   "pairs": 606
+  },
+  "dribbling": {
+   "base": 0.1781293187416632,
+   "adjusted": 0.18005066072332707,
+   "pairs": 606
+  },
+  "ball_winning": {
+   "base": 0.35638764219658847,
+   "adjusted": 0.34772172336136076,
+   "pairs": 606
+  },
+  "duels": {
+   "base": 0.6168907173891153,
+   "adjusted": 0.606621442832198,
+   "pairs": 606
+  },
+  "solidity": {
+   "base": 0.4892599542797523,
+   "adjusted": 0.4289604901425061,
+   "pairs": 606
+  }
+ },
+ "skills_better": 6,
+ "offsets_train": {
+  "253": {
+   "finishing": 0.19247521571500484,
+   "creating": 0.12466432048863377,
+   "passing": 0.17314238649105235,
+   "dribbling": 0.09174857841523035,
+   "ball_winning": -0.054244593176644894,
+   "duels": -0.0036844036470090975,
+   "solidity": 0.056325237240193345
+  },
+  "103": {
+   "finishing": 0.5007735428155429,
+   "creating": 0.43422827458732105,
+   "passing": 0.6160401669501308,
+   "dribbling": 0.04683635728663974,
+   "ball_winning": -0.017816822567032438,
+   "duels": 0.21936434700915936,
+   "solidity": 0.3150909041496992
+  },
+  "61": {
+   "finishing": -0.13720018994012473,
+   "creating": -0.10286582597977116,
+   "passing": 0.035854663924398934,
+   "dribbling": -0.08403422101555474,
+   "ball_winning": 0.13031181797157512,
+   "duels": -0.036721881426971345,
+   "solidity": -0.2258138345533145
+  },
+  "88": {
+   "finishing": 0.24248122744531705,
+   "creating": 0.21932348743644514,
+   "passing": 0.11327482170489034,
+   "dribbling": 0.20038529589566056,
+   "ball_winning": 0.10229795898098047,
+   "duels": 0.2691543183542773,
+   "solidity": -0.09025571010377285
+  },
+  "39": {
+   "finishing": -0.34357112436483617,
+   "creating": -0.3335058610530212,
+   "passing": -0.2954045268665784,
+   "dribbling": -0.16102457403031303,
+   "ball_winning": 0.12108569400896345,
+   "duels": -0.2565888212781272,
+   "solidity": -0.4277743423975126
+  },
+  "40": {
+   "finishing": -0.0529294736665117,
+   "creating": 0.025695921991833286,
+   "passing": -0.015296271504846337,
+   "dribbling": -0.08216714555432801,
+   "ball_winning": -0.011785916619765026,
+   "duels": -0.12091360789567836,
+   "solidity": 0.11826911432048309
+  },
+  "42": {
+   "finishing": 0.21159625169338772,
+   "creating": 0.2533426283555156,
+   "passing": 0.11710389229017733,
+   "dribbling": -0.11813902107827232,
+   "ball_winning": -0.06735337004735738,
+   "duels": 0.05144042956308194,
+   "solidity": 0.5063001012436713
+  },
+  "41": {
+   "finishing": 0.14274291178414025,
+   "creating": 0.18800347473587978,
+   "passing": 0.08811627534431161,
+   "dribbling": -0.15988133523886902,
+   "ball_winning": -0.1079331450713258,
+   "duels": -0.0031436834537757535,
+   "solidity": 0.5410369298662319
+  },
+  "203": {
+   "finishing": 0.0759508807017296,
+   "creating": 0.05202253250090116,
+   "passing": -0.03838355937615512,
+   "dribbling": 0.0013597656914141783,
+   "ball_winning": -0.061661206550755146,
+   "duels": 0.09664863106075146,
+   "solidity": 0.1894669780131249
+  },
+  "140": {
+   "finishing": -0.18234723130471825,
+   "creating": -0.3060521193052608,
+   "passing": -0.25584005456719844,
+   "dribbling": -0.0430462228236766,
+   "ball_winning": -0.049429965228534316,
+   "duels": 0.0768187230036348,
+   "solidity": 0.08346840920294947
+  },
+  "78": {
+   "finishing": -0.04781781442842741,
+   "creating": -0.023282035873942883,
+   "passing": -0.0960483620322308,
+   "dribbling": 0.1348516974897981,
+   "ball_winning": -0.03432480159583282,
+   "duels": -0.050479346210776065,
+   "solidity": -0.06438524234105455
+  },
+  "135": {
+   "finishing": -0.19149637662913999,
+   "creating": -0.03647188377121,
+   "passing": -0.1751951247610577,
+   "dribbling": -0.06622318168348194,
+   "ball_winning": -0.07781662809180852,
+   "duels": -0.09832289259586384,
+   "solidity": -0.005151582117375219
+  },
+  "307": {
+   "finishing": -0.10744231999965742,
+   "creating": 0.043418449262031485,
+   "passing": -0.09481476305779549,
+   "dribbling": -0.16023383090994456,
+   "ball_winning": -0.23731066380177293,
+   "duels": 0.07410224700673035,
+   "solidity": 0.1751419069107829
+  }
+ },
+ "offsets_all": {
+  "253": {
+   "finishing": 0.12663454030244065,
+   "creating": 0.13434947571375552,
+   "passing": 0.16878114680749856,
+   "dribbling": 0.01938858369472192,
+   "ball_winning": -0.12907592982612032,
+   "duels": 0.043914365780884854,
+   "solidity": 0.2188623942684326
+  },
+  "103": {
+   "finishing": 0.530019464739836,
+   "creating": 0.39702230551515316,
+   "passing": 0.5606929279297884,
+   "dribbling": 0.07879226191918538,
+   "ball_winning": 0.04367281309260971,
+   "duels": 0.23807310450004027,
+   "solidity": 0.29869061640711014
+  },
+  "61": {
+   "finishing": -0.11490644697886437,
+   "creating": -0.10663793663522951,
+   "passing": 0.034660035226174085,
+   "dribbling": -0.04638856672608349,
+   "ball_winning": 0.10336217094392133,
+   "duels": -0.060361779249230224,
+   "solidity": -0.282581670828216
+  },
+  "88": {
+   "finishing": 0.2554591811770754,
+   "creating": 0.20057800634897402,
+   "passing": 0.11458248971416175,
+   "dribbling": 0.2154536845291472,
+   "ball_winning": 0.14415362223546418,
+   "duels": 0.2585734215791005,
+   "solidity": -0.13264220757928064
+  },
+  "39": {
+   "finishing": -0.3268594176280395,
+   "creating": -0.3285089897484133,
+   "passing": -0.3024409188556338,
+   "dribbling": -0.15279168805218613,
+   "ball_winning": 0.12415086171032516,
+   "duels": -0.2579663115570522,
+   "solidity": -0.41936455745704826
+  },
+  "40": {
+   "finishing": -0.03751928729025807,
+   "creating": 0.03104904566604892,
+   "passing": -0.040768328506328985,
+   "dribbling": -0.058523083050366534,
+   "ball_winning": 0.00087632807952134,
+   "duels": -0.11726644887937723,
+   "solidity": 0.10262823298725768
+  },
+  "42": {
+   "finishing": 0.1966087610687076,
+   "creating": 0.26935525178243985,
+   "passing": 0.06667763758523086,
+   "dribbling": -0.07963466053570073,
+   "ball_winning": -0.07303779694450094,
+   "duels": 0.01264026316493354,
+   "solidity": 0.4531657170322114
+  },
+  "41": {
+   "finishing": 0.13590674654087959,
+   "creating": 0.18332248461679718,
+   "passing": 0.06005979834683544,
+   "dribbling": -0.11187453437872295,
+   "ball_winning": -0.08679810124700203,
+   "duels": -0.025456806027192844,
+   "solidity": 0.45067283729102336
+  },
+  "203": {
+   "finishing": 0.06149581229736791,
+   "creating": 0.049767086499210765,
+   "passing": -0.022234097051327537,
+   "dribbling": -0.01673428719400622,
+   "ball_winning": -0.07318062674469375,
+   "duels": 0.08898787681864355,
+   "solidity": 0.20758599016363036
+  },
+  "140": {
+   "finishing": -0.21420878454279368,
+   "creating": -0.2848399619252111,
+   "passing": -0.2560405308233377,
+   "dribbling": -0.032250643322816484,
+   "ball_winning": -0.024362754091939904,
+   "duels": 0.04767669874566615,
+   "solidity": -0.0177789026859257
+  },
+  "78": {
+   "finishing": -0.04070808036261628,
+   "creating": -0.027518179525392004,
+   "passing": -0.09305056718155814,
+   "dribbling": 0.15174502447781466,
+   "ball_winning": -0.01079190595834407,
+   "duels": -0.06183512890202272,
+   "solidity": -0.127922058383632
+  },
+  "135": {
+   "finishing": -0.1947842988365296,
+   "creating": -0.06913895049370032,
+   "passing": -0.15721968171033976,
+   "dribbling": -0.0896675301746911,
+   "ball_winning": -0.06855576413752545,
+   "duels": -0.11227283436708194,
+   "solidity": -0.025027625130071902
+  },
+  "307": {
+   "finishing": -0.09139699231143902,
+   "creating": 0.02664734882009242,
+   "passing": -0.0933323508934201,
+   "dribbling": -0.1742370918443211,
+   "ball_winning": -0.2906012020879287,
+   "duels": 0.029121977832973014,
+   "solidity": 0.1870146201109461
+  }
+ },
+ "identical_outputs": {
+  "appearance_scores": true,
+  "to_rank": false,
+  "team_out": true,
+  "lineups": true,
+  "current": true,
+  "season_rows": true,
+  "position_ranks": true,
+  "projections": true,
+  "components": true,
+  "history": true
+ },
+ "markanday": {
+  "138893": {
+   "name": "D. Markanday",
+   "before": {
+    "finishing": 90.1,
+    "creating": 88.0,
+    "passing": 28.7,
+    "dribbling": 96.2,
+    "ball_winning": 64.3,
+    "duels": 55.4,
+    "solidity": 26.1
+   },
+   "after": {
+    "finishing": 88.1,
+    "creating": 83.3,
+    "passing": 26.5,
+    "dribbling": 96.5,
+    "ball_winning": 66.4,
+    "duels": 54.6,
+    "solidity": 14.0
+   }
+  }
+ },
+ "league_mean_scores": {
+  "before": {
+   "88": {
+    "finishing": 52.8,
+    "creating": 53.7,
+    "passing": 45.8,
+    "dribbling": 50.0,
+    "ball_winning": 47.5,
+    "duels": 44.1,
+    "solidity": 35.7
+   },
+   "253": {
+    "finishing": 49.1,
+    "creating": 49.1,
+    "passing": 55.0,
+    "dribbling": 47.6,
+    "ball_winning": 46.9,
+    "duels": 45.8,
+    "solidity": 45.9
+   },
+   "135": {
+    "finishing": 49.2,
+    "creating": 49.3,
+    "passing": 50.3,
+    "dribbling": 47.8,
+    "ball_winning": 44.6,
+    "duels": 43.8,
+    "solidity": 44.4
+   },
+   "140": {
+    "finishing": 48.3,
+    "creating": 49.0,
+    "passing": 50.8,
+    "dribbling": 54.4,
+    "ball_winning": 46.3,
+    "duels": 45.0,
+    "solidity": 36.3
+   },
+   "41": {
+    "finishing": 48.2,
+    "creating": 46.5,
+    "passing": 35.0,
+    "dribbling": 46.4,
+    "ball_winning": 46.3,
+    "duels": 45.3,
+    "solidity": 47.3
+   },
+   "61": {
+    "finishing": 50.6,
+    "creating": 48.3,
+    "passing": 52.0,
+    "dribbling": 52.6,
+    "ball_winning": 48.5,
+    "duels": 45.8,
+    "solidity": 39.9
+   },
+   "39": {
+    "finishing": 50.0,
+    "creating": 50.3,
+    "passing": 51.1,
+    "dribbling": 51.7,
+    "ball_winning": 48.1,
+    "duels": 45.3,
+    "solidity": 43.0
+   },
+   "307": {
+    "finishing": 46.2,
+    "creating": 45.6,
+    "passing": 45.8,
+    "dribbling": 53.6,
+    "ball_winning": 47.2,
+    "duels": 44.4,
+    "solidity": 34.0
+   },
+   "40": {
+    "finishing": 49.7,
+    "creating": 46.4,
+    "passing": 42.1,
+    "dribbling": 46.5,
+    "ball_winning": 44.6,
+    "duels": 44.6,
+    "solidity": 48.8
+   },
+   "103": {
+    "finishing": 51.7,
+    "creating": 48.9,
+    "passing": 50.9,
+    "dribbling": 46.7,
+    "ball_winning": 47.2,
+    "duels": 45.4,
+    "solidity": 40.1
+   },
+   "78": {
+    "finishing": 53.9,
+    "creating": 51.3,
+    "passing": 48.0,
+    "dribbling": 48.0,
+    "ball_winning": 47.0,
+    "duels": 44.0,
+    "solidity": 37.6
+   },
+   "203": {
+    "finishing": 46.8,
+    "creating": 45.3,
+    "passing": 43.5,
+    "dribbling": 47.5,
+    "ball_winning": 43.8,
+    "duels": 44.3,
+    "solidity": 38.4
+   },
+   "None": {
+    "finishing": 46.0,
+    "creating": 40.1,
+    "passing": 33.8,
+    "dribbling": 43.9,
+    "ball_winning": 37.6,
+    "duels": 32.1,
+    "solidity": 20.8
+   },
+   "42": {
+    "finishing": 48.3,
+    "creating": 44.8,
+    "passing": 30.9,
+    "dribbling": 45.5,
+    "ball_winning": 44.5,
+    "duels": 45.7,
+    "solidity": 50.2
+   }
+  },
+  "after": {
+   "88": {
+    "finishing": 45.1,
+    "creating": 50.2,
+    "passing": 42.5,
+    "dribbling": 37.7,
+    "ball_winning": 43.0,
+    "duels": 38.9,
+    "solidity": 43.7
+   },
+   "253": {
+    "finishing": 44.8,
+    "creating": 46.8,
+    "passing": 49.7,
+    "dribbling": 44.0,
+    "ball_winning": 49.3,
+    "duels": 44.7,
+    "solidity": 42.3
+   },
+   "135": {
+    "finishing": 56.7,
+    "creating": 52.7,
+    "passing": 54.7,
+    "dribbling": 50.4,
+    "ball_winning": 45.3,
+    "duels": 46.1,
+    "solidity": 49.6
+   },
+   "140": {
+    "finishing": 56.7,
+    "creating": 57.9,
+    "passing": 57.9,
+    "dribbling": 54.1,
+    "ball_winning": 46.0,
+    "duels": 44.0,
+    "solidity": 41.0
+   },
+   "41": {
+    "finishing": 43.4,
+    "creating": 42.4,
+    "passing": 33.4,
+    "dribbling": 50.3,
+    "ball_winning": 47.4,
+    "duels": 45.7,
+    "solidity": 36.4
+   },
+   "61": {
+    "finishing": 54.9,
+    "creating": 52.3,
+    "passing": 51.3,
+    "dribbling": 52.6,
+    "ball_winning": 45.0,
+    "duels": 47.0,
+    "solidity": 52.5
+   },
+   "39": {
+    "finishing": 61.4,
+    "creating": 60.0,
+    "passing": 59.4,
+    "dribbling": 57.4,
+    "ball_winning": 44.0,
+    "duels": 50.4,
+    "solidity": 59.4
+   },
+   "307": {
+    "finishing": 50.1,
+    "creating": 46.4,
+    "passing": 48.7,
+    "dribbling": 60.0,
+    "ball_winning": 53.7,
+    "duels": 43.6,
+    "solidity": 32.2
+   },
+   "40": {
+    "finishing": 51.3,
+    "creating": 46.9,
+    "passing": 43.3,
+    "dribbling": 47.8,
+    "ball_winning": 43.5,
+    "duels": 46.7,
+    "solidity": 49.3
+   },
+   "103": {
+    "finishing": 36.0,
+    "creating": 40.4,
+    "passing": 36.3,
+    "dribbling": 40.0,
+    "ball_winning": 44.9,
+    "duels": 40.7,
+    "solidity": 34.8
+   },
+   "78": {
+    "finishing": 55.5,
+    "creating": 53.4,
+    "passing": 50.6,
+    "dribbling": 38.3,
+    "ball_winning": 46.0,
+    "duels": 45.2,
+    "solidity": 46.3
+   },
+   "203": {
+    "finishing": 44.9,
+    "creating": 45.3,
+    "passing": 44.0,
+    "dribbling": 46.0,
+    "ball_winning": 44.6,
+    "duels": 42.4,
+    "solidity": 36.4
+   },
+   "None": {
+    "finishing": 44.9,
+    "creating": 40.9,
+    "passing": 34.0,
+    "dribbling": 41.3,
+    "ball_winning": 36.9,
+    "duels": 31.9,
+    "solidity": 22.8
+   },
+   "42": {
+    "finishing": 40.7,
+    "creating": 38.0,
+    "passing": 29.0,
+    "dribbling": 48.1,
+    "ball_winning": 45.5,
+    "duels": 45.4,
+    "solidity": 37.4
+   }
+  }
+ }
+}

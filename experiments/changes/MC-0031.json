@@ -26,5 +26,39 @@
    "model_version": null
   }
  },
- "events": []
+ "events": [
+  {
+   "date": "2026-10-22",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "yes",
+   "label": "Skill z in a new league the next season, predicted from the old league's: mean squared error over the seven skills, 606 moves into 2025 or later, offsets fitted on seasons to 2024",
+   "metric": "other",
+   "delta": -0.0325,
+   "n": 606,
+   "baseline": 0.4227,
+   "after": 0.3902,
+   "interval": [
+    -0.0424,
+    -0.0237
+   ],
+   "interval_level": 0.95,
+   "meaningful": "About 7.7% lower error, lower in 6 of 7 skills (dribbling slightly higher). The registered check 'ranks untouched' came out false only because it compares the to_rank function passed to the writer, two objects that are never equal; every rank, season rank, position rank, projection and predicted XI was identical. Under the evaluator as written the verdict is FAILED.",
+   "source": "experiments/skill_league/results.json",
+   "period": null,
+   "vs_market": null
+  },
+  {
+   "date": "2026-10-22",
+   "type": "correction",
+   "of": 1,
+   "text": "experiments/skill_league/run.py compares every argument of _write but the skill scores, including to_rank, a function: base and changed can never be equal there, whatever the change. The design's check (DESIGN.md, check 4: ranks and predicted XIs identical) holds on every data output (results.json, identical_outputs). The evaluator is left as it is; the owner decides."
+  },
+  {
+   "date": "2026-10-22",
+   "type": "decision",
+   "status": "Accepted",
+   "reason": "Owner, 2026-10-22: release it. The only failed check was the evaluator comparing a function (event 2); every rank and predicted XI was identical, and the scores predict a player's numbers in another league about 7.7% better."
+  }
+ ]
 }
