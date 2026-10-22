@@ -19,8 +19,20 @@ public static class PlayerSkills
     public static View? Of(Player p, SiteDoc site)
     {
         var group = p.Position is { } pos ? Names.GroupOf.GetValueOrDefault(pos) : null;
-        if (group is null || group == "GK" || site.SkillMix?.GetValueOrDefault(group) is not { Count: > 0 } mix) return null;
         var scores = p.Locked ? null : p.Skills;
+        if (group == "GK")
+        {
+            // keepers' own three (MC-0037), with the share of his rank where one counts: his rank
+            // uses save % and pass accuracy, and goals conceded per 90 rather than goals prevented
+            var keeper = Players.KeeperSkills.Select(k =>
+            {
+                double? score = scores is not null && scores.TryGetValue(k.Key, out var v) ? v : null;
+                var weight = k.Key switch { "shot_stopping" => 50, "distribution" => 25, _ => 0 };
+                return new Line(k.Key, k.Label, k.Tip, weight, score, score is { } sc ? Math.Clamp(Js.RoundInt(sc), 0, 100) : 0);
+            }).ToList();
+            return new("GK", Names.GroupSingle.GetValueOrDefault("GK") ?? "goalkeeper", keeper, p.Locked, keeper.Any(l => l.Score is not null));
+        }
+        if (group is null || site.SkillMix?.GetValueOrDefault(group) is not { Count: > 0 } mix) return null;
         // every outfield skill, the heaviest in his position's mix first (some weigh nothing in it)
         var lines = Players.Skills
             .Select(s => (s, w: mix.GetValueOrDefault(s.Key)))

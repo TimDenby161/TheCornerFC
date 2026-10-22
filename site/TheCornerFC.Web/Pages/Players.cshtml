@@ -91,7 +91,7 @@
                         <div class="pos-head"><span>Skill</span>
                             @if (Players.SkillOf(Model.Ch.Sort) is not null){<button type="submit" name="sort" value="" class="pos-clear">Clear</button>}</div>
                         <div class="skill-picks">
-                            @foreach (var s in Players.Skills)
+                            @foreach (var s in Players.AllSkills)
                             {
                                 <button type="submit" name="sort" value="k_@s.Key" class="skill-pick" aria-pressed="@(Model.Ch.Sort == "k_" + s.Key ? "true" : "false")" title="@s.Tip">@s.Label</button>
                             }
@@ -136,9 +136,9 @@
                             <th class="num col-wrank" data-tip="World rank: his place among every listed player by Ability, whatever this list is filtered or sorted by.">World</th>
                             <th class="num col-lrank" data-tip="League rank: his place by Ability among the listed players in his club's league.">Lg</th>
                             @{ SortTh("ga", "col-ga", "Goals and assists this season, all his clubs (7G 4A). Sorts by the two added together. Click to sort.", "G/A"); }
-                            @if (Players.SkillOf(Model.Ch.Sort) is { } sk && Players.Skills.First(s => s.Key == sk) is var skill)
+                            @if (Players.SkillOf(Model.Ch.Sort) is { } sk && Players.AllSkills.First(s => s.Key == sk) is var skill)
                             {
-                                SortTh(Model.Ch.Sort, "col-skill", $"{skill.Label}, 0 to 100: {skill.Tip}, over his last 20 appearances, as a percentile among every outfield regular in any position (50 is average). Players with few minutes are marked down.", skill.Label);
+                                SortTh(Model.Ch.Sort, "col-skill", $"{skill.Label}, 0 to 100: {skill.Tip}, over his last 20 appearances, as a percentile among the regulars of the positions that use it (50 is average), allowing for his league and level. Players with few minutes are marked down; players whose position doesn't use it come last.", skill.Label);
                             }
                             @for (var i = shown - 1; i >= 0; i--)
                             {

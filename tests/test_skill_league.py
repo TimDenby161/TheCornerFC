@@ -84,6 +84,19 @@ class LeagueOffsetTests(unittest.TestCase):
         self.assertIn("finishing", scores[30])
         self.assertEqual(set(pr.SKILLS) - set(scores[1]), {s for s in pr.SKILLS if not pr.SKILL_MIX["CB"].get(s)})
 
+    def test_keepers_have_their_own_three_skills_against_other_keepers(self):
+        # MC-0037: shot-stopping (save %), goals prevented (team xG conceded less goals conceded,
+        # per 90) and distribution (pass accuracy); no outfield skill, and no keeper skill outfield
+        norms = {k: (0.0, 1.0) for k in {k for r in pr.SKILLS.values() for k in r}}
+        base = dict.fromkeys(pr.SUMS, 0.0)
+        base.update(minutes=1800, passes=600, passes_accurate=480, xga=1.2 * 1800, xg_mins=1800)
+        players = {p: ({**base, "saves": 40 + p, "goals_conceded": 20, "club_mins": 1000 * 1800, ("lg", PL): 1800}, "GK") for p in range(1, 30)}
+        players[99] = ({**base, "goals": 5, "shots_on": 15, "club_mins": 1000 * 1800, ("lg", PL): 1800}, "ST")
+        scores = pr.skill_scores(players, norms)
+        self.assertEqual(set(scores[10]), set(pr.KEEPER_SKILLS))
+        self.assertGreater(scores[29]["shot_stopping"], scores[1]["shot_stopping"])       # more saves, same goals: better
+        self.assertFalse(set(scores.get(99, {})) & set(pr.KEEPER_SKILLS))
+
     def test_the_window_keeps_and_drops_each_leagues_minutes(self):
         w = pr.Window()
         t = datetime(2026, 1, 1)

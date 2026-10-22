@@ -26,5 +26,29 @@
    "model_version": null
   }
  },
- "events": []
+ "events": [
+  {
+   "date": "2026-10-22",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "Keepers scored in shot-stopping (listed keepers with a score); every rank and predicted XI identical",
+   "metric": "other",
+   "delta": 585,
+   "n": 585,
+   "baseline": 0,
+   "after": 585,
+   "interval": null,
+   "meaningful": "Alisson 66 / 68 / 93 (shot-stopping, goals prevented, distribution), D. Raya 99 / 87 / 54, T. Courtois 82 / 52 / 98, J. Pickford 47 / 70 / 53, G. Donnarumma 95 / 95 / 89",
+   "source": "experiments/keeper_skills/report.json",
+   "period": null,
+   "vs_market": null
+  },
+  {
+   "date": "2026-10-22",
+   "type": "decision",
+   "status": "Accepted",
+   "reason": "Owner's choice, 2026-10-22 (T-061): three keeper skills on keepers' pages and as Players-list sorts."
+  }
+ ]
 }

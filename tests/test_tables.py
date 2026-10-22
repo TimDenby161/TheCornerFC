@@ -268,6 +268,18 @@ class PaidPlayersTests(unittest.TestCase):
             self.assertIn(line, before)
             self.assertIn(line, sql)
 
+    def test_the_keeper_sorts_migration_adds_the_keeper_skills_and_changes_nothing_else(self):
+        from thecornerfc.models import player_ratings
+        root = Path(__file__).resolve().parents[1]
+        sql = (root / "db/migrations/20261022_keeper_skill_sorts.sql").read_text()
+        self.assertIn(sql, (root / "db/schema.sql").read_text())
+        self.assertEqual(sorted(set(re.findall(r"'k_([a-z_]+)'", sql))),
+                         sorted([*player_ratings.SKILLS, *player_ratings.KEEPER_SKILLS]))   # every skill the model scores
+        before = (root / "db/migrations/20261021_player_skills.sql").read_text()
+        body = lambda t: t[t.index("CREATE OR REPLACE FUNCTION public.site_players("):t.index("COMMIT;")]
+        self.assertEqual(body(sql).replace(",\n                                          'k_shot_stopping', 'k_goals_prevented', 'k_distribution'", ""),
+                         body(before))
+
     def test_the_migration_blanks_the_same_fields_and_marks_the_same_slice(self):
         from thecornerfc.publish import export
         sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_paid_players.sql").read_text()

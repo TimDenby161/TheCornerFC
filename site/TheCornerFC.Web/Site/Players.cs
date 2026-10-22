@@ -128,7 +128,15 @@ public static partial class Players
         ("duels", "Duels", "Share of duels won (all duels: the data doesn't split out aerial ones)"),
         ("solidity", "Solidity", "Times dribbled past and his team's xG conceded while he plays, both per 90 (fewer is better)"),
     ];
-    public static string? SkillOf(string sort) => sort.StartsWith("k_", StringComparison.Ordinal) && Skills.Any(s => "k_" + s.Key == sort) ? sort[2..] : null;
+    // keepers' own three (player_ratings.KEEPER_SKILLS, MC-0037), against other keepers
+    public static readonly (string Key, string Label, string Tip)[] KeeperSkills =
+    [
+        ("shot_stopping", "Shot-stopping", "Keepers: save %, saves out of shots on target faced"),
+        ("goals_prevented", "Goals prevented", "Keepers: his team's xG conceded less the goals he let in, per 90 (the data has no post-shot xG, so the defence in front of him counts too)"),
+        ("distribution", "Distribution", "Keepers: pass accuracy"),
+    ];
+    public static readonly (string Key, string Label, string Tip)[] AllSkills = [.. Skills, .. KeeperSkills];
+    public static string? SkillOf(string sort) => sort.StartsWith("k_", StringComparison.Ordinal) && AllSkills.Any(s => "k_" + s.Key == sort) ? sort[2..] : null;
 
     public static string SortKey(string? asked, int[] seasons, int[] future, bool open, List<string> groups)
     {

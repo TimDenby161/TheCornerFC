@@ -109,6 +109,19 @@ public class PlayerPageTests
     }
 
     [Fact]
+    public async Task A_keeper_shows_his_own_three_skills()
+    {
+        const string keeper = """{"total":1,"rows":[[129033,"J. Gvardiol","G",92.6,50,39,"Croatia",24,[92.6,91.1,96.0],[],3,600,{"GK":92.6},[459,0,0],{"shot_stopping":88.2,"goals_prevented":61.0,"distribution":40.4}]]}""";
+        var html = await Skills(keeper);
+        Assert.Contains("Skills · as a goalkeeper", html);
+        Assert.Matches("Shot-stopping</td>\\s*<td>.*?<b>88</b></span></td>\\s*<td>50%</td>", html);
+        Assert.Matches("Goals prevented</td>\\s*<td>.*?<b>61</b></span></td>\\s*<td>–</td>", html);
+        Assert.Matches("Distribution</td>\\s*<td>.*?<b>40</b></span></td>\\s*<td>25%</td>", html);
+        Assert.DoesNotContain(">Finishing<", html);
+        Assert.Contains("the defence in front of him counts too", html);
+    }
+
+    [Fact]
     public async Task Without_the_mix_in_the_site_document_there_is_no_skills_part()
     {
         var (_, html) = await Get("/player/129033");

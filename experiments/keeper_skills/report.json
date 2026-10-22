@@ -1,0 +1,119 @@
+{
+ "database": "production",
+ "base": "c6ef8bdb6",
+ "ranks_untouched": true,
+ "identical_outputs": {
+  "appearance_scores": true,
+  "team_out": true,
+  "lineups": true,
+  "current": true,
+  "season_rows": true,
+  "position_ranks": true,
+  "projections": true,
+  "components": true,
+  "history": true
+ },
+ "players": {
+  "Alisson": {
+   "before": null,
+   "after": {
+    "shot_stopping": 65.5,
+    "goals_prevented": 67.7,
+    "distribution": 92.5
+   }
+  },
+  "D. Raya": {
+   "before": null,
+   "after": {
+    "shot_stopping": 99.4,
+    "goals_prevented": 87.1,
+    "distribution": 53.9
+   }
+  },
+  "T. Courtois": {
+   "before": null,
+   "after": {
+    "shot_stopping": 82.4,
+    "goals_prevented": 52.0,
+    "distribution": 98.1
+   }
+  },
+  "J. Pickford": {
+   "before": null,
+   "after": {
+    "shot_stopping": 47.0,
+    "goals_prevented": 69.9,
+    "distribution": 53.3
+   }
+  },
+  "G. Donnarumma": {
+   "before": null,
+   "after": {
+    "shot_stopping": 95.3,
+    "goals_prevented": 94.7,
+    "distribution": 89.0
+   }
+  }
+ },
+ "top": {
+  "shot_stopping": [
+   "M. O’Leary (GK): 99.7",
+   "David Raya (GK): 99.4",
+   "J. Ward (GK): 99.1",
+   "B. Özer (GK): 98.7",
+   "David Soria (GK): 98.4",
+   "B. Schwake (GK): 98.1",
+   "A. Østbø (GK): 97.8",
+   "J. Bond (GK): 97.5",
+   "J. Blaswich (GK): 97.2",
+   "M. Vandevoordt (GK): 96.9"
+  ],
+  "goals_prevented": [
+   "F. Dahmen (GK): 99.7",
+   "J. Ward (GK): 99.4",
+   "J. Marcinkowski (GK): 99.1",
+   "C. Pym (GK): 98.7",
+   "J. Bycroft (GK): 98.4",
+   "M. O’Leary (GK): 98.1",
+   "M. Okoye (GK): 97.8",
+   "J. Gauci (GK): 97.5",
+   "S. Breza (GK): 97.2",
+   "E. Corvi (GK): 96.9"
+  ],
+  "distribution": [
+   "Joan García (GK): 99.7",
+   "Y. Takaoka (GK): 99.4",
+   "M. Penders (GK): 99.1",
+   "P. Gulácsi (GK): 98.7",
+   "D. Ferree (GK): 98.4",
+   "T. Courtois (GK): 98.1",
+   "M. Safonov (GK): 97.8",
+   "Josep Martínez (GK): 97.5",
+   "Y. Bounou (GK): 97.2",
+   "R. Risser (GK): 96.9"
+  ]
+ },
+ "scored": {
+  "before": {
+   "finishing": 6058,
+   "creating": 6058,
+   "passing": 7770,
+   "dribbling": 5585,
+   "duels": 7770,
+   "ball_winning": 4868,
+   "solidity": 3454
+  },
+  "after": {
+   "finishing": 6058,
+   "creating": 6058,
+   "passing": 7770,
+   "dribbling": 5585,
+   "duels": 7770,
+   "ball_winning": 4868,
+   "solidity": 3454,
+   "shot_stopping": 585,
+   "goals_prevented": 589,
+   "distribution": 591
+  }
+ }
+}
