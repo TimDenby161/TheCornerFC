@@ -59,6 +59,12 @@
    "type": "decision",
    "status": "Accepted",
    "reason": "Owner, 2026-10-22: release it. The only failed check was the evaluator comparing a function (event 2); every rank and predicted XI was identical, and the scores predict a player's numbers in another league about 7.7% better."
+  },
+  {
+   "date": "2026-10-22",
+   "type": "released",
+   "as": "MC-0032",
+   "note": "Released at its registered settings (900-minute units, offsets shrunk by n / (n + 30)), fitted each run on every unit, as MC-0032 on 2026-10-22."
   }
  ]
 }
