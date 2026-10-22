@@ -1,0 +1,30 @@
+{
+ "id": "MC-0035",
+ "registration": {
+  "recorded": "2026-10-22",
+  "retrospective": false,
+  "date": "2026-10-22",
+  "title": "Skill scores only where the position uses them",
+  "component": "Player ranks",
+  "model": "player",
+  "kind": "experiment",
+  "what": "A player is scored in a skill only if his position's mix gives it weight, and his score is a percentile among the players of positions that use it. Van Dijk's finishing and attackers' solidity are no longer scored. Only the skill scores change.",
+  "why": "The owner's look over the live site, 2026-10-22: Van Dijk 84 in finishing, and wingers and attacking midfielders 88 to 99 in solidity, skills their positions don't use, set against everyone.",
+  "how": "skill_scores in player_ratings.py, with the positions that use each skill taken from SKILL_MIX (experiments/skill_where/DESIGN.md).",
+  "hypothesis": "None to test: a change to what is shown. Every rank stays as it was.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/skill_where/DESIGN.md"
+  },
+  "success_criteria": "experiments/skill_where/report.py: every rank, season rank, position rank, projection and predicted XI identical, base against changed.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/skill_where",
+   "model_version": null
+  }
+ },
+ "events": []
+}
