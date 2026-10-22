@@ -1,0 +1,30 @@
+{
+ "id": "MC-0031",
+ "registration": {
+  "recorded": "2026-10-22",
+  "retrospective": false,
+  "date": "2026-10-22",
+  "title": "Skill scores adjusted for the league they are played in",
+  "component": "Player ranks",
+  "model": "player",
+  "kind": "experiment",
+  "what": "Each skill score takes off an offset for each league the player's minutes were in, fitted from players who played 900+ minutes a season in more than one league, so League Two output counts for less than Premier League output. Only the skill scores change; the ranks don't read them.",
+  "why": "The owner, 2026-10-22: D. Markanday (Chesterfield, League Two) scores 90 finishing, 88 creating and 96 dribbling but is 70 overall. The scores set every league's output per 90 against each other with no allowance for the level.",
+  "how": "skill_units, skill_league_offsets and the rating window's league minutes in player_ratings.py (experiments/skill_league/DESIGN.md).",
+  "hypothesis": "A player's skill z in one league, moved by the two leagues' offsets, predicts his z in another league the next season better than his z as it was.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/skill_league/DESIGN.md"
+  },
+  "success_criteria": "experiments/skill_league/run.py: at least 200 later moves between leagues, a lower squared error averaged over the seven skills with its 95% interval below 0, lower in at least 5 of 7 skills, and every rank and predicted XI identical.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/skill_league",
+   "model_version": null
+  }
+ },
+ "events": []
+}
