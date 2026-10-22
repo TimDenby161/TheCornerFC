@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 
 import requests
@@ -11,6 +12,40 @@ log = logging.getLogger(__name__)
 
 class QuotaExhausted(RuntimeError):
     pass
+
+
+# UTF-8 read as Latin-1 or Windows-1252: a lead byte (Â to ï) followed by continuation bytes
+# (\x80 to \xbf, or their Windows-1252 letters). API-Football sends some names like this
+# ("CvetkoviÄ\x87" for Cvetković, "SÃ¸e" for Søe), usually only in the short "name" field
+# (seen 2026-10-22: 74 player names, 25 first or last names and a club).
+_MANGLED = re.compile("[\xc2-\xdf][\x80-\xbf\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013\u2014\u2018-\u201e\u2020-\u2022\u2026\u2030\u2039\u203a\u20ac\u2122]"
+                      "|[\xe0-\xef][\x80-\xbf\u20ac\u2122\u0152\u0153\u0160\u0161]{2}")
+
+
+def repair_text(s):
+    """s with any UTF-8 that was read as Latin-1 or Windows-1252 put back, or s as it was: a
+    repair counts only if the whole string comes back as valid UTF-8, so a real name that merely
+    looks odd ("Ãvila", "Ñañez") is left alone."""
+    if not isinstance(s, str) or not _MANGLED.search(s):
+        return s
+    for codec in ("latin-1", "cp1252"):
+        try:
+            fixed = s.encode(codec).decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            continue
+        return fixed if fixed != s else s
+    return s
+
+
+def repair_payload(data):
+    """Every string in an API-Football payload put through repair_text."""
+    if isinstance(data, str):
+        return repair_text(data)
+    if isinstance(data, list):
+        return [repair_payload(x) for x in data]
+    if isinstance(data, dict):
+        return {k: repair_payload(v) for k, v in data.items()}
+    return data
 
 
 class ApiFootball:
@@ -111,7 +146,7 @@ class ApiFootball:
                 if isinstance(errors, dict) and "requests" in errors:
                     raise QuotaExhausted(str(errors["requests"]))
                 raise RuntimeError(f"API-Football error on {endpoint} {params}: {errors}")
-            return data
+            return repair_payload(data)
 
         raise RuntimeError(f"Giving up on {endpoint} {params} after {retries} attempts")
 
