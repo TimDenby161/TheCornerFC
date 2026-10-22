@@ -20,7 +20,7 @@ def snapshot(fixture, p, outcome, when, actual, version="mv_a"):
             "actual_score": actual}
 
 
-def conn_with(table=True, names=(("mv_a", "match-prediction 9afa9ed"),)):
+def conn_with(table=True, names=(("mv_a", "match-prediction", "9afa9ed1234567890abcdef1234567890abcdef0"),)):
     def execute(sql, params=None):
         if "to_regclass(%s)" in sql:
             return Mock(fetchone=lambda: (params[0] if table else None,))

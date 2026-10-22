@@ -334,10 +334,12 @@ def prediction_record_rows(conn, rows):
     """One row of site.prediction_record per finished match: its last prospective snapshot before
     kick-off, as evaluation.load_matches selects and scores it for the methodology record (the
     score after 90 minutes; right and log loss as evaluation.probability_metrics counts them), with
-    the version's name. In PREDICTION_RECORD_COLUMNS order, oldest first."""
+    the version as The Model names it (its name and the first seven characters of its commit,
+    "match-prediction 9afa9ed"). In PREDICTION_RECORD_COLUMNS order, oldest first."""
     ids = list({r["model_version_id"] for r in rows})
-    names = dict(conn.execute("select model_version_id, version_name from model_versions where model_version_id = any(%s)",
-                              [ids]).fetchall()) if ids else {}
+    names = {vid: f"{name} {sha[:7]}" if sha else name for vid, name, sha in conn.execute(
+        "select model_version_id, version_name, code_sha from model_versions where model_version_id = any(%s)",
+        [ids]).fetchall()} if ids else {}
     out = []
     for r in sorted(rows, key=lambda r: (r["effective_at"], r["fixture_id"])):
         p, y = r["probabilities"], r["outcome"]
