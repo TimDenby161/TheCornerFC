@@ -18,7 +18,9 @@ public sealed record SiteDoc(
     [property: JsonPropertyName("player_season_fields")] string[]? PlayerSeasonFields = null,
     // the seasons the player ranks cover, newest first, and the projected ones
     [property: JsonPropertyName("player_seasons")] int[]? PlayerSeasons = null,
-    [property: JsonPropertyName("player_future_seasons")] int[]? PlayerFutureSeasons = null)
+    [property: JsonPropertyName("player_future_seasons")] int[]? PlayerFutureSeasons = null,
+    // each outfield position group's mix of skills, {"CB": {"passing": 0.2963, ...}} (player_ratings.SKILL_MIX)
+    [property: JsonPropertyName("skill_mix")] Dictionary<string, Dictionary<string, double>>? SkillMix = null)
 {
     public Competition? Comp(int id) => Competitions.GetValueOrDefault(id.ToString());
     public string TeamName(int id) => Teams.GetValueOrDefault(id.ToString()) ?? $"Team {id}";

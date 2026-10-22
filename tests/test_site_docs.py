@@ -169,7 +169,7 @@ class SiteReaderTests(unittest.TestCase):
         self.assertIn("site.json", export.CRITICAL_JSON_FILES)
         source = (ROOT / 'thecornerfc/publish/export.py').read_text()
         site = source[source.index('    site = {'):source.index('(out_dir / "rankings.json").write_text')]
-        for named in ('"teams"', '"competitions"', '"nation_pages"', '"freshness"', '"match_fields"'):
+        for named in ('"teams"', '"competitions"', '"nation_pages"', '"freshness"', '"match_fields"', '"skill_mix": SKILL_MIX'):
             self.assertIn(named, site)
 
 

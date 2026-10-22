@@ -60,6 +60,61 @@ public class PlayerPageTests
         Assert.Contains("rated as full-back", html);
     }
 
+    // the same stand-in with each position's skill mix in the site document and his skill scores in his row
+    const string SkillSite = """
+        {"generated_at":"2026-10-18T01:40:00+00:00","competitions":{"39":{"name":"Premier League","country":"England","type":"League"}},
+         "teams":{"50":"Manchester City"},"match_fields":["id","kickoff","league","home","away","status"],
+         "player_fields":["id","name","position","rank","team","league","nationality","age","seasons","estimated","lg_rank","lg_n","position_ranks","season","skills"],
+         "player_season_fields":["minutes","goals","assists"],"player_seasons":[2026,2025,2024],"player_future_seasons":[2027],
+         "skill_mix":{"CB":{"passing":0.2963,"ball_winning":0.2346,"duels":0.2346,"solidity":0.2345},"AM":{"creating":0.37,"finishing":0.357}}}
+        """;
+    const string SkillRow = """{"total":1,"rows":[[129033,"J. Gvardiol","D",92.6,50,39,"Croatia",24,[92.6,91.1,96.0],[],3,600,{"FB":92.6,"CB":90.1},[459,1,3],{"finishing":40.2,"creating":71.0,"passing":88.6,"dribbling":55.0,"ball_winning":63.4,"duels":77.9,"solidity":81.2}]]}""";
+    const string LockedRow = """{"total":1,"rows":[[129033,"J. Gvardiol","D",null,50,39,"Croatia",24,null,null,null,null,null,[459,1,3],null]]}""";
+
+    static async Task<string> Skills(string row)
+    {
+        using var site = new SiteFactory("production", r =>
+        {
+            var path = r.RequestUri!.AbsolutePath;
+            if (path.EndsWith("site_players")) return StubHandler.Json(row);
+            if (path.EndsWith("site_player_page")) return StubHandler.Json(Doc);
+            if (path.EndsWith("site_matches")) return StubHandler.Json("""{"matches":[]}""");
+            return StubHandler.Json(r.RequestUri.Query.Contains("p_key=site&") ? SkillSite : "null");
+        });
+        return await site.CreateClient(new() { BaseAddress = new Uri("https://thecornerfc.com") }).GetStringAsync("/player/129033");
+    }
+
+    [Fact]
+    public async Task The_overview_shows_his_skills_and_how_much_each_counts_in_his_position()
+    {
+        var html = await Skills(SkillRow);
+        Assert.Contains("Skills · as a centre-back", html);
+        // the heaviest in a centre-back's mix first, with his score and its share; the rest weigh nothing
+        Assert.Matches("<td title=\"Passes per 90 and pass accuracy\">Passing</td>\\s*<td><span class=\"mc-progress\"><span class=\"mc-bar\"><span class=\"mc-fill sw-89\"></span></span><b>89</b></span></td>\\s*<td>30%</td>", html);
+        Assert.Matches("Ball-winning</td>\\s*<td>.*?<b>63</b></span></td>\\s*<td>23%</td>", html);
+        Assert.Matches("Finishing</td>\\s*<td>.*?<b>40</b></span></td>\\s*<td>–</td>", html);
+        Assert.True(html.IndexOf(">Passing<", StringComparison.Ordinal) < html.IndexOf(">Finishing<", StringComparison.Ordinal));
+        Assert.Contains("each skill counting by its share in a centre-back's mix", html);
+        Assert.DoesNotContain("for subscribers, like his rank", html);
+    }
+
+    [Fact]
+    public async Task Outside_the_free_slice_the_mix_shows_without_his_scores()
+    {
+        var html = await Skills(LockedRow);
+        Assert.Contains("Skills · as a centre-back", html);
+        Assert.Matches("Passing</td>\\s*<td>–</td>\\s*<td>30%</td>", html);
+        Assert.DoesNotContain("mc-fill sw-", html);
+        Assert.Contains("His skill scores are for subscribers, like his rank.", html);
+    }
+
+    [Fact]
+    public async Task Without_the_mix_in_the_site_document_there_is_no_skills_part()
+    {
+        var (_, html) = await Get("/player/129033");
+        Assert.DoesNotContain("id=\"pl-skills\"", html);
+    }
+
     [Fact]
     public async Task A_player_not_in_the_ranks_has_no_page() =>
         Assert.Equal(HttpStatusCode.NotFound, (await Get("/player/1")).Item1);

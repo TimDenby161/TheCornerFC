@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from ..pipeline.health import monitored
 from .. import config
 from ..models import national_lineups, national_predictions      # (national_lineups: reached as export.national_lineups)
+from ..models.player_ratings import SKILL_MIX
 from .site_files import (
     CARRIED_FILES,
     COLLAPSE_RATIO,
@@ -301,6 +302,9 @@ def _write_site_data(conn, out_dir=OUT_DIR):
         "teams": teams,
         "nation_pages": nation_pages,
         "match_fields": SITE_MATCH_FIELDS,      # the order of a match's row, as site_matches() returns them
+        # each outfield position's mix of skills (player_ratings.SKILL_MIX, MC-0030), for the Skills
+        # part of a player's page: the model's own table, so the page can't drift from it
+        "skill_mix": SKILL_MIX,
     }
     (out_dir / "rankings.json").write_text(json.dumps({
         "generated_at": generated,

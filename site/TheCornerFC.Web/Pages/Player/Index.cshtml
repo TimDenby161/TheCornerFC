@@ -41,3 +41,27 @@
             @if (Model.Rank is { } rk){<text>His Ability of @rk comes from earlier seasons and his age curve, not from current form.</text>}</div>
     }
 </div>
+
+@if (Model.Skills is { } sk)
+{
+    <div class="club-section pl-block" id="pl-skills">
+        <div class="modal-section">Skills · as @sk.AGroup</div>
+        <div class="mc-scroll"><table class="calib-table mc-rows pl-skills">
+            <thead><tr><th>Skill</th><th>His score</th><th>Counts in his rank</th></tr></thead>
+            <tbody>@foreach (var l in sk.Lines)
+            {
+                <tr><td title="@l.Tip">@l.Label</td>
+                    <td>@if (l.Score is { } sc){<span class="mc-progress"><span class="mc-bar"><span class="mc-fill sw-@l.Bar"></span></span><b>@Js.ToFixed(sc, 0)</b></span>}else{<text>–</text>}</td>
+                    <td>@(l.Weight > 0 ? $"{l.Weight}%" : "–")</td></tr>
+            }</tbody></table></div>
+        @if (sk.Locked)
+        {
+            <div class="pl-callout">His skill scores are for subscribers, like his rank. The mix is the same for every @sk.GroupName. <partial name="_SubscriberLink" /></div>
+        }
+        else if (!sk.Scored)
+        {
+            <div class="page-note">No skill scores yet: they need enough recent minutes in a league with match-by-match player data.</div>
+        }
+        <div class="page-note">His score in each skill is where he stands among the regulars of the main leagues, 0 to 100, over the same matches as his rank. His Ability starts from the strength of the clubs he has been a regular for; his stats then move it up or down, each skill counting by its share in @sk.AGroup's mix: by up to about 15 points, and up to twice that at the strongest clubs. A position rank in another position uses that position's mix. <a href="/methodology#terms">How player ratings work</a>.</div>
+    </div>
+}
