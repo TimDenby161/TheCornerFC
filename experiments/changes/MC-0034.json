@@ -26,5 +26,12 @@
    "model_version": null
   }
  },
- "events": []
+ "events": [
+  {
+   "date": "2026-10-22",
+   "type": "deployed",
+   "commit": "3872667d9",
+   "note": "Promoted to main on 2026-10-22; the new player-model version is registered by the first nightly after it, and the skill scores change then."
+  }
+ ]
 }

@@ -49,6 +49,12 @@
    "type": "decision",
    "status": "Accepted",
    "reason": "Owner, 2026-10-22: one way, at 0.75, chosen by eye from the report. A judgement, as Ability's club-strength start is; not a tested improvement."
+  },
+  {
+   "date": "2026-10-22",
+   "type": "released",
+   "as": "MC-0034",
+   "note": "Released one way at the owner's setting, 0.75 (amendment 1), as MC-0034 on 2026-10-22."
   }
  ]
 }
