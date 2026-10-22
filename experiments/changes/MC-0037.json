@@ -1,0 +1,30 @@
+{
+ "id": "MC-0037",
+ "registration": {
+  "recorded": "2026-10-22",
+  "retrospective": false,
+  "date": "2026-10-22",
+  "title": "Keeper skills: shot-stopping, goals prevented, distribution",
+  "component": "Player ranks",
+  "model": "player",
+  "kind": "experiment",
+  "what": "Three 0 to 100 skills for keepers, against other keepers: save %, his team's xG conceded minus goals conceded per 90 (with the defence in front of him), and pass accuracy, with the same one-way level pull as the outfield skills. Only the skill scores change; keeper ranks don't.",
+  "why": "The owner's look over the live site, 2026-10-22: Alisson should have a saves skill.",
+  "how": "Keeper branch in skill_scores, player_ratings.py (experiments/keeper_skills/DESIGN.md); the Players list sorts by them through site_players.",
+  "hypothesis": "None to test: a new output. Every rank stays as it was.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/keeper_skills/DESIGN.md"
+  },
+  "success_criteria": "experiments/keeper_skills/report.py: every rank, season rank, position rank, projection and predicted XI identical, base against changed.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/keeper_skills",
+   "model_version": null
+  }
+ },
+ "events": []
+}
