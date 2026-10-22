@@ -16,7 +16,7 @@
 <main>
 <p class="back"><a href="./">The Corner FC</a></p>
 <h1>How the models work</h1>
-<p class="updated">Page last updated 27 September 2026. Live figures below update with the site's data.</p>
+<p class="updated">Page last updated 22 October 2026. Live figures below update with the site's data.</p>
 
 <div class="callout">
   <p><strong>Before you read the numbers</strong></p>
@@ -88,10 +88,20 @@ defenders, passing and chance creation for midfielders, shots and goals for forw
 The stats move him by up to about 15 points, and by up to twice that at the strongest clubs.
 Players with few minutes are pulled down until they've played more.</p>
 <p>Only counted stats are used, such as goals, passes and tackles. A data provider's own match
-ratings are not an input. Each position has its own mix of stats, and a player also has a rating
-for every position he has started in, which says how good he is in that position and can differ
-from his overall rating. The mix for each position was set by judgement in October 2026, by
-looking at where well-known players landed, and not by a test against results.</p>
+ratings are not an input. Since 21 October 2026 the stats are grouped into <strong>eight
+skills</strong>: finishing (goals, shots on target), creating (key passes, assists), passing
+(passes, pass accuracy), dribbling (dribbles won, fewer failed), ball-winning (tackles,
+interceptions, blocks), duels (duels won), defensive solidity (fewer times dribbled past, less xG
+conceded while he plays) and, for keepers only, goalkeeping. Each position's rating is its own mix
+of those skills: a centre-back's is passing, ball-winning, duels and solidity in about equal parts,
+a striker's about two-thirds finishing. The Players tab can list players by any one skill, scored 0 to 100 against the regulars
+of the main leagues.</p>
+<p>A player also has a rating for every position he has started in, which says how good he is in
+that position and can differ from his overall rating. The mix for each position was set by
+judgement in October 2026, by looking at where well-known players landed, and not by a test
+against results. Moving to skills kept each position's mix as it was, and was checked before it
+went live: keepers' ratings unchanged, every position's order almost the same, and ratings as
+repeatable from one season to the next as before.</p>
 <p>It only covers leagues with match-by-match player data, and it can't see things the data
 doesn't record, like off-the-ball work or a player carrying an injury.</p>
 
@@ -107,6 +117,10 @@ doesn't record, like off-the-ball work or a player carrying an injury.</p>
 </ul>
 <p>Those expected goals are turned into win, draw and loss chances, with a small boost to the draw in
 close games. The model doesn't use bookmakers' odds.</p>
+<p>A second version is being tested alongside it on live matches: the same model with a correction
+learned from 44 measures of each match (boosted decision trees). It did better on past seasons, but
+it only replaces the live model if it proves better on matches played after it was written down.
+Its running score, and every other change being tested, are on <a href="./#/model">The Model</a>.</p>
 
 <h3>Projected xG</h3>
 <p>The number of goals the model expects each side to score, such as 1.6–0.9. It's an average over
@@ -144,10 +158,13 @@ they've been right more often when we disagreed (see <a href="#market">below</a>
 <div id="matches-live" class="live" aria-live="polite"><p class="muted">Loading…</p></div>
 
 <h3><span class="badge hist-badge">Historical test</span> July 2024 to September 2026</h3>
+<!-- These figures are the model as it was on 27 September 2026, before the 14 October club-rating change. -->
 <!-- Source: experiments/strength_weight/results.json, test["0.6"] (the production weight), generated
      2026-09-27; test_start 2024-07-01. Calibration pools the home/draw/away classes. -->
 <p>43,658 matches in the leagues we cover, predicted with settings chosen on the previous season
-(July 2023 to June 2024) and then scored on these later matches.</p>
+(July 2023 to June 2024) and then scored on these later matches. These are the model as it stood on
+27 September 2026; the 14 October change to the club ratings improved its log loss on past seasons
+by about 0.0008.</p>
 <div class="stats">
   <div class="stat"><span class="stat-v">51.5%</span><span class="stat-l">Most likely result was right</span></div>
   <div class="stat"><span class="stat-v">0.994</span><span class="stat-l">Log loss (lower is better)</span></div>
@@ -186,7 +203,8 @@ prediction was made. To stop ourselves reading too much into an early lucky or u
 result is sealed: it will be worked out and published once, when 2,000 matches have been recorded
 (the rules were written down on 27 September 2026, before any results were seen). Until then we
 don't publish or look at it. The Stats tab's model-vs-bookmaker figures are a different, rougher
-check: they use closing odds and mix live predictions with recomputed ones.</p>
+check: they use closing odds and mix live predictions with recomputed ones, and so does the
+competition-by-competition comparison on <a href="./#/model">The Model</a>.</p>
 
 <h3><span class="badge hist-badge">Historical test</span> 506 matches, 16–24 September 2026</h3>
 <!-- Source: README "Match predictions", blending bookmaker odds; model recomputed pre-match, closing odds. -->
@@ -233,11 +251,16 @@ outcome we can score each week, so they're checked through what they're used for
     outfield players almost unchanged and repeated as well.</li>
 </ul>
 <p>We only change the match model when a test shows a clear improvement on matches it wasn't tuned
-on. In September 2026 four proposed changes were tested on past seasons this way. None cleared the
-bar, so none were made. Player Ability is the exception: its October 2026 rebuild was a judgement,
-as described above. The match probabilities take a small input from it (the average rating of each
-line of the predicted XI), and the rebuild moved that input by too little to change them
-noticeably.</p>
+on. Every proposed change is written down, with how it will be judged, before its result is seen,
+and the whole record is public on <a href="./#/model">The Model</a>. In September 2026 four
+proposed changes were tested on past seasons this way. None cleared the bar, so none were made.
+On 14 October 2026 one did: changes to the club ratings, made together (clubs that are promoted
+or relegated move towards their new division's level, clubs with few matches behind them move
+further after each one, and a match's shot counts stand in for xG where it has none). They made the match probabilities a little more accurate on
+past seasons, and their live record is being kept against the old version's on the same matches.</p>
+<p>Player Ability is the exception: its October 2026 rebuild was a judgement, as described above.
+The match probabilities take a small input from it (the average rating of each line of the
+predicted XI), and the rebuild moved that input by too little to change them noticeably.</p>
 
 <h2 id="version">Model version</h2>
 <div id="version-live" class="live" aria-live="polite"><p class="muted">Loading…</p></div>
@@ -265,6 +288,9 @@ version's live record builds up alongside the old one's rather than being mixed 
 </dl>
 
 <h2 id="more">More</h2>
+<p>Every prediction the model has made, as it was locked before kick-off, beside the result, is on
+the <a href="./#/record">Prediction record</a>. How accurate it has been month by month, in each
+competition, and every change tested on it, are on <a href="./#/model">The Model</a>.</p>
 <p>Every assumption the models make, why, and how each has been checked, is on
 <a href="assumptions.html">What the models assume</a>.</p>
 <p>The full technical detail, including every test and its limits, is in the project's
