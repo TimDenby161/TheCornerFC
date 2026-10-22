@@ -9,10 +9,22 @@ public static class Crawlers
     // host's own address) is kept out. The account, the owner's fantasy pages and the server's own
     // addresses are never for them (a match card's panels, /match/<id>/..., among them: a crawler reads
     // the match's page without them), and SEO tools' crawlers are asked to stay away altogether.
+    // AI-training crawlers are asked to stay away too (owner, 2026-10-22): the list Cloudflare's
+    // managed robots.txt carried until its "block AI training" setting, which also refused Googlebot,
+    // was switched off, less its two search engines (Baiduspider, PetalBot). Search engines,
+    // Googlebot and Bingbot among them, are not on it. The content signal says the same to any
+    // crawler that reads one.
+    public static readonly string[] AiTrainingBots =
+        ["Amazonbot", "Applebot-Extended", "Bytespider", "CCBot", "ClaudeBot", "Diffbot", "Google-Extended", "GPTBot", "omgili",
+         "anthropic-ai", "Claude-Web", "cohere-ai", "MistralAI-Training", "meta-externalagent", "GoogleOther", "AwarioSmartBot",
+         "AwarioRssBot", "Google-CloudVertexBot", "QualifiedBot", "Cotoyogi", "ICC-Crawler", "atlassian-bot", "FishBot",
+         "BorderxBot", "NavuBot", "SemrushBot-SWA", "WARDBot", "magpie-crawler", "KimiBot", "CitibotSiteCrawler"];
+
     public static string Robots(SiteEnvironment env, string host)
     {
         string[] lines = env.IsProduction && host == env.Host
-            ? [.. Names.SeoBots.SelectMany(bot => new[] { $"User-agent: {bot}", "Disallow: /", "" }), "User-agent: *", "Disallow: /account", "Disallow: /admin", "Disallow: /fantasy/", "Disallow: /fpl",
+            ? [.. Names.SeoBots.Concat(AiTrainingBots).SelectMany(bot => new[] { $"User-agent: {bot}", "Disallow: /", "" }), "User-agent: *",
+               "Content-Signal: search=yes,ai-train=no,use=reference", "Disallow: /account", "Disallow: /admin", "Disallow: /fantasy/", "Disallow: /fpl",
                "Disallow: /my-fpl-team", "Disallow: /efl-fantasy", "Disallow: /stripe/", "Disallow: /players/rows",
                "Disallow: /players/options", "Disallow: /players/seasons", "Disallow: /match/*/", "", $"Sitemap: https://{env.Host}/sitemap.xml", ""]
             : ["User-agent: *", "Disallow: /", ""];

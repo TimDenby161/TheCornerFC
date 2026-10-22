@@ -49,7 +49,12 @@ public class CrawlerTests
         Assert.Contains("Disallow: /account", live);
         Assert.Contains("Sitemap: https://thecornerfc.com/sitemap.xml", live);
         Assert.StartsWith("User-agent: SemrushBot\nDisallow: /\n\nUser-agent: AhrefsBot\nDisallow: /\n", live);
-        Assert.Contains("\nUser-agent: *\nDisallow: /account\n", live);
+        Assert.Contains("\nUser-agent: *\nContent-Signal: search=yes,ai-train=no,use=reference\nDisallow: /account\n", live);
+        // AI-training crawlers are kept out; search engines never are
+        foreach (var bot in new[] { "GPTBot", "Google-Extended", "CCBot", "ClaudeBot", "Applebot-Extended" })
+            Assert.Contains($"\nUser-agent: {bot}\nDisallow: /\n", live);
+        foreach (var engine in new[] { "Googlebot", "Bingbot", "bingbot", "Applebot\n", "DuckDuckBot" })
+            Assert.DoesNotContain($"User-agent: {engine}", live);
         Assert.Contains("\nDisallow: /match/*/\n", live);          // the card panels' data, not the match pages
         Assert.Equal("User-agent: *\nDisallow: /\n", Crawlers.Robots(Live, "thecornerfc.azurewebsites.net"));
         Assert.Equal("User-agent: *\nDisallow: /\n", Crawlers.Robots(Staging, "staging.thecornerfc.com"));
