@@ -68,6 +68,22 @@ class LeagueOffsetTests(unittest.TestCase):
         self.assertEqual(pr.skill_scores(above, norms, level_pull=0.5)[1]["dribbling"],
                          pr.skill_scores(at, norms, level_pull=0.5)[1]["dribbling"])
 
+    def test_a_skill_is_scored_only_where_his_position_uses_it(self):
+        # MC-0035: a centre-back has no finishing score and a winger no solidity, and each skill's
+        # percentile is among the positions that use it
+        norms = {k: (0.0, 1.0) for k in {k for r in pr.SKILLS.values() for k in r}}
+        base = dict.fromkeys(pr.SUMS, 0.0)
+        base.update(minutes=1800, goals=2, shots_on=5, passes=1500, passes_accurate=1400, duels=200, duels_won=120,
+                    dribbles=10, dribbles_won=5, tackles=40, interceptions=30, blocks=20, key_passes=5, assists=1, dribbled_past=5)
+        players = {p: ({**base, "goals": p % 7}, "CB") for p in range(1, 30)}
+        players.update({p: ({**base, "goals": p % 11}, "W") for p in range(30, 60)})
+        scores = pr.skill_scores(players, norms)
+        self.assertNotIn("finishing", scores[1])                     # not part of a centre-back's rank
+        self.assertIn("solidity", scores[1])
+        self.assertNotIn("solidity", scores[30])                     # not part of a winger's rank
+        self.assertIn("finishing", scores[30])
+        self.assertEqual(set(pr.SKILLS) - set(scores[1]), {s for s in pr.SKILLS if not pr.SKILL_MIX["CB"].get(s)})
+
     def test_the_window_keeps_and_drops_each_leagues_minutes(self):
         w = pr.Window()
         t = datetime(2026, 1, 1)

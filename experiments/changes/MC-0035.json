@@ -26,5 +26,29 @@
    "model_version": null
   }
  },
- "events": []
+ "events": [
+  {
+   "date": "2026-10-22",
+   "type": "result",
+   "evaluation": "development",
+   "unseen": "no",
+   "label": "Listed players scored in solidity, before and after (the other skills follow their positions); every rank and predicted XI identical",
+   "metric": "other",
+   "delta": -4316,
+   "n": 7770,
+   "baseline": 7770,
+   "after": 3454,
+   "interval": null,
+   "meaningful": "V. van Dijk no longer scored in finishing (was 88), M. Salah, B. Saka, C. Palmer, H. Kane and E. Haaland no longer in solidity (88 to 99). Top ten in solidity now centre-backs and holding midfielders; in finishing, strikers and wingers",
+   "source": "experiments/skill_where/report.json",
+   "period": null,
+   "vs_market": null
+  },
+  {
+   "date": "2026-10-22",
+   "type": "decision",
+   "status": "Accepted",
+   "reason": "Owner's choice, 2026-10-22, from the look over the live site (T-061): score a skill only where the position uses it."
+  }
+ ]
 }

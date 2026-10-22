@@ -503,8 +503,10 @@ def skill_scores(players, norms, offsets=None, level_pull=None):
     less his leagues' offsets (skill_league_offsets, weighted by his window minutes in each:
     MC-0031), moved down by level_pull (SKILL_LEVEL_PULL unless given) per 100 points his club
     strength sits below the reference level (skill_reference_level: MC-0033), pulled towards MINUTES_PRIOR with few minutes as a position score is, then as a
-    percentile among the listed outfield players with SKILL_SAMPLE_MINUTES or more. Keepers have
-    none. For the lists on the site: nothing in the ranks reads them."""
+    percentile among the listed outfield players with SKILL_SAMPLE_MINUTES or more. Only the skills
+    his position's mix uses are scored, each against the players of positions that use it (MC-0035):
+    a centre-back has no finishing score, a winger no solidity. Keepers have none. For the lists on
+    the site: nothing in the ranks reads them."""
     raw = {}
     pull = SKILL_LEVEL_PULL if level_pull is None else level_pull
     reference = skill_reference_level(players) if pull else None
@@ -522,8 +524,8 @@ def skill_scores(players, norms, offsets=None, level_pull=None):
         level = lambda skill: sum(v * (offsets or {}).get(lg, {}).get(skill, 0.0) for lg, v in played.items()) / total if total else 0.0
         raw[player] = (minutes, {skill: ((sum(w * (m[k] - norms[k][0]) / norms[k][1] for k, w in recipe.items()
                                               if m[k] is not None) - level(skill) + lift) * minutes + MINUTES_PRIOR * SHRINK_MINUTES)
-                                 / (minutes + SHRINK_MINUTES) for skill, recipe in SKILLS.items()})
-    sample = {skill: sorted(v[skill] for mins, v in raw.values() if mins >= SKILL_SAMPLE_MINUTES) for skill in SKILLS}
+                                 / (minutes + SHRINK_MINUTES) for skill, recipe in SKILLS.items() if SKILL_MIX[pos].get(skill, 0) > 0})
+    sample = {skill: sorted(v[skill] for mins, v in raw.values() if mins >= SKILL_SAMPLE_MINUTES and skill in v) for skill in SKILLS}
     pct = lambda ref, x: 100 * bisect.bisect_left(ref, x) / len(ref) if ref else None
     return {player: {skill: round(pct(sample[skill], x), 1) for skill, x in v.items() if sample[skill]}
             for player, (_, v) in raw.items()}

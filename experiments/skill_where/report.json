@@ -1,0 +1,171 @@
+{
+ "database": "production",
+ "base": "12790e628",
+ "ranks_untouched": true,
+ "identical_outputs": {
+  "appearance_scores": true,
+  "team_out": true,
+  "lineups": true,
+  "current": true,
+  "season_rows": true,
+  "position_ranks": true,
+  "projections": true,
+  "components": true,
+  "history": true
+ },
+ "players": {
+  "V. van Dijk": {
+   "before": {
+    "finishing": 87.7,
+    "creating": 47.0,
+    "passing": 98.7,
+    "dribbling": 47.9,
+    "ball_winning": 41.1,
+    "duels": 100.0,
+    "solidity": 100.0
+   },
+   "after": {
+    "passing": 98.7,
+    "ball_winning": 24.7,
+    "duels": 100.0,
+    "solidity": 99.9
+   }
+  },
+  "M. Salah": {
+   "before": {
+    "finishing": 98.4,
+    "creating": 98.5,
+    "passing": 66.9,
+    "dribbling": 80.6,
+    "ball_winning": 22.4,
+    "duels": 12.3,
+    "solidity": 91.4
+   },
+   "after": {
+    "finishing": 97.9,
+    "creating": 98.0,
+    "passing": 66.9,
+    "dribbling": 73.6,
+    "duels": 12.3
+   }
+  },
+  "B. Saka": {
+   "before": {
+    "finishing": 95.9,
+    "creating": 95.1,
+    "passing": 63.3,
+    "dribbling": 96.6,
+    "ball_winning": 68.2,
+    "duels": 59.6,
+    "solidity": 96.5
+   },
+   "after": {
+    "finishing": 94.6,
+    "creating": 93.4,
+    "passing": 63.3,
+    "dribbling": 95.1,
+    "duels": 59.6
+   }
+  },
+  "C. Palmer": {
+   "before": {
+    "finishing": 97.0,
+    "creating": 94.7,
+    "passing": 74.6,
+    "dribbling": 92.7,
+    "ball_winning": 31.0,
+    "duels": 47.1,
+    "solidity": 98.7
+   },
+   "after": {
+    "finishing": 96.0,
+    "creating": 93.0,
+    "passing": 74.6,
+    "dribbling": 89.6,
+    "duels": 47.1
+   }
+  },
+  "H. Kane": {
+   "before": {
+    "finishing": 100.0,
+    "creating": 96.6,
+    "passing": 44.9,
+    "dribbling": 86.7,
+    "ball_winning": 18.4,
+    "duels": 50.4,
+    "solidity": 87.5
+   },
+   "after": {
+    "finishing": 100.0,
+    "creating": 95.5,
+    "passing": 44.9,
+    "dribbling": 81.4,
+    "duels": 50.4
+   }
+  },
+  "E. Haaland": {
+   "before": {
+    "finishing": 99.6,
+    "creating": 85.5,
+    "passing": 26.6,
+    "dribbling": 86.1,
+    "ball_winning": 5.8,
+    "duels": 54.7,
+    "solidity": 98.0
+   },
+   "after": {
+    "finishing": 99.4,
+    "creating": 80.7,
+    "passing": 26.6,
+    "dribbling": 80.7,
+    "duels": 54.7
+   }
+  }
+ },
+ "top": {
+  "solidity": [
+   "W. Saliba (CB): 99.9",
+   "V. van Dijk (CB): 99.9",
+   "Gabriel Magalhães (CB): 99.8",
+   "J. Tarkowski (CB): 99.8",
+   "I. Doukouré (CB): 99.7",
+   "D. Rice (DM): 99.7",
+   "R. Nijstad (CB): 99.6",
+   "E. Konsa (CB): 99.6",
+   "I. Zabarnyi (CB): 99.5",
+   "A. Mandi (CB): 99.5"
+  ],
+  "finishing": [
+   "H. Kane (ST): 100.0",
+   "Raphinha (W): 99.9",
+   "L. Messi (W): 99.9",
+   "I. Toney (ST): 99.8",
+   "V. Osimhen (ST): 99.8",
+   "P. Schick (ST): 99.8",
+   "E. Lepaul (ST): 99.7",
+   "Kylian Mbappé (ST): 99.7",
+   "D. Malen (ST): 99.7",
+   "B. Šeško (ST): 99.6"
+  ]
+ },
+ "scored": {
+  "before": {
+   "finishing": 7770,
+   "creating": 7770,
+   "passing": 7770,
+   "dribbling": 7770,
+   "ball_winning": 7770,
+   "duels": 7770,
+   "solidity": 7770
+  },
+  "after": {
+   "finishing": 6058,
+   "creating": 6058,
+   "passing": 7770,
+   "dribbling": 5585,
+   "duels": 7770,
+   "ball_winning": 4868,
+   "solidity": 3454
+  }
+ }
+}
