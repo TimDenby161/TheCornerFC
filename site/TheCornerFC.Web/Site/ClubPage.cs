@@ -133,7 +133,7 @@ public static partial class ClubPage
 
     // Surname for tight spaces, keeping lower-case particles ("M. de Ligt" -> "de Ligt"), or the
     // name a player is known by where that isn't his surname
-    static readonly Dictionary<string, string> KnownAs = new() { ["Gabriel Magalhães"] = "Gabriel" };
+    static readonly Dictionary<string, string> KnownAs = new() { ["Gabriel Magalhães"] = "Gabriel", ["Pau Cubarsí Paredes"] = "Cubarsí" };
     public static string ShortName(string name)
     {
         if (KnownAs.TryGetValue(name, out var known)) return known;

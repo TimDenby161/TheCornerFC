@@ -81,6 +81,7 @@ describe('names and dates', () => {
 		expect(shortName('E. Haaland')).toBe('Haaland');
 		expect(shortName('V. van Dijk')).toBe('van Dijk');
 		expect(shortName('Gabriel Magalhães')).toBe('Gabriel');
+		expect(shortName('Pau Cubarsí Paredes')).toBe('Cubarsí');
 	});
 	it('takes first and last initials', () => {
 		expect(personInitials('Mikel Arteta')).toBe('MA');

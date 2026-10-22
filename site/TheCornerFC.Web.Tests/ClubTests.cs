@@ -71,6 +71,7 @@ public class ClubTests
         Assert.Equal("Haaland", ClubPage.ShortName("E. Haaland"));
         Assert.Equal("van Dijk", ClubPage.ShortName("V. van Dijk"));
         Assert.Equal("Gabriel", ClubPage.ShortName("Gabriel Magalhães"));
+        Assert.Equal("Cubarsí", ClubPage.ShortName("Pau Cubarsí Paredes"));
         Assert.Equal("MA", ClubPage.PersonInitials("Mikel Arteta"));
         Assert.Equal("R", ClubPage.PersonInitials("Rodri"));
         Assert.Equal("5 Sep", ClubPage.ShortDate("2026-09-05"));

@@ -122,7 +122,7 @@ export const pct = (v: number) => Math.round(Math.max(0, Math.min(100, v)));
 
 // Surname for tight spaces, keeping lower-case particles ("M. de Ligt" -> "de Ligt"), or the
 // name a player is known by where that isn't his surname
-const KNOWN_AS: Record<string, string> = { 'Gabriel Magalhães': 'Gabriel' };
+const KNOWN_AS: Record<string, string> = { 'Gabriel Magalhães': 'Gabriel', 'Pau Cubarsí Paredes': 'Cubarsí' };
 export function shortName(name: string) {
 	if (KNOWN_AS[name]) return KNOWN_AS[name];
 	const parts = name.split(' ');
