@@ -5,6 +5,7 @@ from thecornerfc.pipeline.api import repair_payload, repair_text
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "db/migrations/20261022_repair_player_names.sql"
+PART = ROOT / "db/migrations/20261022_repair_player_names_part.sql"
 
 
 class NameRepairTests(unittest.TestCase):
@@ -31,6 +32,9 @@ class NameRepairTests(unittest.TestCase):
         self.assertIn(sql, (ROOT / "db/schema.sql").read_text())
         self.assertIn("convert_from(convert_to(t, 'LATIN1'), 'UTF8')", sql)
         self.assertIn("EXCEPTION WHEN others THEN\n    RETURN t;", sql)       # anything that doesn't read back stays as it is
+        part = PART.read_text()
+        self.assertIn(part, (ROOT / "db/schema.sql").read_text())
+        self.assertIn("convert_to(m, 'WIN1252')", part)                    # one character at a time, both forms
 
 
 if __name__ == "__main__":

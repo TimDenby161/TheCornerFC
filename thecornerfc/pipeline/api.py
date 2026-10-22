@@ -22,19 +22,25 @@ _MANGLED = re.compile("[\xc2-\xdf][\x80-\xbf\u0152\u0153\u0160\u0161\u0178\u017d
                       "|[\xe0-\xef][\x80-\xbf\u20ac\u2122\u0152\u0153\u0160\u0161]{2}")
 
 
-def repair_text(s):
-    """s with any UTF-8 that was read as Latin-1 or Windows-1252 put back, or s as it was: a
-    repair counts only if the whole string comes back as valid UTF-8, so a real name that merely
-    looks odd ("Ãvila", "Ñañez") is left alone."""
-    if not isinstance(s, str) or not _MANGLED.search(s):
-        return s
+def _unmangle(m):
+    """One garbled character back as it was meant, or the match as it was if it isn't one."""
+    text = m.group()
     for codec in ("latin-1", "cp1252"):
         try:
-            fixed = s.encode(codec).decode("utf-8")
+            return text.encode(codec).decode("utf-8")
         except (UnicodeEncodeError, UnicodeDecodeError):
             continue
-        return fixed if fixed != s else s
-    return s
+    return text
+
+
+def repair_text(s):
+    """s with any UTF-8 that was read as Latin-1 or Windows-1252 put back, one character at a
+    time, so a name garbled only in part ("A. Ã\x96ztürk") comes back whole: a match changes only
+    if it reads back as one valid UTF-8 character, so a real name that merely looks odd ("Ãvila",
+    "Ñañez") is left alone."""
+    if not isinstance(s, str) or not _MANGLED.search(s):
+        return s
+    return _MANGLED.sub(_unmangle, s)
 
 
 def repair_payload(data):

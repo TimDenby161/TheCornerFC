@@ -1,4 +1,4 @@
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-22.
 -- Player names as API-Football sent them, garbled (T-049, 2026-10-22): UTF-8 read as Latin-1,
 -- "M. CvetkoviÄ\u0087" for M. Cvetković, "O. SÃ¸e" for O. Søe. Seen in production on 2026-10-22:
 -- 75 names, 3 first names, 9 last names in players, nothing in any other table. The jobs repair
