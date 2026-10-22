@@ -1,0 +1,30 @@
+{
+ "id": "MC-0033",
+ "registration": {
+  "recorded": "2026-10-22",
+  "retrospective": false,
+  "date": "2026-10-22",
+  "title": "Skill scores pulled towards the level a player plays at",
+  "component": "Player ranks",
+  "model": "player",
+  "kind": "experiment",
+  "what": "Each skill score moves by SKILL_LEVEL_PULL standard deviations for every 100 points his clubs' strength sits above or below the reference leagues' average, on top of the league offsets of MC-0031. Only the skill scores change.",
+  "why": "The owner, 2026-10-22: D. Markanday (League Two) still scores 97 in dribbling after MC-0031, and shouldn't if leagues are taken into account. The movers' data doesn't support a further cut, so it is the owner's judgement, as Ability's club-strength start is.",
+  "how": "skill_reference_level and the level pull in skill_scores, player_ratings.py; the strength set by the owner by eye from experiments/skill_level/report.py.",
+  "hypothesis": "None to test: a judgement. Lower-league skill scores come down and the strongest leagues' go up by the owner's chosen pull, with every rank as it was.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/skill_level/DESIGN.md"
+  },
+  "success_criteria": "A judgement: the owner sets the pull by eye from the report. Before release every rank, season rank, position rank, projection and predicted XI must be identical (report.py).",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/skill_level",
+   "model_version": null
+  }
+ },
+ "events": []
+}
