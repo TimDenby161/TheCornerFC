@@ -49,6 +49,12 @@
    "type": "decision",
    "status": "Accepted",
    "reason": "Owner's choice, 2026-10-22, from the look over the live site (T-061): score a skill only where the position uses it."
+  },
+  {
+   "date": "2026-10-22",
+   "type": "released",
+   "as": "MC-0036",
+   "note": "Released as registered, as MC-0036 on 2026-10-22."
   }
  ]
 }
