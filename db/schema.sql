@@ -4467,7 +4467,7 @@ COMMIT;
 --   select count(*) from players where name ~ '[Â-ß][\u0080-¿]|[à-ï][\u0080-¿]{2}';
 --   select name from players where player_id = 398190;     -- M. Cvetković
 
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-22.
 -- The player names 20261022_repair_player_names.sql left garbled (T-049, 2026-10-22): three that
 -- are garbled only in part ("A. Ã\u0096ztürk", "O. Ã\u0087akıroÄ\u009flu") or in the Windows-1252
 -- form ("QarÉ™hmÉ™dov"), which a whole-string repair can't put back. Each garbled character is
