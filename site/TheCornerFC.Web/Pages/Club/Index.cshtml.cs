@@ -12,7 +12,9 @@ public sealed class IndexModel(Database db) : ClubPageModel(db)
     static readonly HashSet<string> BanReasons = ["Red Card", "Yellow Cards", "Suspended"];
 
     public sealed record Side(bool Home, int Opp, string OppName, double? Gf, double? Ga, int? Win);
-    public sealed record InjuredPlayer(int Id, string Name, int Missed, double? Rank, string? Note, string? Ban);
+    // Link: he has a page (he is among the club's listed players); a long-term absentee who has
+    // dropped out of the ranks has none, so his name isn't a link (found by the site sweep, 2026-10-22)
+    public sealed record InjuredPlayer(int Id, string Name, int Missed, double? Rank, string? Note, string? Ban, bool Link = true);
     public sealed record InjuryCard(bool Upcoming, DateTimeOffset Kickoff, string? Latest, List<InjuredPlayer> Players);
     public sealed record PitchRow(int Id, string Name, int? Pct, int Rank, int XMin, string Tip);
     public sealed record PitchBox(string Label, int N, string Row, int Col, int Total, List<PitchRow> Rows);
@@ -66,7 +68,8 @@ public sealed class IndexModel(Database db) : ClubPageModel(db)
                     var ban = x.Row[3].ValueKind == System.Text.Json.JsonValueKind.String ? x.Row[3].GetString() : null;
                     var banned = ban is not null && BanReasons.Contains(ban);
                     return new InjuredPlayer(x.Row[0].GetInt32(), x.Row[1].GetString() ?? "", x.Row[4].GetInt32(), x.Rank,
-                        type == "Questionable" ? "doubt" : type == "Suspended" || banned ? "susp" : null, banned && ban != "Suspended" ? ban : null);
+                        type == "Questionable" ? "doubt" : type == "Suspended" || banned ? "susp" : null, banned && ban != "Suspended" ? ban : null,
+                        byId.ContainsKey(x.Row[0].GetInt32()));
                 }).ToList());
         // the squad by position: each box's players, best first, with the chance each starts there
         // in the next match and the minutes he is expected to play

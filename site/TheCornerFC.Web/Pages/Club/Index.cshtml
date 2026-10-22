@@ -20,7 +20,7 @@
                 foreach (var p in inj.Players)
                 {
                     <div class="inj-row">
-                        <div class="inj-top"><span class="inj-name" title="@p.Name: missed his club's last @p.Missed match@(p.Missed == 1 ? "" : "es")"><span class="inj-surname"><a class="player-link" href="@Menu.PageHref("player", p.Id.ToString())">@ClubPage.ShortName(p.Name)</a></span>@if (p.Missed > 0){<span class="inj-missed">&nbsp;– @p.Missed</span>}</span>
+                        <div class="inj-top"><span class="inj-name" title="@p.Name: missed his club's last @p.Missed match@(p.Missed == 1 ? "" : "es")"><span class="inj-surname">@if (p.Link){<a class="player-link" href="@Menu.PageHref("player", p.Id.ToString())">@ClubPage.ShortName(p.Name)</a>}else{@ClubPage.ShortName(p.Name)}</span>@if (p.Missed > 0){<span class="inj-missed">&nbsp;– @p.Missed</span>}</span>
                             @if (p.Rank is { } rk){<span class="rel-chip rel-@ClubPage.RankTier(rk)">@Js.RoundInt(rk)</span>}else{<span class="rel-chip rel-none" title="No rating shown">–</span>}</div>
                         @if (p.Note == "doubt"){<span class="inj-reason doubt">Doubtful</span>}else if (p.Note == "susp"){<span class="inj-reason susp">@(p.Ban is not null ? $"Suspended · {p.Ban}" : "Suspended")</span>}
                     </div>
