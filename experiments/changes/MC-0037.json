@@ -49,6 +49,12 @@
    "type": "decision",
    "status": "Accepted",
    "reason": "Owner's choice, 2026-10-22 (T-061): three keeper skills on keepers' pages and as Players-list sorts."
+  },
+  {
+   "date": "2026-10-23",
+   "type": "released",
+   "as": "MC-0038",
+   "note": "Released as registered, as MC-0038 on 2026-10-23."
   }
  ]
 }

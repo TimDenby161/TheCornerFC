@@ -26,5 +26,12 @@
    "model_version": null
   }
  },
- "events": []
+ "events": [
+  {
+   "date": "2026-10-23",
+   "type": "deployed",
+   "commit": "2c3e45485",
+   "note": "Promoted to main on 2026-10-23 (live from 06:48 UTC after a 9½-minute outage caused by an Azure setting, not by this change); the keeper scores arrive with the first nightly after it."
+  }
+ ]
 }
