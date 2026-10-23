@@ -1,4 +1,4 @@
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-23.
 -- Skill scores are for subscribers (owner, 2026-10-23, for the launch): every player's, the free
 -- slice included. site_players(...) is the function of 20261022_keeper_skill_sorts.sql with one
 -- change: for anyone not entitled, a player in the free slice comes with his row's last field, his

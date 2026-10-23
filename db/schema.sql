@@ -4515,7 +4515,7 @@ COMMIT;
 --   select count(*) from players where name ~ '[Â-ß][\u0080-¿]|[à-ï][\u0080-¿]{2}';
 --   select name from players where player_id = 493965;
 
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-22.
 -- Keeper skills (owner, 2026-10-22, MC-0037, experiments/keeper_skills): the Players tab can list
 -- keepers by shot-stopping, goals prevented and distribution. site_players(...) is the function of
 -- 20261021_player_skills.sql with one change: p_sort also takes 'k_shot_stopping',
@@ -4598,7 +4598,7 @@ NOTIFY pgrst, 'reload schema';
 -- Check afterwards (after the next nightly run):
 --   select public.site_players(p_sort => 'k_shot_stopping', p_limit => 3)::json->'rows';     -- three of the best shot-stoppers
 
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-23.
 -- Skill scores are for subscribers (owner, 2026-10-23, for the launch): every player's, the free
 -- slice included. site_players(...) is the function of 20261022_keeper_skill_sorts.sql with one
 -- change: for anyone not entitled, a player in the free slice comes with his row's last field, his

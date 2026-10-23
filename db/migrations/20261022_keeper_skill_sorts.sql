@@ -1,4 +1,4 @@
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-22.
 -- Keeper skills (owner, 2026-10-22, MC-0037, experiments/keeper_skills): the Players tab can list
 -- keepers by shot-stopping, goals prevented and distribution. site_players(...) is the function of
 -- 20261021_player_skills.sql with one change: p_sort also takes 'k_shot_stopping',
