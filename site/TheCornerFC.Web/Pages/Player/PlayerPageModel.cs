@@ -18,6 +18,8 @@ public abstract class PlayerPageModel(Database db) : PageModel
     public SiteDoc Site { get; private set; } = null!;
     public Player P { get; private set; } = null!;
     public PlayerDoc? Doc { get; private set; }
+    // the database held back the paid fields for this visitor (his skill scores among them, even in the free slice)
+    public bool Paywall { get; private set; }
     public List<SeasonLine> Lines { get; private set; } = [];
     public List<Appearance> Apps { get; private set; } = [];
     public PlayerPage.SeasonSum? Now { get; private set; }
@@ -50,6 +52,7 @@ public abstract class PlayerPageModel(Database db) : PageModel
         var docTask = DocOrNull();
         await Task.WhenAll(answerTask, docTask);
         var p = ClubData.Players(Site, answerTask.Result.Rows).FirstOrDefault();
+        Paywall = answerTask.Result.Paywall == true;
         if (p is null) return NotFound();
         P = p;
         Doc = docTask.Result;

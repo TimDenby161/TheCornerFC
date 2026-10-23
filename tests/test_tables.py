@@ -280,6 +280,19 @@ class PaidPlayersTests(unittest.TestCase):
         self.assertEqual(body(sql).replace(",\n                                          'k_shot_stopping', 'k_goals_prevented', 'k_distribution'", ""),
                          body(before))
 
+    def test_the_skills_for_subscribers_migration_changes_only_the_free_slice_row(self):
+        root = Path(__file__).resolve().parents[1]
+        sql = (root / "db/migrations/20261023_skills_for_subscribers.sql").read_text()
+        self.assertIn(sql, (root / "db/schema.sql").read_text())
+        from thecornerfc.publish import export
+        self.assertEqual(export.SITE_PLAYER_FIELDS[-1], "skills")      # the field the function blanks is the row's last
+        before = (root / "db/migrations/20261022_keeper_skill_sorts.sql").read_text()
+        body = lambda t: t[t.index("CREATE OR REPLACE FUNCTION public.site_players("):t.index("COMMIT;")]
+        old = "                   CASE WHEN whole OR p.free THEN p.data ELSE p.data_free END AS data,"
+        self.assertIn(old, body(before))
+        self.assertEqual(body(sql)[:body(sql).index("-- a player in the free slice")].rstrip(), body(before)[:body(before).index(old)].rstrip())
+        self.assertEqual(body(sql)[body(sql).index("ELSE p.data_free END AS data,"):], body(before)[body(before).index("ELSE p.data_free END AS data,"):])
+
     def test_the_migration_blanks_the_same_fields_and_marks_the_same_slice(self):
         from thecornerfc.publish import export
         sql = (Path(__file__).resolve().parents[1] / "db/migrations/20261006_paid_players.sql").read_text()

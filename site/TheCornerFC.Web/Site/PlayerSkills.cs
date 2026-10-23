@@ -16,10 +16,13 @@ public static class PlayerSkills
         public string AGroup => $"{("aeiou".Contains(GroupName[0]) ? "an" : "a")} {GroupName}";
     }
 
-    public static View? Of(Player p, SiteDoc site)
+    // paywall: the database held back the paid fields for this visitor; skill scores are for
+    // subscribers for every player (2026-10-23), so a free-slice player's are held back too
+    public static View? Of(Player p, SiteDoc site, bool paywall = false)
     {
+        var locked = p.Locked || (paywall && p.Skills is null);
         var group = p.Position is { } pos ? Names.GroupOf.GetValueOrDefault(pos) : null;
-        var scores = p.Locked ? null : p.Skills;
+        var scores = locked ? null : p.Skills;
         if (group == "GK")
         {
             // keepers' own three (MC-0037), with the share of his rank where one counts: his rank
@@ -30,7 +33,7 @@ public static class PlayerSkills
                 var weight = k.Key switch { "shot_stopping" => 50, "distribution" => 25, _ => 0 };
                 return new Line(k.Key, k.Label, k.Tip, weight, score, score is { } sc ? Math.Clamp(Js.RoundInt(sc), 0, 100) : 0);
             }).ToList();
-            return new("GK", Names.GroupSingle.GetValueOrDefault("GK") ?? "goalkeeper", keeper, p.Locked, keeper.Any(l => l.Score is not null));
+            return new("GK", Names.GroupSingle.GetValueOrDefault("GK") ?? "goalkeeper", keeper, locked, keeper.Any(l => l.Score is not null));
         }
         if (group is null || site.SkillMix?.GetValueOrDefault(group) is not { Count: > 0 } mix) return null;
         // every outfield skill, the heaviest in his position's mix first (some weigh nothing in it)
@@ -43,6 +46,6 @@ public static class PlayerSkills
                 return new Line(x.s.Key, x.s.Label, x.s.Tip, Js.RoundInt(100 * x.w), score, score is { } sc ? Math.Clamp(Js.RoundInt(sc), 0, 100) : 0);
             })
             .ToList();
-        return new(group, Names.GroupSingle.GetValueOrDefault(group) ?? group, lines, p.Locked, lines.Any(l => l.Score is not null));
+        return new(group, Names.GroupSingle.GetValueOrDefault(group) ?? group, lines, locked, lines.Any(l => l.Score is not null));
     }
 }

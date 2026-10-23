@@ -22,7 +22,7 @@ public sealed class IndexModel(Database db) : PlayerPageModel(db)
     protected override async Task<IActionResult?> Load()
     {
         var p = P;
-        Skills = PlayerSkills.Of(p, Site);
+        Skills = PlayerSkills.Of(p, Site, Paywall);
         // his club's next match: when, who, the model's view, and whether he is listed unavailable
         // for it (the injury itself isn't published: only "Doubtful", "Suspended" or "Out")
         TheCornerFC.Web.Data.Match? m = null;

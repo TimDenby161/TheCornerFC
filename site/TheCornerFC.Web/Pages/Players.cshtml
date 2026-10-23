@@ -166,7 +166,7 @@
                 </table>
                 @if (Model.Rows.Count < Model.Total){<div data-more-rows="/players/rows" data-total="@Model.Total"></div>}
             </div>
-            @if (Model.Paywall){<div class="page-note">Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected. @await Html.PartialAsync("_SubscriberLink")</div>}
+            @if (Model.Paywall){<div class="page-note">Player ranks outside the top 50 overall, the top 10 in each league and the top 10 in each position are for subscribers: his rank, season by season, in each position and projected. Every player's skill scores are for subscribers too: a list sorted by a skill keeps its order, with the scores hidden. @await Html.PartialAsync("_SubscriberLink")</div>}
         }
         else
         {

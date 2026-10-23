@@ -97,9 +97,9 @@ INSERT INTO site.matches (fixture_id, kickoff, league_id, home_id, away_id, data
 -- 1 in the free slice; 2 outside it, with his blanked row; 3 outside it with no blanked row yet
 INSERT INTO site.players (player_id, ord, name_lc, name_fold, team_id, league_id, ability, plays, seasons, future,
                           pos_ranks, data, free, data_free) VALUES
-    (1, 1, 'one', 'one', 10, 39, 90, '{ST}', '{90}', '{90}', '{"ST": 90}', '["one whole"]', true, '["one cut"]'),
-    (2, 2, 'two', 'two', 10, 39, 80, '{ST}', '{80}', '{80}', '{"ST": 80}', '["two whole"]', false, '["two cut"]'),
-    (3, 3, 'three', 'three', 10, 39, 70, '{ST}', '{70}', '{70}', '{"ST": 70}', '["three whole"]', false, NULL);
+    (1, 1, 'one', 'one', 10, 39, 90, '{ST}', '{90}', '{90}', '{"ST": 90}', '["one whole", {"finishing": 90}]', true, '["one cut", null]'),
+    (2, 2, 'two', 'two', 10, 39, 80, '{ST}', '{80}', '{80}', '{"ST": 80}', '["two whole", {"finishing": 80}]', false, '["two cut", null]'),
+    (3, 3, 'three', 'three', 10, 39, 70, '{ST}', '{70}', '{70}', '{"ST": 70}', '["three whole", {"finishing": 70}]', false, NULL);
 
 INSERT INTO public.leagues (league_id, name) VALUES (39, 'League');
 INSERT INTO public.teams (team_id, name) VALUES (10, 'Home'), (20, 'Away');
@@ -233,11 +233,17 @@ class SiteAccess(unittest.TestCase):
             with self.subTest(visitor=visitor):
                 got = self.ask(visitor, "SELECT public.site_players(p_ids => '{1,2,3}')::text")
                 rows = [r[0] for r in got["rows"]]
+                skills = [r[-1] for r in got["rows"]]
                 if visitor in ENTITLED:
                     self.assertEqual((got["paywall"], rows), (False, ["one whole", "two whole", "three whole"]))
+                    self.assertEqual(skills, [{"finishing": 90}, {"finishing": 80}, {"finishing": 70}])
                 else:
                     # 3 has no blanked row yet: left out rather than shown whole
                     self.assertEqual((got["paywall"], rows), (True, ["one whole", "two cut"]))
+                    # skill scores are for subscribers, the free slice's too (2026-10-23)
+                    self.assertEqual(skills, [None, None])
+                    by_skill = self.ask(visitor, "SELECT public.site_players(p_ids => '{1,2,3}', p_sort => 'k_finishing')::text")
+                    self.assertEqual([r[0] for r in by_skill["rows"]], ["one whole", "two cut"])     # the subscriber's order
                     # and a filter on Ability can't be used to find the hidden ones
                     by_ability = self.ask(visitor, "SELECT public.site_players(p_ids => '{1,2,3}', p_ab => '{75,85}')::text")
                     self.assertEqual(by_ability["rows"], [])

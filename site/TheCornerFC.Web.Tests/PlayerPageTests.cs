@@ -95,7 +95,7 @@ public class PlayerPageTests
         Assert.Matches("Finishing</td>\\s*<td>.*?<b>40</b></span></td>\\s*<td>–</td>", html);
         Assert.True(html.IndexOf(">Passing<", StringComparison.Ordinal) < html.IndexOf(">Finishing<", StringComparison.Ordinal));
         Assert.Contains("each skill counting by its share in a centre-back's mix", html);
-        Assert.DoesNotContain("for subscribers, like his rank", html);
+        Assert.DoesNotContain("Skill scores are for subscribers", html);
     }
 
     [Fact]
@@ -105,7 +105,19 @@ public class PlayerPageTests
         Assert.Contains("Skills · as a centre-back", html);
         Assert.Matches("Passing</td>\\s*<td>–</td>\\s*<td>30%</td>", html);
         Assert.DoesNotContain("mc-fill sw-", html);
-        Assert.Contains("His skill scores are for subscribers, like his rank.", html);
+        Assert.Contains("Skill scores are for subscribers.", html);
+    }
+
+    [Fact]
+    public async Task In_the_free_slice_his_rank_shows_but_his_skills_are_for_subscribers()
+    {
+        // the database blanks a free-slice player's skill scores for a visitor who isn't entitled
+        const string free = """{"total":1,"paywall":true,"rows":[[129033,"J. Gvardiol","D",92.6,50,39,"Croatia",24,[92.6,91.1,96.0],[],3,600,{"FB":92.6,"CB":90.1},[459,1,3],null]]}""";
+        var html = await Skills(free);
+        Assert.Contains("<span class=\"val\">93</span><span class=\"lbl\">Ability</span>", html);
+        Assert.Contains("Skill scores are for subscribers.", html);
+        Assert.Matches("Passing</td>\\s*<td>–</td>\\s*<td>30%</td>", html);
+        Assert.DoesNotContain("No skill scores yet", html);
     }
 
     [Fact]
