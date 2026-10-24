@@ -14,7 +14,7 @@ logs/
 .export/
 
 # Security audit findings — never commit (public repo)
-audit/
+/audit
 
 # the experiment's output on the agreed settings (16 MB); verify.py reads it when present
 experiments/player_no_rating/reference.pickle
@@ -26,7 +26,7 @@ experiments/*/inputs.json.gz
 .claude/worktrees/
 
 # Claude's private working knowledge of the project, drawn from audit/: never commit (public repo)
-.claude/brain/
+/.claude/brain
 
 # Claude Code: each person's own settings for this project
 .claude/settings.local.json
