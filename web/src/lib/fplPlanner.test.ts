@@ -119,3 +119,22 @@ test("a squad player with no prediction counts as zero and can be sold", () => {
   const plan = P.plan(prep, { ft: 1 });
   assert.deepEqual(plan.weeks[0].moves, [{ out: -999, in: 70 }]);
 });
+
+test("players out for the whole plan are all sold in the first week, hits and all", () => {
+  // two injured starters at zero; the bench covers them well enough that splitting the sales would score more
+  const pred = world([...SQUAD.map((p) => (p[0] === 8 || p[0] === 13 ? [p[0], p[1], p[2], p[3], 0] : p)),
+    [60, "M", 200, 50, 3], [61, "F", 201, 50, 3]]);
+  pred.players.forEach((r) => { if (r[0] === 8 || r[0] === 13) r[6] = "i"; });
+  const t = team();
+  t.squad.forEach((s) => { if (s.api === 8 || s.api === 13) s.status = "i"; });
+  const prep = P.prepare(pred, t);
+  const plan = P.plan(prep, { ft: 1 });
+  assert.deepEqual(plan.weeks[0].moves.map((m) => m.out).sort((a, b) => a - b), [8, 13]);
+  assert.equal(plan.weeks[0].hits, 4);
+  // a doubtful player, or one back within the plan, is left to the search
+  const back = world([...SQUAD.map((p) => (p[0] === 8 ? [p[0], p[1], p[2], p[3], [0, 0, 2, 2, 2, 2, 2, 2]] : p))]);
+  const t2 = team(); t2.squad[7].status = "i";
+  assert.equal(P.plan(P.prepare(back, t2), { ft: 1 }).weeks[0].hits, 0);
+  // locked-in transfers are kept as they are
+  assert.deepEqual(P.plan(prep, { ft: 1, first: [] }).weeks[0].moves, []);
+});

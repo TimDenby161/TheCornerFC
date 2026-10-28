@@ -204,6 +204,7 @@ function Team({ owner, t, d }: { owner: Owner; t: TeamDoc; d: PredDoc }) {
 			<div className="stats-note mt-foot">
 				Expected points are {d.model}'s, from the FPL tab. The plan searches the next {H} gameweeks for the transfers that add the most:
 				each week it rolls the free transfer or makes one, two or three moves, and a move beyond the free ones costs 4 points.
+				A player FPL lists as out with no expected points in any of those weeks is sold in the first week, even at a cost.
 				A squad is scored by its best line-up with the captain doubled, plus a little for the bench; each later week counts 10% less than the one before,
 				and a free transfer still banked at the end is worth 1.5 points. Selling prices keep half of any rise, as FPL does.
 				Squad, bank, free transfers and chips come from FPL (updated at 07:00, 13:00 and 19:00 UTC). A guide, not advice.</div>

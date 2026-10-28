@@ -1,7 +1,7 @@
 // @ts-nocheck
 // My FPL team: transfer plan and chip advice from the fantasy model's expected points
 // (fpl_predictions) and the owner's squad (fpl_team). Pure functions, no page code; carried over
-// unchanged from the old site's assets/fpl-planner.js (fplPlanner.d.ts says what they take and give).
+// from the old site's assets/fpl-planner.js (fplPlanner.d.ts says what they take and give).
 //
 // Plan: a beam search over the next HORIZON gameweeks. Each week every kept plan may roll its
 // free transfer, or make the best one, two or (with 3+ free) three transfers; a transfer beyond
@@ -14,6 +14,10 @@ const FT_VALUE = 1.5;       // a free transfer still banked at the end of the pl
 const HIT = 4, MAX_FT = 5, CLUB_LIMIT = 3;
 const BEAM = 10, SINGLES = 8, DOUBLES = 6, CANDIDATES = 10, POOL = 60;
 const MIN_GAIN = 0.05;
+// Owner's rule (2026-10-28): a squad player FPL lists as out (injured, suspended, unavailable,
+// left) with no expected points in any week of the plan is sold in the first week, hits and all,
+// rather than benched while other transfers come first.
+const OUT = new Set(["i", "s", "u", "n"]);
 // A chip is advised for a week once its expected gain there reaches this, else held (unless its
 // window closes within the predictions). Set above an ordinary week's: a bench is worth ~12 and
 // a captain ~7 most weeks, so these want a double gameweek or a standout fixture.
@@ -180,19 +184,58 @@ function bestMoves(ctx, st, obj, quick, { singles = SINGLES, doubles = DOUBLES, 
 }
 
 // ---- plan
+// Squad players out for the whole plan (OUT): FPL lists them as out and they have no expected points in any week
+function outForPlan(ctx, squad) {
+  return squad.filter((id) => {
+    const p = ctx.players.get(id);
+    return OUT.has(p.status) && p.xp.slice(0, ctx.H).reduce((a, x) => a + x, 0) < MIN_GAIN;
+  });
+}
+// The best few ways to sell every one of `out` at once: a small beam over them, a player at a
+// time, each tried in every order (the first buy can leave too little money for the next)
+function replaceAll(ctx, st, out, obj, quick) {
+  const orders = out.length > 3 ? [out] : out.reduce((acc, id) => acc.flatMap((o) => [...o.keys(), o.length].map((i) => [...o.slice(0, i), id, ...o.slice(i)])), [[]]);
+  const found = new Map();
+  for (const order of orders) {
+    let paths = [{ moves: [], state: st }];
+    for (const id of order) {
+      const pos = ctx.players.get(id).pos, grown = [];
+      for (const path of paths) {
+        const have = new Set(path.state.squad);
+        const cands = ctx.pool[pos].filter((p) => !have.has(p.id)).sort((a, b) => quick(b) - quick(a));
+        let n = 0;
+        for (const c of cands) {
+          const next = apply(ctx, path.state, [{ out: id, in: c.id }]);
+          if (!next) continue;
+          grown.push({ moves: [...path.moves, { out: id, in: c.id }], state: next, v: obj(next.squad) });
+          if (++n >= CANDIDATES) break;
+        }
+      }
+      paths = grown.sort((a, b) => b.v - a.v).slice(0, 5);
+    }
+    for (const p of paths) {
+      const key = p.moves.map((m) => `${m.out}>${m.in}`).sort().join();
+      if (!found.has(key)) found.set(key, p);
+    }
+  }
+  return [...found.values()].sort((a, b) => b.v - a.v).slice(0, 5);
+}
 // ft: free transfers for the first week (after any already made in FPL). first: moves fixed for
 // the first week (the transfers locked in; [] = locked with none), or null to plan it too.
 function plan(prep, { ft, first = null } = {}) {
   const { ctx, start } = prep;
   const H = ctx.H;
   const key = (s) => [...s.squad].sort((a, b) => a - b).join() + `|${s.ft}`;
+  const out = first ? [] : outForPlan(ctx, start.squad);
   let beam = [{ ...start, ft, steps: [], acc: 0 }];
   for (let k = 0; k < H; k++) {
     const obj = (sq) => weighted(ctx, sq, k, H);
     const quick = (p) => p.rem[k];
     const next = new Map();
     for (const s of beam) {
+      const forced = k === 0 && out.length ? replaceAll(ctx, s, out, obj, quick) : [];
       const options = k === 0 && first ? [{ moves: first }]
+        : forced.length ? forced
         : (({ singles, doubles, triples }) => [{ moves: [] }, ...singles, ...doubles, ...triples])(
           bestMoves(ctx, s, obj, quick, { triples: s.ft >= 3 }));
       for (const opt of options) {

@@ -1,4 +1,4 @@
-// What fplPlanner.js takes and gives (the code itself is the old site's, unchanged).
+// What fplPlanner.js takes and gives (the code itself is the old site's, plus selling players out for the whole plan).
 import type { PredDoc, TeamDoc, Chip } from './fantasy.ts';
 
 export type Pos = 'G' | 'D' | 'M' | 'F';
