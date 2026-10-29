@@ -30,9 +30,12 @@ class ShownPositionRanks(unittest.TestCase):
         self.assertEqual(ranks, {"FB": 81.8, "CM": 90.6})
         self.assertEqual(shown_position_ranks("LM", 70.0, {}), {"W": 70.0})
 
-    def test_a_keeper_or_a_player_with_no_ability_is_left_alone(self):
+    def test_a_keeper_is_ranked_as_a_keeper_by_his_ability(self):
         from thecornerfc.publish.site_players import shown_position_ranks
-        self.assertEqual(shown_position_ranks("GK", 88.0, {}), {})
+        self.assertEqual(shown_position_ranks("GK", 88.0, {}), {"GK": 88.0})
+
+    def test_a_player_with_no_ability_or_position_is_left_alone(self):
+        from thecornerfc.publish.site_players import shown_position_ranks
         self.assertEqual(shown_position_ranks("ST", None, {"ST": 80.0}), {"ST": 80.0})
         self.assertEqual(shown_position_ranks(None, 80.0, {"ST": 79.0}), {"ST": 79.0})
 
@@ -57,6 +60,13 @@ class SitePlayerRows(unittest.TestCase):
                          [(2, 4), (3, 4), (1, 4), (1, 1), (4, 4), (None, None), (None, None)])
         self.assertEqual([got[i]["ord"] for i in range(1, 8)], list(range(7)))
         self.assertEqual([r["ord"] for r in rows], list(range(7)))
+
+    def test_the_best_ten_keepers_are_free_below_the_top_fifty(self):
+        strikers = [player(i, seasons=[99.0 - i / 10, None], rank=90.0) for i in range(1, 61)]
+        keepers = [player(100 + i, seasons=[80.0 - i, None], rank=80.0 - i, position="GK", positions_12m=["GK"],
+                          position_ranks={"GK": 80.0 - i}) for i in range(1, 12)]
+        got = {r["player_id"]: r["free"] for r in site_player_rows(strikers + keepers)}
+        self.assertEqual([got[100 + i] for i in range(1, 12)], [True] * 10 + [False])
 
     def test_the_columns_the_queries_filter_and_sort_on(self):
         rankings = [[1, 39, 0, 0, 1100.0], [2, 39, 0, 0, 1100.0], [3, 39, 0, 0, 1000.0], [4, 39, 0, 0, None]]

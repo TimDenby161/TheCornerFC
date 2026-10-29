@@ -272,10 +272,11 @@ def shown_position_ranks(position, ability, ranks):
     started most over the last 12 months), his rank is his Ability, the number the Players tab
     is ordered by (owner, 2026-10-12). The model's own rank for him there can differ, most for a
     player filling in away from the position his seasons were played in; it stays in
-    player_position_ranks. Keepers have no position ranks."""
+    player_position_ranks. Keepers have none there, so a keeper's only one is GK, his Ability: it
+    puts him in his position's free top ten and fills the Players tab's As GK column."""
     from ..models.positions import GROUPS
     group = GROUPS.get(position)
-    if ability is None or group in (None, "GK"):
+    if ability is None or group is None:
         return ranks
     return {**ranks, group: ability}
 
