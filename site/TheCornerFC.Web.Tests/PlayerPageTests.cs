@@ -90,10 +90,10 @@ public class PlayerPageTests
         var html = await Skills(SkillRow);
         Assert.Contains("Skills · as a centre-back", html);
         // the heaviest in a centre-back's mix first, with his score and its share; the rest weigh nothing
-        Assert.Matches("<td title=\"Passes per 90 and pass accuracy\">Passing</td>\\s*<td><span class=\"mc-progress\"><span class=\"mc-bar\"><span class=\"mc-fill sw-89\"></span></span><b>89</b></span></td>\\s*<td>30%</td>", html);
+        Assert.Matches("<td title=\"How much he is on the ball: passes per 90, and pass accuracy\">Involvement</td>\\s*<td><span class=\"mc-progress\"><span class=\"mc-bar\"><span class=\"mc-fill sw-89\"></span></span><b>89</b></span></td>\\s*<td>30%</td>", html);
         Assert.Matches("Ball-winning</td>\\s*<td>.*?<b>63</b></span></td>\\s*<td>23%</td>", html);
         Assert.Matches("Finishing</td>\\s*<td>.*?<b>40</b></span></td>\\s*<td>–</td>", html);
-        Assert.True(html.IndexOf(">Passing<", StringComparison.Ordinal) < html.IndexOf(">Finishing<", StringComparison.Ordinal));
+        Assert.True(html.IndexOf(">Involvement<", StringComparison.Ordinal) < html.IndexOf(">Finishing<", StringComparison.Ordinal));
         Assert.Contains("each skill counting by its share in a centre-back's mix", html);
         Assert.DoesNotContain("Skill scores are for subscribers", html);
     }
@@ -103,7 +103,7 @@ public class PlayerPageTests
     {
         var html = await Skills(LockedRow);
         Assert.Contains("Skills · as a centre-back", html);
-        Assert.Matches("Passing</td>\\s*<td>–</td>\\s*<td>30%</td>", html);
+        Assert.Matches("Involvement</td>\\s*<td>–</td>\\s*<td>30%</td>", html);
         Assert.DoesNotContain("mc-fill sw-", html);
         Assert.Contains("Skill scores are for subscribers.", html);
     }
@@ -116,7 +116,7 @@ public class PlayerPageTests
         var html = await Skills(free);
         Assert.Contains("<span class=\"val\">93</span><span class=\"lbl\">Ability</span>", html);
         Assert.Contains("Skill scores are for subscribers.", html);
-        Assert.Matches("Passing</td>\\s*<td>–</td>\\s*<td>30%</td>", html);
+        Assert.Matches("Involvement</td>\\s*<td>–</td>\\s*<td>30%</td>", html);
         Assert.DoesNotContain("No skill scores yet", html);
     }
 

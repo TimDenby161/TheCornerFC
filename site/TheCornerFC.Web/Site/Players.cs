@@ -122,7 +122,7 @@ public static partial class Players
     [
         ("finishing", "Finishing", "Goals and shots on target per 90"),
         ("creating", "Creating", "Key passes and assists per 90"),
-        ("passing", "Passing", "Passes per 90 and pass accuracy"),
+        ("passing", "Involvement", "How much he is on the ball: passes per 90, and pass accuracy"),
         ("dribbling", "Dribbling", "Dribbles won per 90, less the ones lost"),
         ("ball_winning", "Ball-winning", "Tackles, interceptions and blocks per 90"),
         ("duels", "Duels", "Share of duels won (all duels: the data doesn't split out aerial ones)"),
