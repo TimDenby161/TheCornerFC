@@ -40,6 +40,9 @@
     /* the pitch and its markings: the one brand colour, the same in both themes */
     --pitch:          #0e3b29;
     --chalk:          #f2f4ec;
+    /* the surprise: on the mark, the home page's button and its dot, never on data or status, so
+       a filled shape under pitch text (it can't be read as text on chalk) */
+    --accent:         #ff86c0;
     --font:           "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   @media (prefers-color-scheme: dark) {
@@ -178,7 +181,7 @@
     font-size: 21px; line-height: 1; font-weight: 900; letter-spacing: 0.03em; text-transform: uppercase; white-space: nowrap;
   }
   /* the mark: a corner flag's two halves, white over black, drawn with the element's borders */
-  .brand-mark { width: 0; height: 0; border: 9px solid; border-color: #ffffff #0b110e #0b110e #ffffff; outline: 1px solid #9fb3a6; }
+  .brand-mark { width: 0; height: 0; border: 9px solid; border-color: var(--accent) #0b110e #0b110e var(--accent); outline: 1px solid #9fb3a6; }
 
   /* Main menu: a column down the left. Wide screens keep it open as a sidebar;
      phones slide it in from the menu button. */
@@ -1115,6 +1118,7 @@
   /* the markings run on past the drawing's own edges (index.html), to the hero's */
   .home-pitch { position: absolute; z-index: -1; top: 0; right: 0; width: 420px; height: 300px; overflow: visible; color: rgba(242,244,236,0.5); }
   .home-flag { transform-box: fill-box; transform-origin: right center; }
+  .home-flag-up { fill: var(--accent); }
   /* the slides side by side in a row that scrolls a slide at a time (a swipe turns it), all as tall
      as the tallest, each standing on the hero's foot. The 4px is room for a focus ring */
   .home-slides { display: flex; gap: 40px; margin: -4px; padding: 4px; scroll-padding-inline: 4px; overflow-x: auto; overflow-y: hidden;
@@ -1147,6 +1151,7 @@
   .home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
   .home-go, .home-ghost { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; font: inherit; font-stretch: 76%; font-size: 18px; font-weight: 800;
     letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.2; padding: 0 28px; text-decoration: none; cursor: pointer; }
+  .home-go { background: var(--accent); color: var(--pitch); }
   .home-go::after { content: "→"; margin-left: 8px; }
   /* the second choice: quieter than the one button the page wants pressed */
   .home-ghost { appearance: none; color: var(--text-primary); background: transparent; border: 1px solid var(--text-muted); font-size: 16px; font-weight: 700; padding: 0 20px; }
@@ -1156,7 +1161,7 @@
   .home-board { min-width: 0; padding-top: 10px; border-top: 2px solid var(--text-primary); }
   .home-board-head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
   .home-board-key { margin-left: auto; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--text-muted); }
-  .home-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good-text); }
+  .home-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   .home-top { list-style: none; margin: 0; padding: 0; counter-reset: home; }
   .home-top li { display: flex; align-items: center; gap: 10px; padding: 10px 0; counter-increment: home; }
   .home-top li + li { border-top: 1px solid var(--gridline); }
@@ -1276,7 +1281,7 @@
   @keyframes home-fill { from { transform: scaleX(0); } }
   @keyframes home-rise { from { opacity: 0; transform: translateY(18px); } }
   @keyframes home-wave { from { transform: skewY(-5deg) scaleX(1); } to { transform: skewY(5deg) scaleX(0.93); } }
-  @keyframes home-pulse { from { box-shadow: 0 0 0 0 rgba(95,224,138,0.6); } to { box-shadow: 0 0 0 var(--home-pulse, 9px) rgba(95,224,138,0); } }
+  @keyframes home-pulse { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); } to { box-shadow: 0 0 0 var(--home-pulse, 9px) transparent; } }
   .country-flag-lg { width: 60px; height: 42px; object-fit: cover; box-shadow: 0 0 0 1px var(--border); }
   @media (max-width: 600px) {
     table.league-table .lt-wide, table.league-table .lt-wdl, table.league-table .lt-gd, #league-tab table.league-table .lt-formcol { display: none; }
