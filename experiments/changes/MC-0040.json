@@ -1,0 +1,52 @@
+{
+ "id": "MC-0040",
+ "registration": {
+  "recorded": "2026-10-30",
+  "retrospective": false,
+  "date": "2026-10-30",
+  "title": "Opponent-adjusted shot and corner ratings in the boosted trees",
+  "component": "Match projection",
+  "model": "match",
+  "kind": "experiment",
+  "what": "Wheatcroft's GAP ratings (attack and defence, home and away) for shots, shots on target and corners, built match by match, added as nine features to A18's boosted trees. Corners are used for the first time.",
+  "why": "Literature review of 2026-10-30: match-statistic ratings adjusted for the opponent carried information beyond goals and beyond bookmaker prices (Wheatcroft 2020, IJF; 2021, JSA). A18 sees shots only as raw averages, and about half its gain was shots.",
+  "how": "experiments/gap_ratings/DESIGN.md: rating learning rates chosen on 2021/22 by how well they predict the counts (no results), trees as A18's chosen.json, development window 2022-07 to 2024-06, final 2024-07 to 2026-10-11 scored once, against A18 on identical matches.",
+  "hypothesis": "A18 with GAP features has lower result log loss than A18 on matches it has not been trained on.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/gap_ratings/DESIGN.md"
+  },
+  "success_criteria": "experiments/gap_ratings/run.py: final log loss better with its 99% interval below zero, development better, final Brier better, better in 2024/25 and 2025/26, no goal market worse by more than 0.0005, 60% of competitions with 300+ matches no worse. A pass is a lead for a prospective test, not a release.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/gap_ratings",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-30",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "A18 + GAP against A18, final 2024-07 to 2026-10-11, identical matches; ratings tuned on 2021/22 counts, trees as A18",
+   "metric": "log_loss",
+   "delta": -0.00056,
+   "n": 44383,
+   "baseline": 0.9908,
+   "after": 0.99023,
+   "interval": [
+    -0.00109,
+    -7e-05
+   ],
+   "interval_level": 0.99,
+   "meaningful": "A real gain that misses the screen: better on development (-0.0009) and final (-0.0006, 99% below zero), Brier, both seasons, every goal market and calibration, but only 35 of 62 competitions no worse (60% needed). The gain is the opponent-adjusted shot ratings: without corners it is the same (-0.00054). Worse where a side has no rating yet (+0.0006, 11,960 matches); better where both do (-0.0010) and in Europe (-0.0027, 2,233). Against production -0.0034 (A18 alone -0.0028). A lead for a prospective test; nothing changes.",
+   "source": "experiments/gap_ratings/results.json",
+   "period": null,
+   "vs_market": null
+  }
+ ]
+}

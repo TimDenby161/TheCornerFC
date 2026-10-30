@@ -1,0 +1,73 @@
+{
+ "id": "MC-0039",
+ "registration": {
+  "recorded": "2026-10-29",
+  "retrospective": false,
+  "date": "2026-10-29",
+  "title": "Line-up changes the match before",
+  "component": "Match projection",
+  "model": "match",
+  "kind": "experiment",
+  "what": "The expected margin moves by a value per line-up change: the number of starters each side changed in its previous match (known days before kickoff), home minus away. A second candidate uses the changes in the match itself (known an hour before).",
+  "why": "The owner, 2026-10-29: does how many changes a side made the week before help predict its next game? The model sees each side's predicted XI but not how much it has been rotating.",
+  "how": "experiments/rotation/DESIGN.md: the value chosen on 2023-07 to 2024-06, scored once on 2021-07 to 2023-06 and 2024-07 to 2026-10-11, on the stored projections.",
+  "hypothesis": "A side's line-up changes in its previous match tell the model something about its next match that its predicted XI does not.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/rotation/DESIGN.md"
+  },
+  "success_criteria": "experiments/rotation/run.py: test log loss on covered matches better with its 97.5% interval below zero, holdout better, test Brier no worse, better in 2024/25 and 2025/26, no goal market worse by more than 0.0005.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/rotation",
+   "model_version": null
+  }
+ },
+ "events": [
+  {
+   "date": "2026-10-29",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "A, prior changes: test 2024-07 to 2026-10-11, matches with both sides' previous-match changes known; 0.045 goals per change chosen on 2023/24",
+   "metric": "log_loss",
+   "delta": 0.00111,
+   "n": 7203,
+   "baseline": 1.0107,
+   "after": 1.0118,
+   "interval": [
+    -0.00018,
+    0.00244
+   ],
+   "interval_level": 0.975,
+   "meaningful": "No help shown: worse on test (+0.0011) and on the holdout (+0.0008), better only in 2025/26, 4 of 12 competitions no worse. The model's goal-difference error doesn't move with a side's changes the match before (bands 0-1, 2-3, 4-5 all within 0.03 goals of zero; 6+ is +0.10, 95% -0.03 to +0.25, on 585 side-matches). Covers 16% of matches: those with both XIs recorded.",
+   "source": "experiments/rotation/results.json",
+   "period": null,
+   "vs_market": null
+  },
+  {
+   "date": "2026-10-29",
+   "type": "result",
+   "evaluation": "backtest",
+   "unseen": "partly",
+   "label": "B, changes now: test 2024-07 to 2026-10-11, matches with both sides' changes in the match itself known; 0 chosen on 2023/24",
+   "metric": "log_loss",
+   "delta": 0.0,
+   "n": 8541,
+   "baseline": 1.00542,
+   "after": 1.00542,
+   "interval": [
+    -0.0,
+    0.0
+   ],
+   "interval_level": 0.975,
+   "meaningful": "No help shown: validation chose no change (0), so the candidate is the model itself. The model's error doesn't move with a side's changes in the match either (all bands within 0.03 goals of zero on test except 6+, +0.06 with a wide interval).",
+   "source": "experiments/rotation/results.json",
+   "period": null,
+   "vs_market": null
+  }
+ ]
+}

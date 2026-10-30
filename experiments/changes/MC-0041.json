@@ -1,0 +1,30 @@
+{
+ "id": "MC-0041",
+ "registration": {
+  "recorded": "2026-10-30",
+  "retrospective": false,
+  "date": "2026-10-30",
+  "title": "Back in the league after a European match with a week's rest",
+  "component": "Match projection",
+  "model": "match",
+  "kind": "experiment",
+  "what": "In a league match, the expected margin moves 0.19 goals towards a side whose previous match was European, five or more days earlier.",
+  "why": "Found by looking on 2026-10-29 (experiments/rotation's follow-up): such sides beat the stored projection by +0.19 goals (+0.07 to +0.31, 779 side-matches). A lead among about 45 groups, so only live matches can test it (T-072).",
+  "how": "experiments/after_europe/DESIGN.md; the shift fixed from history in chosen.json; judged live by P19.",
+  "hypothesis": "Sides back in their league after a European match with five or more days' rest do better than the live model expects.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": "experiments/after_europe/chosen.json"
+  },
+  "success_criteria": "P19 (experiments/prospective/PROTOCOLS.md): the confidence sequence's interval for the candidate minus the live model, on live matches from 2026-10-31, entirely below zero.",
+  "code": {
+   "commit": null,
+   "experiment": "experiments/after_europe",
+   "model_version": null
+  }
+ },
+ "events": []
+}

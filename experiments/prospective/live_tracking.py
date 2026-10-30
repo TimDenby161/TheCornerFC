@@ -1,6 +1,7 @@
 """The Live tracking workflow's one job: P16 (the club-rank release), P17 (every runnable idea on
-the live model) and P18 (the stored challenger against the live model) from one read, stored
-as the one administrator's document `live_tracking` that the Model Change Tracker reads.
+the live model), P18 (the stored challenger against the live model) and P19 (the ideas of 30
+October 2026) from one read, stored as the one administrator's document `live_tracking` that the
+Model Change Tracker reads.
 
     python experiments/prospective/live_tracking.py            # prints the record; stores nothing
     python experiments/prospective/live_tracking.py --store    # and stores it
@@ -28,7 +29,7 @@ def load(name):
     return module
 
 
-p17, p18 = load("live_p17"), load("live_p18")
+p17, p18, p19 = load("live_p17"), load("live_p18"), load("live_p19")
 p16 = p17.p16
 LATER = "Registered after P17, so not one of its candidates: judged by its own evaluator (see its page)"
 
@@ -45,6 +46,20 @@ def together(release_and_ideas, challenger):
     out["exclusions"] = {**out["exclusions"], "P18": challenger["exclusions"]}
     out["settings"] = {**out["settings"], **challenger["settings"]}
     out["p18"] = {"start": challenger["start"], "alpha": challenger["alpha"], "live_counts": challenger["live_counts"]}
+    return out
+
+
+def with_p19(out, later):
+    """The document with P19's record added: its changes leave `not_run`."""
+    out = dict(out)
+    out["protocol"] = "P16, P17, P18 and P19"
+    out["changes"] = {**out["changes"], **later["changes"]}
+    out["not_run"] = {cid: why for cid, why in out["not_run"].items() if cid not in out["changes"]}
+    out["comparisons"] = {**out["comparisons"], "P19": later["comparisons"]}
+    out["exclusions"] = {**out["exclusions"], "P19": later["exclusions"]}
+    out["settings"] = {**out["settings"], **later["settings"]}
+    out["p19"] = {"start": later["start"], "alpha": later["alpha"], "n": later["n"], "against": later["against"],
+                  "counts": later["counts"]}
     return out
 
 
@@ -71,7 +86,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--store", action="store_true", help="store the record for the Admin area (needs a run that may write)")
     args = parser.parse_args()
-    p17.check_pins()
+    p19.check_pins()                      # P17's pins too
     doc = p16.extract()
     rows, excluded, checks = p16.build(doc)
     release = p16.record(rows, excluded, checks, environment=doc["database_says"], generated_at=doc["extracted_at"])
@@ -80,7 +95,8 @@ def main():
     with p16.p13.connect() as conn:
         challenged = p18.extract(conn)
     challenger = p18.record(challenged)
-    out = together(p17.combined(release, ideas), challenger)
+    later_rows, later_excluded = p19.build(doc)
+    out = with_p19(together(p17.combined(release, ideas), challenger), p19.record(later_rows, later_excluded))
     compared = {}
     if rows is not None:
         compared[p16.CHANGE] = (rows["released"], rows["before"], rows["y"])
@@ -88,6 +104,8 @@ def main():
         compared.update({cid: (p, idea_rows["production"], idea_rows["y"]) for cid, p in idea_rows["candidates"].items()})
     pairs = p18.pairs(challenged)[0]
     compared[p18.CHANGE] = ([probs["a18"] for _, _, probs, _ in pairs], [probs["base"] for _, _, probs, _ in pairs], [y for _, y, _, _ in pairs])
+    if later_rows is not None:
+        compared.update({cid: (p, later_rows["against"][cid], later_rows["y"]) for cid, p in later_rows["candidates"].items()})
     out["scores"] = scores(compared)
     print(json.dumps({"n": out["n"], "weeks": out["weeks"], "to": out["to"], "exclusions": out["exclusions"], "checks": checks,
                       "called": {cid: c["called"] for cid, c in out["changes"].items() if c["called"]}}, indent=2, default=str))
