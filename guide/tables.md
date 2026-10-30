@@ -1,5 +1,5 @@
 # Tables
 
-`leagues`, `league_seasons`, `venues`, `teams`, `team_seasons`, `fixtures`, `fixture_team_stats`, `standings`, `bookmakers`, `bet_types`, `odds`, `team_rank_history`, `team_rankings`, `fixture_predictions` (and the view `upcoming_predictions`), `players`, `player_seasons`, `injuries`, `fixture_players`, `paper_bets`. See `db/schema.sql`.
+`leagues`, `league_seasons`, `venues`, `teams`, `team_seasons`, `fixtures`, `fixture_team_stats`, `standings`, `bookmakers`, `bet_types`, `odds`, `team_rank_history`, `team_rankings`, `fixture_predictions` (and the view `upcoming_predictions`), `players`, `player_seasons`, `injuries`, `fixture_players`, `fixture_events` (goals, cards, substitutions and VAR with their minute, from the same /fixtures?ids= responses as `fixture_players`; for plus-minus player ratings; not reachable by the public key), `paper_bets`. See `db/schema.sql`.
 
 The Admin area's, none reachable by the public key ([The Admin area](admin-area.md)): `site_admins`, `admin_docs`, `model_changes`, `model_change_events`.

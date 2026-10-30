@@ -64,6 +64,13 @@ def remove(conn, kind, person_id, apply=False, path=PATH):
             report.append((table, count, 'deleted'))
         except Exception as err:
             report.append((table, count, f'kept: {str(err).splitlines()[0]}'))
+    # the second person on a match event (the assist, the player coming on) keeps the event
+    if kind == 'player' and 'fixture_events' in tables:
+        count = conn.execute('select count(*) from fixture_events where assist_id = %s', (person_id,)).fetchone()[0]
+        if count:
+            if apply:
+                conn.execute('update fixture_events set assist_id = null where assist_id = %s', (person_id,))
+            report.append(('fixture_events.assist_id', count, 'deleted' if apply else 'found'))
     if apply:
         conn.commit()
         doc = json.loads(path.read_text(encoding='utf-8'))

@@ -1110,8 +1110,33 @@ def _player_lines(f, grids, xi, names=False):
     return out
 
 
+def _event_rows(f, suppressed):
+    """fixture_events rows for one /fixtures?ids= item, in the feed's order; a suppressed player
+    is stored as null."""
+    fid, out = f["fixture"]["id"], []
+    for seq, ev in enumerate(f.get("events") or []):
+        time = ev.get("time") or {}
+        who, other = (ev.get("player") or {}).get("id"), (ev.get("assist") or {}).get("id")
+        out.append({"fixture_id": fid, "seq": seq, "team_id": (ev.get("team") or {}).get("id"),
+                    "player_id": None if who in suppressed else who,
+                    "assist_id": None if other in suppressed else other,
+                    "elapsed": time.get("elapsed"), "extra": time.get("extra"),
+                    "type": ev.get("type"), "detail": ev.get("detail")})
+    return out
+
+
+def _store_events(conn, fixture_ids, rows):
+    """Replace the events of these fixtures (nothing until the 20261030 migration is applied)."""
+    if not fixture_ids or not conn.execute("select to_regclass('public.fixture_events')").fetchone()[0]:
+        return
+    conn.execute("delete from fixture_events where fixture_id = any(%s)", [list(fixture_ids)])
+    if rows:
+        upsert(conn, "fixture_events", rows, ["fixture_id", "seq"], touch_updated_at=False)
+
+
 def sync_fixture_players(api, conn, league_ids, batch_size=20):
-    """Per-match player minutes for finished fixtures not fetched yet (/fixtures?ids=)."""
+    """Per-match player minutes for finished fixtures not fetched yet (/fixtures?ids=), and the
+    match events that come with them (fixture_events)."""
     pending = [r[0] for r in conn.execute(
         """select fixture_id from fixtures
            where players_fetched_at is null and status_short = any(%s) and league_id = any(%s)
@@ -1120,10 +1145,14 @@ def sync_fixture_players(api, conn, league_ids, batch_size=20):
     now = datetime.now(timezone.utc)
     for i in range(0, len(pending), batch_size):
         resp = api.get("fixtures", ids="-".join(map(str, pending[i:i + batch_size])))
-        rows, done, formations, colors = [], [], [], []
+        rows, done, formations, colors, events, with_events = [], [], [], [], [], []
+        suppressed = suppression.load()["players"]
         for f in resp:
             capture_official(conn, f)
             fid = f["fixture"]["id"]
+            if f.get("events"):
+                with_events.append(fid)
+                events += _event_rows(f, suppressed)
             colors += _home_colors(f)
             grids = {}                               # player -> (grid, role) for starters
             xi = {}                                  # team -> its official starting XI (player ids)
@@ -1146,6 +1175,7 @@ def sync_fixture_players(api, conn, league_ids, batch_size=20):
         upsert(conn, "fixture_formations", _dedupe(formations, ("fixture_id", "team_id")),
                ["fixture_id", "team_id"], touch_updated_at=False)
         _store_colors(conn, colors)
+        _store_events(conn, with_events, events)
         if done:
             conn.execute("update fixtures set players_fetched_at = now() where fixture_id = any(%s)", [done])
         conn.commit()

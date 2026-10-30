@@ -70,6 +70,16 @@ class SuppressionTests(unittest.TestCase):
         conn.execute.side_effect = execute
         return conn
 
+    def test_the_second_person_on_a_match_event_is_blanked_and_the_event_kept(self):
+        conn = self._conn({'fixture_events': 2})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 's.json'
+            path.write_text('{"players": [], "coaches": []}')
+            report = suppression.remove(conn, 'player', 42, apply=True, path=path)
+        self.assertIn(('fixture_events.assist_id', 2, 'deleted'), report)
+        sqls = [c.args[0] for c in conn.execute.call_args_list]
+        self.assertIn('update fixture_events set assist_id = null where assist_id = %s', sqls)
+
     def test_dry_run_counts_and_changes_nothing(self):
         conn = self._conn({'injuries': 3, 'players': 1, 'odds': 0})
         with tempfile.TemporaryDirectory() as tmp:
