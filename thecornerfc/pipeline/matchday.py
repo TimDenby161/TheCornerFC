@@ -23,6 +23,7 @@ WINDOW_HOURS = 3
 MAX_ODDS_CALLS = 250
 LINEUP_WINDOW_MINUTES = 70   # XIs are published about an hour before kickoff; runs are 30 minutes apart
 MAX_LINEUP_CALLS = 10        # 20 fixtures per call
+PLAYER_CLUB_DAYS = 400       # a club counts as a player-data club if it played in one of those leagues this recently
 
 
 def run_matchday(api, conn):
@@ -70,17 +71,31 @@ def run_matchday(api, conn):
     betting.settle_bets(conn)
 
 
+def _player_club(side):
+    """SQL: the fixture's side (home_team_id or away_team_id) played in a player-data league within
+    PLAYER_CLUB_DAYS before now (two lookups, each on its own team index)."""
+    return " or ".join(
+        f"""exists (select 1 from fixtures p where p.{column} = f.{side} and p.league_id = any(%(leagues)s)
+                   and p.kickoff < %(now)s and p.kickoff > %(since)s)"""
+        for column in ("home_team_id", "away_team_id"))
+
+
 def capture_prekickoff_lineups(api, conn, now):
-    """Official XIs for player-data fixtures kicking off within LINEUP_WINDOW_MINUTES that don't yet
-    have both teams' XI recorded before kickoff (experiments/prospective P3). Evidence only."""
+    """Official XIs kicking off within LINEUP_WINDOW_MINUTES that don't yet have both teams' XI
+    recorded before kickoff (experiments/prospective P3): every fixture in a player-data league,
+    and cup and European ties between two clubs from those leagues (their players are ranked, so
+    the line-up term and the rotation research can use them; owner's yes to the calls, 2026-10-30).
+    Evidence only."""
     due = [f for (f,) in conn.execute(
-        """select f.fixture_id from fixtures f
-           where f.status_short in ('NS', 'TBD') and f.kickoff > %s and f.kickoff <= %s
-             and f.league_id = any(%s)
+        f"""select f.fixture_id from fixtures f
+           where f.status_short in ('NS', 'TBD') and f.kickoff > %(now)s and f.kickoff <= %(until)s
+             and (f.league_id = any(%(leagues)s)
+                  or (({_player_club("home_team_id")}) and ({_player_club("away_team_id")})))
              and (select count(distinct o.team_id) from official_lineup_snapshots o
                   where o.fixture_id = f.fixture_id and o.captured_at < f.kickoff) < 2
            order by f.kickoff""",
-        [now, now + timedelta(minutes=LINEUP_WINDOW_MINUTES), config.MATCH_PLAYER_LEAGUES])]
+        {"now": now, "until": now + timedelta(minutes=LINEUP_WINDOW_MINUTES),
+         "since": now - timedelta(days=PLAYER_CLUB_DAYS), "leagues": config.MATCH_PLAYER_LEAGUES})]
     due = due[:20 * MAX_LINEUP_CALLS]
     for i in range(0, len(due), 20):
         for f in api.get("fixtures", ids="-".join(map(str, due[i:i + 20]))):

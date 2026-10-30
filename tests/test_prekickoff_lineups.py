@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import unittest
 from unittest.mock import Mock, patch
 
@@ -18,6 +18,16 @@ class PrekickoffLineupTests(unittest.TestCase):
         self.assertEqual(capture.call_count, 20 * matchday.MAX_LINEUP_CALLS)
         self.assertEqual(api.get.call_args_list[0].kwargs['ids'].split('-')[:2], ['1', '2'])
         self.assertEqual(conn.commit.call_count, matchday.MAX_LINEUP_CALLS)
+
+    def test_cup_ties_between_player_data_clubs_are_asked_for_too(self):
+        conn, api = Mock(), Mock()
+        conn.execute.return_value = []
+        matchday.capture_prekickoff_lineups(api, conn, NOW)
+        sql, params = conn.execute.call_args.args
+        self.assertIn('f.league_id = any(%(leagues)s)', sql)
+        self.assertEqual(sql.count('exists (select 1 from fixtures p'), 4)     # each side, home or away
+        self.assertEqual(params['leagues'], matchday.config.MATCH_PLAYER_LEAGUES)
+        self.assertEqual(NOW - params['since'], timedelta(days=matchday.PLAYER_CLUB_DAYS))
 
     def test_no_due_fixtures_makes_no_calls(self):
         conn, api = Mock(), Mock()
