@@ -4685,7 +4685,7 @@ NOTIFY pgrst, 'reload schema';
 -- Check afterwards, signed out (should be null): the last field of the first free player's row
 --   select (public.site_players(p_limit => 1)::json->'rows'->0->-1);
 
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-10-30, to staging and to production.
 -- Match events: goals, cards, substitutions and VAR decisions with their minute (owner's decision
 -- 2026-10-30, T-074). The /fixtures?ids= responses the jobs already fetch for player-data
 -- fixtures (sync_fixture_players) carry them and they were thrown away; keeping them costs no API
