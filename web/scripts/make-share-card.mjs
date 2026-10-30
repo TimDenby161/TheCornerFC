@@ -29,7 +29,7 @@ p { margin: 28px 0 0; font-size: 38px; font-weight: 400; opacity: .92; }
   <!-- the penalty box and the D, faint, running off the page -->
   <path d="M1200 210 H1010 V630" /><path d="M1010 330 A120 120 0 0 0 1010 510" />
   <line x1="1196" y1="630" x2="1196" y2="520" stroke-opacity=".6" />
-  <path d="M1196 520 l-34 14 l34 14 z" fill="#ff86c0" stroke="none" />
+  <path d="M1196 520 l-34 14 l34 14 z" fill="#f2f4ec" fill-opacity=".6" stroke="none" />
 </svg>
 <div class="text"><h1>The Corner FC</h1><p>Club ratings · Player ranks · Match predictions</p></div>
 <div class="url">THECORNERFC.COM</div>`;

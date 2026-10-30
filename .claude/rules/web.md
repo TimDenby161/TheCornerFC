@@ -31,8 +31,6 @@ logic in `web/src/lib` that the React parts import, so a change there changes th
 - Fantasy data never goes into a page the server writes: the owner's browser asks for it.
 - Lists behind the paywall keep the subscriber's order with the ranks hidden.
 - No fault text on any page: faults go to the logs only.
-- The pink accent (`--accent`) stays rare: the mark, the home page's main button and its dot. Never
-  on data, charts, tables or status, and never as text on chalk (a filled shape under pitch text).
 
 ## Checks
 
