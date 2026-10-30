@@ -38,6 +38,8 @@ From `site/`: `dotnet test`. From `site/client`: `npm test`, `npm run check`. Fr
 (its shared logic): `npm test`, `npm run check`. Then run the site (`dotnet run --urls
 http://127.0.0.1:5280` from `site/TheCornerFC.Web`) and `node web/scripts/browser-check.mjs
 http://127.0.0.1:5280`; `node web/scripts/fantasy-check.mjs "" http://127.0.0.1:5280` for the
-fantasy pages. The deploy workflow runs the React and C# tests first, so a failing test stops a
+fantasy pages. `site/e2e` drives the site as visitors on phone and desktop sizes, with accessibility
+checks, on staging's data (`npx playwright test` from there; the Visitors workflow runs it on
+staging): add to it for each new page or interactive piece. The deploy workflow runs the React and C# tests first, so a failing test stops a
 deploy. Add a step to `browser-check.mjs` for each new interactive piece, and wait with its
 `until()`, not a fixed sleep.

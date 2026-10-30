@@ -11,13 +11,13 @@ $54 a month, as the owner confirmed on 14 October 2026:
 
 | Service | Plan | Price | Allowance to stay within |
 |---|---|---|---|
-| **API-Football** | Ultra | $29 a month | 75,000 calls a day, reset daily; the jobs keep `API_DAILY_RESERVE` (200) back |
+| **API-Football** | Pro | $19 a month | 7,500 calls a day, reset daily; the jobs keep `API_DAILY_RESERVE` (200) back |
 | **Supabase** (production) | Pro | $25 a month | Its included disk, egress and the smallest compute (the credit covers it); Disk IO is the tightest limit. Anything above is billed as overage or needs a bigger compute size |
 
-**The aim is to step API-Football down to Pro** ($19 a month, 7,500 calls a day), the owner's
-wish on 14 October 2026. So a change should bring the calls a day down, never up, and every
-day's total, backfills included, should be heading under 7,500 less the reserve. Once it fits,
-the owner changes the plan.
+**API-Football is on Pro** ($19 a month, 7,500 calls a day), the step down the owner wanted on
+14 October 2026. So every day's total, backfills included, has to stay under 7,500 less the
+reserve; a change should bring the calls a day down, never up. The nightly alone uses about
+2,100 to 2,600.
 
 **Azure App Service B1** (Linux, UK South) runs the site, live and staging on one plan: about
 $13 (£10) a month, the owner's yes on 2026-10-18; a budget emails at US$16 and a policy refuses
@@ -31,7 +31,7 @@ relying on a number here.
 
 | Service | What it runs | What costs money | What to check |
 |---|---|---|---|
-| **API-Football** | Every fetch, in the GitHub jobs only | A bigger plan if the calls outgrow 75,000 a day; staying on Ultra if they don't fit under Pro's 7,500 | New calls a run makes (per night, per match day, per backfill), whether an existing response already holds the data, `API_DAILY_RESERVE`, a backfill's `call_budget`. [API usage](api-usage.md) |
+| **API-Football** | Every fetch, in the GitHub jobs only | A bigger plan (Ultra, $29) if the calls outgrow 7,500 a day | New calls a run makes (per night, per match day, per backfill), whether an existing response already holds the data, `API_DAILY_RESERVE`, a backfill's `call_budget`. [API usage](api-usage.md) |
 | **Supabase** (production) | The database the jobs write and the site reads | Overage above Pro's included disk and egress; a bigger compute size or add-ons if Disk IO or CPU run out | Rows and bytes a new table or column adds a season, indexes, how often a job rewrites a table whole, how much each page request reads (a function's joins, `limit`), egress from exports. It warned on Disk IO on 2026-10-05 |
 | **Supabase** (staging) | Its own free project | Moving it to a paid project (about $10–25 a month) | Stays under 500 MB; it holds a few leagues, not everything. [Production and staging](environments.md#what-it-costs) |
 | **Azure** | The site: web apps `thecornerfc` and `thecornerfc-staging` on one B1 plan | A second instance or a bigger plan (the policy refuses both); outbound data beyond the free allowance | Memory and CPU on the one B1 (1.75 GB, one core) shared by both apps, the budget's emails |

@@ -33,7 +33,7 @@
         }
         else
         {
-            <div class="mc-scroll"><table class="calib-table mc-rows record-table" id="record-rows">
+            <div class="mc-scroll" tabindex="0" role="region" aria-label="Scrollable table"><table class="calib-table mc-rows record-table" id="record-rows">
                 <thead><tr><th>Kick-off</th><th>Match</th><th>Competition</th><th>Home</th><th>Draw</th><th>Away</th><th>Likely</th><th>Result</th><th>Log loss</th><th>Stored</th></tr></thead>
                 <tbody>@foreach (var r in Model.Rows)
                 {

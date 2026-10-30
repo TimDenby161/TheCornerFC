@@ -560,7 +560,7 @@
   table.leaderboard.players th.col-age, table.leaderboard.players td.col-age { width: 52px; text-align: center; padding-left: 4px; padding-right: 4px; }
   table.leaderboard.players .dim { color: var(--gridline); }
   /* a season estimated from the age curve (no minutes in covered leagues): outlined, not filled */
-  table.season-table .est .rel-chip, table.leaderboard.players .est .rel-chip { background: transparent; box-shadow: inset 0 0 0 1px currentColor; font-style: italic; opacity: .8; }
+  table.season-table .est .rel-chip, table.leaderboard.players .est .rel-chip { background: transparent; box-shadow: inset 0 0 0 1px currentColor; font-style: italic; }
   /* Years toggle: past seasons left of Ability, projected ones (age curve) right of it, fainter */
   .now-head { display: inline-flex; align-items: center; gap: 6px; }
   .years-btn { font: inherit; font-size: 13px; font-weight: 700; line-height: 1; width: 18px; height: 18px; padding: 0; margin: -3px 0;

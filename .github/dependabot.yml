@@ -41,3 +41,13 @@ updates:
     groups:
       client:
         patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /site/e2e
+    target-branch: staging      # nothing reaches main except by promotion (guide/environments.md)
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      browser-tests:
+        patterns: ["*"]

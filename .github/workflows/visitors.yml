@@ -1,0 +1,47 @@
+name: Visitors
+
+# The site as visitors use it, on phone and desktop sizes, on every push to the staging branch.
+# It informs and doesn't gate: promotion still rests on staging-check alone (staging.yml).
+on:
+  push:
+    branches: [staging]
+
+concurrency:
+  group: visitors
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  visitors:
+    permissions:
+      contents: read
+    environment: Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Install the browser tests
+        working-directory: site/e2e
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+
+      - name: Wait for this commit on staging
+        env:
+          STAGING_ACCESS_CLIENT_ID: ${{ secrets.STAGING_ACCESS_CLIENT_ID }}
+          STAGING_ACCESS_CLIENT_SECRET: ${{ secrets.STAGING_ACCESS_CLIENT_SECRET }}
+        run: node web/scripts/staging-smoke.mjs https://staging.thecornerfc.com "$GITHUB_SHA"
+
+      - name: Visit the site as a signed-out visitor
+        working-directory: site/e2e
+        env:
+          BASE_URL: https://staging.thecornerfc.com
+          STAGING_ACCESS_CLIENT_ID: ${{ secrets.STAGING_ACCESS_CLIENT_ID }}
+          STAGING_ACCESS_CLIENT_SECRET: ${{ secrets.STAGING_ACCESS_CLIENT_SECRET }}
+        run: npx playwright test

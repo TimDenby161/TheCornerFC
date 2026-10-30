@@ -11,7 +11,7 @@
         <span class="mc-pill mark-@d.Mark">@c.Status</span></div>
     @if (c.What is { Length: > 0 } what){<p class="mc-para"><b>What it does:</b> @what</p>}
     @if (c.Learns is { } learns){<p class="mc-para"><b>How it learns:</b> @learns</p>}
-    <div class="mc-scroll"><table class="calib-table mc-rows mc-card-table"><thead><tr><th></th><th>Past test</th><th>Live so far</th></tr></thead>
+    <div class="mc-scroll" tabindex="0" role="region" aria-label="Scrollable table"><table class="calib-table mc-rows mc-card-table"><thead><tr><th></th><th>Past test</th><th>Live so far</th></tr></thead>
         <tbody>
             <tr><td>Matches</td><td>@(c.Past?.N is { } pn ? Js.Num(pn) : "–")</td>
                 <td>@if (c.Live is { } l){<span class="mc-progress"><span>@Js.Num(l.N) of @Js.Num(l.Need)</span><span class="mc-bar"><span class="mc-fill sw-@l.MatchShare"></span></span></span>

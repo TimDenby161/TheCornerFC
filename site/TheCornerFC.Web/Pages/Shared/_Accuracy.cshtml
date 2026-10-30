@@ -23,7 +23,7 @@ else
         <div class="rs-charts"><div class="stats-card"><div class="stats-label">Right results, %</div>@Html.Raw(ch.Right)</div>
             <div class="stats-card"><div class="stats-label">Log loss, lower is better</div>@Html.Raw(ch.LogLoss)</div></div>
     }
-    <div class="mc-scroll"><table class="calib-table mc-rows rs-months" id="rs-months"><thead><tr><th>Month</th><th>Matches</th><th>Right</th><th>Log loss</th><th>Priced</th><th>Model</th><th>Bookmakers</th><th>Gap</th><th>Right, model</th><th>Right, bookmakers</th></tr></thead>
+    <div class="mc-scroll" tabindex="0" role="region" aria-label="Scrollable table"><table class="calib-table mc-rows rs-months" id="rs-months"><thead><tr><th>Month</th><th>Matches</th><th>Right</th><th>Log loss</th><th>Priced</th><th>Model</th><th>Bookmakers</th><th>Gap</th><th>Right, model</th><th>Right, bookmakers</th></tr></thead>
         <tbody>@foreach (var m in a.Months)
         {
             <tr><td>@m.Month</td><td>@Js.Num(m.N)</td><td>@m.Right</td><td>@m.LogLoss</td><td>@(m.Priced == 0 ? "–" : Js.Num(m.Priced))</td><td>@m.ModelLl</td><td>@m.MarketLl</td>
@@ -37,7 +37,7 @@ else
 {
     <div class="rs-reliability-wrap">
         <div class="stats-card">@Html.Raw(rel)</div>
-        <div class="mc-scroll"><table class="calib-table mc-rows" id="rs-bands"><thead><tr><th>Said</th><th>Calls</th><th>Average said</th><th>Happened</th><th>Off by</th></tr></thead>
+        <div class="mc-scroll" tabindex="0" role="region" aria-label="Scrollable table"><table class="calib-table mc-rows" id="rs-bands"><thead><tr><th>Said</th><th>Calls</th><th>Average said</th><th>Happened</th><th>Off by</th></tr></thead>
             <tbody>@foreach (var b in a.Bands)
             {
                 var off = b.Hit - b.Said;
@@ -59,7 +59,7 @@ else
 }
 else
 {
-    <div class="mc-scroll"><table class="calib-table mc-rows rs-vs" id="rs-vs"><thead><tr><th>Competition</th><th>Priced matches</th><th>Model</th><th>Bookmakers</th><th>Gap</th><th>Right, model</th><th>Right, bookmakers</th></tr></thead>
+    <div class="mc-scroll" tabindex="0" role="region" aria-label="Scrollable table"><table class="calib-table mc-rows rs-vs" id="rs-vs"><thead><tr><th>Competition</th><th>Priced matches</th><th>Model</th><th>Bookmakers</th><th>Gap</th><th>Right, model</th><th>Right, bookmakers</th></tr></thead>
         <tbody>@foreach (var v in a.VsMarket)
         {
             <tr class="@(v.Key == a.Pick ? "rs-picked" : null)"><td><a class="team-link" href="@path?c=@v.Key@anchor">@v.Name</a></td><td>@Js.Num(v.Priced)</td><td>@v.ModelLl</td><td>@v.MarketLl</td>

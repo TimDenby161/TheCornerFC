@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = {p.name: p.read_text() for p in sorted((ROOT / ".github/workflows").glob("*.yml"))}
 PRODUCTION_SECRETS = ("DATABASE_URL", "API_FOOTBALL_KEY")
-STAGING = ("staging.yml", "staging-pipeline.yml")
+STAGING = ("staging.yml", "staging-pipeline.yml", "visitors.yml")
 SECRET = re.compile(r"secrets\.([A-Za-z_0-9]+)")
 
 
@@ -116,7 +116,7 @@ class WorkflowIsolationTests(unittest.TestCase):
     def test_the_unit_tests_run_before_any_step_is_given_a_secret(self):
         for name, text in WORKFLOWS.items():
             for job, body in jobs(text).items():
-                if "secrets." not in body or name == "staging.yml":     # (the staging check runs no Python)
+                if "secrets." not in body or name in ("staging.yml", "visitors.yml"):     # (these run no Python)
                     continue
                 with self.subTest(workflow=name, job=job):
                     self.assertIn("python -m unittest discover -s tests", body)

@@ -34,7 +34,7 @@
                     <div class="mc-compare" id="mc-compare">
                         @if (v.Scores is { N: > 0 } || v.PastScores.Rows.Count > 0)
                         {
-                            <div class="mc-scroll"><table class="calib-table mc-rows mc-two" id="mc-two"><thead><tr><th>Measure</th><th>Bookmakers</th><th>Base</th><th>A18</th><th>A18 − Bookmakers</th><th>A18 − Base</th></tr></thead>
+                            <div class="mc-scroll" tabindex="0" role="region" aria-label="Scrollable table"><table class="calib-table mc-rows mc-two" id="mc-two"><thead><tr><th>Measure</th><th>Bookmakers</th><th>Base</th><th>A18</th><th>A18 − Bookmakers</th><th>A18 − Base</th></tr></thead>
                                 @if (v.PastScores.Rows.Count > 0)
                                 {
                                     <tbody><tr class="mc-group"><th colspan="6">Past matches@(v.PastScores.Period is [var from, var to, ..] ? $", {from} to {to}" : "")</th></tr>
@@ -63,7 +63,7 @@
                         {
                             <details class="mc-fold" id="mc-apart-fold"><summary>Where they differ most: the @v.Apart.Count upcoming fixtures furthest apart</summary>
                             <div class="stats-note">Home · draw · away chances, with each model's expected goals under them.</div>
-                            <div class="mc-scroll"><table class="calib-table mc-rows mc-apart" id="mc-apart"><thead><tr><th>Kick-off</th><th>Match</th><th>Bookmakers</th><th>Base</th><th>A18</th><th>Gap</th></tr></thead>
+                            <div class="mc-scroll" tabindex="0" role="region" aria-label="Scrollable table"><table class="calib-table mc-rows mc-apart" id="mc-apart"><thead><tr><th>Kick-off</th><th>Match</th><th>Bookmakers</th><th>Base</th><th>A18</th><th>Gap</th></tr></thead>
                                 <tbody>@foreach (var r in v.Apart){<tr class="@(r.Differ ? "mc-differ" : null)"><td>@When(r.Kickoff, "short")</td><td><a class="team-link" href="/match/@r.Fixture">@r.Match</a><span class="mc-sub">@r.League@(r.Differ ? " · different favourite" : "")</span></td>
                                     <td>@(r.Market ?? "No prices yet")</td><td>@r.Base<span class="mc-sub">xG @r.BaseXg</span></td><td>@r.A18<span class="mc-sub">xG @r.A18Xg</span></td><td>@r.Gap</td></tr>}</tbody></table></div>
                             </details>
