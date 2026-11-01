@@ -294,7 +294,7 @@ check('the reconstructed history, with more to list', (await run('location.searc
 // old public addresses are gone, the public key can't read the bets, and the menu has no link
 await open('/admin/simulation'); await until(`location.pathname === '/account'`);
 check('a signed-out visitor is sent from the Admin area to sign in', (await run('location.pathname')) === '/account' && !(await run(`!!document.querySelector('#bets-body')`)), await run('location.pathname'));
-const shut = await run(`Promise.all(['/admin', '/admin/changes', '/admin/changes/MC-0001', '/admin/model-vs-market', '/admin/simulation/__data.json', '/admin/changes/__data.json'].map((u) => fetch(u, { redirect: 'manual' }).then(async (r) => r.type === 'opaqueredirect' || r.status === 404 || /^\\{"type":"redirect","status":303,"location":"\\/account"\\}$/.test(await r.text()) ? '' : u + ' ' + r.status))).then((x) => x.filter(Boolean).join(', '))`);
+const shut = await run(`Promise.all(['/admin', '/admin/changes', '/admin/changes/MC-0001', '/admin/model-vs-market', '/admin/posts', '/admin/simulation/__data.json', '/admin/changes/__data.json'].map((u) => fetch(u, { redirect: 'manual' }).then(async (r) => r.type === 'opaqueredirect' || r.status === 404 || /^\\{"type":"redirect","status":303,"location":"\\/account"\\}$/.test(await r.text()) ? '' : u + ' ' + r.status))).then((x) => x.filter(Boolean).join(', '))`);
 check('every address under /admin is shut to a signed-out visitor, the data behind the pages too', shut === '', shut);
 const gone = await run(`Promise.all(['/simulation', '/model-vs-market'].map((u) => fetch(u).then((r) => r.status))).then((x) => x.join())`);
 check("the betting pages' old public addresses are gone", gone === '404,404', gone);

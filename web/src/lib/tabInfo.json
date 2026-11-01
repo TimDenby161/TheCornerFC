@@ -231,6 +231,11 @@
 			]
 		]
 	},
+	"posts": {
+		"intro": "Posts ready for X, written from the site's public figures as they stand now. Copy the card, open the post in X, paste the card in and press Post.",
+		"more": "",
+		"key": []
+	},
 	"research": {
 		"intro": "How the match model is doing, looked at closely: accuracy month by month, whether its chances come true as often as it says, how it compares with the bookmakers in each competition, and every challenger's running score on live matches.",
 		"more": "",

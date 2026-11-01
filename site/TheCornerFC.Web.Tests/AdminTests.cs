@@ -68,7 +68,7 @@ public class AdminTests
     public async Task A_visitor_who_isnt_signed_in_is_sent_to_sign_in_from_every_admin_address()
     {
         using var site = Site(admin: true);
-        foreach (var path in new[] { "/admin", "/admin/changes", "/admin/changes/MC-0031", "/admin/simulation", "/admin/anything/else" })
+        foreach (var path in new[] { "/admin", "/admin/changes", "/admin/changes/MC-0031", "/admin/simulation", "/admin/posts", "/admin/anything/else" })
         {
             var r = await Client(site).SendAsync(Get(path, signedIn: false));
             Assert.Equal(HttpStatusCode.SeeOther, r.StatusCode);

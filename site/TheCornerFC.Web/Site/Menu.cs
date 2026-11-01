@@ -33,6 +33,7 @@ public static partial class Menu
         new("research", "Research", "/admin/research"),
         new("tips", "Model vs Market", "/admin/model-vs-market"),
         new("bets", "Paper Simulation", "/admin/simulation"),
+        new("posts", "X posts", "/admin/posts"),
     ]);
 
     // The fantasy pages are the site owner's: in the menu for the owner only.

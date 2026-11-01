@@ -9,3 +9,9 @@
 .match-page-head, .match-page-foot { margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }
 .match-page-foot { margin: 12px 0 0; }
 @media (pointer: coarse) { .match-page-link { min-height: 44px; } }
+/* the Admin area's X page: a post's card, its words and what to do with them */
+.xp { margin: 0 0 32px; }
+.xp-card { display: block; width: 100%; max-width: 720px; height: auto; border-radius: 4px; }
+.xp-text { max-width: 720px; margin: 12px 0; font-size: 15px; line-height: 1.45; }
+.xp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.xp-said { font-size: 13px; color: var(--text-secondary); }

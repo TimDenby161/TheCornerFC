@@ -1,8 +1,9 @@
 # The Admin area and the model change record
 
-Four pages under `/admin` are the site administrator's only: **Model Change Tracker**,
-**Research**, **Model vs Market** and **Paper Simulation**. The two betting pages were public until
-2026-10-13 (owner's decision). Nothing here changes a model, a bet or a stored prediction.
+Five pages under `/admin` are the site administrator's only: **Model Change Tracker**,
+**Research**, **Model vs Market**, **Paper Simulation** and **X posts**. The two betting pages were
+public until 2026-10-13 (owner's decision). Nothing here changes a model, a bet or a stored
+prediction.
 
 **The record is public too (owner's decision 2026-10-16, the most transparent model).** The
 public page **The Model** (`/model`) shows the tracker's eight figures and every change as a card
@@ -39,6 +40,19 @@ To add or remove an administrator, in the SQL editor of that database:
 insert into site_admins (email) values ('name@example.com') on conflict do nothing;   -- lower case
 delete from site_admins where email = 'name@example.com';
 ```
+
+## X posts
+
+`/admin/posts` (`Site/XPosts.cs`, `Assets/x-cards.js`) has four posts ready for @TheCorner_FC,
+written fresh from the figures on each visit: the next Premier League round's chances, the
+Premier League movers, the record and the strongest clubs. Each has its words and a card drawn in
+the browser. The administrator copies the card, presses **Open in X**, which fills in the words,
+pastes the card and posts. Nothing is sent to X by the site, so it needs no X API, which charges
+for every post (owner's decision 2026-10-30: nothing is paid to X), and adds no job, table or key.
+
+Every figure is read as a signed-out visitor would read it, with no token, and through the reads
+the public pages already keep. So a post can't hold a paid field, an Admin document or fantasy
+data. The words follow the launch rules: chances, never tips; no prices or odds.
 
 ## The paper bets
 

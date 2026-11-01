@@ -1,0 +1,28 @@
+@page "/admin/posts"
+@model PostsModel
+@removeTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    ViewData["Title"] = "X posts · The Corner FC";
+    ViewData["NoIndex"] = true;
+}
+<section class="panel mc" data-tab="posts" data-active="true">
+    @if (Model.Posts.Count == 0)
+    {
+        <div class="empty-state">No posts can be made right now: the figures behind them are not available.</div>
+    }
+    @foreach (var post in Model.Posts)
+    {
+        <article class="xp" data-post="@post.Key">
+            <h2 class="mc-h2">@post.Name</h2>
+            <canvas class="xp-card" width="2400" height="1350" data-card="@PostsModel.CardJson(post.Card)" role="img" aria-label="Card: @post.Card.Title"></canvas>
+            <p class="xp-text">@post.Text</p>
+            <div class="xp-actions">
+                <button type="button" class="mt-btn" data-copy>Copy card</button>
+                <button type="button" class="mt-btn" data-save="@post.Key">Download card</button>
+                <a class="mt-btn" href="@post.ShareUrl" target="_blank" rel="noopener">Open in X</a>
+                <span class="xp-said" role="status"></span>
+            </div>
+        </article>
+    }
+    <script src="/x-cards.js" nonce="@HttpContext.Nonce()"></script>
+</section>

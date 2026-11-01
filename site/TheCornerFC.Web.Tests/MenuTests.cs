@@ -15,6 +15,7 @@ public class MenuTests
     [InlineData("/admin/model-vs-market", "tips")]
     [InlineData("/admin/changes/MC-0007", "changes")]
     [InlineData("/admin/research", "research")]
+    [InlineData("/admin/posts", "posts")]
     [InlineData("/simulation", "home")]
     public void Names_the_section_a_page_belongs_to_for_the_stylesheet(string path, string tab) =>
         Assert.Equal(tab, Menu.TabFor(path));
@@ -23,8 +24,8 @@ public class MenuTests
     public void Keeps_every_admin_page_out_of_the_menus_anyone_else_is_shown()
     {
         var shown = Menu.Main.Append(Menu.Owner).SelectMany(g => g.Sections);
-        Assert.DoesNotContain(shown, s => s.Path.StartsWith("/admin") || s.Label is "Paper Simulation" or "Model vs Market" or "Model Change Tracker" or "Research");
-        Assert.Equal(["Model Change Tracker", "Research", "Model vs Market", "Paper Simulation"], Menu.Admin.Sections.Select(s => s.Label));
+        Assert.DoesNotContain(shown, s => s.Path.StartsWith("/admin") || s.Label is "Paper Simulation" or "Model vs Market" or "Model Change Tracker" or "Research" or "X posts");
+        Assert.Equal(["Model Change Tracker", "Research", "Model vs Market", "Paper Simulation", "X posts"], Menu.Admin.Sections.Select(s => s.Label));
         Assert.All(Menu.Admin.Sections, s => Assert.StartsWith("/admin/", s.Path));
     }
 
