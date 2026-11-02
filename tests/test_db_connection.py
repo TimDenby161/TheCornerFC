@@ -11,7 +11,7 @@ class ConnectionTests(unittest.TestCase):
              patch.object(db.config, "READ_ONLY", True), \
              patch.object(db.psycopg, "connect") as connect:
             conn = db.connect()
-            connect.assert_called_once_with(url, prepare_threshold=None, sslmode="require")
+            connect.assert_called_once_with(url, prepare_threshold=None, **db.KEEPALIVES, sslmode="require")
             self.assertTrue(conn.read_only)
 
     def test_tls_is_required_only_for_a_remote_url_that_sets_no_sslmode(self):
@@ -28,7 +28,7 @@ class ConnectionTests(unittest.TestCase):
                  patch.object(db.config, "GITHUB_ACTIONS", False), patch.object(db.config, "ENV", ""), \
                  patch.object(db.psycopg, "connect") as connect:
                 db.connect()
-                connect.assert_called_once_with(url, prepare_threshold=None, **extra)
+                connect.assert_called_once_with(url, prepare_threshold=None, **db.KEEPALIVES, **extra)
 
     def test_blank_url_does_not_attempt_connection(self):
         with patch.object(db.config, "DATABASE_URL", " \r\n"), \

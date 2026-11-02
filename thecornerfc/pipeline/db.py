@@ -8,6 +8,14 @@ from ..privacy import suppression
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent.parent / "db" / "schema.sql"
 
+# A job can leave its connection idle for minutes while a model fits (match_trees reads the
+# history, then fits). GitHub's runners sit behind Azure's network, which silently drops a TCP
+# connection idle for about four minutes, and the next statement then hangs until the socket
+# times out (about 15 minutes: the match-day run of 2026-11-02 21:00 UTC failed that way after 20).
+# Probes every 30 seconds keep it open, and a connection that dies anyway fails within a minute.
+KEEPALIVES = {"keepalives": 1, "keepalives_idle": 30, "keepalives_interval": 10, "keepalives_count": 3,
+              "tcp_user_timeout": 60000}
+
 
 def _tls(database_url):
     # libpq's default (prefer) falls back to plain text when TLS is refused, so anything on the
@@ -31,7 +39,7 @@ def connect():
     if may_write:
         config.require_write_address(database_url)
     # prepare_threshold=None keeps it compatible with Supabase's pgbouncer poolers.
-    conn = psycopg.connect(database_url, prepare_threshold=None, **_tls(database_url))
+    conn = psycopg.connect(database_url, prepare_threshold=None, **KEEPALIVES, **_tls(database_url))
     # read-only unless this run is one that is meant to write (config.writes_allowed)
     if not may_write:
         try:

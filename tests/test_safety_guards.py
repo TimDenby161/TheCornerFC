@@ -111,7 +111,7 @@ class SafetyGuardTests(unittest.TestCase):
         import thecornerfc.pipeline.db as db
         with patch.object(db, "config", config), patch.object(db.psycopg, "connect") as connect:
             conn = db.connect()
-        connect.assert_called_once_with("postgresql://readonly@example/db", prepare_threshold=None, sslmode="require")
+        connect.assert_called_once_with("postgresql://readonly@example/db", prepare_threshold=None, **db.KEEPALIVES, sslmode="require")
         self.assertTrue(conn.read_only)
 
     def test_production_mode_alone_is_not_enough_outside_actions(self):
