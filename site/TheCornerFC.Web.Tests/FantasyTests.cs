@@ -59,6 +59,21 @@ public class FantasyTests
     }
 
     [Fact]
+    public async Task The_fantasy_links_are_in_the_menu_only_for_a_signed_in_owner()
+    {
+        using var site = Make();
+        async Task<string> Home(bool signedIn)
+        {
+            var m = new HttpRequestMessage(HttpMethod.Get, "/clubs");
+            m.Headers.Add("Cookie", signedIn ? $"{Cookie()}; owner=1" : "owner=1");
+            return await (await Client(site).SendAsync(m)).Content.ReadAsStringAsync();
+        }
+        // a browser signed out with the owner cookie still set (an old sign-out, an expired session)
+        Assert.DoesNotContain("href=\"/my-fpl-team\"", await Home(signedIn: false));
+        Assert.Contains("href=\"/my-fpl-team\"", await Home(signedIn: true));
+    }
+
+    [Fact]
     public async Task The_owners_data_is_asked_for_with_their_token_and_handed_on_unread()
     {
         using var site = Make();

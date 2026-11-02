@@ -6,11 +6,12 @@ public sealed record Visitor(ZoneChoice Zone, string? Email = null, string? Toke
 {
     public bool SignedIn => Email is not null;
 
-    // (a session with no email to it, as a phone sign-in would have, isn't counted as signed in)
+    // (a session with no email to it, as a phone sign-in would have, isn't counted as signed in;
+    // the owner cookie, which only puts the Fantasy links in the menu, counts only while signed in)
     public static Visitor For(HttpContext context, Session? session)
     {
         var s = session is { Email.Length: > 0 } ? session : null;
-        return new(ZoneChoice.From(context.Request.Cookies["tz"]), s?.Email, s?.AccessToken, Owner: context.Request.Cookies["owner"] == "1", UserId: s?.UserId);
+        return new(ZoneChoice.From(context.Request.Cookies["tz"]), s?.Email, s?.AccessToken, Owner: s is not null && context.Request.Cookies["owner"] == "1", UserId: s?.UserId);
     }
 
     // (signed out where nothing has said otherwise: a request that never passed through Sessions)

@@ -165,6 +165,8 @@ public class AccountTests
         var r = await Client(site).SendAsync(Post("/account?handler=signout", [], cookie: Cookie(In(TimeSpan.FromHours(1)))));
         Assert.Equal("/account", r.Headers.Location!.ToString());
         Assert.Contains("expires=Thu, 01 Jan 1970", SetCookie(r, Sessions.Cookie)!);
+        // and the owner cookie, so the menu loses the Fantasy links
+        Assert.Contains("expires=Thu, 01 Jan 1970", SetCookie(r, "owner")!);
         var logout = site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/auth/v1/logout");
         Assert.Equal("?scope=local", logout.RequestUri!.Query);
         Assert.Equal("Bearer access-1", logout.Headers.Authorization!.ToString());

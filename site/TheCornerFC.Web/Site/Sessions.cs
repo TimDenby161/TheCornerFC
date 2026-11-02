@@ -22,7 +22,12 @@ public static class Sessions
     };
     public static void Keep(HttpContext c, Session s) =>
         c.Response.Cookies.Append(Cookie, Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(s)), Options(c.Request, TimeSpan.FromDays(400)));
-    public static void Forget(HttpContext c) => c.Response.Cookies.Delete(Cookie, Options(c.Request, TimeSpan.Zero));
+    // (and the owner cookie, so a signed-out browser's menu loses the Fantasy links at once)
+    public static void Forget(HttpContext c)
+    {
+        c.Response.Cookies.Delete(Cookie, Options(c.Request, TimeSpan.Zero));
+        c.Response.Cookies.Delete("owner", new CookieOptions { Path = "/" });
+    }
     public static void KeepVerifier(HttpContext c, string verifier) => c.Response.Cookies.Append(PkceCookie, verifier, Options(c.Request, TimeSpan.FromMinutes(10)));
 
     // the kinds of request a form sends (a script's own requests, JSON, are another matter)
