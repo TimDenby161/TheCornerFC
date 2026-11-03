@@ -24,7 +24,7 @@
         user = visitor.SignedIn ? new { email = visitor.Email } : null,
         sub = sub is null ? null : new { paywall = sub.Paywall, subscriber = sub.Subscriber, status = sub.Status, plan = sub.Plan, renewsAt = sub.RenewsAt, ends = sub.Ends },
         botCheck = Env.BotCheck, pay = Payments.From(Settings, Env) is not null,
-        prices = new { monthly = TheCornerFC.Web.Pages.AccountModel.Prices.Monthly, yearly = TheCornerFC.Web.Pages.AccountModel.Prices.Yearly },
+        prices = TheCornerFC.Web.Pages.AccountModel.PricesAt(DateTimeOffset.UtcNow) is var pr ? new { monthly = pr.Monthly, yearly = pr.Yearly, note = pr.Note } : null,
     }).Replace("<", "\\u003c");
 }
 <!doctype html>

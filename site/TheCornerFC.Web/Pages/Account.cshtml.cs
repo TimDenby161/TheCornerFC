@@ -36,7 +36,7 @@ public sealed record Subscription(bool Paywall, [property: JsonPropertyName("sig
 // (Forms here are checked as SvelteKit checks them, before any page runs: a post must come from
 // this site's own pages, Site/Sessions.cs)
 [IgnoreAntiforgeryToken]
-public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient payments, IConfiguration settings, SiteEnvironment env) : PageModel
+public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient payments, IConfiguration settings, SiteEnvironment env, TimeProvider clock) : PageModel
 {
     public static readonly HashSet<string> Views = ["signin", "signup", "reset", "newpass", "subscribe", "delete"];
     public static readonly Dictionary<string, string> Titles = new()
@@ -47,9 +47,14 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
     // whether subscriptions can be bought yet: the server has payments' secrets (none yet, on either site)
     Payments? P => Payments.From(settings, env);
     public bool Pay => P is not null;
-    // what a subscription costs (owner, 2026-10-07): the words on the buttons; the charge itself is
-    // the price set in Stripe, and the two must be changed together
-    public static readonly (string Monthly, string Yearly) Prices = ("£4.99 a month", "£49 a year");
+    // what a subscription costs, VAT included (owner, 2026-11-02): the words on the buttons; the charge
+    // itself is the price set in Stripe, and the two must be changed together. Until the founder's
+    // price ends (Payments.FounderEnds) the founder's price is shown, with the standard one beside it.
+    public sealed record PriceWords(string Monthly, string Yearly, string? Note);
+    public static PriceWords PricesAt(DateTimeOffset now) => Payments.Founder(now)
+        ? new("£4.99 a month", "£39 a year", "Founder's price until 31 January 2027 (then £5.99 a month or £49 a year), kept for as long as you stay subscribed.")
+        : new("£5.99 a month", "£49 a year", null);
+    public PriceWords Prices => PricesAt(clock.GetUtcNow());
     const string NoCheck = "Wait for the check above the button to finish, then try again.";
 
     public Visitor Who => Visitor.Of(HttpContext);
@@ -206,7 +211,9 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
             var session = await payments.Stripe(p, HttpMethod.Post, "checkout/sessions", new Dictionary<string, object?>
             {
                 ["mode"] = "subscription",
-                ["line_items"] = new[] { new { price = plan == "yearly" ? p.Yearly : p.Monthly, quantity = 1 } },
+                ["line_items"] = new[] { new { price = p.PriceOf(plan, clock.GetUtcNow()), quantity = 1 } },
+                // Stripe sells as the merchant of record and takes care of the VAT
+                ["managed_payments"] = new { enabled = true },
                 ["client_reference_id"] = userId,
                 ["subscription_data"] = new { metadata = new { user_id = userId } },
                 // a returning subscriber keeps their record with Stripe

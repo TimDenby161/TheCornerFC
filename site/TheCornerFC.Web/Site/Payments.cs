@@ -12,10 +12,26 @@ namespace TheCornerFC.Web.Site;
 // which is written to the `subscriptions` table the database's paywall reads. Nothing here is
 // switched on until the server has all five secrets (the app's settings in Azure, never the code):
 //   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET   Stripe's API key and the webhook's signing secret
-//   STRIPE_PRICE_MONTHLY, STRIPE_PRICE_YEARLY  the two prices' ids in Stripe
+//   STRIPE_PRICE_MONTHLY, STRIPE_PRICE_YEARLY  the standard prices' ids in Stripe
+//   STRIPE_PRICE_FOUNDER_MONTHLY, STRIPE_PRICE_FOUNDER_YEARLY  the founder's prices' ids
 //   SUPABASE_SERVICE_KEY                       the database key that may write `subscriptions`
-public sealed record Payments(string Key, string Hook, string Monthly, string Yearly, string Db)
+// Stripe sells as the merchant of record (Managed Payments, owner 2026-11-02): it charges and pays
+// the VAT, and handles fraud and disputes. The prices in Stripe include VAT.
+public sealed record Payments(string Key, string Hook, string Monthly, string Yearly, string Db, string FounderMonthly, string FounderYearly)
 {
+    // Stripe's API version: Managed Payments needs 2025-03-31.basil or later
+    public const string ApiVersion = "2025-03-31.basil";
+
+    // The founder's price (owner, 2026-11-02): offered to anyone who subscribes before the end of
+    // 31 January 2027, UK time, then the standard price, by itself and never extended. Stripe keeps
+    // each subscriber on the price they joined at, so a founder keeps theirs.
+    public static readonly DateTimeOffset FounderEnds = new(2027, 2, 1, 0, 0, 0, TimeSpan.Zero);
+    public static bool Founder(DateTimeOffset now) => now < FounderEnds;
+    public string PriceOf(string plan, DateTimeOffset now) => (plan == "yearly", Founder(now)) switch
+    {
+        (true, true) => FounderYearly, (true, false) => Yearly, (false, true) => FounderMonthly, (false, false) => Monthly,
+    };
+
     // Only the live site takes real money: anywhere else a live Stripe key is treated as no key at
     // all, so staging can be given test keys and nothing else.
     public static Payments? From(IConfiguration settings, SiteEnvironment env)
@@ -24,7 +40,8 @@ public sealed record Payments(string Key, string Hook, string Monthly, string Ye
         var key = Get("STRIPE_SECRET_KEY");
         if (!env.IsProduction && key is not null && !key.StartsWith("sk_test_", StringComparison.Ordinal)) return null;
         return key is not null && Get("STRIPE_WEBHOOK_SECRET") is { } hook && Get("STRIPE_PRICE_MONTHLY") is { } m && Get("STRIPE_PRICE_YEARLY") is { } y && Get("SUPABASE_SERVICE_KEY") is { } db
-            ? new(key, hook, m, y, db) : null;
+            && Get("STRIPE_PRICE_FOUNDER_MONTHLY") is { } fm && Get("STRIPE_PRICE_FOUNDER_YEARLY") is { } fy
+            ? new(key, hook, m, y, db, fm, fy) : null;
     }
 
     // Stripe takes a form, with nested names in brackets: { a: { b: [1] } } is a[b][0]=1
@@ -88,7 +105,7 @@ public sealed record Payments(string Key, string Hook, string Monthly, string Ye
         var priceId = price is { } p2 ? Str(p2, "id") : null;
         var customer = Obj(s, "customer") is { } c ? c.ValueKind == JsonValueKind.String ? c.GetString()! : Str(c, "id") ?? "" : "";
         return new(userId, status,
-            priceId == Yearly || interval == "year" ? "yearly" : priceId == Monthly || interval == "month" ? "monthly" : null,
+            priceId == Yearly || priceId == FounderYearly || interval == "year" ? "yearly" : priceId == Monthly || priceId == FounderMonthly || interval == "month" ? "monthly" : null,
             end is { } e ? IsoTime(DateTimeOffset.FromUnixTimeSeconds(e)) : null,
             (s.TryGetProperty("cancel_at_period_end", out var cape) && cape.ValueKind == JsonValueKind.True) || (Obj(s, "cancel_at") is not null),
             "stripe", customer, Str(s, "id") ?? "", IsoTime(now));
@@ -102,6 +119,7 @@ public sealed class PaymentsClient(HttpClient http, SiteEnvironment env)
     {
         using var m = new HttpRequestMessage(method, $"https://api.stripe.com/v1/{path}");
         m.Headers.Authorization = new AuthenticationHeaderValue("Bearer", p.Key);
+        m.Headers.Add("Stripe-Version", Payments.ApiVersion);
         if (form is not null) m.Content = new FormUrlEncodedContent(Payments.FormBody(JsonSerializer.SerializeToElement(form)));
         using var r = await http.SendAsync(m);
         if (!r.IsSuccessStatusCode) throw new HttpRequestException($"Stripe {path}: {(int)r.StatusCode}");
@@ -113,7 +131,9 @@ public sealed class PaymentsClient(HttpClient http, SiteEnvironment env)
     {
         var m = new HttpRequestMessage(method, $"{env.Url}/rest/v1/subscriptions?{query}");
         m.Headers.Add("apikey", p.Db);
-        m.Headers.Authorization = new AuthenticationHeaderValue("Bearer", p.Db);
+        // a legacy service_role key is a JWT and goes as the bearer too; a new secret key (sb_secret_)
+        // isn't one and goes on apikey alone, as Supabase asks (both give the server's full access)
+        if (!p.Db.StartsWith("sb_", StringComparison.Ordinal)) m.Headers.Authorization = new AuthenticationHeaderValue("Bearer", p.Db);
         return m;
     }
     public async Task Save(Payments p, Payments.SubscriptionRow row)

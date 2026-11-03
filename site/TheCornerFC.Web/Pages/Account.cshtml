@@ -93,14 +93,18 @@
                 else if (user.SignedIn)
                 {
                     <p class="account-text">Cancel whenever you like: the subscription then runs to the end of the time paid for. Payment is taken by Stripe; this site never sees your card. See the <a href="/terms">terms</a>.</p>
+                    @if (Model.Prices.Note is { } note)
+                    {
+                        <p class="account-text"><b>@note</b></p>
+                    }
                     <form method="post" action="/account?/subscribe" class="account-plans">
-                        <button type="submit" name="plan" value="monthly" class="mt-btn account-out">Subscribe · @AccountModel.Prices.Monthly</button>
-                        <button type="submit" name="plan" value="yearly" class="mt-btn account-out">Subscribe · @AccountModel.Prices.Yearly</button>
+                        <button type="submit" name="plan" value="monthly" class="mt-btn account-out">Subscribe · @Model.Prices.Monthly</button>
+                        <button type="submit" name="plan" value="yearly" class="mt-btn account-out">Subscribe · @Model.Prices.Yearly</button>
                     </form>
                 }
                 else
                 {
-                    <p class="account-text"><b>@AccountModel.Prices.Monthly, or @AccountModel.Prices.Yearly.</b> Sign in or create a free account first, then subscribe from here.</p>
+                    <p class="account-text"><b>@Model.Prices.Monthly, or @Model.Prices.Yearly.</b>@(Model.Prices.Note is { } n ? $" {n}" : "") Sign in or create a free account first, then subscribe from here.</p>
                 }
                 <div class="account-links"><a class="link-btn" href="@(user.SignedIn ? "/account" : Href("signin"))">@(user.SignedIn ? "Back to your account" : "Sign in")</a></div>
             }

@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using TheCornerFC.Web.Pages;
 using TheCornerFC.Web.Site;
 
 namespace TheCornerFC.Web.Tests;
@@ -16,8 +18,9 @@ public class PaymentsTests
     {
         ["STRIPE_SECRET_KEY"] = "sk_test_1", ["STRIPE_WEBHOOK_SECRET"] = "whsec_test", ["STRIPE_PRICE_MONTHLY"] = "price_m",
         ["STRIPE_PRICE_YEARLY"] = "price_y", ["SUPABASE_SERVICE_KEY"] = "service",
+        ["STRIPE_PRICE_FOUNDER_MONTHLY"] = "price_fm", ["STRIPE_PRICE_FOUNDER_YEARLY"] = "price_fy",
     };
-    static readonly Payments P = new("sk", "wh", "price_m", "price_y", "db");
+    static readonly Payments P = new("sk", "wh", "price_m", "price_y", "db", "price_fm", "price_fy");
     const string Known = "6624ddd652ee78d27211f2d32373bb1b7277e4d2b5af8aff64cac0580f3e651f";
 
     [Fact]
@@ -27,7 +30,8 @@ public class PaymentsTests
         var production = SiteEnvironment.Named("production");
         Assert.Null(Payments.From(Settings([]), production));
         Assert.Null(Payments.From(Settings(All.Where(kv => kv.Key != "SUPABASE_SERVICE_KEY").ToDictionary(kv => kv.Key, kv => (string?)kv.Value)), production));
-        Assert.Equal(new Payments("sk_test_1", "whsec_test", "price_m", "price_y", "service"), Payments.From(Settings(All.ToDictionary(kv => kv.Key, kv => (string?)kv.Value)), staging));
+        Assert.Equal(new Payments("sk_test_1", "whsec_test", "price_m", "price_y", "service", "price_fm", "price_fy"), Payments.From(Settings(All.ToDictionary(kv => kv.Key, kv => (string?)kv.Value)), staging));
+        Assert.Null(Payments.From(Settings(All.Where(kv => kv.Key != "STRIPE_PRICE_FOUNDER_YEARLY").ToDictionary(kv => kv.Key, kv => (string?)kv.Value)), staging));
         var live = All.ToDictionary(kv => kv.Key, kv => (string?)kv.Value);
         live["STRIPE_SECRET_KEY"] = "sk_live_1";
         Assert.Null(Payments.From(Settings(live), staging));
@@ -126,6 +130,7 @@ public class PaymentsTests
         var saved = site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/rest/v1/subscriptions");
         Assert.Equal("?on_conflict=user_id", saved.RequestUri!.Query);
         Assert.Equal("Bearer service", saved.Headers.Authorization!.ToString());
+        Assert.Equal("service", saved.Headers.GetValues("apikey").Single());
         Assert.Contains("\"user_id\":\"u1\"", site.Handler.Bodies[saved]);
         Assert.Contains("\"plan\":\"yearly\"", site.Handler.Bodies[saved]);
         // one not signed by Stripe goes no further
@@ -133,6 +138,33 @@ public class PaymentsTests
         forged.Headers.Add("Stripe-Signature", $"t={t},v1={Sign(body, "someone-else", t)}");
         Assert.Equal(HttpStatusCode.BadRequest, (await Client(site).SendAsync(forged)).StatusCode);
         Assert.Single(site.Handler.Sent, x => x.RequestUri!.Host == "api.stripe.com");
+    }
+
+    [Fact]
+    public async Task A_new_supabase_secret_key_goes_on_apikey_alone()
+    {
+        using var site = new SiteFactory("staging", r => StubHandler.Json("[]"), All);
+        var client = site.Services.GetRequiredService<PaymentsClient>();
+        await client.KeptFor(P with { Db = "sb_secret_abc" }, "u1");
+        var asked = site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/rest/v1/subscriptions");
+        Assert.Equal("sb_secret_abc", asked.Headers.GetValues("apikey").Single());
+        Assert.Null(asked.Headers.Authorization);
+    }
+
+    [Fact]
+    public void The_founders_price_is_offered_until_the_end_of_31_January_2027_then_the_standard_price()
+    {
+        var lastMinute = new DateTimeOffset(2027, 1, 31, 23, 59, 59, TimeSpan.Zero);
+        Assert.Equal("price_fm", P.PriceOf("monthly", lastMinute));
+        Assert.Equal("price_fy", P.PriceOf("yearly", lastMinute));
+        Assert.Equal("price_m", P.PriceOf("monthly", Payments.FounderEnds));
+        Assert.Equal("price_y", P.PriceOf("yearly", Payments.FounderEnds));
+        Assert.Equal(new AccountModel.PriceWords("£4.99 a month", "£39 a year",
+            "Founder's price until 31 January 2027 (then £5.99 a month or £49 a year), kept for as long as you stay subscribed."), AccountModel.PricesAt(lastMinute));
+        Assert.Equal(new AccountModel.PriceWords("£5.99 a month", "£49 a year", null), AccountModel.PricesAt(Payments.FounderEnds));
+        // a founder's subscription is recorded under its plan like any other
+        var row = P.RowOf(JsonDocument.Parse("""{"id":"sub_1","customer":"cus_1","status":"active","metadata":{"user_id":"u1"},"items":{"data":[{"price":{"id":"price_fy"}}]}}""").RootElement, DateTimeOffset.UtcNow);
+        Assert.Equal("yearly", row!.Plan);
     }
 
     [Fact]
@@ -149,7 +181,10 @@ public class PaymentsTests
         var r = await Client(site).SendAsync(m);
         Assert.Contains("\"location\":\"https://checkout.stripe.com/c/pay/cs_1\"", await r.Content.ReadAsStringAsync());
         var form = site.Handler.Bodies[site.Handler.Sent.Single(x => x.RequestUri!.Host == "api.stripe.com")];
-        Assert.Contains("line_items%5B0%5D%5Bprice%5D=price_y", form);
+        // the founder's yearly price until it ends, sold by Stripe as merchant of record, on the API version that allows it
+        Assert.Contains(Payments.Founder(DateTimeOffset.UtcNow) ? "line_items%5B0%5D%5Bprice%5D=price_fy" : "line_items%5B0%5D%5Bprice%5D=price_y", form);
+        Assert.Contains("managed_payments%5Benabled%5D=true", form);
+        Assert.Equal(Payments.ApiVersion, site.Handler.Sent.Single(x => x.RequestUri!.Host == "api.stripe.com").Headers.GetValues("Stripe-Version").Single());
         Assert.Contains("subscription_data%5Bmetadata%5D%5Buser_id%5D=user-1", form);
         Assert.Contains("customer_email=fan%40example.com", form);
         Assert.Contains("success_url=https%3A%2F%2Fstaging.thecornerfc.com%2Faccount%3Fpaid%3D1", form);

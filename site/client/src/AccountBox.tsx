@@ -10,7 +10,7 @@ import { longDate } from '../../../web/src/lib/club.ts';
 
 type View = 'signin' | 'signup' | 'reset' | 'newpass' | 'note' | 'account' | 'delete' | 'subscribe';
 type Sub = { paywall: boolean; subscriber: boolean; status: string | null; plan: string | null; renewsAt: string | null; ends: boolean } | null;
-export type AccountProps = { user: { email: string } | null; sub: Sub; botCheck: string; pay: boolean; prices: { monthly: string; yearly: string } };
+export type AccountProps = { user: { email: string } | null; sub: Sub; botCheck: string; pay: boolean; prices: { monthly: string; yearly: string; note?: string | null } };
 type Answer = { type: 'success'; data: { done: string; note?: string } } | { type: 'failure'; data: { message: string } } | { type: 'redirect'; location: string };
 
 const TITLES: Record<View, string> = {
@@ -134,10 +134,11 @@ export function AccountBox({ user, sub, botCheck, pay, prices, start, onview, on
 			: sub?.subscriber ? <p className="account-text"><b>This account is subscribed.</b></p>
 			: who ? <>
 				<p className="account-text">Cancel whenever you like: the subscription then runs to the end of the time paid for. Payment is taken by Stripe; this site never sees your card. See the <a href="/terms">terms</a>.</p>
+				{prices.note && <p className="account-text"><b>{prices.note}</b></p>}
 				{form('subscribe', <><button type="submit" name="plan" value="monthly" className="mt-btn account-out" disabled={busy}>Subscribe · {prices.monthly}</button>
 					<button type="submit" name="plan" value="yearly" className="mt-btn account-out" disabled={busy}>Subscribe · {prices.yearly}</button></>, 'account-plans')}
 			</>
-			: <p className="account-text"><b>{prices.monthly}, or {prices.yearly}.</b> Sign in or create a free account first, then subscribe from here.</p>}
+			: <p className="account-text"><b>{prices.monthly}, or {prices.yearly}.</b>{prices.note ? ` ${prices.note}` : ''} Sign in or create a free account first, then subscribe from here.</p>}
 		<div className="account-links">{link(who ? 'account' : 'signin', who ? 'Back to your account' : 'Sign in')}</div>
 	</>;
 	else if (view === 'account' && who) body = <>
