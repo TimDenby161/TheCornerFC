@@ -69,6 +69,7 @@ from .site_matches import (
     national_matches,
     national_nationalities,
     national_xis,
+    refresh_match_states,
     site_freshness,
     store_matches,
     worked_example,

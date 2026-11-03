@@ -16,10 +16,12 @@ from ..fantasy_games import fantasy_snapshots
 from .db import upsert
 from .ingest import _national_rows, _store_fixtures, sync_injuries_fixtures, sync_odds_fixtures
 from ..evidence.lineup_snapshots import capture_official
+from ..publish.export import refresh_match_states
 
 log = logging.getLogger(__name__)
 
 WINDOW_HOURS = 3
+REARRANGED_HOURS = 3          # a game still marked postponed this close to its kick-off is looked up again
 MAX_ODDS_CALLS = 250
 LINEUP_WINDOW_MINUTES = 70   # XIs are published about an hour before kickoff; runs are 30 minutes apart
 MAX_LINEUP_CALLS = 10        # 20 fixtures per call
@@ -29,14 +31,17 @@ PLAYER_CLUB_DAYS = 400       # a club counts as a player-data club if it played 
 def run_matchday(api, conn):
     now = datetime.now(timezone.utc)
 
-    # Results for matches that kicked off in the last few hours
+    # Results for matches that kicked off in the last few hours, and any still marked postponed
+    # that kick off in the next few (a rearranged game API-Football hasn't marked on yet)
     recent = [r[0] for r in conn.execute(
         """select fixture_id from fixtures
-           where kickoff between %s and %s and status_short not in ('FT', 'AET', 'PEN', 'CANC')""",
-        [now - timedelta(hours=5), now])]
+           where (kickoff between %s and %s and status_short not in ('FT', 'AET', 'PEN', 'CANC'))
+              or (kickoff between %s and %s and status_short = 'PST')""",
+        [now - timedelta(hours=5), now, now, now + timedelta(hours=REARRANGED_HOURS)])]
     for i in range(0, len(recent), 20):
         _store_fixtures(conn, api.get("fixtures", ids="-".join(map(str, recent[i:i + 20]))))
         conn.commit()
+    refresh_match_states(conn, recent)      # the site's rows, between nightly exports
     refresh_national_results(api, conn, now)
 
     # Leagues where bookmaker odds are actually available (seen in the last 30 days)

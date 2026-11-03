@@ -12,6 +12,7 @@ def run_with_upcoming(upcoming):
     conn.execute.return_value.fetchall.return_value = upcoming
     conn.execute.return_value.__iter__ = lambda self: iter([])
     with patch.object(matchday, "refresh_national_results"), \
+         patch.object(matchday, "refresh_match_states"), \
          patch.object(matchday, "national_with_odds", return_value=[]), \
          patch.object(matchday, "capture_prekickoff_lineups"), \
          patch.object(matchday, "sync_odds_fixtures"), \
@@ -32,6 +33,25 @@ class FantasySnapshotTests(unittest.TestCase):
     def test_only_the_premier_league_fixtures_are_captured(self):
         capture = run_with_upcoming([(1, CHAMPIONS_LEAGUE), (2, PL), (3, PL)])
         self.assertEqual(capture.call_args.args[1], [2, 3])
+
+
+class RecentFixturesTests(unittest.TestCase):
+    def test_a_game_still_marked_postponed_just_before_kick_off_is_fetched_and_the_site_rows_refreshed(self):
+        conn = Mock()
+        conn.execute.return_value.fetchall.return_value = []
+        conn.execute.return_value.__iter__ = lambda self: iter([(7,), (8,)])
+        api = Mock()
+        with patch.object(matchday, "refresh_national_results"), \
+             patch.object(matchday, "_store_fixtures"), \
+             patch.object(matchday, "refresh_match_states") as refresh, \
+             patch.object(matchday, "national_with_odds", return_value=[]), \
+             patch.object(matchday, "capture_prekickoff_lineups"), \
+             patch.object(matchday.betting, "settle_bets"):
+            matchday.run_matchday(api, conn)
+        sql = conn.execute.call_args_list[0].args[0]
+        self.assertIn("status_short = 'PST'", sql)
+        api.get.assert_any_call("fixtures", ids="7-8")
+        refresh.assert_called_once_with(conn, [7, 8])
 
 
 if __name__ == "__main__":

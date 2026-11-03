@@ -279,6 +279,51 @@ def store_matches(conn, matches, explained=None):
     return True
 
 
+MATCH_STATE_FIELDS = ("kickoff", "status", "hg", "ag", "pen_h", "pen_a")
+
+
+def refresh_match_states(conn, fixture_ids):
+    """Bring the site's rows of these club matches up to date with fixtures between nightly
+    exports: kick-off, status, score and penalties, in the row and its blanked copies. The match-day
+    run calls it for the matches it has just fetched, so a game in play shows its score, and one
+    the nightly stored as postponed before it was rearranged (Northampton v Oldham, 2026-11-03)
+    shows once API-Football has it on. Only rows already on the site: the nightly adds new ones.
+
+    How many rows changed. 0, with nothing written, on a read-only run."""
+    if not fixture_ids:
+        return 0
+    try:
+        config.require_db_write("refresh the matches' states")
+    except config.SafetyError as exc:
+        log.info("Match states not refreshed: %s", exc)
+        return 0
+    fresh = {r[0]: (r[1].isoformat(), *r[2:]) for r in conn.execute(
+        """select fixture_id, kickoff, status_short, home_goals, away_goals, pen_home, pen_away
+           from fixtures where fixture_id = any(%s)""", [list(fixture_ids)])}
+    at = [SITE_MATCH_FIELDS.index(f) for f in MATCH_STATE_FIELDS]
+    text = lambda value: json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+    changed = 0
+    with conn.cursor() as cur:
+        for fid, *copies in conn.execute(
+                "select fixture_id, data, data_free, data_locked from site.matches where fixture_id = any(%s)",
+                [list(fresh)]).fetchall():
+            state = fresh[fid]
+            if all(row is None or [row[i] for i in at] == list(state) for row in copies):
+                continue
+            for row in copies:
+                for i, value in zip(at, state):
+                    if row is not None:
+                        row[i] = value
+            cur.execute(
+                """update site.matches set kickoff = %s, status = %s, data = %s, data_free = %s, data_locked = %s
+                   where fixture_id = %s""",
+                [state[0], state[1], *(None if row is None else text(row) for row in copies), fid])
+            changed += 1
+    conn.commit()
+    log.info("Match states refreshed: %d of %d on the site changed", changed, len(fresh))
+    return changed
+
+
 def national_matches(conn, since, until):
     """Senior national team matches (national_fixtures) kicking off between since and until, for
     the Matches tab, each with its projection (national_fixture_predictions; nulls where it has
