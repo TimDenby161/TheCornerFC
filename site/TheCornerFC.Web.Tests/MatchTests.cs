@@ -88,18 +88,23 @@ public class MatchTests
         Mk(1, "2026-10-03T14:00:00+00:00", "Regular Season - 7", "FT"), Mk(2, "2026-10-04T14:00:00+00:00", "Regular Season - 7", "FT"),
         Mk(3, "2026-11-20T19:00:00+00:00", "Regular Season - 7"), // rearranged: outside its round's window
         Mk(4, "2026-10-17T14:00:00+00:00", "Regular Season - 8"), Mk(5, "2026-10-18T14:00:00+00:00", "Regular Season - 8", "PST"),
-        Mk(6, "2026-10-24T14:00:00+00:00", "Regular Season - 9"),
+        Mk(6, "2026-10-24T14:00:00+00:00", "Regular Season - 9", "FT"),
+        Mk(7, "2026-11-21T15:00:00+00:00", "Regular Season - 12"),
     ], "Europe/London");
 
     [Fact]
-    public void Rounds_are_in_date_order_leave_a_postponed_match_out_and_dont_wait_for_a_rearranged_one()
+    public void Rounds_are_in_date_order_leave_a_postponed_match_out_and_show_a_rearranged_one_in_the_round_it_is_played_in()
     {
-        Assert.Equal(["Round 7", "Round 8", "Round 9"], Rounds.Select(r => r.Label));
+        Assert.Equal(["Round 7", "Round 8", "Round 9", "Round 12"], Rounds.Select(r => r.Label));
         Assert.Equal("3 Oct – 4 Oct", Matchday.RoundDates(Rounds[0], "Europe/London"));
         Assert.Equal("24 Oct", Matchday.RoundDates(Rounds[2], "Europe/London"));
+        Assert.Equal("20 Nov – 21 Nov", Matchday.RoundDates(Rounds[3], "Europe/London"));
+        Assert.Equal([1, 2], Rounds[0].Matches.Select(m => m.Id));
         Assert.Equal([4], Rounds[1].Matches.Select(m => m.Id));
+        Assert.Equal([3, 7], Rounds[3].Matches.Select(m => m.Id));
         Assert.False(Rounds[0].Pending);
         Assert.True(Rounds[1].Pending);
+        Assert.False(Rounds[2].Pending);
     }
 
     [Fact]

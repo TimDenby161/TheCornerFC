@@ -138,15 +138,29 @@ public static partial class Matchday
             var k = byKey.FindIndex(x => x.Key == key);
             if (k < 0) byKey.Add((key, label, [m])); else byKey[k].Ms.Add(m);
         }
-        return byKey.Select(r =>
+        // each round's middle, from its matches in date order
+        var mids = byKey.Select(r =>
         {
-            var ms = r.Ms.Select((m, i) => (m, i)).OrderBy(t => t.m.Kickoff, Js.Compare).ThenBy(t => t.i).Select(t => t.m).ToList();
+            var times = r.Ms.Select(m => At(m.Kickoff)).Order().ToList();
+            return times[times.Count / 2];
+        }).ToList();
+        // a rearranged match goes in the round nearest the day it's played, where a visitor looks for it
+        var held = byKey.Select(_ => new List<Match>()).ToList();
+        for (var k = 0; k < byKey.Count; k++)
+            foreach (var m in byKey[k].Ms)
+            {
+                var at = At(m.Kickoff);
+                var to = (at - mids[k]).Duration() <= RoundWindow ? k
+                    : Enumerable.Range(0, byKey.Count).MinBy(j => ((at - mids[j]).Duration(), j));
+                held[to].Add(m);
+            }
+        return byKey.Select((r, k) =>
+        {
+            var ms = held[k].Select((m, i) => (m, i)).OrderBy(t => t.m.Kickoff, Js.Compare).ThenBy(t => t.i).Select(t => t.m).ToList();
             var times = ms.Select(m => At(m.Kickoff)).ToList();
-            var mid = times[times.Count / 2];
-            var own = times.Where(t => (t - mid).Duration() <= RoundWindow).ToList(); // its scheduled dates
-            // still to come: a match in its own window that hasn't been played (or called off)
-            var pending = ms.Any(m => !ClubData.Finished.Contains(m.Status) && !ClubData.NoGame.Contains(m.Status) && (At(m.Kickoff) - mid).Duration() <= RoundWindow);
-            return new Round(r.Key, r.Label, ms, mid, own.Min(), own.Max(), pending);
+            // still to come: a match that hasn't been played (or called off)
+            var pending = ms.Any(m => !ClubData.Finished.Contains(m.Status) && !ClubData.NoGame.Contains(m.Status));
+            return new Round(r.Key, r.Label, ms, mids[k], times.Min(), times.Max(), pending);
         }).Select((r, i) => (r, i)).OrderBy(t => t.r.Mid).ThenBy(t => t.i).Select(t => t.r).ToList();
     }
     // The round to show: the one on a day asked for (or the next after it), else the one on now or
