@@ -16,8 +16,10 @@ Run each check on its own, not chained through a pipe, and read its own result l
    selected. `git status --short`, `git log --oneline origin/staging..HEAD`,
    `git diff --stat origin/staging..HEAD`. The branch must be `staging`; if the work is on
    another branch, say so and stop.
-2. **Nothing private.** Nothing from `audit/`, no `.env`, no saved feed data
-   (`inputs.json.gz`, pickles), no FPL-derived data in a public file. This repository is public.
+2. **Nothing private.** Run the `public-repo-guard` agent on what this push carries and report
+   its verdict. Nothing from `audit/`, no `.env`, no saved feed data (`inputs.json.gz`,
+   pickles), no FPL-derived data in a public file. This repository is public. Any finding stops
+   the push until it is fixed.
 3. **Python** (the venv is `.venv`, made from `requirements.txt`):
    `python -m unittest discover -s tests`
    The line to read is `OK` (or `OK (skipped=21)` without numpy and scipy), with the count on
@@ -40,7 +42,8 @@ Run each check on its own, not chained through a pipe, and read its own result l
 8. **If a migration is waiting**: say so, whether it has been applied to staging, and whether
    the Python it needs is on `main`.
 
-9. **Cost** (`guide/costs.md`): for each service the diff touches (API-Football, Supabase,
+9. **Cost** (`guide/costs.md`): run the `cost-checker` agent on the diff, in parallel with the
+   checks above. For each service the diff touches (API-Football, Supabase,
    Cloudflare, Azure, GitHub), say what it adds or saves. If it adds cost the owner has not agreed to,
    say so and stop.
 

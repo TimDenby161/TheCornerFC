@@ -80,6 +80,17 @@ covers the fantasy pages.
 Skills: `/new-migration` (any database change), `/model-experiment` (any change to a model),
 `/pre-push` (work goes to `staging`), `/promote-production` (the only way onto `main`), `/add-task` (puts one task on the brain's list).
 
+Agents (`.claude/agents/`, read-only reviewers): `cost-checker` (what a change adds on each
+service), `public-repo-guard` (nothing private in a commit or on a page), `migration-reviewer`
+(a migration before the owner applies it); and `twitter`, which drafts, ranks and times the
+X posts with their cards (a cloud routine runs it at 07:30, 11:30 and 16:30 UK time onto the X Desk page and pings the owner's phone; the owner
+picks with a comment and posts). Run them without being asked: `cost-checker`
+before building a change to a job, the database, the site or hosting; `public-repo-guard`
+before every commit or push; `migration-reviewer` after a migration file is written or changed.
+`/pre-push` and `/new-migration` call them as steps. Their reports come back to Claude, not
+the owner: put each agent's verdict in the reply on its own line (`cost-checker: Adds nothing`),
+with any findings under it, and stop if one says "Needs the owner" or lists a problem.
+
 ## Rules that must not be broken
 
 - **Never add cost.** Before building any change, work out what it costs on each service it

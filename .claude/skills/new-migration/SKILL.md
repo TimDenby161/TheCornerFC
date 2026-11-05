@@ -35,6 +35,7 @@ connect to the database to change it.
 7. **Check the order.** If Python on `main` must change first (the jobs run from `main`), say
    which commit has to be there before the migration is applied.
 8. **Run** `python -m unittest discover -s tests` and read its own `OK` line.
+   Then run the `migration-reviewer` agent on the file and fix what it finds before going on.
 9. **Tell the owner** the file is waiting, in one line, with anything they must do after it
    (a workflow to run, a setting to switch).
 10. **Once the owner says it is applied**: change the first line to
