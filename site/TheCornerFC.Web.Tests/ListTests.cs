@@ -165,6 +165,17 @@ public class ListTests
             new[] { 1, 2, 3, 4, 11, 12, 13, 21, 22, 101, 111 }.Select(Markup.Ordinal));
         Assert.Equal("/nation/C%C3%B4te%20d'Ivoire", Menu.PageHref("nation", "Côte d'Ivoire"));
     }
+
+    [Fact]
+    public void A_clubs_flag_links_to_its_league_with_the_leagues_name_on_hover()
+    {
+        var flag = Markup.LeagueFlag("England", 39, "Premier League").ToString()!;
+        Assert.Contains($"href=\"{Menu.PageHref("league", "39")}\"", flag);
+        Assert.Contains("title=\"Premier League\"", flag);
+        Assert.Contains("<img class=\"flag\"", flag);
+        var noFlag = Markup.LeagueFlag("Nowhere", 7, "Some League").ToString()!;
+        Assert.Contains(">Some League</a>", noFlag);
+    }
 }
 
 // web/src/lib/cups.test.ts, for the C# site

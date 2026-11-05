@@ -65,7 +65,7 @@
                                         <a class="team-link" href="@Menu.PageHref("club", r.Team.ToString())" data-short="@r.Short">@r.Name</a>
                                         @if (showMeta && r.Country != "")
                                         {
-                                            <span class="club-meta">@Markup.Flag(r.CountryKey, r.Country)<span class="cm-league"><a class="nat-link" href="@Menu.PageHref("league", r.League.ToString())">@r.LeagueName</a></span></span>
+                                            <span class="club-meta">@Markup.LeagueFlag(r.Country, r.League, r.LeagueName)</span>
                                         }
                                     </div>
                                 </td>

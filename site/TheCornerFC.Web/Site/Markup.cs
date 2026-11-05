@@ -57,6 +57,16 @@ public static partial class Markup
             : $"<a class=\"nat-link\" href=\"{href}\">{E(name)}</a> ·");
     }
 
+    // A club's league as its country's flag, linking to the league's page, the league's name on
+    // hover (its name where there is no flag). `country` is the country as it is shown.
+    public static IHtmlContent LeagueFlag(string country, int league, string leagueName)
+    {
+        var href = E(Menu.PageHref("league", league.ToString()));
+        return new HtmlString(Names.FlagCodes.TryGetValue(country, out var code)
+            ? $"<a class=\"flag-link\" href=\"{href}\" title=\"{E(leagueName)}\" aria-label=\"{E(leagueName)}\"><img class=\"flag\" src=\"https://flagcdn.com/w40/{code}.png\" alt=\"\" loading=\"lazy\" /></a>"
+            : $"<a class=\"nat-link\" href=\"{href}\">{E(leagueName)}</a>");
+    }
+
     // A signed change: green with a plus when up, red when down, a plain 0, nothing when unknown.
     public static IHtmlContent Move(double? value) => new HtmlString(value switch
     {
