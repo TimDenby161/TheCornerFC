@@ -6,8 +6,8 @@ paths:
 
 # The site (`site/`, with what it shares from `web/`)
 
-The live site is the C# app in `site/` (since 2026-10-20). `web/` was the SvelteKit site; it
-stays as the source of the stylesheets, icons, text pages, `tabInfo.json`, `names.json` and the
+The live site is the C# app in `site/` (since 2026-10-20). `web/` was the SvelteKit site
+(retired 2026-11-05); it stays as the source of the stylesheets, icons, text pages, `tabInfo.json`, `names.json` and the
 logic in `web/src/lib` that the React parts import, so a change there changes the C# site too.
 
 - No back buttons on any page. Navigation is the menu and the browser.

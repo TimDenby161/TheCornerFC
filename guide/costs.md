@@ -24,7 +24,7 @@ $13 (£10) a month, the owner's yes on 2026-10-18; a budget emails at US$16 and 
 anything but that one plan.
 
 Everything else is free: the staging Supabase project, Cloudflare (DNS, Access, the timer
-Worker, and the old site's Workers until about 2026-11-03) and GitHub (public repository). Check the providers' pages for the current figures before
+Worker) and GitHub (public repository). Check the providers' pages for the current figures before
 relying on a number here.
 
 ## The services and what to watch

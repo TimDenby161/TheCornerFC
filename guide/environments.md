@@ -7,7 +7,7 @@ nothing of production's.
 | | Production | Staging |
 |---|---|---|
 | Branch | `main`, moved only by promotion | `staging`, where every push lands |
-| Site | Azure web app `thecornerfc`, thecornerfc.com | Azure web app `thecornerfc-staging`, staging.thecornerfc.com (and next.thecornerfc.com until about 2026-11-03), behind Cloudflare Access |
+| Site | Azure web app `thecornerfc`, thecornerfc.com | Azure web app `thecornerfc-staging`, staging.thecornerfc.com, behind Cloudflare Access |
 | Database | The live Supabase project | Its own Supabase project, in its own organisation |
 | Jobs | The scheduled workflows, GitHub environment `production` | `Staging pipeline`, by hand only, GitHub environment `staging` |
 | API-Football | The key, in the `production` environment | Off unless a run is given a call budget |
@@ -126,25 +126,13 @@ What this does not stop: someone with write access to the repository who sets ou
 deployment record, or who edits the ruleset. That is the owner alone. It stops a mistake, an
 untested push and anything from a fork.
 
-## The old SvelteKit Workers (until about 2026-11-03)
+## The old SvelteKit Workers
 
 The site was the SvelteKit Worker `thecornerfc` (`web/`) until 2026-10-20. It and
-`thecornerfc-staging` are still deployed, with no address of their own (www.thecornerfc.com is
-a Cloudflare Redirect Rule to thecornerfc.com), so that going back is one DNS change: delete the `@` CNAME to
-`thecornerfc.azurewebsites.net` and add `thecornerfc.com` back as the Worker's custom domain.
-After that date they are deleted, and this section with them.
-
-### Making the staging Worker again
-
-Cloudflare's "import a repository" form has no branch option, so its first build is from `main`.
-To keep that copy from ever being public: on the form set the name `thecornerfc-staging`, build
-command `npm run build`, deploy command `npx wrangler deploy --env staging`, path `web`, the
-build variable `VITE_SITE_ENV=staging`, preview builds off and "Protect with Cloudflare Access"
-on. Then, in the new Worker's Settings → Builds, change the production branch to `staging` and
-push to `staging`. The live Worker (`thecornerfc`) builds `main` only: its preview builds are
-off, and its build variable is `VITE_SITE_ENV=production`. The lock on staging.thecornerfc.com
-is a Zero Trust self-hosted application for that hostname, with one policy allowing the owner's
-email and one for the check's service token.
+`thecornerfc-staging` were kept, without an address, as a one-step rollback for two weeks, and
+deleted on 2026-11-05 with `next.thecornerfc.com`. `web/` now holds only what the C# site
+shares. The lock on staging.thecornerfc.com is a Zero Trust self-hosted application for that
+hostname, with one policy allowing the owner's email and one for the check's service token.
 
 ## When something goes wrong
 

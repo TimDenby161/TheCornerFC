@@ -7,9 +7,8 @@
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 
-  <!-- Until the switch-over (audit plan step 9) the current site in web/ keeps the one copy of the
-       stylesheets, fonts, icons, each page's intro and the text pages' words: each build copies or
-       builds them in, so a fix there reaches both sites. wwwroot/ is made by the build and is not
+  <!-- web/ (left from the SvelteKit site) keeps the one copy of the stylesheets, fonts, icons,
+       each page's intro and the text pages' words: each build copies or builds them in. wwwroot/ is made by the build and is not
        in git. -->
   <PropertyGroup>
     <WebSource>$(MSBuildProjectDirectory)/../../web</WebSource>

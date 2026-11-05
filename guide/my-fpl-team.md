@@ -29,7 +29,8 @@ signed in in that browser ([Accounts](accounts.md)).
 - **Locking in.** "I've made these transfers" calls `lock_fpl_transfers` in Supabase with the
   week's moves. The page then plans from the squad after them, until the next FPL update reads
   the real transfers from FPL (FPL's squad wins). The browser talks only to this site: the
-  server routes in `web/src/routes/fantasy/` (`data`, `known`, `lock`, `mark`) pass the request
+  server routes in `site/TheCornerFC.Web/Site/FantasyEndpoints.cs` (`/fantasy/data`, `known`,
+  `lock`, `mark`) pass the request
   on with the signed-in visitor's own token, and the security policy's `connect-src` is `'self'`.
   `lock_fpl_transfers` / `unlock_fpl_transfers` and `fpl_owner_data` (which returns the lock-ins)
   are SECURITY DEFINER, can be called by signed-in visitors only, and do nothing unless the

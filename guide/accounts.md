@@ -4,9 +4,9 @@ Visitors can sign in with Google or with an email and password (Supabase Auth; *
 header). The only thing an account unlocks is the owner's: the FPL predictions and My FPL team
 answer only the sign-in named in `fpl_team_owners` ([My FPL team](my-fpl-team.md)), and the
 Admin area answers only an address in `site_admins` ([The Admin area](admin-area.md)). The code is
-`web/src/lib/server/auth.ts`, `web/src/hooks.server.ts` (finishing a sign-in from an emailed link
-or from Google, and reading who is signed in) and the account page,
-`web/src/routes/(app)/account/`.
+`site/TheCornerFC.Web/Site/Auth.cs` (Supabase Auth: signing in, finishing a sign-in from an
+emailed link or from Google, and reading who is signed in) and the account page,
+`site/TheCornerFC.Web/Pages/Account.cshtml`.
 
 - **Sign-in is the server's job.** The session (Supabase Auth's access and refresh tokens) is in
   a cookie the page's scripts can't read (`HttpOnly`, `Secure`, `SameSite=Lax`); nothing is kept

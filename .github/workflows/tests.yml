@@ -1,10 +1,10 @@
 name: Tests
 
-# The Python unit tests, the site's unit tests and type check, and the C# site's tests (site/, the
-# rebuild in progress), on every push and pull request.
+# The Python unit tests, the unit tests and type check of the logic the React parts share from
+# web/src/lib, and the C# site's tests (site/), on every push and pull request.
 # No secrets, no database, no API. The same checks also stand in front of what deploys: the site's
-# build runs its two (web/package.json, "build"), and each job that writes to the database runs
-# the Python tests first (guide/architecture.md, "What gates a deploy").
+# deploy runs the React and C# tests, and each job that writes to the database runs the Python
+# tests first (guide/architecture.md, "What gates a deploy").
 on:
   push:
     branches: [main, staging]     # staging is where work lands first; main is what it is promoted to
@@ -84,10 +84,7 @@ jobs:
       - name: Timer tests
         run: node --test ../timer/src/index.test.js
 
-      # (the type check loads the build's settings, which must name an environment)
       - name: Types
-        env:
-          VITE_SITE_ENV: production
         run: npm run check
 
   # The C# site (site/, T-048): its unit tests and the whole site started in memory against a

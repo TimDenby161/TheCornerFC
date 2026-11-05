@@ -17,7 +17,7 @@ API-Football ──► Python jobs (GitHub Actions) ──► Supabase Postgres 
 | Jobs | `thecornerfc/`, started as `python -m thecornerfc <command>` (`__main__.py`) | GitHub Actions, on a schedule, from `main` |
 | Database | `db/schema.sql`, `db/migrations/` | Supabase. The owner applies migrations by hand |
 | Site | `site/` (ASP.NET Core on .NET 10, React for the interactive parts) | Azure App Service: the web app `thecornerfc`, deployed from `main`; `thecornerfc-staging` from `staging` |
-| Shared site files | `web/` (the SvelteKit site, live until 2026-10-20): its stylesheets, icons, text pages, `tabInfo.json`, `names.json` and the logic in `src/lib` that the React parts import | Not deployed as the site; its Workers are kept until about 2026-11-03 so going back is one DNS change |
+| Shared site files | `web/` (left from the SvelteKit site, live until 2026-10-20, retired 2026-11-05): its stylesheets, icons, text pages, `tabInfo.json`, `names.json` and the logic in `src/lib` that the React parts import | Not deployed; copied into the C# site as it builds |
 | Experiments | `experiments/` | By hand, read-only. They judge model changes and are never part of a job |
 
 There is no queue of our own: the jobs are batch runs, and the site is one long-running ASP.NET

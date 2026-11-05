@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { ENVIRONMENTS, siteEnvironment } from './environments.ts';
-import { payments } from './server/payments.ts';
 
 describe('which copy of the site a build is', () => {
 	it('has no default: a build that names neither environment fails', () => {
@@ -22,14 +21,3 @@ describe('which copy of the site a build is', () => {
 	});
 });
 
-describe('payment outside the live site', () => {
-	const env = { STRIPE_WEBHOOK_SECRET: 'wh', STRIPE_PRICE_MONTHLY: 'm', STRIPE_PRICE_YEARLY: 'y', SUPABASE_SERVICE_KEY: 'db' };
-	it('treats a live Stripe key as no key on staging, and takes a test key', () => {
-		expect(payments({ ...env, STRIPE_SECRET_KEY: 'sk_live_abc' }, 'staging')).toBeNull();
-		expect(payments({ ...env, STRIPE_SECRET_KEY: 'rk_live_abc' }, 'staging')).toBeNull();
-		expect(payments({ ...env, STRIPE_SECRET_KEY: 'sk_test_abc' }, 'staging')?.key).toBe('sk_test_abc');
-	});
-	it('takes the live key on the live site', () => {
-		expect(payments({ ...env, STRIPE_SECRET_KEY: 'sk_live_abc' }, 'production')?.key).toBe('sk_live_abc');
-	});
-});

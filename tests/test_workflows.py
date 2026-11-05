@@ -143,21 +143,6 @@ class WorkflowIsolationTests(unittest.TestCase):
                 self.assertEqual(found.group(1), config.PROJECTS[name])
         self.assertNotEqual(config.PROJECTS["staging"], config.PROJECTS["production"])
 
-    def test_the_staging_worker_is_its_own_and_has_no_public_address(self):
-        text = code((ROOT / "web/wrangler.jsonc").read_text().replace("//", " # "))
-        staging = text.split('"staging": {', 1)[1]
-        self.assertIn('"name": "thecornerfc-staging"', staging)
-        self.assertIn('"SITE_ENV": "staging"', staging)
-        self.assertIn('"workers_dev": false', staging)
-        self.assertIn('"preview_urls": false', staging)
-        self.assertIn('"vars": { "SITE_ENV": "production" }', text.split('"env": {', 1)[0])
-
-    def test_the_production_worker_answers_only_at_the_sites_address(self):
-        text = code((ROOT / "web/wrangler.jsonc").read_text().replace("//", " # "))
-        production = text.split('"env": {', 1)[0]
-        self.assertIn('"workers_dev": false', production)
-        self.assertIn('"preview_urls": false', production)
-
 
 class TimerTests(unittest.TestCase):
     """The timer (timer/) starts the scheduled jobs on the minute; GitHub's schedules are the
