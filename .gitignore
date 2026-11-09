@@ -21,6 +21,9 @@ experiments/player_no_rating/reference.pickle
 experiments/player_no_rating/replay.json
 # a saved copy of the database rows an experiment read (run.py --refresh rebuilds it): feed data, never committed
 experiments/*/inputs.json.gz
+# FiveThirtyEight's archived forecasts and the fixture pairing built from them (fetch.sh rebuilds both)
+experiments/fivethirtyeight/spi_matches.csv
+experiments/fivethirtyeight/pairs.json
 
 # Claude Code worktrees: local working copies, never part of the site
 .claude/worktrees/
