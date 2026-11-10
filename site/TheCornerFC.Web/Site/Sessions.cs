@@ -30,11 +30,6 @@ public static class Sessions
     }
     public static void KeepVerifier(HttpContext c, string verifier) => c.Response.Cookies.Append(PkceCookie, verifier, Options(c.Request, TimeSpan.FromMinutes(10)));
 
-    // the kinds of request a form sends (a script's own requests, JSON, are another matter)
-    static bool IsForm(string? type) => type is not null &&
-        (type.StartsWith("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase) || type.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase)
-         || type.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase));
-
     public static Session? Read(HttpRequest request)
     {
         if (request.Cookies[Cookie] is not { Length: > 0 } raw) return null;
@@ -57,9 +52,13 @@ public static class Sessions
             request.QueryString = new QueryString($"?handler={Uri.EscapeDataString(qs[2..].Split('&')[0])}");
         var q = request.Query;
 
-        // A form may only be sent here from this site's own pages (as SvelteKit checks every form
-        // post): one from anywhere else, or that won't say where it is from, goes no further
-        if (HttpMethods.IsPost(request.Method) && IsForm(request.ContentType) && request.Headers.Origin.ToString() != $"{request.Scheme}://{request.Host}")
+        // A form or a script's request may only be posted here from this site's own pages: one from
+        // anywhere else, or that won't say where it is from, goes no further. (Stripe's webhook is
+        // the one post from outside: it is known by its signature, Site/Payments.cs; a refusal of
+        // its own passes here again as the error page, still under the address it was sent to)
+        var sentTo = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodeReExecuteFeature>()?.OriginalPath
+            ?? context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>()?.Path ?? request.Path.Value;
+        if (HttpMethods.IsPost(request.Method) && sentTo != StripeWebhook.Path && request.Headers.Origin.ToString() != $"{request.Scheme}://{request.Host}")
         {
             context.Response.StatusCode = 403;
             await context.Response.WriteAsync("Cross-site form submissions are forbidden");

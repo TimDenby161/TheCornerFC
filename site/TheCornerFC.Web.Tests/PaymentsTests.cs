@@ -170,9 +170,11 @@ public class PaymentsTests
     [Fact]
     public async Task Subscribing_opens_Stripes_checkout_for_this_account()
     {
-        var cookie = $"{Sessions.Cookie}={Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new Session("access-1", "refresh-1", DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(), "user-1", "fan@example.com")))}";
+        // (the cookie names another account: the checkout is for the one the token is, as the sign-in service says)
+        var cookie = Cookie("someone-else", "other@example.com");
         using var site = new SiteFactory("staging", r =>
             r.RequestUri!.Host == "api.stripe.com" ? StubHandler.Json("""{"url":"https://checkout.stripe.com/c/pay/cs_1"}""")
+            : r.RequestUri.AbsolutePath == "/auth/v1/user" ? StubHandler.Json("""{"id":"user-1","email":"fan@example.com"}""")
             : r.RequestUri.AbsolutePath == "/rest/v1/subscriptions" ? StubHandler.Json("[]") : StubHandler.Json("null"), All);
         var m = new HttpRequestMessage(HttpMethod.Post, "/account?/subscribe") { Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["plan"] = "yearly" }) };
         m.Headers.Add("Origin", "https://staging.thecornerfc.com");
@@ -188,5 +190,56 @@ public class PaymentsTests
         Assert.Contains("subscription_data%5Bmetadata%5D%5Buser_id%5D=user-1", form);
         Assert.Contains("customer_email=fan%40example.com", form);
         Assert.Contains("success_url=https%3A%2F%2Fstaging.thecornerfc.com%2Faccount%3Fpaid%3D1", form);
+        Assert.Equal("Bearer access-1", site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/auth/v1/user").Headers.Authorization!.ToString());
+        Assert.Equal("?user_id=eq.user-1&select=status,provider_customer,provider_subscription", site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/rest/v1/subscriptions").RequestUri!.Query);
+    }
+
+    static string Cookie(string userId, string email) =>
+        $"{Sessions.Cookie}={Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new Session("access-1", "refresh-1", DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(), userId, email)))}";
+
+    // The cookie is the visitor's to write. One that names somebody else's account, with a token
+    // the sign-in service doesn't know, reaches neither the subscriptions table nor Stripe.
+    [Theory]
+    [InlineData("subscribe")]
+    [InlineData("manage")]
+    [InlineData("erase")]
+    public async Task A_made_up_cookie_naming_another_account_gets_nowhere_near_its_subscription(string action)
+    {
+        using var site = new SiteFactory("staging", r =>
+            r.RequestUri!.AbsolutePath == "/auth/v1/user" ? StubHandler.Json("""{"error_code":"bad_jwt"}""", HttpStatusCode.Forbidden)
+            : r.RequestUri.AbsolutePath == "/rest/v1/subscriptions" ? StubHandler.Json("""[{"status":"active","provider_customer":"cus_victim","provider_subscription":"sub_victim"}]""")
+            : StubHandler.Json("null"), All);
+        var m = new HttpRequestMessage(HttpMethod.Post, $"/account?handler={action}") { Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["plan"] = "monthly" }) };
+        m.Headers.Add("Origin", "https://staging.thecornerfc.com");
+        m.Headers.Add("Accept", "application/json");
+        m.Headers.Add("Cookie", Cookie("victim", "victim@example.com"));
+        var r = await Client(site).SendAsync(m);
+        Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+        Assert.Contains("Sign in first.", await r.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(site.Handler.Sent, x => x.RequestUri!.Host == "api.stripe.com" || x.RequestUri.AbsolutePath == "/rest/v1/subscriptions"
+            || x.RequestUri.AbsolutePath == "/rest/v1/rpc/delete_my_account");
+    }
+
+    // and a real visitor's own token acts on their own subscription, whatever the cookie says
+    [Fact]
+    public async Task Managing_and_deleting_act_on_the_account_the_token_is()
+    {
+        using var site = new SiteFactory("staging", r =>
+            r.RequestUri!.Host == "api.stripe.com" ? StubHandler.Json("""{"url":"https://billing.stripe.com/p/session/1"}""")
+            : r.RequestUri.AbsolutePath == "/auth/v1/user" ? StubHandler.Json("""{"id":"user-1","email":"fan@example.com"}""")
+            : r.RequestUri.AbsolutePath == "/auth/v1/logout" ? new HttpResponseMessage(HttpStatusCode.NoContent)
+            : r.RequestUri.AbsolutePath == "/rest/v1/subscriptions" ? StubHandler.Json("""[{"status":"active","provider_customer":"cus_1","provider_subscription":"sub_1"}]""")
+            : StubHandler.Json("null"), All);
+        foreach (var action in new[] { "manage", "erase" })
+        {
+            var m = new HttpRequestMessage(HttpMethod.Post, $"/account?handler={action}") { Content = new FormUrlEncodedContent(new Dictionary<string, string>()) };
+            m.Headers.Add("Origin", "https://staging.thecornerfc.com");
+            m.Headers.Add("Accept", "application/json");
+            m.Headers.Add("Cookie", Cookie("victim", "victim@example.com"));
+            Assert.Equal(HttpStatusCode.OK, (await Client(site).SendAsync(m)).StatusCode);
+        }
+        Assert.All(site.Handler.Sent.Where(x => x.RequestUri!.AbsolutePath == "/rest/v1/subscriptions"), x => Assert.StartsWith("?user_id=eq.user-1&", x.RequestUri!.Query));
+        Assert.Equal(2, site.Handler.Sent.Count(x => x.RequestUri!.AbsolutePath == "/rest/v1/subscriptions"));
+        Assert.Contains(site.Handler.Sent, x => x.Method == HttpMethod.Delete && x.RequestUri!.AbsoluteUri == "https://api.stripe.com/v1/subscriptions/sub_1");
     }
 }

@@ -34,6 +34,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
     o.KnownIPNetworks.Clear();
     o.KnownProxies.Clear();
+    // a visitor can send these headers too: the host one is taken only when it names this site,
+    // so no request can make the server write another site's address into an email or a redirect
+    o.AllowedHosts = [env.Host, $"www.{env.Host}"];
 });
 
 var app = builder.Build();

@@ -165,7 +165,9 @@ public static class StripeWebhook
     static readonly HashSet<string> Events = ["checkout.session.completed", "customer.subscription.created", "customer.subscription.updated",
         "customer.subscription.deleted", "customer.subscription.paused", "customer.subscription.resumed"];
 
-    public static void Map(WebApplication app) => app.MapPost("/stripe/webhook", async (HttpContext c, PaymentsClient client, IConfiguration settings, SiteEnvironment env, TimeProvider clock) =>
+    public const string Path = "/stripe/webhook";
+
+    public static void Map(WebApplication app) => app.MapPost(Path, async (HttpContext c, PaymentsClient client, IConfiguration settings, SiteEnvironment env, TimeProvider clock) =>
     {
         if (Payments.From(settings, env) is not { } p) return Results.NotFound();
         using var reader = new StreamReader(c.Request.Body, Encoding.UTF8);

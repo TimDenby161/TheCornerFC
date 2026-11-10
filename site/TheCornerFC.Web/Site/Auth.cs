@@ -106,6 +106,23 @@ public sealed class AuthClient(HttpClient http, SiteEnvironment env)
     public Task<AuthAnswer> Refresh(string refreshToken) =>
         SessionCall(HttpMethod.Post, Auth("token?grant_type=refresh_token"), new { refresh_token = refreshToken });
 
+    // Whose token this is, as the sign-in service says: the account's id and email. No account
+    // where the service doesn't know the token. The cookie names an account too, but the cookie
+    // is the visitor's to write, so its word is never taken where the server acts with its own keys.
+    public sealed record Account(string Id, string Email);
+    public async Task<(Account? Account, bool Unreachable)> Whose(string token)
+    {
+        var r = await Send(HttpMethod.Get, Auth("user"), null, token);
+        if (r is null) return (null, true);
+        if ((int)r.Value.Status >= 300) return (null, false);
+        try
+        {
+            var u = JsonSerializer.Deserialize<UserAnswer>(r.Value.Body, Json);
+            return (u?.Id is { Length: > 0 } id ? new(id, u.Email ?? "") : null, false);
+        }
+        catch (JsonException) { return (null, false); }
+    }
+
     public async Task<AuthAnswer> UpdatePassword(string token, string password)
     {
         var r = await Send(HttpMethod.Put, Auth("user"), new { password }, token);

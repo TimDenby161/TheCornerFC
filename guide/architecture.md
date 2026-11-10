@@ -81,7 +81,8 @@ deliberate version.
 
 In `site/TheCornerFC.Web`: `Pages/` holds thin Razor pages; logic is in tested `Site/*.cs`;
 every database read goes through `Data/Database.cs`; `Site/Sessions.cs` keeps sign-ins in an
-HttpOnly cookie, renews them and checks each form's origin; `Site/Gate.cs` sets the security
+HttpOnly cookie, renews them and takes a post only from the site's own pages (Stripe's webhook
+apart, known by its signature); `Site/Gate.cs` sets the security
 policy and headers; small touches are plain JavaScript in `Assets/`; the React parts are in
 `site/client` (built into `wwwroot/client`, one file plus the fantasy pages' own). Secrets are
 the app's settings in Azure. Conventions: `.claude/rules/web.md`.

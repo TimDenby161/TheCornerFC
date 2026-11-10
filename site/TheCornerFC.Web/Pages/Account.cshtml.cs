@@ -44,7 +44,7 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
         ["signin"] = "Sign in", ["signup"] = "Create an account", ["reset"] = "Reset your password", ["newpass"] = "Choose a new password",
         ["note"] = "Check your email", ["account"] = "Your profile", ["delete"] = "Delete your account", ["subscribe"] = "Subscribe",
     };
-    // whether subscriptions can be bought yet: the server has payments' secrets (none yet, on either site)
+    // whether subscriptions can be bought yet: the server has payments' secrets
     Payments? P => Payments.From(settings, env);
     public bool Pay => P is not null;
     // what a subscription costs, VAT included (owner, 2026-11-02): the words on the buttons; the charge
@@ -171,16 +171,29 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
         return await Done("signout");
     }
 
+    // Whose account this is, for the payments' actions: asked of the sign-in service with the
+    // visitor's own token. Those actions use the server's own keys, so the account they act on is
+    // the token's, never the one the cookie names.
+    async Task<(AuthClient.Account? Me, IActionResult? Refused)> Me(string view)
+    {
+        if (Who.Token is not { } token) return (null, await Fail("Sign in first.", view, status: 401));
+        var (me, unreachable) = await auth.Whose(token);
+        if (me is not null) return (me, null);
+        return (null, unreachable ? await Fail("Something went wrong. Try again in a moment.", view, status: 502) : await Fail("Sign in first.", view, status: 401));
+    }
+
     // removes the caller's own row from Supabase Auth and nothing else (delete_my_account)
     public async Task<IActionResult> OnPostErase()
     {
-        if (Who.Token is not { } token || Who.UserId is not { } userId) return await Fail("Sign in first.", "delete", status: 401);
+        if (Who.Token is not { } token) return await Fail("Sign in first.", "delete", status: 401);
         // a subscription still running is cancelled with Stripe first, so nothing more is charged
         if (P is { } p)
         {
+            var (me, refused) = await Me("delete");
+            if (me is null) return refused!;
             try
             {
-                var kept = await payments.KeptFor(p, userId);
+                var kept = await payments.KeptFor(p, me.Id);
                 if (kept?.ProviderSubscription is { Length: > 0 } running && kept.Status != "canceled")
                     await payments.Stripe(p, HttpMethod.Delete, $"subscriptions/{Uri.EscapeDataString(running)}");
             }
@@ -201,7 +214,9 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
     public async Task<IActionResult> OnPostSubscribe()
     {
         if (P is not { } p) return await Fail("Subscriptions are coming soon.", "subscribe");
-        if (Who.UserId is not { } userId) return await Fail("Sign in first.", "subscribe", status: 401);
+        var (me, refused) = await Me("subscribe");
+        if (me is null) return refused!;
+        var userId = me.Id;
         var plan = Text("plan") == "yearly" ? "yearly" : "monthly";
         string to;
         try
@@ -217,7 +232,7 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
                 ["client_reference_id"] = userId,
                 ["subscription_data"] = new { metadata = new { user_id = userId } },
                 // a returning subscriber keeps their record with Stripe
-                [kept?.ProviderCustomer is { Length: > 0 } ? "customer" : "customer_email"] = kept?.ProviderCustomer is { Length: > 0 } customer ? customer : Who.Email,
+                [kept?.ProviderCustomer is { Length: > 0 } ? "customer" : "customer_email"] = kept?.ProviderCustomer is { Length: > 0 } customer ? customer : me.Email,
                 ["success_url"] = $"{Origin}/account?paid=1",
                 ["cancel_url"] = $"{Origin}/account?view=subscribe",
             });
@@ -234,11 +249,12 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
     public async Task<IActionResult> OnPostManage()
     {
         if (P is not { } p) return await Fail("Subscriptions are coming soon.", "account");
-        if (Who.UserId is not { } userId) return await Fail("Sign in first.", "account", status: 401);
+        var (me, refused) = await Me("account");
+        if (me is null) return refused!;
         string to;
         try
         {
-            var kept = await payments.KeptFor(p, userId);
+            var kept = await payments.KeptFor(p, me.Id);
             if (kept?.ProviderCustomer is not { Length: > 0 } customer) return await Fail("No subscription on this account.", "account");
             to = (await payments.Stripe(p, HttpMethod.Post, "billing_portal/sessions", new { customer, return_url = $"{Origin}/account" })).GetProperty("url").GetString()!;
         }

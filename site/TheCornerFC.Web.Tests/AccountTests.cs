@@ -67,6 +67,53 @@ public class AccountTests
         Assert.DoesNotContain(site.Handler.Sent, m => m.RequestUri!.AbsolutePath.StartsWith("/auth/"));
     }
 
+    // A script's post (JSON, or nothing at all) is held to the same rule as a form's
+    [Fact]
+    public async Task A_scripts_post_from_another_site_goes_no_further_either()
+    {
+        using var site = Site();
+        foreach (var origin in new[] { "https://elsewhere.example", null })
+        {
+            var m = new HttpRequestMessage(HttpMethod.Post, "/fantasy/mark") { Content = new StringContent("""{"player":7,"mine":true}""", Encoding.UTF8, "application/json") };
+            if (origin is not null) m.Headers.Add("Origin", origin);
+            m.Headers.Add("Cookie", Cookie(In(TimeSpan.FromHours(1))));
+            Assert.Equal(HttpStatusCode.Forbidden, (await Client(site).SendAsync(m)).StatusCode);
+            var bare = new HttpRequestMessage(HttpMethod.Post, "/account?handler=signout");
+            if (origin is not null) bare.Headers.Add("Origin", origin);
+            bare.Headers.Add("Cookie", Cookie(In(TimeSpan.FromHours(1))));
+            Assert.Equal(HttpStatusCode.Forbidden, (await Client(site).SendAsync(bare)).StatusCode);
+        }
+        Assert.Empty(site.Handler.Sent.Where(m => m.RequestUri!.AbsolutePath.StartsWith("/auth/") || m.RequestUri.AbsolutePath.Contains("mark_fpl_player")));
+    }
+
+    // A visitor can send X-Forwarded-Host. Only this site's own name is taken from it: a made-up
+    // one changes nothing, so no email or redirect is written with somebody else's address.
+    [Fact]
+    public async Task A_made_up_forwarded_host_is_not_believed()
+    {
+        using var site = Site(r => r.RequestUri!.AbsolutePath == "/auth/v1/recover" ? StubHandler.Json("{}") : null);
+        var reset = Post("/account?handler=reset", new() { ["email"] = "fan@example.com", ["cf-turnstile-response"] = "ok" }, json: true, origin: "https://evil.example");
+        reset.Headers.Add("X-Forwarded-Host", "evil.example");
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client(site).SendAsync(reset)).StatusCode);
+        var honest = Post("/account?handler=reset", new() { ["email"] = "fan@example.com", ["cf-turnstile-response"] = "ok" }, json: true);
+        honest.Headers.Add("X-Forwarded-Host", "evil.example");
+        Assert.Equal(HttpStatusCode.OK, (await Client(site).SendAsync(honest)).StatusCode);
+        Assert.Equal("?redirect_to=https%3A%2F%2Fthecornerfc.com%2F", site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/auth/v1/recover").RequestUri!.Query);
+        // robots.txt stays the live site's, and the other copy's name doesn't stop the server answering
+        foreach (var host in new[] { "evil.example", "staging.thecornerfc.com" })
+        {
+            var robots = new HttpRequestMessage(HttpMethod.Get, "/robots.txt");
+            robots.Headers.Add("X-Forwarded-Host", host);
+            var r = await Client(site).SendAsync(robots);
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+            Assert.Contains("Sitemap: https://thecornerfc.com/sitemap.xml", await r.Content.ReadAsStringAsync());
+        }
+        // its own name by that header is still taken (www goes to the site's address, as before)
+        var www = new HttpRequestMessage(HttpMethod.Get, "/clubs");
+        www.Headers.Add("X-Forwarded-Host", "www.thecornerfc.com");
+        Assert.Equal("https://thecornerfc.com/clubs", (await Client(site).SendAsync(www)).Headers.Location!.ToString());
+    }
+
     [Fact]
     public async Task A_wrong_password_says_so_in_words_and_without_its_script_the_page_keeps_the_email()
     {

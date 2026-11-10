@@ -10,7 +10,11 @@ emailed link or from Google, and reading who is signed in) and the account page,
 
 - **Sign-in is the server's job.** The session (Supabase Auth's access and refresh tokens) is in
   a cookie the page's scripts can't read (`HttpOnly`, `Secure`, `SameSite=Lax`); nothing is kept
-  in the browser's storage. The libraries are the npm packages `@supabase/ssr` and
+  in the browser's storage. The cookie is the visitor's to write, so only its token counts: the
+  database checks the token on every request, and where the server acts with its own keys (the
+  payments' actions) it first asks Supabase Auth whose token it is (`AuthClient.Whose`). The
+  address in an emailed link is this site's own: a host name a request sends in
+  `X-Forwarded-Host` is taken only when it is the site's (`Program.cs`). The libraries are the npm packages `@supabase/ssr` and
   `@supabase/supabase-js` in `web/package.json`, updated like any other dependency. A signed-in
   visitor's pages are answered `private, no-store`, and their database requests carry their own
   token (`askAs` in `web/src/lib/server/database.ts`).

@@ -17,6 +17,8 @@ public class FantasyTests
         var m = new HttpRequestMessage(method, path);
         if (signedIn) m.Headers.Add("Cookie", Cookie());
         if (json is not null) m.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        // (a browser says where a post is from; one that doesn't, or from elsewhere, goes no further)
+        if (method == HttpMethod.Post) m.Headers.Add("Origin", "https://thecornerfc.com");
         return m;
     }
     static HttpClient Client(SiteFactory site) =>
