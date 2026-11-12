@@ -26,7 +26,7 @@ public static class Crawlers
             ? [.. Names.SeoBots.Concat(AiTrainingBots).SelectMany(bot => new[] { $"User-agent: {bot}", "Disallow: /", "" }), "User-agent: *",
                "Content-Signal: search=yes,ai-train=no,use=reference", "Disallow: /account", "Disallow: /admin", "Disallow: /fantasy/", "Disallow: /fpl",
                "Disallow: /my-fpl-team", "Disallow: /efl-fantasy", "Disallow: /stripe/", "Disallow: /players/rows",
-               "Disallow: /players/options", "Disallow: /players/seasons", "Disallow: /match/*/", "", $"Sitemap: https://{env.Host}/sitemap.xml", ""]
+               "Disallow: /players/options", "Disallow: /players/seasons", "Disallow: /match/*/", "Disallow: /match/example", "", $"Sitemap: https://{env.Host}/sitemap.xml", ""]
             : ["User-agent: *", "Disallow: /", ""];
         return string.Join('\n', lines);
     }

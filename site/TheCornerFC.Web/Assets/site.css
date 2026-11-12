@@ -9,6 +9,10 @@
 .match-page-head, .match-page-foot { margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }
 .match-page-foot { margin: 12px 0 0; }
 @media (pointer: coarse) { .match-page-link { min-height: 44px; } }
+/* over the card of the match shown as an example of what subscribers get */
+.match-example { margin: 0 0 12px; padding: 10px 12px; border-left: 3px solid var(--text-primary); background: var(--chip-bg); font-size: 14px; line-height: 1.45; color: var(--text-secondary); }
+.match-example b { color: var(--text-primary); }
+.match-example .link-btn { font-size: inherit; }
 /* the Admin area's X page: a post's card, its words and what to do with them */
 .xp { margin: 0 0 32px; }
 .xp-card { display: block; width: 100%; max-width: 720px; height: auto; border-radius: 4px; }

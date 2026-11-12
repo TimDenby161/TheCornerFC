@@ -64,6 +64,11 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
     public bool MessageOk { get; private set; }
     public string Note { get; private set; } = "";
     public string Email { get; private set; } = "";
+    // On the way to subscribing: a visitor who signs in or creates an account from the Subscribe
+    // view carries then=subscribe (in the address, then in each form), and lands back on that view
+    // with the plans to pick from, not on the page they began on
+    public bool Then => (Request.HasFormContentType ? Request.Form["then"].ToString() : Request.Query["then"].ToString()) == "subscribe";
+    public const string Subscribe = "/account?view=subscribe";
 
     // what is shown: a signed-in visitor sees their profile unless choosing a password or deleting
     public string View => Asked == "subscribe" ? "subscribe" : Asked == "note" ? "note"
@@ -103,7 +108,7 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
         if (WantsJson) return new JsonResult(new { type = "success", data = new { done, note } });
         if (note is not null) { Asked = "note"; Note = note; await Load(); return Page(); }
         if (message is not null) { Asked = done == "erased" ? "signin" : "account"; Message = message; MessageOk = true; await Load(); return Page(); }
-        return Redirect("/account");
+        return Redirect(done == "signin" && Then ? Subscribe : "/account");
     }
     IActionResult Away(string to) => WantsJson ? new JsonResult(new { type = "redirect", location = to }) : Redirect(to);
 
@@ -126,11 +131,13 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
     {
         var email = Text("email").Trim();
         if (Captcha is null) return await Fail(NoCheck, "signup", email);
-        var a = await auth.SignUp(email, Text("password"), Captcha, $"{Origin}/");
+        // (the emailed link comes back to Home, or to /subscribe on the way to subscribing: an address
+        // with no "?" of its own, since the email's template adds its token after one)
+        var a = await auth.SignUp(email, Text("password"), Captcha, $"{Origin}/{(Then ? "subscribe" : "")}");
         if (!a.Ok) return await Fail(AuthClient.ErrorText(a), "signup", email);
         // the same answer whether or not the email has an account, so the box can't be used to find out
         if (a.Session is { } s) { Sessions.Keep(HttpContext, s); return await Done("signin"); }
-        return await Done("note", $"We've sent a link to {email}. Open it to finish creating your account.");
+        return await Done("note", $"We've sent a link to {email}. Open it to finish creating your account{(Then ? " and choose your plan" : "")}.");
     }
 
     public async Task<IActionResult> OnPostReset()

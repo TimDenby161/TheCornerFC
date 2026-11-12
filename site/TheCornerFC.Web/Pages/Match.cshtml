@@ -9,6 +9,10 @@
         @if (Model.CompetitionHref is not null){<a href="@Model.CompetitionHref">@Model.Competition</a>}else{@Model.Competition}
         · @Markup.LocalTime(kickoff, "day", visitor)
     </p>
+    @if (Model.Example)
+    {
+        <p class="match-example"><b>An example of what subscribers get.</b> This match has been played, so nothing here is held back: the projected score beside the result, the line-up the model predicted marked against who started, and the model's working step by step. Subscribers get all of it before kick-off, with the key reasons and each player's rank, for the matches to come. <partial name="_SubscriberLink" /></p>
+    }
     @await Html.PartialAsync("_MatchCard", new MatchCardModel(Model.Card, When: "day", Page: true))
     <p class="match-page-foot"><a href="/matches">All matches</a> · <a href="/model">How the model works and how good it is</a></p>
 </section>

@@ -56,6 +56,7 @@ public class CrawlerTests
         foreach (var engine in new[] { "Googlebot", "Bingbot", "bingbot", "Applebot\n", "DuckDuckBot" })
             Assert.DoesNotContain($"User-agent: {engine}", live);
         Assert.Contains("\nDisallow: /match/*/\n", live);          // the card panels' data, not the match pages
+        Assert.Contains("\nDisallow: /match/example\n", live);    // the way on to the example match: a redirect, not a page
         Assert.Equal("User-agent: *\nDisallow: /\n", Crawlers.Robots(Live, "thecornerfc.azurewebsites.net"));
         Assert.Equal("User-agent: *\nDisallow: /\n", Crawlers.Robots(Staging, "staging.thecornerfc.com"));
     }

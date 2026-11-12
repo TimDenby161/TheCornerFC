@@ -66,8 +66,49 @@ public class MatchPageTests
         using var _f = f;
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Contains("are for subscribers", body);
+        Assert.Contains("<a class=\"link-btn\" href=\"/match/example\" rel=\"nofollow\">See an example</a>", body);
         Assert.DoesNotContain("lineup-toggle", body);
         Assert.DoesNotContain("why-toggle", body);
+    }
+
+    // "See an example": the newest finished match that had a prediction, on its own page, which
+    // says what it is an example of and is kept out of search engines
+    [Fact]
+    public async Task See_an_example_goes_on_to_the_newest_finished_match_that_had_a_prediction()
+    {
+        const string season = """
+            {"matches":[[1002,"2026-10-18T14:00:00+00:00",39,"Regular Season - 8",49,42,"FT",0,2,0.4,0.3,0.3,1.3,1.2,"1-1"],
+             [1004,"2026-10-25T14:00:00+00:00",39,"Regular Season - 9",42,49,"FT",1,1,0.5,0.27,0.23,1.7,1.1,"2-1"],
+             [1005,"2026-10-26T14:00:00+00:00",39,"Regular Season - 9",49,42,"FT",3,0,null,null,null,null,null,null],
+             [1001,"2030-10-26T16:30:00+00:00",39,"Regular Season - 10",42,49,"NS",null,null,0.5,0.27,0.23,1.7,1.1,"2-1"]],"paywall":true}
+            """;
+        async Task<HttpResponseMessage> Go(string matches)
+        {
+            using var site = new SiteFactory("production", r => r.RequestUri!.AbsolutePath.EndsWith("site_matches") ? StubHandler.Json(matches)
+                : r.RequestUri.Query.Contains("p_key=site&") ? StubHandler.Json(Site) : StubHandler.Json("null"));
+            var r = await site.CreateClient(new() { AllowAutoRedirect = false, BaseAddress = new Uri("https://thecornerfc.com") }).GetAsync("/match/example");
+            Assert.Contains("\"p_leagues\":[39]", site.Handler.Bodies[site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath.EndsWith("site_matches"))]);
+            return r;
+        }
+        var to = await Go(season);
+        Assert.Equal(HttpStatusCode.Redirect, to.StatusCode);
+        Assert.Equal("/match/1004?example=1", to.Headers.Location!.ToString());
+        Assert.Equal("noindex", to.Headers.GetValues("X-Robots-Tag").Single());
+        // nothing played yet: the matches
+        Assert.Equal("/matches", (await Go(Upcoming)).Headers.Location!.ToString());
+
+        var (_, body, _, f) = await Get("/match/1002?example=1", Finished);
+        using var _f = f;
+        Assert.Contains("An example of what subscribers get.", body);
+        Assert.Contains("<meta name=\"robots\" content=\"noindex\" />", body);
+        // the same match at its own address, and a match to come, say nothing of it
+        var (_, plain, _, f2) = await Get("/match/1002", Finished);
+        using var _f2 = f2;
+        Assert.DoesNotContain("An example of what subscribers get.", plain);
+        Assert.DoesNotContain("content=\"noindex\"", plain);
+        var (_, later, _, f3) = await Get("/match/1001?example=1", Upcoming);
+        using var _f3 = f3;
+        Assert.DoesNotContain("An example of what subscribers get.", later);
     }
 
     [Theory]

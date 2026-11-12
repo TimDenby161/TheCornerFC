@@ -40,7 +40,7 @@
                     <p class="home-lede">One strength rating for every club, from the Premier League to the lower divisions, with ranks for players and national teams and the model's chances for the matches they play.</p>
                     <div class="home-actions">
                         <a class="mt-btn home-go" href="/clubs">See the ratings</a>
-                        @if (!Model.SignedIn){<a class="home-ghost" href="/account?view=signup">Create a free account</a>}
+                        @if (!Model.SignedIn){<a class="home-ghost" href="/account?view=subscribe">What subscribers get</a>}
                     </div>
                 </div>
                 <div class="home-board">
@@ -100,9 +100,10 @@
                 @for (var i = 0; i < slides.Count; i++){<button type="button" data-slide="@slides[i].Key" aria-current="@(i == 0 ? "true" : null)"><span>@slides[i].Name</span></button>}
             </div>
         </div>
-        <!-- on a phone or a tablet the way to an account stands under the slides, there whichever one is up
-             (on a wide screen it is on the first slide, beside its button) -->
-        @if (!Model.SignedIn){<a class="mt-btn home-go home-join" href="/account?view=signup">Create a free account</a>}
+        <!-- on a phone or a tablet the way to subscribing stands under the slides, there whichever one is up
+             (on a wide screen it is on the first slide, beside its button). Everything free is open
+             without an account, so the button offers the subscription, not an account -->
+        @if (!Model.SignedIn){<a class="mt-btn home-go home-join" href="/account?view=subscribe">What subscribers get</a>}
     </div>
     <!-- the four things a first visit asks, each a label, a one-line answer and the detail under it -->
     <div class="home-brief">

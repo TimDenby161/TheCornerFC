@@ -105,6 +105,15 @@ app.MapGet("/players/seasons", async (HttpContext c, Database db) =>
     return Results.Json(Players.SeasonSpells(siteTask.Result, docTask.IsCompletedSuccessfully ? docTask.Result : null), Database.Json);
 });
 
+// Subscribe, as an address of its own: the account page's Subscribe view. It is where the emailed
+// link comes back to when an account was made on the way to subscribing (the email's template adds
+// its token after a "?", so that address can't carry a choice of its own).
+app.MapGet("/subscribe", (HttpContext c) =>
+{
+    c.Response.Headers["X-Robots-Tag"] = "noindex";
+    return Results.Redirect("/account?view=subscribe");
+});
+
 // What a match card asks for as it is opened or comes into view
 MatchEndpoints.Map(app);
 FantasyEndpoints.Map(app);

@@ -115,9 +115,9 @@ const fitStats = await until(fits, 3000);
 await run(`[...document.querySelectorAll('.home-turn-list button')].find((b) => b.textContent === 'Players')?.click()`);
 await until(`document.querySelector('.home-turn-list button[aria-current]')?.textContent === 'Players'`);
 check('Home on a phone: the hero is as tall as the slide that\'s up, under its rules', fitStats && (await until(fits, 3000)));
-// ... and the way to an account stands under the slides whichever is up (here Players), not only on the first
+// ... and the way to subscribing stands under the slides whichever is up (here Players), not only on the first
 const joinUnder = await run(`(() => { const j = document.querySelector('.home-join'), box = document.querySelector('.home-slides'); if (!j) return 'no button'; const r = j.getBoundingClientRect(); return { shown: getComputedStyle(j).display !== 'none' && r.height > 40, under: r.top >= box.getBoundingClientRect().bottom - 5, onSlide: [...document.querySelectorAll('.home-slide .home-actions .home-ghost')].filter((a) => getComputedStyle(a).display !== 'none').length }; })()`);
-check('Home on a phone: "Create a free account" under the slides, on every one', joinUnder.shown && joinUnder.under && joinUnder.onSlide === 0, JSON.stringify(joinUnder));
+check('Home on a phone: "What subscribers get" under the slides, on every one', joinUnder.shown && joinUnder.under && joinUnder.onSlide === 0 && (await run(`document.querySelector('.home-join')?.textContent`)) === 'What subscribers get' && (await run(`document.querySelector('.home-join')?.getAttribute('href')`)) === '/account?view=subscribe', JSON.stringify(joinUnder));
 // ... and it doesn't move as the slides turn: on a phone each is as tall as the tallest
 const joinTop = `Math.round(document.querySelector('.home-join').getBoundingClientRect().top - document.querySelector('.home-hero').getBoundingClientRect().top)`;
 const joinAt = [await run(joinTop)];
@@ -195,9 +195,20 @@ check('opening another card\'s model detail closes the first card', (await run(`
 const matchHref = await run(`document.querySelector('#matches-list .match-card .match-page-link')?.getAttribute('href') || ''`);
 await run(`document.querySelector('.secondary-filters a.today-btn')?.click()`); await sleep(1800);
 check('Next goes to the round to come, where the paid parts are locked', (await run('location.search')) === '?c=39' && (await run(`document.querySelectorAll('#matches-list .paid-lock').length`)) > 0);
-await run(`document.querySelector('#matches-list .paid-lock .link-btn')?.click()`); await sleep(500);
-check('"What subscribers get" opens the account box there', (await run(`document.querySelector('#account-title')?.textContent`)) === 'Subscribe');
+await run(`document.querySelector('#matches-list .paid-lock a[href="/account?view=subscribe"]')?.click()`);
+check('"What subscribers get" opens the account box there', (await until(`document.querySelector('#account-title')?.textContent === 'Subscribe'`, 3000)));
+// signed out, with the checkout on: the price, Google coming back to the plans, and an account by
+// email that does the same (the checkout is off where the server has no payments' secrets: coming soon)
+if (await run(`!/coming soon/.test(document.querySelector('#account-body')?.textContent || '')`)) {
+	check('the Subscribe box: Google comes back to the plans', (await run(`document.querySelector('#account-body input[name=back]')?.value`)) === '/account?view=subscribe');
+	await run(`[...document.querySelectorAll('#account-body .account-links .link-btn')].find((b) => /Create an account/.test(b.textContent))?.click()`);
+	check('... and an account made from it carries on to the plans', (await until(`document.querySelector('#account-title')?.textContent === 'Create an account'`, 3000)) && (await run(`document.querySelector('#account-body form.account-form input[name=then]')?.value`)) === 'subscribe' && (await run(`document.querySelector('#account-body input[name=back]')?.value`)) === '/account?view=subscribe');
+} else check('the Subscribe box: subscriptions are coming soon here (no payments\' secrets)', true);
 await run(`document.querySelector('#account-modal .modal-close')?.click()`); await sleep(300);
+// "See an example": a finished match's own page, saying what it is an example of
+const exampleHref = await run(`document.querySelector('#matches-list .paid-lock a[href="/match/example"]')?.getAttribute('href') || ''`);
+if (exampleHref) await open(exampleHref);
+check('"See an example" on a locked card opens a finished match as the example', exampleHref === '/match/example' && (await until(`/^\\/match\\/\\d+$/.test(location.pathname) && location.search === '?example=1' && !!document.querySelector('.match-example') && document.querySelector('.match-page .match-card')?.dataset.finished === '1'`)), `${await run('location.pathname + location.search')}`);
 check('each card links to the match\'s own page', /^\/match\/\d+$/.test(matchHref), matchHref);
 if (matchHref) await open(matchHref);
 const matchPage = await until(`document.querySelectorAll('.match-page .fixture-lineup-panel .xi-spot').length === 22 && document.querySelectorAll('.match-page .why-detail .why-sec').length >= 2`);

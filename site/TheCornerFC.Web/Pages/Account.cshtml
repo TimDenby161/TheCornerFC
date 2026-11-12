@@ -8,20 +8,27 @@
     var view = Model.View;
     var user = Model.Who;
     var sub = Model.Sub;
+    // on the way to subscribing (AccountModel.Then): signing in or creating an account comes back to the plans
+    var then = Model.Then;
     // (where the page's script isn't running, a link to another view opens the page on it)
-    static string Href(string to) => $"/account?view={to}";
+    string Href(string to) => $"/account?view={to}{(then && to is "signin" or "signup" ? "&then=subscribe" : "")}";
 }
 @functions {
-    // the page they were on, to come back to after Google (the account page itself: Home)
+    // the page they were on, to come back to after Google (the account page itself: Home), or the
+    // Subscribe view on the way to subscribing
     const string Here = "/";
+    void Then(bool then)
+    {
+        if (then){<input type="hidden" name="then" value="subscribe" />}
+    }
     void Field(string name, string label, string type, string autocomplete, int? min = null, string value = "")
     {
         <label>@label<input type="@type" name="@name" class="table-search" autocomplete="@autocomplete" required minlength="@min" value="@(value == "" ? null : value)" /></label>
     }
-    void Google()
+    void Google(string back = Here)
     {
         <form method="post" action="/account?/google">
-            <input type="hidden" name="back" value="@Here" />
+            <input type="hidden" name="back" value="@back" />
             <button type="submit" class="google-btn">
                 <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" /><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18z" /><path fill="#FBBC05" d="M3.96 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3-2.33z" /><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z" /></svg>
                 <span>Continue with Google</span></button>
@@ -40,18 +47,20 @@
         <div id="account-body">
             @if (view == "signin")
             {
-                Google();
+                if (then){<p class="account-text">Sign in, then choose your plan.</p>}
+                Google(then ? AccountModel.Subscribe : Here);
                 <form class="account-form" method="post" action="/account?/signin">
-                    @{ Field("email", "Email", "email", "username", value: Model.Email); Field("password", "Password", "password", "current-password"); BotCheck(); }
+                    @{ Then(then); Field("email", "Email", "email", "username", value: Model.Email); Field("password", "Password", "password", "current-password"); BotCheck(); }
                     <button type="submit" class="mt-btn">Sign in</button>
                 </form>
                 <div class="account-links"><a class="link-btn" href="@Href("signup")">Create an account</a><a class="link-btn" href="@Href("reset")">Forgotten your password?</a></div>
             }
             else if (view == "signup")
             {
-                Google();
+                if (then){<p class="account-text">Create an account, then choose your plan.</p>}
+                Google(then ? AccountModel.Subscribe : Here);
                 <form class="account-form" method="post" action="/account?/signup">
-                    @{ Field("email", "Email", "email", "email", value: Model.Email); Field("password", "Password (8 characters or more)", "password", "new-password", 8); BotCheck(); }
+                    @{ Then(then); Field("email", "Email", "email", "email", value: Model.Email); Field("password", "Password (8 characters or more)", "password", "new-password", 8); BotCheck(); }
                     <button type="submit" class="mt-btn">Create account</button>
                 </form>
                 <div class="stats-note">By creating an account you agree to the <a href="/terms">terms of use</a> and the <a href="/privacy">privacy notice</a>.</div>
@@ -81,7 +90,7 @@
             else if (view == "subscribe")
             {
                 <p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings and the league tables.</p>
-                <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free).</p>
+                <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free). <a class="link-btn" href="/match/example" rel="nofollow">See an example match</a></p>
                 @if (!Model.Pay)
                 {
                     <p class="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free above is here for everyone, with no account needed.</p>
@@ -104,9 +113,16 @@
                 }
                 else
                 {
-                    <p class="account-text"><b>@Model.Prices.Monthly, or @Model.Prices.Yearly.</b>@(Model.Prices.Note is { } n ? $" {n}" : "") Sign in or create a free account first, then subscribe from here.</p>
+                    @* the shortest way on: an account (Google is one press), then straight back here to the plans *@
+                    <p class="account-text"><b>@Model.Prices.Monthly, or @Model.Prices.Yearly.</b>@(Model.Prices.Note is { } n ? $" {n}" : "") Cancel whenever you like.</p>
+                    <p class="account-text">A subscription belongs to an account. Sign in or create one, and you come straight back here to choose your plan.</p>
+                    Google(AccountModel.Subscribe);
+                    <div class="account-links"><a class="link-btn" href="/account?view=signup&amp;then=subscribe">Create an account with an email</a><a class="link-btn" href="/account?view=signin&amp;then=subscribe">Sign in</a></div>
                 }
-                <div class="account-links"><a class="link-btn" href="@(user.SignedIn ? "/account" : Href("signin"))">@(user.SignedIn ? "Back to your account" : "Sign in")</a></div>
+                @if (user.SignedIn || !Model.Pay)
+                {
+                    <div class="account-links"><a class="link-btn" href="@(user.SignedIn ? "/account" : Href("signin"))">@(user.SignedIn ? "Back to your account" : "Sign in")</a></div>
+                }
             }
             else if (view == "account")
             {

@@ -53,6 +53,9 @@ export function AccountBox({ user, sub, botCheck, pay, prices, start, onview, on
 	const [busy, setBusy] = useState(false);
 	const [check, setCheck] = useState(0); // a new number draws a fresh bot check
 	const [who, setWho] = useState(user);
+	// on the way to subscribing: signing in or creating an account from the Subscribe view comes back
+	// to that view, with the plans to pick from, not to the page under the box
+	const [then, setThen] = useState(false);
 	// what is shown: a signed-in visitor sees their profile unless choosing a password or deleting
 	const view: View = asked === 'subscribe' ? 'subscribe' : asked === 'note' ? 'note'
 		: !who ? (asked === 'delete' || asked === 'account' ? 'signin' : asked)
@@ -61,6 +64,7 @@ export function AccountBox({ user, sub, botCheck, pay, prices, start, onview, on
 	const go = (to: View) => { setAsked(to); setMsg({ text: '', bad: false }); };
 	const failed = useRef((text: string) => setMsg({ text, bad: true })).current;
 	const here = location.pathname === '/account' ? '/' : location.pathname + location.search;
+	const SUBSCRIBE = '/account?view=subscribe';
 
 	// a form's answer, back in the box
 	async function sent(e: FormEvent<HTMLFormElement>, handler: string) {
@@ -87,36 +91,41 @@ export function AccountBox({ user, sub, botCheck, pay, prices, start, onview, on
 			document.querySelector('.account-btn')?.classList.remove('is-profile');
 			return;
 		}
-		// who is signed in has changed: the page is drawn again, as them
+		// who is signed in has changed: the page is drawn again, as them (or, on the way to
+		// subscribing, the plans are shown)
 		onclose();
-		location.reload();
+		if (done === 'signin' && then) location.href = SUBSCRIBE; else location.reload();
 	}
 
 	const field = (name: string, label: string, type: string, autocomplete: string, min?: number) =>
 		<label>{label}<input type={type} name={name} className="table-search" autoComplete={autocomplete} required minLength={min} /></label>;
 	const link = (to: View, label: string) => <button type="button" className="link-btn" onClick={() => go(to)}>{label}</button>;
-	const google = (
+	const google = (back: string) => (
 		<>
 			<form method="post" action="/account?/google" onSubmit={(e) => sent(e, 'google')}>
-				<input type="hidden" name="back" value={here} />
+				<input type="hidden" name="back" value={back} />
 				<button type="submit" className="google-btn" disabled={busy}>{GOOGLE}<span>Continue with Google</span></button>
 			</form>
 			<div className="account-or">or</div>
 		</>
 	);
 	const bot = <BotCheck key={check} sitekey={botCheck} failed={failed} />;
+	const after = then && <input type="hidden" name="then" value="subscribe" />;
+	const onward = (to: View, label: string) => <button type="button" className="link-btn" onClick={() => { setThen(true); go(to); }}>{label}</button>;
 	const form = (handler: string, children: ReactNode, cls = 'account-form') =>
 		<form className={cls || undefined} method="post" action={`/account?/${handler}`} onSubmit={(e) => sent(e, handler)}>{children}</form>;
 
 	let body: ReactNode = null;
 	if (view === 'signin') body = <>
-		{google}
-		{form('signin', <>{field('email', 'Email', 'email', 'username')}{field('password', 'Password', 'password', 'current-password')}{bot}<button type="submit" className="mt-btn" disabled={busy}>Sign in</button></>)}
+		{then && <p className="account-text">Sign in, then choose your plan.</p>}
+		{google(then ? SUBSCRIBE : here)}
+		{form('signin', <>{after}{field('email', 'Email', 'email', 'username')}{field('password', 'Password', 'password', 'current-password')}{bot}<button type="submit" className="mt-btn" disabled={busy}>Sign in</button></>)}
 		<div className="account-links">{link('signup', 'Create an account')}{link('reset', 'Forgotten your password?')}</div>
 	</>;
 	else if (view === 'signup') body = <>
-		{google}
-		{form('signup', <>{field('email', 'Email', 'email', 'email')}{field('password', 'Password (8 characters or more)', 'password', 'new-password', 8)}{bot}<button type="submit" className="mt-btn" disabled={busy}>Create account</button></>)}
+		{then && <p className="account-text">Create an account, then choose your plan.</p>}
+		{google(then ? SUBSCRIBE : here)}
+		{form('signup', <>{after}{field('email', 'Email', 'email', 'email')}{field('password', 'Password (8 characters or more)', 'password', 'new-password', 8)}{bot}<button type="submit" className="mt-btn" disabled={busy}>Create account</button></>)}
 		<div className="stats-note">By creating an account you agree to the <a href="/terms">terms of use</a> and the <a href="/privacy">privacy notice</a>.</div>
 		<div className="account-links">{link('signin', 'Already have an account? Sign in')}</div>
 	</>;
@@ -129,7 +138,7 @@ export function AccountBox({ user, sub, botCheck, pay, prices, start, onview, on
 	else if (view === 'note') body = <><p className="account-text">{note}</p><div className="account-links">{link('signin', 'Back to sign in')}</div></>;
 	else if (view === 'subscribe') body = <>
 		<p className="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings and the league tables.</p>
-		<p className="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free).</p>
+		<p className="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free). <a className="link-btn" href="/match/example" rel="nofollow">See an example match</a></p>
 		{!pay ? <p className="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free above is here for everyone, with no account needed.</p>
 			: sub?.subscriber ? <p className="account-text"><b>This account is subscribed.</b></p>
 			: who ? <>
@@ -138,8 +147,14 @@ export function AccountBox({ user, sub, botCheck, pay, prices, start, onview, on
 				{form('subscribe', <><button type="submit" name="plan" value="monthly" className="mt-btn account-out" disabled={busy}>Subscribe · {prices.monthly}</button>
 					<button type="submit" name="plan" value="yearly" className="mt-btn account-out" disabled={busy}>Subscribe · {prices.yearly}</button></>, 'account-plans')}
 			</>
-			: <p className="account-text"><b>{prices.monthly}, or {prices.yearly}.</b>{prices.note ? ` ${prices.note}` : ''} Sign in or create a free account first, then subscribe from here.</p>}
-		<div className="account-links">{link(who ? 'account' : 'signin', who ? 'Back to your account' : 'Sign in')}</div>
+			: <>
+				{/* the shortest way on: an account (Google is one press), then straight back to the plans */}
+				<p className="account-text"><b>{prices.monthly}, or {prices.yearly}.</b>{prices.note ? ` ${prices.note}` : ''} Cancel whenever you like.</p>
+				<p className="account-text">A subscription belongs to an account. Sign in or create one, and you come straight back here to choose your plan.</p>
+				{google(SUBSCRIBE)}
+				<div className="account-links">{onward('signup', 'Create an account with an email')}{onward('signin', 'Sign in')}</div>
+			</>}
+		{(who || !pay) && <div className="account-links">{link(who ? 'account' : 'signin', who ? 'Back to your account' : 'Sign in')}</div>}
 	</>;
 	else if (view === 'account' && who) body = <>
 		<p className="account-text">Signed in as <b>{who.email}</b></p>

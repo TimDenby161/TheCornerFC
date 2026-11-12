@@ -13,6 +13,9 @@ public sealed class MatchModel(Database db, TimeProvider clock) : PageModel
     public Cards.View Card { get; private set; } = null!;
     public string Competition { get; private set; } = "";
     public string? CompetitionHref { get; private set; }
+    // Reached from "See an example" (/match/example): a finished match, shown as what subscribers
+    // get before kick-off. The page says so, and that address is kept out of search engines.
+    public bool Example { get; private set; }
 
     public async Task<IActionResult> OnGet(string id)
     {
@@ -29,6 +32,8 @@ public sealed class MatchModel(Database db, TimeProvider clock) : PageModel
         Card = Cards.Of(site, ranks, m, answerTask.Result.Paywall == true, clock.GetUtcNow());
         Competition = site.CompLabel(m.League);
         CompetitionHref = Card.Intl ? null : Menu.PageHref("league", m.League.ToString());
+        Example = Request.Query.ContainsKey("example") && Card.Finished && Card.Probs is not null;
+        if (Example) ViewData["NoIndex"] = true;
 
         if (!visitor.SignedIn) Response.Headers.CacheControl = "public, max-age=60";
         var name = $"{Card.Home.Name} v {Card.Away.Name}";

@@ -242,6 +242,42 @@ public class AccountTests
         Assert.Equal("?redirect_to=https%3A%2F%2Fthecornerfc.com%2F", site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/auth/v1/signup").RequestUri!.Query);
     }
 
+    // From the Subscribe view, signing in or creating an account comes back to the plans: Google and
+    // the forms carry it, and the emailed link returns to /subscribe, which has no "?" of its own
+    [Fact]
+    public async Task On_the_way_to_subscribing_signing_in_comes_back_to_the_plans()
+    {
+        using var site = Site(r => r.RequestUri!.AbsolutePath == "/auth/v1/signup" ? StubHandler.Json("""{"id":"user-1","email":"fan@example.com","confirmation_sent_at":"2026-10-19T10:00:00Z"}""")
+            : r.RequestUri.PathAndQuery == "/auth/v1/token?grant_type=password" || r.RequestUri.AbsolutePath == "/auth/v1/verify" ? StubHandler.Json(SessionJson(In(TimeSpan.FromHours(1)))) : null);
+        var to = await Client(site).GetAsync("/subscribe");
+        Assert.Equal(HttpStatusCode.Redirect, to.StatusCode);
+        Assert.Equal("/account?view=subscribe", to.Headers.Location!.ToString());
+        // the forms reached from the Subscribe view carry it, and Google comes back to that view
+        foreach (var view in new[] { "signin", "signup" })
+        {
+            var page = await Client(site).GetStringAsync($"/account?view={view}&then=subscribe");
+            Assert.Contains("<input type=\"hidden\" name=\"then\" value=\"subscribe\" />", page);
+            Assert.Contains("<input type=\"hidden\" name=\"back\" value=\"/account?view=subscribe\" />", page);
+            Assert.Contains("then choose your plan.", page);
+            var plain = await Client(site).GetStringAsync($"/account?view={view}");
+            Assert.DoesNotContain("name=\"then\"", plain);
+            Assert.Contains("<input type=\"hidden\" name=\"back\" value=\"/\" />", plain);
+        }
+        // a new account's emailed link comes back to /subscribe, and the note says what comes next
+        var made = await Client(site).SendAsync(Post("/account?handler=signup", new() { ["email"] = "fan@example.com", ["password"] = "longenough", ["cf-turnstile-response"] = "ok", ["then"] = "subscribe" }, json: true));
+        Assert.Contains("Open it to finish creating your account and choose your plan.", await made.Content.ReadAsStringAsync());
+        Assert.Equal("?redirect_to=https%3A%2F%2Fthecornerfc.com%2Fsubscribe", site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/auth/v1/signup").RequestUri!.Query);
+        var back = await Client(site).GetAsync("/subscribe?token_hash=abc&type=email");
+        Assert.Equal("/subscribe", back.Headers.Location!.ToString());
+        Assert.NotNull(SetCookie(back, Sessions.Cookie));
+        // signing in without the page's script: on to the plans, or to the profile as before
+        var form = new Dictionary<string, string> { ["email"] = "fan@example.com", ["password"] = "pw", ["cf-turnstile-response"] = "ok" };
+        Assert.Equal("/account", (await Client(site).SendAsync(Post("/account?handler=signin", form))).Headers.Location!.ToString());
+        Assert.Equal("/account?view=subscribe", (await Client(site).SendAsync(Post("/account?handler=signin", new(form) { ["then"] = "subscribe" }))).Headers.Location!.ToString());
+        // anything else in its place is ignored
+        Assert.Equal("/account", (await Client(site).SendAsync(Post("/account?handler=signin", new(form) { ["then"] = "https://elsewhere.example" }))).Headers.Location!.ToString());
+    }
+
     [Fact]
     public async Task The_current_sites_form_addresses_reach_the_same_handlers()
     {

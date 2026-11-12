@@ -28,8 +28,36 @@ public static partial class MatchEndpoints
     static bool IsFinished(Match m) => ClubData.Finished.Contains(m.Status) && m.Hg is not null;
     static IResult Json(object? o) => Results.Json(o, Database.Json);
 
+    // The match shown as an example of what subscribers get: the newest finished one that had a
+    // prediction. A match that has kicked off is whole for everyone, so its page shows a visitor the
+    // projected score, the line-ups and the model's detail that are held back before kick-off.
+    public const int ExampleLeague = 39; // the Premier League
+    public static Match? Example(IEnumerable<Match> matches) =>
+        matches.Where(m => IsFinished(m) && m.PHome is not null && m.PDraw is not null)
+            .OrderByDescending(m => DateTimeOffset.Parse(m.Kickoff)).ThenBy(m => m.Id).FirstOrDefault();
+
     public static void Map(WebApplication app)
     {
+        // "See an example", on a locked match card and in the Subscribe box: on to the example
+        // match's own page. For a visitor who isn't signed in the answer asked for is the one the
+        // Premier League's round view keeps, so this adds no more than that page does (one a minute);
+        // a signed-in visitor's is asked as them. With no match to show, or the database not
+        // answering: the matches.
+        app.MapGet("/match/example", async (HttpContext c, Database db) =>
+        {
+            var token = Visitor.Of(c).Token;
+            c.Response.Headers.CacheControl = token is not null ? "private, no-store" : "public, max-age=60";
+            c.Response.Headers["X-Robots-Tag"] = "noindex";
+            Match? m = null;
+            try
+            {
+                var site = await db.KeptDoc<SiteDoc>("site");
+                m = Example(ClubData.MatchRows(site, await db.AskAs<MatchesAnswer>(token, "site_matches", new { p_leagues = new[] { ExampleLeague } })));
+            }
+            catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException or JsonException) { }
+            return Results.Redirect(m is null ? "/matches" : $"/match/{m.Id}?example=1");
+        });
+
         // A match's model detail, asked for when its card's "Model detail" is opened
         app.MapGet("/match/{id}/detail", async (string id, HttpContext c, Database db) =>
         {

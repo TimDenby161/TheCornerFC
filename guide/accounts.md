@@ -26,6 +26,11 @@ emailed link or from Google, and reading who is signed in) and the account page,
   make them work anywhere, set these in Authentication → Emails → Templates:
   Confirm signup `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email`,
   Reset password `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery`.
+- **On the way to subscribing.** The Subscribe view (`/account?view=subscribe`, also reached as
+  `/subscribe`) offers a signed-out visitor Google or an account by email, and either comes back
+  to that view with the plans to pick from: the forms carry `then=subscribe`, Google is sent back
+  to the view, and a new account's emailed link returns to `/subscribe` (an address with no `?`
+  of its own, because the email template adds its token after one).
 - **Deleting an account.** Account → Delete account calls `delete_my_account()`
   (`db/migrations/20261004_delete_my_account.sql`), which removes the caller's own row from
   Supabase Auth and nothing else.

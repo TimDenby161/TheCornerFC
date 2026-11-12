@@ -111,6 +111,22 @@ public class PaymentsTests
         Assert.DoesNotContain(site.Handler.Sent, x => x.RequestUri!.Host == "api.stripe.com");
     }
 
+    // Signed out, the Subscribe view gives the price and the way on: Google, which comes back to
+    // this view, or an account by email, which does the same
+    [Fact]
+    public async Task Signed_out_the_subscribe_view_gives_the_price_and_the_way_to_an_account()
+    {
+        using var site = new SiteFactory("staging", r => StubHandler.Json("null"), All);
+        var page = await Client(site).GetStringAsync("/account?view=subscribe");
+        Assert.Contains("a month, or", page);
+        Assert.Contains("you come straight back here to choose your plan", page);
+        Assert.Contains("<input type=\"hidden\" name=\"back\" value=\"/account?view=subscribe\" />", page);
+        Assert.Contains("href=\"/account?view=signup&amp;then=subscribe\"", page);
+        Assert.Contains("href=\"/account?view=signin&amp;then=subscribe\"", page);
+        Assert.Contains("href=\"/match/example\"", page);
+        Assert.DoesNotContain("name=\"plan\"", page); // the plans are a signed-in visitor's to pick
+    }
+
     [Fact]
     public async Task The_webhook_records_what_Stripe_now_says_of_the_subscription()
     {
