@@ -50,11 +50,31 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
     // what a subscription costs, VAT included (owner, 2026-11-02): the words on the buttons; the charge
     // itself is the price set in Stripe, and the two must be changed together. Until the founder's
     // price ends (Payments.FounderEnds) the founder's price is shown, with the standard one beside it.
-    public sealed record PriceWords(string Monthly, string Yearly, string? Note);
+    // YearlyMonth is the yearly price as a month's ("£3.25 a month"), and YearlySave what a year costs
+    // less than twelve monthly payments, in whole pounds rounded down ("£20"): both worked out from
+    // the two prices, so neither can say more than is true.
+    public sealed record PriceWords(string Monthly, string Yearly, string? Note, string YearlyMonth, string YearlySave);
+    static string Pounds(decimal x, string format) => "£" + x.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
+    public static PriceWords Words(decimal monthly, decimal yearly, string? note) => new($"{Pounds(monthly, "0.00")} a month", $"{Pounds(yearly, "0.##")} a year", note,
+        $"{Pounds(Math.Round(yearly / 12, 2, MidpointRounding.AwayFromZero), "0.00")} a month", Pounds(Math.Floor(12 * monthly - yearly), "0"));
     public static PriceWords PricesAt(DateTimeOffset now) => Payments.Founder(now)
-        ? new("£4.99 a month", "£39 a year", "Founder's price until 31 January 2027 (then £5.99 a month or £49 a year), kept for as long as you stay subscribed.")
-        : new("£5.99 a month", "£49 a year", null);
+        ? Words(4.99m, 39m, "Founder's price until 31 January 2027 (then £5.99 a month or £49 a year), kept for as long as you stay subscribed.")
+        : Words(5.99m, 49m, null);
     public PriceWords Prices => PricesAt(clock.GetUtcNow());
+    // What a subscription adds, as Home and the Subscribe view list it (the account box's script has
+    // the same list, AccountBox.tsx: change the two together, and guide/paid-tier.md says what is gated)
+    public static readonly (string What, string Detail)[] Benefits =
+    [
+        ("The projected score", "Goals for each side and the likeliest scoreline, for every match."),
+        ("The key reasons", "What moved each prediction, with the model's working step by step."),
+        ("Predicted line-ups", "The eleven the model expects each club to start, before the team sheets."),
+        ("Projected tables", "Where every club finishes its league, with its chance of each place."),
+        ("Every player ranked", "The full 0 to 100 list in every position, not only the top 50."),
+        ("Matches further ahead", "The model's chances for matches more than 7 days away."),
+    ];
+    public const string Free = "Free without an account: the club ratings, the league tables, results, the model's record, the chances for every match in the next 7 days, and the top 50 players with the top 10 of each league and position.";
+    // (the promise is the terms', #subscriptions: a full refund within 14 days of first subscribing)
+    public const string Promise = "Cancel whenever you like. Change your mind in the first 14 days and you get a full refund.";
     const string NoCheck = "Wait for the check above the button to finish, then try again.";
 
     public Visitor Who => Visitor.Of(HttpContext);

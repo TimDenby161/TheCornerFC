@@ -15,6 +15,12 @@
     var visitor = Visitor.Of(HttpContext);
 }
 @functions {
+    // a price with its figure large: "£4.99 a month" is the figure and the rest
+    void Price(string words)
+    {
+        var cut = words.IndexOf(' ');
+        <b>@(cut < 0 ? words : words[..cut])</b>@(cut < 0 ? "" : words[cut..])
+    }
     void Slide(string key, string name, string first, string second, string lede, string go, string href, string head, string note, Func<object?, Microsoft.AspNetCore.Mvc.Razor.HelperResult> sample)
     {
         <div class="home-slide" role="group" aria-roledescription="slide" aria-label="@name" data-slide="@key" inert>
@@ -105,6 +111,51 @@
              without an account, so the button offers the subscription, not an account -->
         @if (!Model.SignedIn){<a class="mt-btn home-go home-join" href="/account?view=subscribe">What subscribers get</a>}
     </div>
+    @* The subscription, for anyone who doesn't have one: what it adds, shown on a match now played
+       (nothing of a match to come), what it costs and the way to it. The one boxed part of the page. *@
+    @if (Model.Offer)
+    {
+        <section class="home-sub" aria-labelledby="home-sub-title">
+            <div class="home-sub-copy">
+                <p class="home-sub-eye">For subscribers</p>
+                <h2 class="home-sub-title" id="home-sub-title">The whole prediction. <em>Before kick-off.</em></h2>
+                <p class="home-sub-lede">Everyone gets the model's chance of a win, a draw and a defeat for the week ahead. Subscribers get everything behind it, for every match: the score, the reasons and the line-ups.</p>
+                @if (Model.Pay)
+                {
+                    <p class="home-sub-price">@{ Price(Model.Prices.Monthly); } <i>or</i> @{ Price(Model.Prices.Yearly); }</p>
+                    <p class="home-sub-note">The year works out at @Model.Prices.YearlyMonth, @Model.Prices.YearlySave less than paying by the month.@(Model.Prices.Note is { } note ? $" {note}" : "")</p>
+                }
+                <div class="home-actions">
+                    <a class="mt-btn home-go" href="/account?view=subscribe">@(Model.Pay ? "Subscribe" : "What subscribers get")</a>
+                    <a class="home-ghost" href="/match/example" rel="nofollow">See an example match</a>
+                </div>
+                @if (Model.Pay){<p class="home-sub-small">@AccountModel.Promise</p>}
+            </div>
+            @if (Model.Sample is { } s)
+            {
+                var at = DateTimeOffset.Parse(s.Kickoff);
+                <div class="home-sub-sample">
+                    <p class="home-board-head"><span class="home-dot" aria-hidden="true"></span>What subscribers saw before kick-off</p>
+                    <p class="home-call-teams">@s.HomeName <i>v</i> @s.AwayName</p>
+                    <p class="home-call-when">@s.Comp · @Markup.LocalTime(at, "day", visitor)</p>
+                    <p class="home-sub-tier">Free for everyone</p>
+                    <span class="home-call-bar" role="img" aria-label="@s.HomeName @(s.H)%, draw @(s.D)%, @s.AwayName @(s.A)%"><span class="prob-home sw-@s.H"></span><span class="prob-draw sw-@s.D"></span><span class="prob-away sw-@s.A"></span></span>
+                    <span class="home-call-key" aria-hidden="true"><span><b>@(s.H)%</b>@s.HomeName</span><span><b>@(s.D)%</b>Draw</span><span><b>@(s.A)%</b>@s.AwayName</span></span>
+                    <p class="home-sub-tier">Subscribers also saw</p>
+                    <dl class="home-sub-nums">
+                        <div><dt>@s.Goals</dt><dd>Projected score</dd></div>
+                        @if (s.Likely is { Length: > 0 } likely){<div><dt>@likely</dt><dd>Likeliest score</dd></div>}
+                        <div class="home-sub-final"><dt>@s.Score</dt><dd>How it finished</dd></div>
+                    </dl>
+                    <ul class="why-list">@foreach (var x in s.Reasons){<li><span>@x.Text</span><b>@x.Size</b></li>}</ul>
+                    <a class="home-board-more" href="/match/@s.Id">The whole match, line-ups too</a>
+                </div>
+            }
+            <ul class="home-sub-list">
+                @foreach (var (what, detail) in AccountModel.Benefits){<li><b>@what</b><span>@detail</span></li>}
+            </ul>
+        </section>
+    }
     <!-- the four things a first visit asks, each a label, a one-line answer and the detail under it -->
     <div class="home-brief">
         <section class="home-brief-item">

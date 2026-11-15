@@ -10,13 +10,19 @@ import { longDate } from '../../../web/src/lib/club.ts';
 
 type View = 'signin' | 'signup' | 'reset' | 'newpass' | 'note' | 'account' | 'delete' | 'subscribe';
 type Sub = { paywall: boolean; subscriber: boolean; status: string | null; plan: string | null; renewsAt: string | null; ends: boolean } | null;
-export type AccountProps = { user: { email: string } | null; sub: Sub; botCheck: string; pay: boolean; prices: { monthly: string; yearly: string; note?: string | null } };
+export type AccountProps = { user: { email: string } | null; sub: Sub; botCheck: string; pay: boolean; prices: { monthly: string; yearly: string; note?: string | null; yearlyMonth: string; yearlySave: string } };
 type Answer = { type: 'success'; data: { done: string; note?: string } } | { type: 'failure'; data: { message: string } } | { type: 'redirect'; location: string };
 
 const TITLES: Record<View, string> = {
 	signin: 'Sign in', signup: 'Create an account', reset: 'Reset your password', newpass: 'Choose a new password',
 	note: 'Check your email', account: 'Your profile', delete: 'Delete your account', subscribe: 'Subscribe'
 };
+
+// What a subscription adds, and what is free without one: the account page has the same words
+// (AccountModel.Benefits, Free and Promise in Account.cshtml.cs): change the two together
+const BENEFITS = ['The projected score', 'The key reasons', 'Predicted line-ups', 'Projected tables', 'Every player ranked', 'Matches further ahead'];
+const FREE = "Free without an account: the club ratings, the league tables, results, the model's record, the chances for every match in the next 7 days, and the top 50 players with the top 10 of each league and position.";
+const PROMISE = 'Cancel whenever you like. Change your mind in the first 14 days and you get a full refund.';
 
 // ---- The check that a visitor isn't a bot (Cloudflare Turnstile, BotCheck.svelte). Its script is
 // asked for only when a form that needs it is first shown; the widget writes its answer into the
@@ -136,26 +142,42 @@ export function AccountBox({ user, sub, botCheck, pay, prices, start, onview, on
 	</>;
 	else if (view === 'newpass') body = form('newpass', <>{field('password', 'New password (8 characters or more)', 'password', 'new-password', 8)}<button type="submit" className="mt-btn" disabled={busy}>Save password</button></>);
 	else if (view === 'note') body = <><p className="account-text">{note}</p><div className="account-links">{link('signin', 'Back to sign in')}</div></>;
-	else if (view === 'subscribe') body = <>
-		<p className="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings and the league tables.</p>
-		<p className="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free). <a className="link-btn" href="/match/example" rel="nofollow">See an example match</a></p>
-		{!pay ? <p className="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free above is here for everyone, with no account needed.</p>
-			: sub?.subscriber ? <p className="account-text"><b>This account is subscribed.</b></p>
-			: who ? <>
-				<p className="account-text">Cancel whenever you like: the subscription then runs to the end of the time paid for. Payment is taken by Stripe; this site never sees your card. See the <a href="/terms">terms</a>.</p>
-				{prices.note && <p className="account-text"><b>{prices.note}</b></p>}
-				{form('subscribe', <><button type="submit" name="plan" value="monthly" className="mt-btn account-out" disabled={busy}>Subscribe · {prices.monthly}</button>
-					<button type="submit" name="plan" value="yearly" className="mt-btn account-out" disabled={busy}>Subscribe · {prices.yearly}</button></>, 'account-plans')}
-			</>
-			: <>
-				{/* the shortest way on: an account (Google is one press), then straight back to the plans */}
-				<p className="account-text"><b>{prices.monthly}, or {prices.yearly}.</b>{prices.note ? ` ${prices.note}` : ''} Cancel whenever you like.</p>
-				<p className="account-text">A subscription belongs to an account. Sign in or create one, and you come straight back here to choose your plan.</p>
-				{google(SUBSCRIBE)}
-				<div className="account-links">{onward('signup', 'Create an account with an email')}{onward('signin', 'Sign in')}</div>
-			</>}
-		{(who || !pay) && <div className="account-links">{link(who ? 'account' : 'signin', who ? 'Back to your account' : 'Sign in')}</div>}
-	</>;
+	else if (view === 'subscribe') {
+		// a plan: a button on to the checkout for a signed-in visitor, the same card to read for anyone else
+		const plan = (value: 'yearly' | 'monthly') => {
+			const yearly = value === 'yearly';
+			const inside = <>
+				<span className="sub-plan-name">{yearly ? 'Yearly' : 'Monthly'}{yearly && <i>Save {prices.yearlySave}</i>}</span>
+				<b>{yearly ? prices.yearly : prices.monthly}</b>
+				<span className="sub-plan-sub">{yearly ? `Works out at ${prices.yearlyMonth}` : 'Paid a month at a time'}</span>
+				{who && <span className="sub-plan-go">Choose {value}</span>}
+			</>;
+			const cls = `sub-plan${yearly ? ' sub-plan-best' : ''}`;
+			return who ? <button type="submit" name="plan" value={value} className={cls} disabled={busy}>{inside}</button> : <div className={cls}>{inside}</div>;
+		};
+		// what it adds first, then the plans, then the way on; what is free comes last
+		body = <>
+			<p className="sub-title">The whole prediction. <em>Before kick-off.</em></p>
+			<p className="account-text">Everyone gets the model's chance of a win, a draw and a defeat for the next 7 days. Subscribers get everything behind it, for every match:</p>
+			<ul className="sub-list">{BENEFITS.map((b) => <li key={b}>{b}</li>)}</ul>
+			<p className="account-text sub-example"><a className="link-btn" href="/match/example" rel="nofollow">See an example match</a></p>
+			{!pay ? <p className="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free below is here for everyone, with no account needed.</p>
+				: sub?.subscriber ? <p className="account-text"><b>This account is subscribed.</b></p>
+				: <>
+					{who ? form('subscribe', <>{plan('yearly')}{plan('monthly')}</>, 'account-plans') : <div className="account-plans">{plan('yearly')}{plan('monthly')}</div>}
+					{prices.note && <p className="account-text sub-note">{prices.note}</p>}
+					{!who && <>
+						{/* the shortest way on: an account (Google is one press), then straight back to the plans */}
+						<p className="account-text">Sign in or create an account, and you come straight back here to choose your plan.</p>
+						{google(SUBSCRIBE)}
+						<div className="account-links">{onward('signup', 'Create an account with an email')}{onward('signin', 'Sign in')}</div>
+					</>}
+					<p className="sub-trust">{PROMISE} Payment is taken by Stripe; this site never sees your card. <a href="/terms#subscriptions">Terms</a></p>
+				</>}
+			<p className="sub-free">{FREE}</p>
+			{(who || !pay) && <div className="account-links">{link(who ? 'account' : 'signin', who ? 'Back to your account' : 'Sign in')}</div>}
+		</>;
+	}
 	else if (view === 'account' && who) body = <>
 		<p className="account-text">Signed in as <b>{who.email}</b></p>
 		{sub?.paywall && (sub.subscriber
@@ -186,7 +208,7 @@ function AccountModal(props: AccountProps & { start: View | null; onclose: () =>
 	}, [props]);
 	return (
 		<div className="modal-overlay" id="account-modal" onClick={(e) => { if (e.target === e.currentTarget) props.onclose(); }}>
-			<div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="account-title">
+			<div className={`modal-card${title === TITLES.subscribe ? ' modal-sub' : ''}`} role="dialog" aria-modal="true" aria-labelledby="account-title">
 				<div className="modal-header">
 					<div id="account-title">{title}</div>
 					<button type="button" className="modal-close" aria-label="Close" onClick={props.onclose}>&times;</button>

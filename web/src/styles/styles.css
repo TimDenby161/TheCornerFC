@@ -644,6 +644,38 @@
   .account-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: 12px; font-size: 13px; }
   .account-text { font-size: 14px; line-height: 1.45; margin: 0 0 12px; overflow-wrap: anywhere; }
   .mt-btn.account-danger { background: #b3261e; color: #fff; }
+  /* The Subscribe view: what a subscription adds, then the two plans side by side (the year first and
+     filled, as the better price), then the way on and the promise; what is free comes last */
+  .modal-card.modal-sub { max-width: 480px; max-height: 92vh; }
+  .sub-title { margin: 2px 0 10px; font-size: clamp(34px, 9vw, 44px); line-height: 0.9; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }
+  .sub-title em { display: block; font-style: normal; }
+  @supports (-webkit-text-stroke: 1px black) {
+    .sub-title em { color: var(--surface-1); -webkit-text-stroke: 0.04em var(--text-primary); paint-order: stroke fill; letter-spacing: 0.035em; }
+  }
+  .sub-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; font-size: 14px; font-weight: 700; line-height: 1.25; }
+  .sub-list li { position: relative; padding-left: 22px; }
+  .sub-list li::before { content: "✓"; position: absolute; left: 0; top: 0; font-weight: 900; color: var(--good-text); }
+  .account-text.sub-example { margin-bottom: 14px; }
+  .account-plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 10px; }
+  .sub-plan { appearance: none; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; padding: 12px 12px 12px; font: inherit; text-align: left;
+    color: var(--text-primary); background: transparent; border: 1px solid var(--text-muted); border-radius: 0; }
+  .sub-plan-best { color: var(--surface-1); background: var(--text-primary); border-color: var(--text-primary); }
+  button.sub-plan { cursor: pointer; }
+  button.sub-plan:disabled { opacity: 0.6; cursor: default; }
+  button.sub-plan:focus-visible { outline: 2px solid var(--series-blue); outline-offset: 2px; }
+  button.sub-plan:not(.sub-plan-best):hover { background: var(--chip-bg); }
+  .sub-plan-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; width: 100%; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  .sub-plan-name i { padding: 2px 6px; font-style: normal; letter-spacing: 0.04em; color: var(--text-primary); background: var(--surface-1); }
+  .sub-plan b { margin-top: 6px; font-size: clamp(19px, 5.6vw, 26px); line-height: 1; font-weight: 900; font-stretch: 68%; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sub-plan-sub { font-size: 13px; line-height: 1.3; opacity: 0.8; }
+  .sub-plan-go { margin-top: 10px; padding-top: 8px; width: 100%; border-top: 1px solid currentColor; font-size: 14px; font-weight: 800; font-stretch: 76%; letter-spacing: 0.06em; text-transform: uppercase; }
+  .sub-plan-go::after { content: " →"; }
+  .account-text.sub-note { font-size: 13px; color: var(--text-secondary); }
+  .sub-trust, .sub-free { margin: 12px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-muted); }
+  .sub-trust { color: var(--text-secondary); }
+  .sub-trust a { color: inherit; }
+  .sub-free { padding-top: 10px; border-top: 1px solid var(--border); }
+  @media (max-width: 359px) { .account-plans, .sub-list { grid-template-columns: minmax(0, 1fr); } }
   #account-msg { font-size: 13px; margin-top: 10px; }
   #account-msg:empty { display: none; }
   #account-msg.bad { color: var(--critical-text); }
@@ -1225,6 +1257,53 @@
   .home-nums dt { white-space: nowrap; } .home-nums dt small { font-size: 0.45em; }
   .home-nums dd { margin: 6px 0 0; font-size: 13px; line-height: 1.35; color: var(--text-secondary); }
   .home-nums-note { margin: 14px 0 0; font-size: 12px; line-height: 1.35; color: var(--text-muted); }
+  /* The subscription, offered under the hero: the one boxed part of a page of rules. Chalk in both
+     themes (the hero over it is the pitch in both), with a played match on the grass inside it:
+     what everyone saw of it, then what subscribers saw */
+  .home-sub { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px 48px; margin: 0 -16px; padding: clamp(28px, 4vw, 52px) 16px clamp(28px, 4vw, 44px);
+    color-scheme: light; color: var(--text-primary); background: var(--chalk);
+    --text-primary: #0d1410; --text-secondary: #414b45; --text-muted: #5b655e; --gridline: #d8dbd0; --border: rgba(13,20,16,0.18);
+    --page-plane: var(--chalk); --surface-1: var(--chalk); --chip-bg: #e8eae1; --blue-text: #1e589e; --good-text: #086a08; --critical-text: #a22727; }
+  .home-sub-copy { min-width: 0; }
+  .home-sub-eye { display: inline-block; margin: 0 0 14px; padding: 4px 8px; font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--chalk); background: var(--pitch); }
+  .home-sub-title { margin: 0 0 18px; font-size: clamp(44px, 6.6vw, 104px); line-height: 0.87; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }
+  .home-sub-title em { display: block; font-style: normal; }
+  @supports (-webkit-text-stroke: 1px black) {
+    .home-sub-title em { color: var(--chalk); -webkit-text-stroke: 0.036em var(--text-primary); paint-order: stroke fill; letter-spacing: 0.035em; }
+  }
+  .home-sub-lede { margin: 0 0 22px; max-width: 50ch; font-size: clamp(15px, 1.5vw, 18px); line-height: 1.5; color: var(--text-secondary); }
+  .home-sub-price { margin: 0 0 6px; font-size: 17px; font-weight: 600; color: var(--text-secondary); }
+  .home-sub-price b { font-size: clamp(36px, 4.4vw, 56px); line-height: 1; font-weight: 900; font-stretch: 68%; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .home-sub-price i { margin: 0 8px; font-style: normal; color: var(--text-muted); }
+  .home-sub-note { margin: 0 0 20px; max-width: 58ch; font-size: 14px; line-height: 1.45; color: var(--text-secondary); }
+  .home-sub-small { margin: 14px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-muted); }
+  .home-sub-sample { align-self: start; min-width: 0; padding: 18px 20px 4px; color-scheme: dark; color: var(--chalk); background: var(--pitch);
+    --text-primary: var(--chalk); --text-secondary: #c9d4c9; --text-muted: #9fb3a6; --border: rgba(242,244,236,0.24); --gridline: rgba(242,244,236,0.24);
+    --page-plane: var(--pitch); --surface-1: var(--pitch); --chip-bg: rgba(242,244,236,0.10);
+    --blue-text: #9cc6f7; --good-text: #5fe08a; --critical-text: #ff9c9c; }
+  .home-sub-sample :is(p, dl) { margin: 0; }
+  .home-sub-sample .home-board-head { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid var(--text-primary); }
+  .home-sub-sample .home-call-when { margin-bottom: 0; }
+  .home-sub-sample .home-sub-tier { margin: 16px 0 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+  .home-sub-nums { display: flex; gap: 0 16px; }
+  .home-sub-nums div { flex: 1 1 0; min-width: 0; }
+  .home-sub-nums div + div { padding-left: 14px; border-left: 1px solid var(--gridline); }
+  .home-sub-nums dt { font-size: clamp(28px, 3.2vw, 40px); line-height: 1; font-weight: 800; font-stretch: 68%; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .home-sub-nums dd { margin: 5px 0 0; font-size: 12px; line-height: 1.3; color: var(--text-secondary); }
+  .home-sub-nums .home-sub-final dt { color: var(--good-text); }
+  .home-sub-sample .why-list { margin: 14px 0 12px; }
+  .home-sub-sample .why-list li { padding: 6px 0; font-size: 13px; line-height: 1.35; border-top: 1px solid var(--gridline); }
+  .home-sub-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px 28px; }
+  .home-sub-list li { padding-top: 12px; border-top: 2px solid var(--text-primary); }
+  .home-sub-list b { display: block; margin-bottom: 4px; font-size: 21px; line-height: 1.1; font-weight: 800; }
+  .home-sub-list span { display: block; font-size: 14px; line-height: 1.45; color: var(--text-secondary); }
+  @media (min-width: 641px) { .home-sub-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1100px) {
+    .home-sub { grid-template-columns: minmax(0, 1.2fr) minmax(340px, .8fr); }
+    .home-sub-list { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 480px) { .home-sub { margin: 0 -12px; padding-left: 12px; padding-right: 12px; } }
   .home-close { margin: 72px 0 8px; padding-top: 18px; border-top: 2px solid var(--text-primary); }
   .home-close-line { margin: 0 0 12px; font-size: clamp(40px, 6vw, 88px); line-height: 0.88; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }
   .home-close-sub { margin: 0 0 24px; max-width: 52ch; font-size: 16px; line-height: 1.5; color: var(--text-secondary); }

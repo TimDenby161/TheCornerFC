@@ -10,7 +10,7 @@ namespace TheCornerFC.Web.Pages;
 // as on the old site; the site's name in the menu still opens Home for them (a link from one of the
 // site's own pages). The example line-up's slide is asked for once the page is up (/home/xi): it can
 // need the reconstructed history, which the database takes seconds over.
-public sealed class IndexModel(Database db, TimeProvider clock) : PageModel
+public sealed class IndexModel(Database db, TimeProvider clock, IConfiguration settings, SiteEnvironment env) : PageModel
 {
     public int ClubCount { get; private set; }
     public List<Home.ClubRow> Clubs { get; private set; } = [];
@@ -20,6 +20,14 @@ public sealed class IndexModel(Database db, TimeProvider clock) : PageModel
     public List<Home.LeagueRow> Leagues { get; private set; } = [];
     public List<Home.NationRow>? Nations { get; private set; }
     public bool SignedIn { get; private set; }
+    // The subscription, offered under the hero to anyone who doesn't subscribe while the paywall is
+    // on: a sample of what a subscriber saw before a match now played, what subscribing costs, and
+    // whether it can be bought yet (the server has payments' secrets). The same for every visitor
+    // who isn't signed in.
+    public bool Offer { get; private set; }
+    public Home.Sample? Sample { get; private set; }
+    public AccountModel.PriceWords Prices { get; private set; } = AccountModel.PricesAt(DateTimeOffset.UtcNow);
+    public bool Pay => Payments.From(settings, env) is not null;
 
     public async Task<IActionResult> OnGet()
     {
@@ -35,11 +43,17 @@ public sealed class IndexModel(Database db, TimeProvider clock) : PageModel
         var all = Data.Clubs.From(docTask.Result);
         var now = clock.GetUtcNow();
         var playersTask = Home.Players(db, site);
-        var callsTask = Home.MatchCalls(db, site, all, visitor.Zone.Tz, now);
+        var topTask = Home.TopFixtures(db, site, all);
         var statsTask = Home.Stats(db);
         var nationsTask = Home.Nations(db);
-        await Task.WhenAll(playersTask, callsTask, statsTask, nationsTask);
-        (Players, Calls, Stats, Nations) = (playersTask.Result, callsTask.Result, statsTask.Result, nationsTask.Result);
+        // (what the menu's box asks of a signed-in visitor on every page: asked once, here first)
+        var subTask = Subscription.Of(db, HttpContext);
+        await Task.WhenAll(playersTask, topTask, statsTask, nationsTask, subTask);
+        (Players, Stats, Nations) = (playersTask.Result, statsTask.Result, nationsTask.Result);
+        Calls = Home.MatchCalls(site, topTask.Result, visitor.Zone.Tz, now);
+        Offer = topTask.Result.Paywall && subTask.Result?.Subscriber != true;
+        if (Offer) Sample = Home.SampleOf(site, topTask.Result);
+        Prices = AccountModel.PricesAt(now);
         ClubCount = all.Count;
         Clubs = Home.Clubs(site, all);
         Leagues = Home.Leagues(site, all);

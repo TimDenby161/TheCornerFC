@@ -102,16 +102,24 @@ public static class Home
         return answer is null ? null : ClubData.MatchRows(site, answer);
     }
 
+    // The strongest clubs' matches as a visitor who isn't signed in sees them, read once for the two
+    // parts of Home that use them (the Matches slide and the subscribers' sample), and whether the
+    // paywall is on, which their answers say
+    const int CallClubs = 4, CallCount = 3;
+    public sealed record TopLists(List<List<Match>> Clubs, bool Paywall);
+    public static async Task<TopLists> TopFixtures(Database db, SiteDoc site, List<Club> all)
+    {
+        var answers = await Task.WhenAll(Strongest(all).Take(CallClubs).Select(x => Quiet(db.KeptAsk<MatchesAnswer>("site_matches", new { p_team = x.Team }))));
+        return new(answers.Select(a => a is null ? [] : ClubData.MatchRows(site, a)).ToList(), answers.Any(a => a?.Paywall == true));
+    }
+
     // A few matches' chances as a taste of the Matches page: the next match of each of the
     // strongest clubs that has the model's chances, soonest first (two of them meeting is one match)
-    const int CallClubs = 4, CallCount = 3;
     public sealed record Call(int Id, string HomeName, string AwayName, string Comp, string Kickoff, int H, int D, int A);
     public sealed record Calls(string Day, List<Call> List);
-    public static async Task<Calls?> MatchCalls(Database db, SiteDoc site, List<Club> all, string tz, DateTimeOffset now)
+    public static Calls? MatchCalls(SiteDoc site, TopLists lists, string tz, DateTimeOffset now)
     {
-        var teams = Strongest(all).Take(CallClubs).Select(x => x.Team).ToList();
-        var lists = await Task.WhenAll(teams.Select(t => Fixtures(db, site, t)));
-        var next = lists.Select(l => (l ?? []).FirstOrDefault(x => x.Status == "NS" && x.PHome is not null && x.PDraw is not null && DateTimeOffset.Parse(x.Kickoff) > now))
+        var next = lists.Clubs.Select(l => l.FirstOrDefault(x => x.Status == "NS" && x.PHome is not null && x.PDraw is not null && DateTimeOffset.Parse(x.Kickoff) > now))
             .Where(m => m is not null).Select(m => m!).ToList();
         var seen = new HashSet<int>();
         var ms = next.Where(m => seen.Add(m.Id)).Take(CallCount).OrderBy(m => m.Kickoff, Js.Compare).ToList();
@@ -121,6 +129,28 @@ public static class Home
             var p = Cards.ShownProbs(m.PHome!.Value, m.PDraw!.Value);
             return new Call(m.Id, site.TeamName(m.Home), site.TeamName(m.Away), site.CompLabel(m.League), m.Kickoff, p[0], p[1], p[2]);
         }).ToList());
+    }
+
+    // What a subscriber saw before kick-off, shown for a match now played (a played match is whole
+    // for everyone, so nothing here is behind the paywall): the chances everyone had, then the
+    // projected score, the likeliest score and the key reasons, and what happened. The strongest
+    // clubs' latest finished match that had all of those: the latest, whatever the result, never
+    // picked for how the prediction did. None: left out.
+    const int SampleReasons = 3;
+    public sealed record Sample(int Id, string HomeName, string AwayName, string Comp, string Kickoff, int H, int D, int A,
+        string Goals, string? Likely, string Score, List<Cards.Reason> Reasons);
+    public static Sample? SampleOf(SiteDoc site, TopLists lists)
+    {
+        var m = lists.Clubs.SelectMany(l => l)
+            .Where(x => ClubData.Finished.Contains(x.Status) && !ClubData.NoGame.Contains(x.Status) && x.Hg is not null && x.Ag is not null
+                && x.PHome is not null && x.PDraw is not null && x.HomeXg is not null && x.AwayXg is not null)
+            .OrderByDescending(x => x.Kickoff, StringComparer.Ordinal).ThenByDescending(x => x.Id)
+            .Select(x => (M: x, Why: x.Reasons.Select(r => Cards.ReasonText(r.Key, r.Goals, site.TeamName(x.Home), site.TeamName(x.Away))).Where(r => r is not null).Select(r => r!).Take(SampleReasons).ToList()))
+            .FirstOrDefault(x => x.Why.Count >= 2);
+        if (m.M is not { } match) return null;
+        var p = Cards.ShownProbs(match.PHome!.Value, match.PDraw!.Value);
+        return new(match.Id, site.TeamName(match.Home), site.TeamName(match.Away), site.CompLabel(match.League), match.Kickoff, p[0], p[1], p[2],
+            $"{Js.ToFixed(match.HomeXg!.Value, 1)}–{Js.ToFixed(match.AwayXg!.Value, 1)}", match.Likely?.Replace('-', '–'), $"{match.Hg}–{match.Ag}", m.Why);
     }
 
     // The example line-up: the XI that started, on a pitch, marked against the one the model

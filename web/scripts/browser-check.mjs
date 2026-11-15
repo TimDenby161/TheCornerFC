@@ -130,6 +130,18 @@ check('Home on a phone: the button stays where it is from slide to slide', joinA
 await send('Emulation.setDeviceMetricsOverride', { width: 820, height: 1180, deviceScaleFactor: 2, mobile: true });
 check('Home on a tablet: the same', await until(fits, 3000));
 await send('Emulation.clearDeviceMetricsOverride');
+// under the hero, the subscription: a played match as subscribers saw it, what it adds, and the
+// way to the Subscribe box (the prices only where the checkout is on)
+const offer = await run(`(() => { const s = document.querySelector('.home-sub'); if (!s) return null; const nums = [...s.querySelectorAll('.home-sub-nums dt')].map((d) => d.textContent);
+	return { nums, reasons: s.querySelectorAll('.home-sub-sample .why-list li').length, match: s.querySelector('.home-sub-sample .home-board-more')?.getAttribute('href') || '', adds: s.querySelectorAll('.home-sub-list li').length,
+		wide: s.scrollWidth <= s.clientWidth + 1, go: s.querySelector('.home-go')?.getAttribute('href') }; })()`);
+check('Home: the subscription under the hero, with a played match as subscribers saw it', !!offer && offer.adds === 6 && offer.go === '/account?view=subscribe' && offer.wide
+	&& (!offer.match || (offer.nums.length >= 2 && offer.nums.every((n) => /^\d+(\.\d)?–\d+(\.\d)?$/.test(n)) && offer.reasons >= 2 && /^\/match\/\d+$/.test(offer.match))), JSON.stringify(offer));
+await run(`document.querySelector('.home-sub .home-go')?.click()`);
+check('... and its button opens the Subscribe box, with what a subscription adds', (await until(`document.querySelector('#account-title')?.textContent === 'Subscribe'`, 3000)) && (await run(`document.querySelectorAll('#account-body .sub-list li').length`)) === 6);
+if (await run(`!/coming soon/.test(document.querySelector('#account-body')?.textContent || '')`))
+	check('the Subscribe box: both plans, the year first with what it saves, and nothing to press before there is an account', (await run(`[...document.querySelectorAll('#account-body .account-plans .sub-plan')].map((p) => p.tagName + ':' + p.querySelector('.sub-plan-name').textContent.replace(/£[0-9]+/, '£')).join()`)) === 'DIV:YearlySave £,DIV:Monthly' && (await run(`document.querySelectorAll('.home-sub-price b').length`)) === 2);
+await run(`document.querySelector('#account-modal .modal-close')?.click()`); await until(`!document.querySelector('#account-modal')`, 2000);
 await run(`document.querySelector('.home-close .home-ghost')?.click()`); await until(`location.pathname === '/methodology' && !!document.querySelector('.stat-v')`);
 check('How the models work: the text page with its live figures, and no menu', (await run('location.pathname')) === '/methodology' && (await run(`document.querySelectorAll('.stat-v').length`)) >= 4 && !(await run(`!!document.querySelector('nav.tabs')`)), `${await run(`document.querySelectorAll('.stat-v').length`)} figures`);
 await run(`document.querySelector('.back a')?.click()`); await until(`location.pathname === '/' && !!document.querySelector('nav.tabs')`);

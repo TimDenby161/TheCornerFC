@@ -42,7 +42,7 @@
     }
 }
 <section class="panel" data-tab="club" data-active="true">
-    <div class="modal-card account-page">
+    <div class="modal-card account-page@(view == "subscribe" ? " modal-sub" : "")">
         <div class="modal-header"><div id="account-title">@AccountModel.Titles[view]</div></div>
         <div id="account-body">
             @if (view == "signin")
@@ -89,36 +89,50 @@
             }
             else if (view == "subscribe")
             {
-                <p class="account-text">Free for everyone: the model's win, draw and loss chances for every match in the next 7 days, results and the model's record, the club ratings and the league tables.</p>
-                <p class="account-text">For subscribers: the chances for matches further ahead, the projected score, the key reasons and full model detail behind every prediction, predicted line-ups, every league's projected table with each club's finishing chances, and the full player ranks (the top 50 overall, the top 10 in each league and the top 10 in each position are free). <a class="link-btn" href="/match/example" rel="nofollow">See an example match</a></p>
+                var prices = Model.Prices;
+                @* what it adds first, then the plans, then the way on; what is free comes last *@
+                <p class="sub-title">The whole prediction. <em>Before kick-off.</em></p>
+                <p class="account-text">Everyone gets the model's chance of a win, a draw and a defeat for the next 7 days. Subscribers get everything behind it, for every match:</p>
+                <ul class="sub-list">@foreach (var (what, _) in AccountModel.Benefits){<li>@what</li>}</ul>
+                <p class="account-text sub-example"><a class="link-btn" href="/match/example" rel="nofollow">See an example match</a></p>
                 @if (!Model.Pay)
                 {
-                    <p class="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free above is here for everyone, with no account needed.</p>
+                    <p class="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free below is here for everyone, with no account needed.</p>
                 }
                 else if (sub?.Subscriber == true)
                 {
                     <p class="account-text"><b>This account is subscribed.</b></p>
                 }
-                else if (user.SignedIn)
-                {
-                    <p class="account-text">Cancel whenever you like: the subscription then runs to the end of the time paid for. Payment is taken by Stripe; this site never sees your card. See the <a href="/terms">terms</a>.</p>
-                    @if (Model.Prices.Note is { } note)
-                    {
-                        <p class="account-text"><b>@note</b></p>
-                    }
-                    <form method="post" action="/account?/subscribe" class="account-plans">
-                        <button type="submit" name="plan" value="monthly" class="mt-btn account-out">Subscribe · @Model.Prices.Monthly</button>
-                        <button type="submit" name="plan" value="yearly" class="mt-btn account-out">Subscribe · @Model.Prices.Yearly</button>
-                    </form>
-                }
                 else
                 {
-                    @* the shortest way on: an account (Google is one press), then straight back here to the plans *@
-                    <p class="account-text"><b>@Model.Prices.Monthly, or @Model.Prices.Yearly.</b>@(Model.Prices.Note is { } n ? $" {n}" : "") Cancel whenever you like.</p>
-                    <p class="account-text">A subscription belongs to an account. Sign in or create one, and you come straight back here to choose your plan.</p>
-                    Google(AccountModel.Subscribe);
-                    <div class="account-links"><a class="link-btn" href="/account?view=signup&amp;then=subscribe">Create an account with an email</a><a class="link-btn" href="/account?view=signin&amp;then=subscribe">Sign in</a></div>
+                    if (user.SignedIn)
+                    {
+                        <form method="post" action="/account?/subscribe" class="account-plans">
+                            <button type="submit" name="plan" value="yearly" class="sub-plan sub-plan-best"><span class="sub-plan-name">Yearly<i>Save @prices.YearlySave</i></span><b>@prices.Yearly</b><span class="sub-plan-sub">Works out at @prices.YearlyMonth</span><span class="sub-plan-go">Choose yearly</span></button>
+                            <button type="submit" name="plan" value="monthly" class="sub-plan"><span class="sub-plan-name">Monthly</span><b>@prices.Monthly</b><span class="sub-plan-sub">Paid a month at a time</span><span class="sub-plan-go">Choose monthly</span></button>
+                        </form>
+                    }
+                    else
+                    {
+                        <div class="account-plans">
+                            <div class="sub-plan sub-plan-best"><span class="sub-plan-name">Yearly<i>Save @prices.YearlySave</i></span><b>@prices.Yearly</b><span class="sub-plan-sub">Works out at @prices.YearlyMonth</span></div>
+                            <div class="sub-plan"><span class="sub-plan-name">Monthly</span><b>@prices.Monthly</b><span class="sub-plan-sub">Paid a month at a time</span></div>
+                        </div>
+                    }
+                    if (prices.Note is { } note)
+                    {
+                        <p class="account-text sub-note">@note</p>
+                    }
+                    if (!user.SignedIn)
+                    {
+                        @* the shortest way on: an account (Google is one press), then straight back here to the plans *@
+                        <p class="account-text">Sign in or create an account, and you come straight back here to choose your plan.</p>
+                        Google(AccountModel.Subscribe);
+                        <div class="account-links"><a class="link-btn" href="/account?view=signup&amp;then=subscribe">Create an account with an email</a><a class="link-btn" href="/account?view=signin&amp;then=subscribe">Sign in</a></div>
+                    }
+                    <p class="sub-trust">@AccountModel.Promise Payment is taken by Stripe; this site never sees your card. <a href="/terms#subscriptions">Terms</a></p>
                 }
+                <p class="sub-free">@AccountModel.Free</p>
                 @if (user.SignedIn || !Model.Pay)
                 {
                     <div class="account-links"><a class="link-btn" href="@(user.SignedIn ? "/account" : Href("signin"))">@(user.SignedIn ? "Back to your account" : "Sign in")</a></div>

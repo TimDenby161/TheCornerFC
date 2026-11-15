@@ -118,7 +118,13 @@ public class PaymentsTests
     {
         using var site = new SiteFactory("staging", r => StubHandler.Json("null"), All);
         var page = await Client(site).GetStringAsync("/account?view=subscribe");
-        Assert.Contains("a month, or", page);
+        // (both plans with their prices, the year first with what it saves, and the promise)
+        var prices = AccountModel.PricesAt(DateTimeOffset.UtcNow);
+        Assert.Contains($"<i>Save {prices.YearlySave}</i></span><b>{prices.Yearly}</b>", page);
+        Assert.Contains($"<b>{prices.Monthly}</b>", page);
+        Assert.True(page.IndexOf(prices.Yearly, StringComparison.Ordinal) < page.IndexOf(prices.Monthly, StringComparison.Ordinal));
+        Assert.Contains(AccountModel.Promise, page);
+        Assert.DoesNotContain("name=\"plan\"", page);     // nothing to buy with until there's an account
         Assert.Contains("you come straight back here to choose your plan", page);
         Assert.Contains("<input type=\"hidden\" name=\"back\" value=\"/account?view=subscribe\" />", page);
         Assert.Contains("href=\"/account?view=signup&amp;then=subscribe\"", page);
@@ -175,9 +181,11 @@ public class PaymentsTests
         Assert.Equal("price_fy", P.PriceOf("yearly", lastMinute));
         Assert.Equal("price_m", P.PriceOf("monthly", Payments.FounderEnds));
         Assert.Equal("price_y", P.PriceOf("yearly", Payments.FounderEnds));
+        // (with each, the year as a month's price and what it saves on twelve monthly payments, in whole
+        // pounds rounded down: £59.88 less £39 is £20.88, £71.88 less £49 is £22.88)
         Assert.Equal(new AccountModel.PriceWords("£4.99 a month", "£39 a year",
-            "Founder's price until 31 January 2027 (then £5.99 a month or £49 a year), kept for as long as you stay subscribed."), AccountModel.PricesAt(lastMinute));
-        Assert.Equal(new AccountModel.PriceWords("£5.99 a month", "£49 a year", null), AccountModel.PricesAt(Payments.FounderEnds));
+            "Founder's price until 31 January 2027 (then £5.99 a month or £49 a year), kept for as long as you stay subscribed.", "£3.25 a month", "£20"), AccountModel.PricesAt(lastMinute));
+        Assert.Equal(new AccountModel.PriceWords("£5.99 a month", "£49 a year", null, "£4.08 a month", "£22"), AccountModel.PricesAt(Payments.FounderEnds));
         // a founder's subscription is recorded under its plan like any other
         var row = P.RowOf(JsonDocument.Parse("""{"id":"sub_1","customer":"cus_1","status":"active","metadata":{"user_id":"u1"},"items":{"data":[{"price":{"id":"price_fy"}}]}}""").RootElement, DateTimeOffset.UtcNow);
         Assert.Equal("yearly", row!.Plan);
