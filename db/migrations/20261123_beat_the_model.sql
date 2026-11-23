@@ -1,4 +1,4 @@
--- Repeatable. Applied to staging 2026-11-23 (production not yet).
+-- Repeatable. Applied 2026-11-23, to staging and to production.
 -- Beat the Model (T-095, owner's decisions 2026-11-23): signed-in accounts predict the score of
 -- every match of each Premier League round before kick-off; 3 points for the exact score, 1 for
 -- the right result. The model plays too, with its most likely score. A player sees the model's

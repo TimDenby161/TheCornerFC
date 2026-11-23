@@ -55,6 +55,13 @@ SIGNED_IN_FUNCTIONS = ANON_FUNCTIONS | {
     "public.lock_fpl_transfers(p_entry integer, p_season integer, p_event integer, p_transfers jsonb)",
     "public.mark_fpl_player(p_entry integer, p_player integer, p_mine boolean, p_target boolean)",
     "public.unlock_fpl_transfers(p_entry integer, p_season integer, p_event integer)",
+    # free with an account (T-095, T-104): Beat the Model and Fantasy points
+    "public.btm_pick(p_fixture integer, p_home integer, p_away integer)",
+    "public.btm_round(p_round integer)",
+    "public.btm_set_name(p_name text)",
+    "public.btm_table(p_round integer)",
+    "public.fantasy_points_doc()",
+    "public.fantasy_points_stamp()",
 }
 
 # The visitors: (role, account). Accounts are made in setUpClass.

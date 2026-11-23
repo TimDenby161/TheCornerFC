@@ -4727,7 +4727,7 @@ END; $$;
 COMMIT;
 
 -- db/migrations/20261123_fantasy_points_public.sql
--- Repeatable. Applied to staging 2026-11-23 (production not yet).
+-- Repeatable. Applied 2026-11-23, to staging and to production.
 -- The Fantasy points page for every signed-in account (T-104, owner's decision 2026-11-23: free
 -- with an account, with prices and injury flags, not for subscribers only; partly supersedes the
 -- owner-only rule of 2026-10-02 for this one document). Only the 'fpl_predictions' document is
@@ -4782,7 +4782,7 @@ END; $$;
 COMMIT;
 
 -- db/migrations/20261123_beat_the_model.sql
--- Repeatable. Applied to staging 2026-11-23 (production not yet).
+-- Repeatable. Applied 2026-11-23, to staging and to production.
 -- Beat the Model (T-095, owner's decisions 2026-11-23): signed-in accounts predict the score of
 -- every match of each Premier League round before kick-off; 3 points for the exact score, 1 for
 -- the right result. The model plays too, with its most likely score. A player sees the model's
