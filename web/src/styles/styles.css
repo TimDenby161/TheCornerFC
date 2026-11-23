@@ -785,6 +785,29 @@
   .fpl-span { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .fpl-filters > .fpl-span { margin-left: auto; }
   .fpl-table.multi { min-width: 640px; }
+  /* Beat the Model (/beat-the-model) */
+  .btm-list { display: grid; gap: 0; margin-top: 6px; }
+  .btm-match { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px;
+    padding: 10px 0; border-top: 1px solid var(--border); }
+  .btm-side { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; }
+  .btm-side span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btm-side.away { flex-direction: row-reverse; text-align: right; }
+  .btm-mid { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 112px; }
+  .btm-boxes { display: flex; align-items: center; gap: 4px; }
+  .btm-boxes input { width: 40px; padding: 6px 0; text-align: center; font: inherit; font-weight: 700; font-variant-numeric: tabular-nums;
+    border: 1px solid var(--text-muted); border-radius: 0; background: var(--surface-1); color: var(--text-primary); }
+  .btm-score { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .btm-when, .btm-line { color: var(--text-muted); font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
+  .btm-line b { color: var(--text-primary); }
+  .btm-pts { display: inline-block; min-width: 18px; padding: 0 4px; font-weight: 800; color: var(--text-primary); background: var(--chip-bg, rgba(127,127,127,0.18)); }
+  .btm-pts.p3 { color: var(--good-text); }
+  .btm-save { padding: 4px 10px; font-size: 12px; }
+  .btm-total { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; margin: 4px 0 2px; }
+  .btm-total b { font-size: 22px; font-variant-numeric: tabular-nums; }
+  .btm-name { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+  .btm-name .table-search { flex: 1 1 160px; width: auto; margin: 0; }
+  .btm-table tr.me td { font-weight: 700; }
+  .btm-table tr.model td { font-style: italic; }
   /* one gameweek fits the card at any width: the name gives way (ellipsis), then spacing tightens */
   #fpl-next { container-type: inline-size; }
   .fpl-scroll .fpl-table:not(.multi) { min-width: 0; table-layout: auto; }

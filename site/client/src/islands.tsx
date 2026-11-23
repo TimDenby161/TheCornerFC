@@ -18,11 +18,13 @@ const ISLANDS: Record<string, FunctionComponent<any>> = {
 	'who-picker': WhoPicker
 };
 
-// The owner's fantasy pages, fetched only where one of them is on the page
+// The fantasy pages and the game, fetched only where one of them is on the page
 const LATER: Record<string, () => Promise<FunctionComponent<any>>> = {
 	fpl: () => import('./FplPage.tsx').then((m) => m.FplPage),
 	myteam: () => import('./MyTeamPage.tsx').then((m) => m.MyTeamPage),
-	efl: () => import('./EflPage.tsx').then((m) => m.EflPage)
+	efl: () => import('./EflPage.tsx').then((m) => m.EflPage),
+	'fantasy-points': () => import('./FantasyPointsPage.tsx').then((m) => m.FantasyPointsPage),
+	btm: () => import('./BeatTheModelPage.tsx').then((m) => m.BeatTheModelPage)
 };
 
 async function mount(el: HTMLElement) {

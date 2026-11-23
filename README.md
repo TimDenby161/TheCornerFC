@@ -39,6 +39,7 @@ The tables and the records they keep:
 - [My FPL team](guide/my-fpl-team.md)
 - [The site's data in the database (step 1)](guide/site-data.md)
 - [Accounts](guide/accounts.md)
+- [Beat the Model and Fantasy points (free with an account)](guide/beat-the-model.md)
 - [The Admin area and the model change record](guide/admin-area.md)
 - [From an idea to the live model](guide/idea-to-live.md)
 - [Paid tier (built in part, switched off)](guide/paid-tier.md)

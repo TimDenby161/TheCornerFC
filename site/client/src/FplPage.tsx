@@ -48,7 +48,8 @@ export function FplPage({ email, findings }: { email: string | null; findings: F
 	</div>;
 }
 
-function Predictions({ owner }: { owner: Owner }) {
+// marking: the owner's own ticks (Mine, Target); the Fantasy points page has none
+export function Predictions({ owner, marking = true }: { owner: Owner; marking?: boolean }) {
 	const d = owner.fpl;
 	const [v, setV] = useState<FplView>({ pos: 'all', q: '', sort: 'xp', mode: 'gw', gw: 0, price: [null, null], mine: false, target: false });
 	const [all, setAll] = useState(false), [open, setOpen] = useState<number | null>(null), [markMsg, setMarkMsg] = useState('');
@@ -59,10 +60,12 @@ function Predictions({ owner }: { owner: Owner }) {
 	const span = d ? fplSpan(d, v) : [];
 	const rows = useMemo(() => (d ? fplList(d, players, v, owner.marks) : []), [d, players, v, owner.marks]);
 	const list = all ? rows : rows.slice(0, FPL_SHOWN);
-	const cols = one ? 8 : 6 + span.length;
+	const cols = (one ? 8 : 6 + span.length) - (marking ? 0 : 2);
 	const ids = list.map((r) => r.p.player).join();
 	useEffect(() => { void askKnown(list.map((r) => r.p.player)); }, [ids]); // eslint-disable-line react-hooks/exhaustive-deps
 	const frozen = useFrozenColumns();
+	// the public page doesn't use the game's name (owner, 2026-11-23)
+	const plain = (t: ReturnType<typeof statusTag>) => (t && !marking ? { ...t, title: 'Injury news' } : t);
 
 	const gwLabel = (g: Gameweek) => (d?.source === 'fpl' ? `GW${g.id}` : `Round ${g.id}`);
 	const count = (j: 0 | 1) => [...owner.marks.values()].filter((m) => m[j]).length;
@@ -99,8 +102,9 @@ function Predictions({ owner }: { owner: Owner }) {
 		<div className="fpl-filters">
 			{[['all', 'All'], ['G', 'GK'], ['D', 'DEF'], ['M', 'MID'], ['F', 'FWD']].map(([k, label]) =>
 				<button key={k} type="button" className="filter-chip" aria-pressed={v.pos === k} onClick={() => change({ pos: k })}>{label}</button>)}
-			<button type="button" className="filter-chip" aria-pressed={v.mine} onClick={() => change({ mine: !v.mine })}>My team {count(0)}</button>
-			<button type="button" className="filter-chip" aria-pressed={v.target} onClick={() => change({ target: !v.target })}>Targets {count(1)}</button>
+			{marking && <>
+				<button type="button" className="filter-chip" aria-pressed={v.mine} onClick={() => change({ mine: !v.mine })}>My team {count(0)}</button>
+				<button type="button" className="filter-chip" aria-pressed={v.target} onClick={() => change({ target: !v.target })}>Targets {count(1)}</button></>}
 			<input type="search" className="table-search fpl-search" id="fpl-q" placeholder="Search players or clubs" aria-label="Search players or clubs"
 				value={v.q} onChange={(e) => change({ q: e.currentTarget.value })} />
 		</div>
@@ -114,7 +118,7 @@ function Predictions({ owner }: { owner: Owner }) {
 		<div id="fpl-list">
 			<Scroll>
 				<table key={String(one)} className={`calib-table fpl-table${one ? '' : ' multi'}`} ref={frozen}>
-					<thead><tr><th>#</th><th>Player</th><th title="In my team">Mine</th><th title="A player I want">Target</th>
+					<thead><tr><th>#</th><th>Player</th>{marking && <><th title="In my team">Mine</th><th title="A player I want">Target</th></>}
 						{SORTS[one ? 'gw' : 'multi'].map(([k, label, title]) =>
 							<th key={k} title={title || undefined}><button type="button" className={`fpl-sort${v.sort === k ? ' on' : ''}`} aria-pressed={v.sort === k} aria-label={title || undefined} onClick={() => change({ sort: k }, true)}>{label}</button></th>)}
 						{!one && span.map((i) => <th key={i} title={day(gws[i].first_kickoff)}>{gwLabel(gws[i])}</th>)}
@@ -126,7 +130,7 @@ function Predictions({ owner }: { owner: Owner }) {
 			</Scroll>
 			{rows.length > FPL_SHOWN && <button type="button" className="show-all" id="fpl-more" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${rows.length}`}</button>}
 		</div>
-		<div className="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, penalties, assists, FPL assists, clean sheets,
+		{marking && <div className="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, penalties, assists, FPL assists, clean sheets,
 			goals conceded, saves, penalty saves, cards, bonus and defensive contributions. Bonus is rebuilt from match stats (it tracks FPL's own closely).
 			Defensive contributions combine each player's tackles, blocks and interceptions with his own FPL record this season, which also counts clearances.
 			Penalties go mostly to each club's taker, from FPL's penalty order and who has taken them recently; a miss costs 2.
@@ -135,17 +139,17 @@ function Predictions({ owner }: { owner: Owner }) {
 			Click a player's points to see where they come from.
 			{' '}{d.source === 'fpl' ? "Positions, prices, status and gameweeks come from FPL (updated nightly); players FPL doesn't list at their club are left out." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
 			{' '}In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
-			This is {d.model}, designed after the backtest below and still being tested on upcoming gameweeks: a guide, not a pick list.</div>
+			This is {d.model}, designed after the backtest below and still being tested on upcoming gameweeks: a guide, not a pick list.</div>}
 	</div>;
 
 	function playerRows(r: ListRow, i: number) {
 		const pd = d!;
 		return <>
 			<tr><td>{i + 1}</td>
-				<FantasyWho owner={owner} id={r.p.player} name={r.p.name} team={r.p.team} teamName={teamOf(pd, r.p.team)} tag={statusTag(r.p)}
+				<FantasyWho owner={owner} id={r.p.player} name={r.p.name} team={r.p.team} teamName={teamOf(pd, r.p.team)} tag={plain(statusTag(r.p))}
 					line={one ? versus(pd, r.cells) : teamOf(pd, r.p.team)}
-					meta={<span className="fpl-meta"><span title={FPL_POS[r.p.pos]}>{r.p.pos}{!r.p.fpl_position && <span title="Not matched to FPL yet: our position">*</span>}</span>{r.price > 0 ? ` · £${r.price.toFixed(1)}` : ''}</span>} />
-				{([0, 1] as const).map((j) =>
+					meta={<span className="fpl-meta"><span title={FPL_POS[r.p.pos]}>{r.p.pos}{!r.p.fpl_position && <span title={marking ? 'Not matched to FPL yet: our position' : 'Our own position'}>*</span>}</span>{r.price > 0 ? ` · £${r.price.toFixed(1)}` : ''}</span>} />
+				{marking && ([0, 1] as const).map((j) =>
 					<td key={j} className="fpl-mark"><input type="checkbox" checked={!!owner.marks.get(r.p.player)?.[j]} aria-label={`${r.p.name}: ${j ? 'a target' : 'in my team'}`} onChange={(e) => mark(r, j, e)} /></td>)}
 				<td>{pd.part_fields
 					? <button type="button" className="fpl-pts" aria-expanded={open === r.p.player} title="Where the points come from" onClick={() => setOpen(open === r.p.player ? null : r.p.player)}><b>{r.xp.toFixed(1)}</b></button>
@@ -161,7 +165,7 @@ function Predictions({ owner }: { owner: Owner }) {
 						})}</>}
 			</tr>
 			{open === r.p.player && pd.part_fields && <tr className="fpl-break"><td className="fpl-parts-cell" colSpan={cols}><div className="fpl-parts">
-				{partLines(pd, r, FPL_PARTS).map((x) => <div key={x.label} className="fpl-part"><span>{x.label}</span><span>{x.figure}</span><b className={x.value < 0 ? 'neg' : undefined}>{signed(x.value)}</b></div>)}
+				{partLines(pd, r, FPL_PARTS).map((x) => <div key={x.label} className="fpl-part"><span>{marking ? x.label : x.label.replace('FPL assists', 'Other assists')}</span><span>{x.figure}</span><b className={x.value < 0 ? 'neg' : undefined}>{signed(x.value)}</b></div>)}
 			</div></td></tr>}
 		</>;
 	}

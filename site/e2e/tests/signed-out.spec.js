@@ -1,7 +1,7 @@
 // A visitor with no account: every page opens, the lists fill, and the paid parts stay locked.
 import { test, expect, fitsTheWidth } from './visitor.js';
 
-for (const path of ['/', '/clubs', '/players', '/leagues', '/nations', '/matches', '/stats', '/record', '/lineups', '/model', '/methodology', '/terms', '/privacy']) {
+for (const path of ['/', '/clubs', '/players', '/leagues', '/nations', '/matches', '/stats', '/record', '/lineups', '/model', '/methodology', '/terms', '/privacy', '/beat-the-model', '/fantasy-points']) {
 	test(`${path} opens and fits the width`, async ({ page, faults }) => {
 		const response = await page.goto(path);
 		expect(response.status()).toBe(200);

@@ -1,0 +1,23 @@
+@page "/beat-the-model"
+@model BeatTheModelModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Beat the Model · The Corner FC";
+    // the game itself is drawn by the browser (BeatTheModelPage.tsx), asking /btm/* as the visitor
+    var signedIn = Visitor.Of(HttpContext).SignedIn;
+}
+<section class="panel" data-tab="btm" data-active="true">
+    <div data-island="btm"><script type="application/json">@Html.Raw(JsonSerializer.Serialize(new { email = Visitor.Of(HttpContext).Email }, TheCornerFC.Web.Data.Database.Json).Replace("<", "\\u003c"))</script>
+        <div id="btm-body"><div class="stats-card"><div class="stats-label">This round</div>
+            @if (signedIn)
+            {
+                <div class="stats-note">Loading…</div>
+            }
+            else
+            {
+                <div class="stats-note">Predict the score of every Premier League match before kick-off: 3 points for the exact score, 1 for the right result. Our model plays too. Pick a match and you see the model's score straight away. Free with an account.</div>
+                <div class="mt-lock"><a role="button" class="mt-btn owner-signin" href="/account?view=signin">Sign in free to play</a></div>
+            }
+        </div></div>
+    </div>
+</section>

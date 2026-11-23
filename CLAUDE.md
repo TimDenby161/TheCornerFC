@@ -120,7 +120,10 @@ with any findings under it, and stop if one says "Needs the owner" or lists a pr
   promotion to `main` deploys the live one.
 - **Fantasy game data is owner-only.** Anything derived from FPL or Fantasy EFL goes only where
   the owner's sign-in can read it (`fpl_owner_data`): never into a public table, file, page or
-  server-rendered HTML. Any new use of that data is the owner's decision: ask first.
+  server-rendered HTML. Any new use of that data is the owner's decision: ask first. The one
+  exception (owner's decision 2026-11-23): the expected-points list (`fpl_predictions`) for any
+  signed-in account on Fantasy points (`/fantasy-points`, `fantasy_points_doc`), asked for by
+  the browser, never written into a page, and without FPL's name or logo.
 - **New tables and views are reachable by the public key** unless shut: keep row-level security
   on and revoke `anon` from views.
 - **A signed-in visitor's requests** go through `AskAs(token, ...)` with their own token, never

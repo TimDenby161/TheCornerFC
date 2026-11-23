@@ -378,6 +378,17 @@ await run(`[...document.querySelectorAll('.time-pick button')].find((b) => b.tex
 check('My time: the visitor\'s own times again', await until(`document.cookie.includes('tz=America%2FNew_York') && ${times} === ${JSON.stringify(mine)}`));
 await send('Emulation.setTimezoneOverride', { timezoneId: '' });
 
+// free with an account (T-095, T-104): signed out, each page says what it is and offers the way
+// in, its React part draws without a fault, and its sign-in button opens the account box
+for (const [path, body, words] of [['/beat-the-model', '#btm-body', 'Predict the score'], ['/fantasy-points', '#points-body', 'expected fantasy points']]) {
+	await open(path);
+	check(`${path}: says what it is and offers a sign-in`, await until(`(document.querySelector('${body}')?.textContent || '').includes('${words}') && !!document.querySelector('${body} a.owner-signin')`));
+	check(`${path}: in the menu`, await run(`!!document.querySelector('a[href="${path}"]')`));
+	check(`${path}: asks the database nothing while signed out`, await run(`!performance.getEntriesByType('resource').some((e) => e.name.includes('/btm/') || e.name.includes('/fantasy/'))`));
+}
+await run(`document.querySelector('#points-body a.owner-signin')?.click()`);
+check('... and Sign in free opens the account box', await until(`document.querySelector('#account-title')?.textContent === 'Sign in'`, 4000));
+
 } catch (err) { out.push('STOPPED: ' + err.message.split('\n')[0]); out.push('at ' + await run('location.href') + ' · body: ' + (await run('document.body.innerText.slice(0, 300)'))); }
 console.log(out.join('\n'));
 console.log(errors.length ? 'PAGE ERRORS:\n' + [...new Set(errors)].join('\n') : 'no page errors');

@@ -15,8 +15,10 @@ export type Owner = {
 	marks: Map<number, [boolean, boolean]>;
 	// players with a page of their own on this site (their names link to it), and those asked about
 	known: Map<number, boolean>;
+	// the Fantasy points page's own ask (any signed-in account): idle, busy, ok, or no (error: why)
+	points: 'idle' | 'busy' | 'ok' | 'no';
 };
-let owner: Owner = { status: 'idle', error: '', fpl: null, team: null, efl: null, locks: [], marks: new Map(), known: new Map() };
+let owner: Owner = { status: 'idle', error: '', fpl: null, team: null, efl: null, locks: [], marks: new Map(), known: new Map(), points: 'idle' };
 const watchers = new Set<() => void>();
 const set = (change: Partial<Owner>) => { owner = { ...owner, ...change }; for (const w of watchers) w(); };
 const watch = (w: () => void) => { watchers.add(w); return () => watchers.delete(w); };
@@ -54,6 +56,29 @@ async function loadOwner(email: string | null) {
 		marks: new Map((d.marks || []).map(([id, mine, target]) => [id, [mine, target]])), status: 'ok'
 	});
 	remember(true);
+}
+
+// The Fantasy points page's data (T-104): the same predictions, for any signed-in account, from
+// /fantasy/points. Fills `fpl` and `points`, never `status`: it says nothing about being the owner.
+let pointsAsked = false;
+export function usePoints(email: string | null): Owner {
+	useEffect(() => { void loadPoints(email); }, [email]);
+	return useSyncExternalStore(watch, () => owner);
+}
+async function loadPoints(email: string | null) {
+	if (pointsAsked) return;
+	pointsAsked = true;
+	if (!email) { set({ points: 'no' }); return; }
+	set({ points: 'busy' });
+	let d: { ok: boolean; error?: string; doc?: PredDoc | null };
+	try {
+		const r = await fetch('/fantasy/points');
+		d = await r.json();
+	} catch {
+		d = { ok: false, error: "Couldn't reach the database just now." };
+	}
+	if (!d.ok) { set({ points: 'no', error: d.error || '' }); return; }
+	set({ fpl: d.doc || null, points: 'ok' });
 }
 
 // Which of these players have a page here: asked a screenful at a time, each player once

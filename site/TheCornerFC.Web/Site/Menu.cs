@@ -24,6 +24,11 @@ public static partial class Menu
             new("lineups", "Line-up record", "/lineups"),
             new("model", "The Model", "/model"),
         ]),
+        // free with an account: the reasons to sign in (T-095, T-104)
+        new("Play", [
+            new("btm", "Beat the Model", "/beat-the-model"),
+            new("fantasypoints", "Fantasy points", "/fantasy-points"),
+        ]),
     ];
 
     // The Admin area is the site administrator's: in the menu for them only, and every address

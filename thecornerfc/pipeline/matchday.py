@@ -17,6 +17,7 @@ from .db import upsert
 from .ingest import _national_rows, _store_fixtures, sync_injuries_fixtures, sync_odds_fixtures
 from ..evidence.lineup_snapshots import capture_official
 from ..publish.export import refresh_match_states
+from .beat_the_model import score_safely as score_beat_the_model
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ def run_matchday(api, conn):
         _store_fixtures(conn, api.get("fixtures", ids="-".join(map(str, recent[i:i + 20]))))
         conn.commit()
     refresh_match_states(conn, recent)      # the site's rows, between nightly exports
+    score_beat_the_model(conn)              # the game's picks of matches that have finished
     refresh_national_results(api, conn, now)
 
     # Leagues where bookmaker odds are actually available (seen in the last 30 days)

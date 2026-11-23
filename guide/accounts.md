@@ -1,9 +1,11 @@
 # Accounts
 
 Visitors can sign in with Google or with an email and password (Supabase Auth; **Sign in** in the
-header). The only thing an account unlocks is the owner's: the FPL predictions and My FPL team
-answer only the sign-in named in `fpl_team_owners` ([My FPL team](my-fpl-team.md)), and the
-Admin area answers only an address in `site_admins` ([The Admin area](admin-area.md)). The code is
+header). A free account unlocks [Beat the Model and Fantasy points](beat-the-model.md); a
+subscription unlocks the paid parts ([Paid tier](paid-tier.md)). The owner's pages are the
+owner's: the FPL planner and My FPL team answer only the sign-in named in `fpl_team_owners`
+([My FPL team](my-fpl-team.md)), and the Admin area answers only an address in `site_admins`
+([The Admin area](admin-area.md)). The code is
 `site/TheCornerFC.Web/Site/Auth.cs` (Supabase Auth: signing in, finishing a sign-in from an
 emailed link or from Google, and reading who is signed in) and the account page,
 `site/TheCornerFC.Web/Pages/Account.cshtml`.

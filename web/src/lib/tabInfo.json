@@ -357,5 +357,15 @@
 		"intro": "The site owner's own Fantasy Premier League team and transfer plan.",
 		"more": "",
 		"key": []
+	},
+	"fantasypoints": {
+		"intro": "Every Premier League player's expected fantasy points for each of the next 10 rounds, from our match predictions, expected minutes and injury news. Free with an account.",
+		"more": "",
+		"key": []
+	},
+	"btm": {
+		"intro": "Predict the score of every Premier League match before kick-off and see if you can beat our model. 3 points for the exact score, 1 for the right result. Free with an account.",
+		"more": "",
+		"key": []
 	}
 }

@@ -17,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 var env = SiteEnvironment.Choose(builder.Configuration["SITE_ENV"], builder.Environment.ContentRootPath);
 builder.Services.AddSingleton(env);
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<FantasyPointsCache>();
 builder.Services.AddHttpClient<Database>(c => c.Timeout = TimeSpan.FromSeconds(10));
 // one Database for the server, so the kept documents are shared between requests
 builder.Services.AddSingleton(sp => new Database(
@@ -117,6 +118,8 @@ app.MapGet("/subscribe", (HttpContext c) =>
 // What a match card asks for as it is opened or comes into view
 MatchEndpoints.Map(app);
 FantasyEndpoints.Map(app);
+FantasyPointsCache.Map(app);
+BeatTheModel.Map(app);
 // Stripe's webhook: off until the server has payments' secrets
 StripeWebhook.Map(app);
 

@@ -1,0 +1,24 @@
+@page "/fantasy-points"
+@model FantasyPointsModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Fantasy points · The Corner FC";
+    // what anyone sees before the browser has asked for the points (FantasyPointsPage.tsx): the
+    // points themselves are never written here
+    var signedIn = Visitor.Of(HttpContext).SignedIn;
+}
+<section class="panel" data-tab="fantasypoints" data-active="true">
+    <div data-island="fantasy-points"><script type="application/json">@Html.Raw(JsonSerializer.Serialize(new { email = Visitor.Of(HttpContext).Email }, TheCornerFC.Web.Data.Database.Json).Replace("<", "\\u003c"))</script>
+        <div id="points-body"><div class="stats-card"><div class="stats-label">Expected points</div>
+            @if (signedIn)
+            {
+                <div class="stats-note">Loading…</div>
+            }
+            else
+            {
+                <div class="stats-note">Every Premier League player's expected fantasy points for each of the next 10 rounds, with price, position and injury news. Free with an account.</div>
+                <div class="mt-lock"><a role="button" class="mt-btn owner-signin" href="/account?view=signin">Sign in free</a></div>
+            }
+        </div></div>
+    </div>
+</section>
