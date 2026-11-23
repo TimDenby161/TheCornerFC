@@ -386,6 +386,15 @@ for (const [path, body, words] of [['/beat-the-model', '#btm-body', 'Predict the
 	check(`${path}: in the menu`, await run(`!!document.querySelector('a[href="${path}"]')`));
 	check(`${path}: asks the database nothing while signed out`, await run(`!performance.getEntriesByType('resource').some((e) => e.name.includes('/btm/') || e.name.includes('/fantasy/'))`));
 }
+// ... and the invitations to them on Home, Players, Matches and a Premier League card to come (T-105)
+await open('/');
+check('Home: the Play free band names both, each linking to its page', await until(`!!document.querySelector('.home-play a[href="/beat-the-model"]') && !!document.querySelector('.home-play a[href="/fantasy-points"]')`));
+await open('/players');
+check('Players: the Fantasy points banner', await until(`!!document.querySelector('.play-banner a[href="/fantasy-points"]')`));
+await open('/matches?c=39');
+const plUpcoming = await until(`[...document.querySelectorAll('.match-card')].some((c) => c.dataset.finished !== "1")`, 4000);
+check('Matches (Premier League): the Beat the Model banner and "Predict this score" on cards to come', !plUpcoming || await until(`!!document.querySelector('.play-banner a[href="/beat-the-model"]') && !!document.querySelector('.match-card:not([data-finished="1"]) a.play-link[href="/beat-the-model"]')`), plUpcoming ? '' : 'no match to come shown');
+await open('/fantasy-points');
 await run(`document.querySelector('#points-body a.owner-signin')?.click()`);
 check('... and Sign in free opens the account box', await until(`document.querySelector('#account-title')?.textContent === 'Sign in'`, 4000));
 

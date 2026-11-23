@@ -1,0 +1,12 @@
+@model TheCornerFC.Web.Site.PlayBannerModel
+@{
+    // A one-line invitation to what a free account gives (T-105): Beat the Model on Matches,
+    // Fantasy points on Players. The page it names has the way in; a signed-in visitor is
+    // offered the page itself.
+    var signedIn = Visitor.Of(Context).SignedIn;
+}
+<aside class="play-banner" aria-label="@Model.Label">
+    <span class="play-banner-eye">Free with an account</span>
+    <span class="play-banner-text">@Model.Text</span>
+    <a class="mt-btn play-banner-go" href="@Model.Href">@(signedIn ? Model.SignedInGo : Model.Go)</a>
+</aside>

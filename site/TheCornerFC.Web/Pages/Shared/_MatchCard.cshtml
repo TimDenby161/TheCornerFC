@@ -34,13 +34,15 @@
             <ul class="why-list">@foreach (var x in m.Reasons){<li><span>@x.Text</span><b>@x.Size</b></li>}</ul>
         </div>
     }
-    @if (canLineups || m.CanDetail || !Model.Page)
+    @if (canLineups || m.CanDetail || !Model.Page || m.Playable)
     {
         <div class="card-toggles">
             @if (canLineups){<button type="button" class="lineup-toggle" aria-expanded="false">@(m.Finished ? "Line-ups" : "Predicted line-ups")</button>}
             @if (m.CanDetail){<button type="button" class="why-toggle" aria-expanded="false">@(m.Finished ? "Pre-match model detail" : "Model detail")</button>}
             @* the match's own page, to share or come back to *@
             @if (!Model.Page){<a class="match-page-link" href="/match/@m.Id">Match page</a>}
+            @* Beat the Model: a Premier League match still to play (T-105) *@
+            @if (m.Playable){<a class="play-link" href="/beat-the-model">Predict this score</a>}
         </div>
     }
     @if (canLineups || m.CanDetail || m.Rating is not null)

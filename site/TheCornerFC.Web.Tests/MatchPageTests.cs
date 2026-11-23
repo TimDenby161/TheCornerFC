@@ -20,6 +20,7 @@ public class MatchPageTests
         {
             var p = r.RequestUri!.AbsolutePath;
             if (p.EndsWith("site_matches")) return StubHandler.Json(matches);
+            if (p.EndsWith("site_match_days")) return StubHandler.Json("""{"days":[["2026-10-18",39],["2030-10-26",39]],"leagues":[39],"intl":[]}""");
             if (r.RequestUri.Query.Contains("p_key=site&")) return StubHandler.Json(Site);
             if (r.RequestUri.Query.Contains("p_key=rankings")) return StubHandler.Json("""{"fields":["team"],"rankings":[]}""");
             return StubHandler.Json("null");
@@ -45,6 +46,30 @@ public class MatchPageTests
         Assert.Contains("Arsenal rated the stronger side", body);
         Assert.DoesNotContain("match-page-link", body);   // no link to itself
         Assert.Contains("public", r.Headers.CacheControl?.ToString());
+    }
+
+    [Fact]
+    public async Task A_Premier_League_match_to_come_offers_Beat_the_Model_and_a_played_one_does_not()
+    {
+        var (_, upcoming, _, f1) = await Get("/match/1001", Upcoming);
+        using var _1 = f1;
+        Assert.Contains("<a class=\"play-link\" href=\"/beat-the-model\">Predict this score</a>", upcoming);
+        var (_, finished, _, f2) = await Get("/match/1002", Finished);
+        using var _2 = f2;
+        Assert.DoesNotContain("play-link", finished);
+    }
+
+    [Fact]
+    public async Task Matches_invites_visitors_to_Beat_the_Model_only_when_a_Premier_League_match_is_to_come()
+    {
+        var (status, body, _, f1) = await Get("/matches?c=39", Upcoming);
+        using var _1 = f1;
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Contains("class=\"play-banner\"", body);
+        Assert.Contains("href=\"/beat-the-model\">Play Beat the Model</a>", body);
+        var (_, played, _, f2) = await Get("/matches?c=39", Finished);
+        using var _2 = f2;
+        Assert.DoesNotContain("class=\"play-banner\"", played);
     }
 
     [Fact]

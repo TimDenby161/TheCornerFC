@@ -15,7 +15,11 @@ public static class Cards
     public sealed record View(int Id, string Kickoff, string? Round, string Status, bool Intl, Side Home, Side Away,
         int? Hg, int? Ag, int? PenH, int? PenA, double? HomeXg, double? AwayXg, string? Likely, string? Source,
         bool Finished, bool Upcoming, int[]? Probs, int[]? Market, string Tag, bool Live, string? Lock,
-        bool CanLineups, bool CanDetail, bool CanSquads, List<Reason> Reasons, RatingView? Rating);
+        bool CanLineups, bool CanDetail, bool CanSquads, List<Reason> Reasons, RatingView? Rating, int League = 0)
+    {
+        // a Premier League match still to kick off: the card offers Beat the Model (T-105)
+        public bool Playable => League == BeatTheModel.League && Upcoming && !Live && !ClubData.NoGame.Contains(Status);
+    }
 
     static readonly Dictionary<int, string> RatingLabels = new() { [1] = "Terrible", [2] = "Poor", [3] = "Decent", [4] = "Very good", [5] = "Excellent" };
 
@@ -79,7 +83,8 @@ public static class Cards
             !locked && probs is not null,
             upcoming && !intl && !locked && !ClubData.NoGame.Contains(m.Status),
             upcoming && probs is not null ? m.Reasons.Select(r => ReasonText(r.Key, r.Goals, home.Name, away.Name)).Where(r => r is not null).Select(r => r!).ToList() : [],
-            finished && m.Rating is { } rt and > 0 ? new(rt, RatingLabels.GetValueOrDefault(rt, ""), factors.Select(f => new Factor(f.Label, f.Weight, FactorScore(f.Key))).ToList()) : null);
+            finished && m.Rating is { } rt and > 0 ? new(rt, RatingLabels.GetValueOrDefault(rt, ""), factors.Select(f => new Factor(f.Label, f.Weight, FactorScore(f.Key))).ToList()) : null,
+            m.League);
     }
 
     public static string RoundName(string r) =>

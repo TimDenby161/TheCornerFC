@@ -111,6 +111,26 @@
              without an account, so the button offers the subscription, not an account -->
         @if (!Model.SignedIn){<a class="mt-btn home-go home-join" href="/account?view=subscribe">What subscribers get</a>}
     </div>
+    @* What a free account gives (T-105): Beat the Model and Fantasy points. Each links to its own
+       page, which has the way in, so a visitor who signs up there lands where they can play. *@
+    <section class="home-play" aria-labelledby="home-play-title">
+        <div class="home-play-head">
+            <p class="home-sub-eye">Free with an account</p>
+            <h2 class="home-play-title" id="home-play-title">Play along, <em>free.</em></h2>
+        </div>
+        <div class="home-play-items">
+            <a class="home-play-item" href="/beat-the-model">
+                <span class="home-play-name">Beat the Model</span>
+                <span class="home-play-text">Predict the score of every Premier League match before kick-off. 3 points for the exact score, 1 for the result. See how you stack up against our model, and everyone else.</span>
+                <span class="mt-btn home-go">@(Model.SignedIn ? "Make your picks" : "Play free")</span>
+            </a>
+            <a class="home-play-item" href="/fantasy-points">
+                <span class="home-play-name">Fantasy points</span>
+                <span class="home-play-text">Every Premier League player's expected fantasy points for the next 10 rounds, with price, position and injury news. Find the best value and your captain.</span>
+                <span class="mt-btn home-go">See the points</span>
+            </a>
+        </div>
+    </section>
     @* The subscription, for anyone who doesn't have one: what it adds, shown on a match now played
        (nothing of a match to come), what it costs and the way to it. The one boxed part of the page. *@
     @if (Model.Offer)

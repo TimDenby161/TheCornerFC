@@ -32,6 +32,8 @@
             <a class="nav-btn today-btn" href="@Model.Address(null)" title="@(byRound ? "The round on now or next up" : null)">@(byRound ? "Next" : "Today")</a>
         </div>
     </div>
+    @* Beat the Model, where the list has a Premier League match still to play (T-105) *@
+    @if (Model.Groups.Any(g => g.Cards.Any(c => c.Playable))){@await Html.PartialAsync("_PlayBanner", PlayBannerModel.Game)}
     <div id="matches-list">
         @foreach (var g in Model.Groups)
         {

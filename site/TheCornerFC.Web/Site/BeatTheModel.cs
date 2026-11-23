@@ -11,6 +11,7 @@ namespace TheCornerFC.Web.Site;
 // whether a pick is still open. Nothing here is kept between visitors.
 public static class BeatTheModel
 {
+    public const int League = 39;   // the Premier League: the game's matches (btm_round)
     const string NoStore = "private, no-store";
     const string Unreachable = "Couldn't reach the database just now.";
 

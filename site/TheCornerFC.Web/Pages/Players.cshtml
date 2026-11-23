@@ -118,6 +118,7 @@
             </button>
         </div>
     </div>
+    @await Html.PartialAsync("_PlayBanner", PlayBannerModel.Points)
     <form class="contents" method="get" action="/players" role="search">
         <span id="search-keep">@foreach (var (k, v) in Model.Choices("q")) { <input type="hidden" name="@k" value="@v" /> }</span>
         <input type="search" name="q" id="table-search" class="table-search" placeholder="Search players or clubs" aria-label="Search" value="@Model.Ch.Search" autocomplete="off" data-live-search="#table-wrap" />
