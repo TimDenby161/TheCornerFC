@@ -16,6 +16,7 @@
     python -m thecornerfc fpl capture    # pre-deadline FPL state (needs FPL_CAPTURE_ENABLED)
     python -m thecornerfc fpl results    # actual FPL points for finished gameweeks
     python -m thecornerfc fpl team       # the owner's FPL team (FPL_TEAM_ENTRY) for My FPL team
+    python -m thecornerfc report         # email the owner yesterday's visits, accounts and subscribers
 """
 import argparse
 import logging
@@ -69,6 +70,8 @@ def main(argv=None):
     who.add_argument("--player", type=int, help="API-Football player id")
     who.add_argument("--coach", type=int, help="API-Football coach id")
     suppress.add_argument("--apply", action="store_true", help="Delete and add to suppressed.json (without it: count only)")
+    report = sub.add_parser("report", help="Email the owner yesterday's visits, new accounts and paid subscribers")
+    report.add_argument("--dry-run", action="store_true", help="Print the email instead of sending it")
     sub.add_parser("fantasy", help="Snapshot fantasy v1.1 expected points for upcoming Premier League fixtures")
 
     fpl = sub.add_parser("fpl", help="Fantasy Premier League evidence (off unless FPL_CAPTURE_ENABLED)")
@@ -114,6 +117,11 @@ def main(argv=None):
 
     if args.command == "health":
         return health.publish()
+
+    if args.command == "report":
+        from .pipeline import owner_report
+        owner_report.run(dry_run=args.dry_run)
+        return 0
 
     usage.prune()
     with health.pipeline(os.environ["API_PROCESS_LABEL"]) as run:

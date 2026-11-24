@@ -24,7 +24,8 @@ $13 (£10) a month, the owner's yes on 2026-10-18; a budget emails at US$16 and 
 anything but that one plan.
 
 Everything else is free: the staging Supabase project, Cloudflare (DNS, Access, the timer
-Worker) and GitHub (public repository). Check the providers' pages for the current figures before
+Worker), GitHub (public repository) and Resend (the sign-up and reset emails and the owner's
+morning report: free up to 100 emails a day and 3,000 a month). Check the providers' pages for the current figures before
 relying on a number here.
 
 ## The services and what to watch
