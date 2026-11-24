@@ -35,7 +35,7 @@ public class MatchPageTests
         var (status, body, r, f) = await Get("/match/1001", Upcoming);
         using var _ = f;
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Contains("<title>Arsenal v Chelsea · Premier League, Sat 26 Oct · The Corner FC</title>", body);
+        Assert.Contains("<title>Arsenal vs Chelsea prediction · Premier League, Sat 26 Oct · The Corner FC</title>", body);
         Assert.Contains("<h1 class=\"app-title\">Arsenal v Chelsea</h1>", body);
         Assert.Contains("the model&#x27;s win, draw and loss chances", body);
         Assert.Contains("data-fixture=\"1001\"", body);
@@ -78,8 +78,8 @@ public class MatchPageTests
         var (status, body, _, f) = await Get("/match/1002", Finished);
         using var _f = f;
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Contains("Chelsea v Arsenal · Premier League, Sun 18 Oct", body);
-        Assert.Contains("the result, the model&#x27;s chances before kick-off", body);
+        Assert.Contains("<title>Chelsea vs Arsenal result and prediction · Premier League, Sun 18 Oct · The Corner FC</title>", body);
+        Assert.Contains("the result, the model&#x27;s prediction before kick-off", body);
         Assert.Contains("<span class=\"final-box\">0</span>", body);
         Assert.Contains(">Line-ups<", body);
     }

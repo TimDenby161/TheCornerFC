@@ -224,7 +224,7 @@ check('"See an example" on a locked card opens a finished match as the example',
 check('each card links to the match\'s own page', /^\/match\/\d+$/.test(matchHref), matchHref);
 if (matchHref) await open(matchHref);
 const matchPage = await until(`document.querySelectorAll('.match-page .fixture-lineup-panel .xi-spot').length === 22 && document.querySelectorAll('.match-page .why-detail .why-sec').length >= 2`);
-check('a match\'s own page: its card with the line-ups and model detail open, both sides in its name', matchPage && / v /.test(await run(`document.querySelector('h1.app-title')?.textContent`)) && / v .* · /.test(await run('document.title')), `${await run('location.pathname')} · ${await run('document.title')}`);
+check('a match\'s own page: its card with the line-ups and model detail open, both sides in its name', matchPage && / v /.test(await run(`document.querySelector('h1.app-title')?.textContent`)) && / vs? .* · /.test(await run('document.title')), `${await run('location.pathname')} · ${await run('document.title')}`);
 
 // Leagues: the list, a league's page and its tabs, a country's page
 await open('/leagues');

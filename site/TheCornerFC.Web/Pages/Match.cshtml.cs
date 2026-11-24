@@ -40,10 +40,14 @@ public sealed class MatchModel(Database db, TimeProvider clock) : PageModel
         // (the shared title and description are the same for every visitor: the day in UK time)
         var day = Times.Show(DateTimeOffset.Parse(m.Kickoff), "Europe/London", "day");
         ViewData["Name"] = name;
-        ViewData["Title"] = $"{name} · {Competition}, {day} · The Corner FC";
+        // The title uses the words people search with: "Arsenal vs Chelsea prediction"
+        var searched = $"{Card.Home.Name} vs {Card.Away.Name}";
+        ViewData["Title"] = Card.Finished
+            ? $"{searched} result and prediction · {Competition}, {day} · The Corner FC"
+            : $"{searched} prediction · {Competition}, {day} · The Corner FC";
         ViewData["Description"] = Card.Finished
-            ? $"{name}, {Competition}, {day}: the result, the model's chances before kick-off, how its prediction did, and both line-ups."
-            : $"{name}, {Competition}, {day}: the model's win, draw and loss chances, projected score, key reasons and how the prediction was made.";
+            ? $"{searched}, {Competition}, {day}: the result, the model's prediction before kick-off, how it did, and both line-ups."
+            : $"{searched} prediction, {Competition}, {day}: the model's win, draw and loss chances, predicted score, predicted line-ups and the key reasons.";
         return Page();
     }
 }
