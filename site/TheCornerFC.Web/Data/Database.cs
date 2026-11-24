@@ -108,21 +108,23 @@ public sealed class Database(HttpClient http, SiteEnvironment env, TimeProvider 
 
     // Rows every page needs that change a few times a day at most are kept for a minute, so a
     // busy moment is one read of the database and not one per visitor. A failed read isn't kept.
-    readonly ConcurrentDictionary<string, (DateTimeOffset At, Task<object> Doc)> kept = new();
+    readonly ConcurrentDictionary<string, (DateTimeOffset At, TimeSpan Keep, Task<object> Doc)> kept = new();
 
-    Task<T> Kept<T>(string key, TimeSpan keepFor, Func<Task<T>> read)
+    public Task<T> Kept<T>(string key, TimeSpan keepFor, Func<Task<T>> read)
     {
         var now = clock.GetUtcNow();
         // (a read that failed or timed out is never handed on: it is asked again)
         if (kept.TryGetValue(key, out var have) && now - have.At < keepFor && !have.Doc.IsFaulted && !have.Doc.IsCanceled)
             return Cast<T>(have.Doc);
         var doc = Box(read());
-        kept[key] = (now, doc);
-        doc.ContinueWith(_ => kept.TryRemove(new(key, (now, doc))), TaskContinuationOptions.NotOnRanToCompletion);
-        // a server runs for weeks: don't let the answers to one-off questions pile up
+        var entry = (now, keepFor, doc);
+        kept[key] = entry;
+        doc.ContinueWith(_ => kept.TryRemove(new(key, entry)), TaskContinuationOptions.NotOnRanToCompletion);
+        // a server runs for weeks: don't let the answers to one-off questions pile up. Each answer
+        // goes once its own time is up, so a minute's answer never clears a day's
         if (kept.Count > 500)
             foreach (var (k, v) in kept)
-                if (now - v.At > keepFor) kept.TryRemove(k, out _);
+                if (now - v.At > v.Keep) kept.TryRemove(k, out _);
         return Cast<T>(doc);
     }
 
@@ -148,6 +150,6 @@ public sealed class Database(HttpClient http, SiteEnvironment env, TimeProvider 
 
     // A question whose answer depends on who asks (the paid rows): with a signed-in visitor's
     // token, asked afresh for them; without one, the kept answer every signed-out visitor shares.
-    public Task<T> AskAs<T>(string? token, string fn, object parameters) =>
-        token is not null ? SiteAsk<T>(fn, parameters, token) : KeptAsk<T>(fn, parameters);
+    public Task<T> AskAs<T>(string? token, string fn, object parameters, TimeSpan? keepFor = null) =>
+        token is not null ? SiteAsk<T>(fn, parameters, token) : KeptAsk<T>(fn, parameters, keepFor);
 }

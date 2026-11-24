@@ -43,12 +43,16 @@ public abstract class PlayerPageModel(Database db) : PageModel
     // a club's name as his file has it (clubs the names row doesn't hold), else the site's
     public string Club(int t) => Doc?.Teams?.GetValueOrDefault(t.ToString()) ?? Site.TeamName(t);
 
+    // A player's row and file change only at the nightly export, so a signed-out visitor's answer is
+    // kept for half an hour: his four tabs, and a search engine reading them, share one read
+    static readonly TimeSpan PlayerKeep = TimeSpan.FromMinutes(30);
+
     public async Task<IActionResult> OnGet(string id)
     {
         if (id.Length is 0 or > 9 || !id.All(char.IsAsciiDigit)) return NotFound();
         Id = int.Parse(id);
         Site = await Db.KeptDoc<SiteDoc>("site");
-        var answerTask = Db.AskAs<PlayersAnswer>(Visitor.Token, "site_players", new { p_ids = new[] { Id }, p_limit = 1 });
+        var answerTask = Db.AskAs<PlayersAnswer>(Visitor.Token, "site_players", new { p_ids = new[] { Id }, p_limit = 1 }, PlayerKeep);
         var docTask = DocOrNull();
         await Task.WhenAll(answerTask, docTask);
         var p = ClubData.Players(Site, answerTask.Result.Rows).FirstOrDefault();
@@ -85,7 +89,7 @@ public abstract class PlayerPageModel(Database db) : PageModel
 
     async Task<PlayerDoc?> DocOrNull()
     {
-        try { return await Db.AskAs<PlayerDoc?>(Visitor.Token, "site_player_page", new { p_id = Id }); }
+        try { return await Db.AskAs<PlayerDoc?>(Visitor.Token, "site_player_page", new { p_id = Id }, PlayerKeep); }
         catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { return null; }
     }
 

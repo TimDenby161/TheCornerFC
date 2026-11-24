@@ -36,6 +36,28 @@ public class CrawlerTests
     }
 
     [Fact]
+    public void The_sitemap_ends_with_the_premier_league_clubs_players_once_each()
+    {
+        var xml = Crawlers.Sitemap("https://thecornerfc.com", [(42, 39)], [1001], [12, 11, 12]);
+        Assert.EndsWith("<url><loc>https://thecornerfc.com/match/1001</loc></url>\n<url><loc>https://thecornerfc.com/player/11</loc></url>\n" +
+                        "<url><loc>https://thecornerfc.com/player/12</loc></url>\n</urlset>\n", xml);
+        Data.Player P(int id, int? team) => new(id, "A. Player", null, null, team, null, null, null, null, false);
+        Assert.Equal([1, 3], Crawlers.SitemapPlayers([P(1, 42), P(2, 50), P(3, 42), P(4, null)], [42]));
+        Assert.Equal(39, Crawlers.SitemapPlayerLeague);
+    }
+
+    [Fact]
+    public void A_player_summary_says_what_his_page_shows_and_keeps_a_hidden_rank_out()
+    {
+        var open = PlayerSummary.Lines("E. Haaland", "ST", 26, "Norway", "Manchester City", "Premier League", "2026/27", 980, 11, 9, 0, false, 97, (1, 508), false);
+        Assert.Equal(["E. Haaland is a 26-year-old striker from Norway, playing for Manchester City in the Premier League.",
+                      "In 2026/27 he has 980 league minutes in 11 appearances, 9 goals and 0 assists.",
+                      "His Ability rank is 97, the 1st highest of 508 players in the Premier League."], open);
+        var hidden = PlayerSummary.Lines("A. Keeper", "GK", 18, null, "Elche", "La Liga", "2026/27", 0, null, null, null, true, 70, (40, 500), true);
+        Assert.Equal(["A. Keeper is an 18-year-old goalkeeper, playing for Elche in La Liga.", "He has no league minutes yet in 2026/27."], hidden);
+    }
+
+    [Fact]
     public void The_sitemaps_matches_run_from_7_days_back_to_7_days_ahead_in_whole_days()
     {
         Assert.Equal(("2026-10-13T00:00:00.000Z", "2026-10-28T00:00:00.000Z"), Crawlers.SitemapDays(DateTimeOffset.Parse("2026-10-20T15:42:00+00:00")));

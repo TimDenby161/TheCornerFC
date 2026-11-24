@@ -81,8 +81,22 @@ app.MapGet("/sitemap.xml", async (HttpContext c, Database db, TimeProvider clock
         if (site is not null && answer?.Matches is not null) matches = Crawlers.SitemapMatches(ClubData.MatchRows(site, answer)).ToList();
     }
     catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
+    // the Premier League's players (T-091): their ids only, kept for a day; without them if the database doesn't answer
+    IEnumerable<int> players = [];
+    try
+    {
+        var teams = doc.Clubs().Where(t => t.League == Crawlers.SitemapPlayerLeague).Select(t => t.Team).Distinct().Order().ToArray();
+        if (teams.Length > 0)
+            players = await db.Kept("sitemap:players", TimeSpan.FromHours(24), async () =>
+            {
+                var site = await db.KeptDoc<SiteDoc>("site");
+                var answer = await db.SiteAsk<PlayersAnswer?>("site_players", new { p_teams = teams, p_limit = 2000 });
+                return site is null || answer?.Rows is null ? [] : Crawlers.SitemapPlayers(ClubData.Players(site, answer.Rows), teams).ToList();
+            });
+    }
+    catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException or System.Text.Json.JsonException) { }
     c.Response.Headers.CacheControl = "public, max-age=86400";
-    return Results.Text(Crawlers.Sitemap($"https://{env.Host}", doc.Clubs(), matches), "application/xml; charset=utf-8");
+    return Results.Text(Crawlers.Sitemap($"https://{env.Host}", doc.Clubs(), matches, players), "application/xml; charset=utf-8");
 });
 
 // What the Players page's club and nationality boxes list, asked for when one is first opened

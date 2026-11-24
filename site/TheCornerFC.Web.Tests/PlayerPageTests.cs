@@ -43,7 +43,7 @@ public class PlayerPageTests
     {
         var (status, html) = await Get("/player/129033");
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Contains("<title>J. Gvardiol · The Corner FC</title>", html);
+        Assert.Contains("<title>J. Gvardiol: rating, stats and position rank · The Corner FC</title>", html);
         Assert.Contains("<span class=\"val\">93</span><span class=\"lbl\">Ability</span>", html);
         Assert.Contains("of 600 in Premier League", html);
         Assert.Contains("<span class=\"pos-chip-pos\">FB</span><span class=\"pos-chip-rank\">93</span>", html);

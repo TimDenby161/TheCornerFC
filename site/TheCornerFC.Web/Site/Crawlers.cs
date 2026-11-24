@@ -37,17 +37,24 @@ public static class Crawlers
     public static readonly IReadOnlyList<string> MainPages =
         ["/", "/clubs", "/players", "/matches", "/leagues", "/nations", "/stats", "/record", "/lineups", "/model", "/methodology", "/assumptions", "/privacy", "/terms"];
 
-    public static string Sitemap(string origin, IEnumerable<(int Team, int? League)> clubs, IEnumerable<int>? matches = null)
+    public static string Sitemap(string origin, IEnumerable<(int Team, int? League)> clubs, IEnumerable<int>? matches = null, IEnumerable<int>? players = null)
     {
         var list = clubs.ToList();
         var leagues = list.Where(c => c.League is not null).Select(c => c.League!.Value).Distinct().Order();
         var teams = list.Select(c => c.Team).Distinct().Order();
         var paths = MainPages.Concat(leagues.Select(l => $"/league/{l}/table")).Concat(teams.Select(t => $"/club/{t}"))
-            .Concat((matches ?? []).Distinct().Order().Select(m => $"/match/{m}"));
+            .Concat((matches ?? []).Distinct().Order().Select(m => $"/match/{m}"))
+            .Concat((players ?? []).Distinct().Order().Select(p => $"/player/{p}"));
         var xml = new StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
         xml.AppendJoin('\n', paths.Select(p => $"<url><loc>{origin}{p}</loc></url>"));
         return xml.Append("\n</urlset>\n").ToString();
     }
+
+    // Whose player pages the sitemap lists: the Premier League's clubs' players first (T-091), so a
+    // search engine reading them can be told apart in the database's load before more are listed
+    public const int SitemapPlayerLeague = 39;
+    public static IEnumerable<int> SitemapPlayers(IEnumerable<Data.Player> players, IReadOnlyCollection<int> teams) =>
+        players.Where(p => p.Team is { } t && teams.Contains(t)).Select(p => p.Id);
 
     // Which days' matches the sitemap lists: from the start of the day 7 days back to the end of
     // the day 7 days ahead (UTC), whole days so the database's answer is kept for the day
