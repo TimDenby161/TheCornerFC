@@ -16,6 +16,8 @@ public sealed class MatchModel(Database db, TimeProvider clock) : PageModel
     // Reached from "See an example" (/match/example): a finished match, shown as what subscribers
     // get before kick-off. The page says so, and that address is kept out of search engines.
     public bool Example { get; private set; }
+    // a few sentences about the match for its page (T-091), from what this visitor's card holds
+    public List<string> Preview { get; private set; } = [];
 
     public async Task<IActionResult> OnGet(string id)
     {
@@ -28,7 +30,8 @@ public sealed class MatchModel(Database db, TimeProvider clock) : PageModel
         var site = siteTask.Result;
         var m = ClubData.MatchRows(site, answerTask.Result).FirstOrDefault();
         if (m is null) return NotFound();
-        var ranks = Clubs.From(rankingsTask.Result).GroupBy(c => c.Team).ToDictionary(g => g.Key, g => g.Last());
+        var all = Clubs.From(rankingsTask.Result);
+        var ranks = all.GroupBy(c => c.Team).ToDictionary(g => g.Key, g => g.Last());
         Card = Cards.Of(site, ranks, m, answerTask.Result.Paywall == true, clock.GetUtcNow());
         Competition = site.CompLabel(m.League);
         CompetitionHref = Card.Intl ? null : Menu.PageHref("league", m.League.ToString());
@@ -41,6 +44,13 @@ public sealed class MatchModel(Database db, TimeProvider clock) : PageModel
         // (the shared title and description are the same for every visitor: the day in UK time)
         var day = Times.Show(DateTimeOffset.Parse(m.Kickoff), "Europe/London", "day");
         ViewData["Name"] = name;
+        if (!Example)
+        {
+            var kick = DateTimeOffset.Parse(m.Kickoff);
+            Preview = MatchPreview.Lines(Card, Competition, day, Times.Show(kick, "Europe/London", "time"),
+                Card.Intl ? null : MatchPreview.StandingOf(m.Home, all, site.CompLabel),
+                Card.Intl ? null : MatchPreview.StandingOf(m.Away, all, site.CompLabel));
+        }
         // The title uses the words people search with: "Arsenal vs Chelsea prediction"
         var searched = $"{Card.Home.Name} vs {Card.Away.Name}";
         ViewData["Title"] = Card.Finished

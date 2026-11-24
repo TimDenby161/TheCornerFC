@@ -146,4 +146,34 @@ public class MatchPageTests
         using var _f = f;
         Assert.Equal(HttpStatusCode.NotFound, status);
     }
+
+    [Fact]
+    public async Task A_match_page_says_in_words_what_its_card_shows()
+    {
+        var (_, body, _, f) = await Get("/match/1001", Upcoming);
+        using var _f = f;
+        Assert.Contains("<div class=\"match-preview\">", body);
+        Assert.Contains("Arsenal play Chelsea in the Premier League on Sat 26 Oct, kick-off 17:30 UK time.", body);
+        Assert.Contains("The model gives Arsenal 50%, the draw 27% and Chelsea 23%, which makes it Arsenal favourites.", body);
+        Assert.Contains("Its projected score is 1.7–1.1, and the single most likely score 2–1.", body);
+    }
+
+    [Fact]
+    public async Task The_words_keep_out_what_the_paywall_holds_back()
+    {
+        var (_, body, _, f) = await Get("/match/1003", Locked);
+        using var _f = f;
+        Assert.Contains("appear here free 7 days before kick-off", body);
+        Assert.DoesNotContain("The model gives", body);
+        Assert.DoesNotContain("projected score is", body);
+    }
+
+    [Fact]
+    public async Task A_played_match_says_the_result_and_whether_the_model_called_it()
+    {
+        var (_, body, _, f) = await Get("/match/1002", Finished);
+        using var _f = f;
+        Assert.Contains("Arsenal won 2–0 away at Chelsea in the Premier League on Sun 18 Oct.", body);
+        Assert.Contains("Before kick-off the model gave Chelsea 40%, the draw 30% and Arsenal 30%, so the result was not the one it rated most likely.", body);
+    }
 }
