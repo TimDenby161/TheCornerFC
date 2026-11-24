@@ -24,12 +24,20 @@ SENDER = "TheCorner FC <reports@thecornerfc.com>"
 PAID = ("b.status IN ('active', 'trialing', 'past_due') "
         "AND (b.current_period_end IS NULL OR b.current_period_end + interval '3 days' > now())")
 
-ACCOUNTS_SQL = """
+# The owner's own accounts are left out: every address starting timdenby161 (the owner's
+# name here, as on GitHub), and the administrator and FPL owner addresses
+OWNER = """(lower(u.email) LIKE 'timdenby161%%'
+        OR lower(u.email) IN (SELECT a.email FROM public.site_admins a
+                              UNION SELECT lower(o.email) FROM public.fpl_team_owners o))"""
+
+ACCOUNTS_SQL = f"""
 SELECT count(*) FILTER (WHERE u.created_at >= %(start)s AND u.created_at < %(end)s),
        count(*) FILTER (WHERE u.created_at >= %(start)s AND u.created_at < %(end)s
                           AND u.email_confirmed_at IS NOT NULL),
-       count(*)
+       count(*),
+       count(*) FILTER (WHERE {OWNER})
 FROM auth.users u
+WHERE NOT ({OWNER}) OR %(count_owner)s
 """
 
 SUBSCRIBERS_SQL = f"""
@@ -39,6 +47,8 @@ SELECT count(*) FILTER (WHERE {PAID}),
        count(*) FILTER (WHERE {PAID} AND b.cancel_at_period_end),
        count(*) FILTER (WHERE {PAID} AND b.updated_at >= %(start)s AND b.updated_at < %(end)s)
 FROM public.subscriptions b
+JOIN auth.users u ON u.id = b.user_id
+WHERE NOT ({OWNER})
 """
 
 VISITS_QUERY = """
@@ -69,9 +79,10 @@ def database_figures(conn, start, end):
     params = {"start": start, "end": end}
     with conn.transaction():
         conn.execute("SET TRANSACTION READ ONLY")
-        new, confirmed, accounts = conn.execute(ACCOUNTS_SQL, params).fetchone()
+        _, _, _, mine = conn.execute(ACCOUNTS_SQL, {**params, "count_owner": True}).fetchone()
+        new, confirmed, accounts, _ = conn.execute(ACCOUNTS_SQL, {**params, "count_owner": False}).fetchone()
         paid, monthly, yearly, cancelling, changed = conn.execute(SUBSCRIBERS_SQL, params).fetchone()
-    return {"new_accounts": new, "new_confirmed": confirmed, "accounts": accounts,
+    return {"new_accounts": new, "new_confirmed": confirmed, "accounts": accounts, "yours": mine,
             "paid": paid, "monthly": monthly, "yearly": yearly, "cancelling": cancelling,
             "paid_changed": changed}
 
@@ -117,14 +128,14 @@ def compose(day, figures, web):
         *web_lines,
         "",
         f"New accounts: {figures['new_accounts']:,} ({figures['new_confirmed']:,} confirmed their email)",
-        f"All accounts: {figures['accounts']:,}",
+        f"All accounts: {figures['accounts']:,} (your own {figures['yours']:,} left out)",
         "",
         f"Paid subscribers now: {figures['paid']:,} ({figures['monthly']:,} monthly, {figures['yearly']:,} yearly)",
         f"Of those, set to cancel at the period end: {figures['cancelling']:,}",
         f"Subscriptions started, renewed or changed yesterday: {figures['paid_changed']:,}",
         "",
         "Visits and page views are Cloudflare Web Analytics' figures (sampled). Your own visits",
-        "count too. Your own account isn't a paid subscriber, so it isn't in that number.",
+        "count too. Your own accounts are left out of the account and subscriber figures.",
     ]
     return subject, "\n".join(lines) + "\n"
 

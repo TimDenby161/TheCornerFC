@@ -22,7 +22,7 @@ class Response:
 class Connection:
     def __init__(self):
         self.statements = []
-        self.answers = [(2, 1, 40), (3, 2, 1, 1, 1)]
+        self.answers = [(9, 9, 9, 3), (2, 1, 40, 0), (3, 2, 1, 1, 1)]
 
     def transaction(self):
         return self
@@ -41,7 +41,7 @@ class Connection:
         return self.answers.pop(0)
 
 
-FIGURES = {"new_accounts": 2, "new_confirmed": 1, "accounts": 40, "paid": 3, "monthly": 2,
+FIGURES = {"new_accounts": 2, "new_confirmed": 1, "accounts": 40, "yours": 3, "paid": 3, "monthly": 2,
            "yearly": 1, "cancelling": 1, "paid_changed": 1}
 
 
@@ -62,6 +62,12 @@ class OwnerReportTests(unittest.TestCase):
         self.assertEqual(conn.statements[0][0], "SET TRANSACTION READ ONLY")
         for sql, _ in conn.statements[1:]:
             self.assertTrue(sql.strip().startswith("SELECT"))
+
+    def test_the_owners_accounts_are_left_out(self):
+        for sql in (owner_report.ACCOUNTS_SQL, owner_report.SUBSCRIBERS_SQL):
+            self.assertIn("LIKE 'timdenby161%%'", sql)
+            self.assertIn("site_admins", sql)
+            self.assertIn("fpl_team_owners", sql)
 
     def test_paid_means_what_the_site_means(self):
         self.assertIn("'active', 'trialing', 'past_due'", owner_report.SUBSCRIBERS_SQL)
@@ -98,6 +104,7 @@ class OwnerReportTests(unittest.TestCase):
         self.assertIn("Visits: 17", text)
         self.assertIn("New accounts: 2 (1 confirmed their email)", text)
         self.assertIn("Paid subscribers now: 3 (2 monthly, 1 yearly)", text)
+        self.assertIn("All accounts: 40 (your own 3 left out)", text)
         subject, text = owner_report.compose(date(2026, 11, 23), FIGURES, None)
         self.assertIn("visits unknown", subject)
         self.assertIn("Cloudflare couldn't be read", text)
