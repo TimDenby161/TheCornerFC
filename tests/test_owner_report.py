@@ -22,7 +22,7 @@ class Response:
 class Connection:
     def __init__(self):
         self.statements = []
-        self.answers = [(9, 9, 9, 3), (2, 1, 40, 0), (3, 2, 1, 1, 1)]
+        self.answers = [(9, 9, 9, 3), (2, 1, 40, 0), (3, 2, 1, 1, 1), (6, 4)]
 
     def transaction(self):
         return self
@@ -42,7 +42,7 @@ class Connection:
 
 
 FIGURES = {"new_accounts": 2, "new_confirmed": 1, "accounts": 40, "yours": 3, "paid": 3, "monthly": 2,
-           "yearly": 1, "cancelling": 1, "paid_changed": 1}
+           "yearly": 1, "cancelling": 1, "paid_changed": 1, "week_accounts": 6, "prev_accounts": 4}
 
 
 class OwnerReportTests(unittest.TestCase):
@@ -57,7 +57,8 @@ class OwnerReportTests(unittest.TestCase):
 
     def test_the_database_is_only_read(self):
         conn = Connection()
-        figures = owner_report.database_figures(conn, "s", "e")
+        end = datetime(2026, 11, 24, tzinfo=timezone.utc)
+        figures = owner_report.database_figures(conn, "s", end)
         self.assertEqual(figures, FIGURES)
         self.assertEqual(conn.statements[0][0], "SET TRANSACTION READ ONLY")
         for sql, _ in conn.statements[1:]:
@@ -108,6 +109,29 @@ class OwnerReportTests(unittest.TestCase):
         subject, text = owner_report.compose(date(2026, 11, 23), FIGURES, None)
         self.assertIn("visits unknown", subject)
         self.assertIn("Cloudflare couldn't be read", text)
+
+    def test_the_week_against_the_week_before_and_where_visits_came_from(self):
+        sent = {}
+
+        def post(url, json, headers, timeout):
+            sent.update(json["variables"])
+            return Response(body={"data": {"viewer": {"accounts": [{
+                "week": [{"count": 300, "sum": {"visits": 120}}], "prev": [{"count": 200, "sum": {"visits": 80}}],
+                "refs": [{"sum": {"visits": 60}, "dimensions": {"refererHost": "www.google.com"}},
+                         {"sum": {"visits": 30}, "dimensions": {"refererHost": ""}},
+                         {"sum": {"visits": 12}, "dimensions": {"refererHost": "example.org"}}]}]}}})
+
+        end = datetime(2026, 11, 24, tzinfo=timezone.utc)
+        week = owner_report.week_visits(end, token="t", account="a", site="s", post=post)
+        self.assertEqual((sent["weekStart"], sent["prevStart"], sent["end"]),
+                         ("2026-11-17T00:00:00Z", "2026-11-10T00:00:00Z", "2026-11-24T00:00:00Z"))
+        _, text = owner_report.compose(date(2026, 11, 23), FIGURES, {"visits": 17, "page_views": 120}, week)
+        self.assertIn("Visits: 120, up 50% on the week before (80)", text)
+        self.assertIn("Page views: 300, up 50% on the week before (200)", text)
+        self.assertIn("New accounts: 6, up 50% on the week before (4)", text)
+        self.assertIn("Where the last 7 days' visits came from: google.com 60, direct or unknown 30, example.org 12", text)
+        _, text = owner_report.compose(date(2026, 11, 23), FIGURES, None, None)
+        self.assertIn("The last 7 days, against the 7 before\nVisits: Cloudflare couldn't be read", text)
 
     def test_a_refused_email_fails_the_run(self):
         sent = {}

@@ -51,6 +51,30 @@ JOIN auth.users u ON u.id = b.user_id
 WHERE NOT ({OWNER})
 """
 
+# New accounts over the last 7 days to yesterday's end, and the 7 before, the owner's left out
+ACCOUNTS_WEEK_SQL = f"""
+SELECT count(*) FILTER (WHERE u.created_at >= %(week_start)s AND u.created_at < %(end)s),
+       count(*) FILTER (WHERE u.created_at >= %(prev_start)s AND u.created_at < %(week_start)s)
+FROM auth.users u
+WHERE NOT ({OWNER})
+"""
+
+# The last 7 days and the 7 before, and where the last 7 days' visits came from (one request)
+WEEK_QUERY = """
+query ($account: String!, $site: String!, $weekStart: Time!, $prevStart: Time!, $end: Time!) {
+  viewer {
+    accounts(filter: {accountTag: $account}) {
+      week: rumPageloadEventsAdaptiveGroups(limit: 1, filter: {AND: [
+        {datetime_geq: $weekStart}, {datetime_lt: $end}, {siteTag: $site}]}) { count sum { visits } }
+      prev: rumPageloadEventsAdaptiveGroups(limit: 1, filter: {AND: [
+        {datetime_geq: $prevStart}, {datetime_lt: $weekStart}, {siteTag: $site}]}) { count sum { visits } }
+      refs: rumPageloadEventsAdaptiveGroups(limit: 8, orderBy: [sum_visits_DESC], filter: {AND: [
+        {datetime_geq: $weekStart}, {datetime_lt: $end}, {siteTag: $site}]}) { sum { visits } dimensions { refererHost } }
+    }
+  }
+}
+"""
+
 VISITS_QUERY = """
 query ($account: String!, $site: String!, $start: Time!, $end: Time!) {
   viewer {
@@ -82,9 +106,11 @@ def database_figures(conn, start, end):
         _, _, _, mine = conn.execute(ACCOUNTS_SQL, {**params, "count_owner": True}).fetchone()
         new, confirmed, accounts, _ = conn.execute(ACCOUNTS_SQL, {**params, "count_owner": False}).fetchone()
         paid, monthly, yearly, cancelling, changed = conn.execute(SUBSCRIBERS_SQL, params).fetchone()
+        week, prev = conn.execute(ACCOUNTS_WEEK_SQL, {"end": end, "week_start": end - timedelta(days=7),
+                                                      "prev_start": end - timedelta(days=14)}).fetchone()
     return {"new_accounts": new, "new_confirmed": confirmed, "accounts": accounts, "yours": mine,
             "paid": paid, "monthly": monthly, "yearly": yearly, "cancelling": cancelling,
-            "paid_changed": changed}
+            "paid_changed": changed, "week_accounts": week, "prev_accounts": prev}
 
 
 def visits(start, end, *, token, account, site, post=requests.post):
@@ -108,11 +134,43 @@ def visits(start, end, *, token, account, site, post=requests.post):
     return {"visits": groups[0]["sum"]["visits"], "page_views": groups[0]["count"]}
 
 
+def week_visits(end, *, token, account, site, post=requests.post):
+    """The last 7 days' visits and page views to `end`, the 7 days before, and the last 7 days'
+    visits by the site they came from; None when Cloudflare can't be read."""
+    if not (token and account and site):
+        return None
+    iso = lambda t: t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    variables = {"account": account, "site": site, "end": iso(end),
+                 "weekStart": iso(end - timedelta(days=7)), "prevStart": iso(end - timedelta(days=14))}
+    try:
+        response = post(CLOUDFLARE_GRAPHQL, json={"query": WEEK_QUERY, "variables": variables},
+                        headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        response.raise_for_status()
+        body = response.json()
+        if body.get("errors"):
+            return None
+        a = body["data"]["viewer"]["accounts"][0]
+        total = lambda g: (g[0]["sum"]["visits"], g[0]["count"]) if g else (0, 0)
+        (wv, wp), (pv, pp) = total(a["week"]), total(a["prev"])
+        refs = [((r["dimensions"].get("refererHost") or "").removeprefix("www."), r["sum"]["visits"])
+                for r in a["refs"] if r["sum"]["visits"]]
+    except (requests.RequestException, ValueError, KeyError, IndexError, TypeError):
+        return None
+    return {"visits": wv, "page_views": wp, "prev_visits": pv, "prev_page_views": pp, "refs": refs}
+
+
+def _change(now, before):
+    if not before:
+        return "none the week before" if not now else "from none the week before"
+    pct = round((now - before) * 100 / before)
+    return f"{'up' if pct > 0 else 'down' if pct < 0 else 'level'}{f' {abs(pct)}%' if pct else ''} on the week before ({before:,})"
+
+
 def _plural(n, word):
     return f"{n:,} {word}{'' if n == 1 else 's'}"
 
 
-def compose(day, figures, web):
+def compose(day, figures, web, week=None):
     when = f"{day:%A} {day.day} {day:%B %Y}"
     visits_short = "visits unknown" if web is None else _plural(web["visits"], "visit")
     subject = (f"TheCorner FC, {day.day} {day:%b}: {visits_short}, "
@@ -134,10 +192,27 @@ def compose(day, figures, web):
         f"Of those, set to cancel at the period end: {figures['cancelling']:,}",
         f"Subscriptions started, renewed or changed yesterday: {figures['paid_changed']:,}",
         "",
+        *_week_lines(figures, week),
+        "",
         "Visits and page views are Cloudflare Web Analytics' figures (sampled). Your own visits",
         "count too. Your own accounts are left out of the account and subscriber figures.",
     ]
     return subject, "\n".join(lines) + "\n"
+
+
+def _week_lines(figures, week):
+    lines = ["The last 7 days, against the 7 before"]
+    if week is None:
+        lines.append("Visits: Cloudflare couldn't be read this morning.")
+    else:
+        lines.append(f"Visits: {week['visits']:,}, {_change(week['visits'], week['prev_visits'])}")
+        lines.append(f"Page views: {week['page_views']:,}, {_change(week['page_views'], week['prev_page_views'])}")
+    if "week_accounts" in figures:
+        lines.append(f"New accounts: {figures['week_accounts']:,}, {_change(figures['week_accounts'], figures['prev_accounts'])}")
+    if week and week["refs"]:
+        named = [f"{host or 'direct or unknown'} {n:,}" for host, n in week["refs"]]
+        lines += ["", "Where the last 7 days' visits came from: " + ", ".join(named)]
+    return lines
 
 
 def send(subject, text, *, api_key, to, post=requests.post):
@@ -163,10 +238,14 @@ def run(dry_run=False):
     web = visits(start, end, token=(os.getenv("CLOUDFLARE_ANALYTICS_TOKEN") or "").strip(),
                  account=(os.getenv("CLOUDFLARE_ACCOUNT_ID") or "").strip(),
                  site=(os.getenv("CLOUDFLARE_SITE_TAG") or "").strip())
-    subject, text = compose(day, figures, web)
+    week = week_visits(end, token=(os.getenv("CLOUDFLARE_ANALYTICS_TOKEN") or "").strip(),
+                       account=(os.getenv("CLOUDFLARE_ACCOUNT_ID") or "").strip(),
+                       site=(os.getenv("CLOUDFLARE_SITE_TAG") or "").strip())
+    subject, text = compose(day, figures, web, week)
     if dry_run:
         print(subject, text, sep="\n\n")
         return
     send(subject, text, api_key=api_key, to=to)
     # Nothing else: the logs are public
-    print("Report sent" + ("" if web else " (without visits: Cloudflare couldn't be read)"))
+    print("Report sent" + ("" if web else " (without visits: Cloudflare couldn't be read)")
+          + ("" if week else " (without the week's visits: Cloudflare couldn't be read)"))
