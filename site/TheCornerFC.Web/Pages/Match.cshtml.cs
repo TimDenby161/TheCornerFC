@@ -34,6 +34,7 @@ public sealed class MatchModel(Database db, TimeProvider clock) : PageModel
         CompetitionHref = Card.Intl ? null : Menu.PageHref("league", m.League.ToString());
         Example = Request.Query.ContainsKey("example") && Card.Finished && Card.Probs is not null;
         if (Example) ViewData["NoIndex"] = true;
+        else ViewData["ShareImage"] = $"/share/match/{fixture}.png";
 
         if (!visitor.SignedIn) Response.Headers.CacheControl = "public, max-age=60";
         var name = $"{Card.Home.Name} v {Card.Away.Name}";

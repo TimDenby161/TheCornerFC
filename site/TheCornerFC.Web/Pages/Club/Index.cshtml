@@ -2,6 +2,7 @@
 @model TheCornerFC.Web.Pages.ClubTabs.IndexModel
 @{
     ViewData["Title"] = $"{Model.C.Name} ranking, form and fixtures · The Corner FC";
+    if (Model.C.Rank is not null) { ViewData["ShareImage"] = $"/share/club/{Model.C.Id}.png"; }
     ViewData["Description"] = $"{Model.C.Name}: strength rating, form, league position, next fixtures with the model's chances, and recent results.";
     var visitor = TheCornerFC.Web.Site.Visitor.Of(HttpContext);
     string Move(double v) => $"{(v > 0 ? "+" : "")}{Js.ToFixed(v, 1)}";

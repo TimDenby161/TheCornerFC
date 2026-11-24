@@ -117,6 +117,7 @@ app.MapGet("/subscribe", (HttpContext c) =>
 
 // What a match card asks for as it is opened or comes into view
 MatchEndpoints.Map(app);
+ShareCards.Map(app);
 FantasyEndpoints.Map(app);
 FantasyPointsCache.Map(app);
 BeatTheModel.Map(app);

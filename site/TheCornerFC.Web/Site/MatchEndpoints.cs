@@ -12,7 +12,7 @@ public static partial class MatchEndpoints
     sealed record LineupsAnswer(bool? Locked, Dictionary<string, JsonElement[][]>? Xi, Dictionary<string, JsonElement[][]>? Actual, Dictionary<string, JsonElement[][]>? Prematch);
 
     // One match by its id, as this visitor may see it (`Paywall`: the database held paid fields back)
-    static async Task<(SiteDoc Site, Match M, bool Paywall)?> Base(Database db, string param, string? token)
+    internal static async Task<(SiteDoc Site, Match M, bool Paywall)?> Base(Database db, string param, string? token)
     {
         if (!IdRe().IsMatch(param)) return null;
         var site = await db.KeptDoc<SiteDoc>("site");

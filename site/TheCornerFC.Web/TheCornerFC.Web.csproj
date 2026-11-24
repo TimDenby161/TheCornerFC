@@ -30,6 +30,14 @@
   <ItemGroup>
     <ClientInputs Include="$(ClientSource)/src/**/*;$(ClientSource)/package.json;$(ClientSource)/vite.config.ts;$(WebSource)/src/lib/**/*.ts;$(WebSource)/src/lib/*.json" Exclude="$(WebSource)/src/lib/**/*.test.ts" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="3.116.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.116.1" />
+  </ItemGroup>
+  <!-- the link preview cards' font (Site/ShareCards.cs): the site's Archivo at two weights, OFL -->
+  <ItemGroup>
+    <None Include="ShareFonts/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
   <Target Name="BuildClient" BeforeTargets="CopyWebAssets" Inputs="@(ClientInputs)" Outputs="wwwroot/client/islands.js">
     <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(ClientSource)" Condition="!Exists('$(ClientSource)/node_modules')" EnvironmentVariables="PATH=$(PATH):/opt/homebrew/bin:/usr/local/bin" />
     <Exec Command="npm run build" WorkingDirectory="$(ClientSource)" EnvironmentVariables="PATH=$(PATH):/opt/homebrew/bin:/usr/local/bin" />
