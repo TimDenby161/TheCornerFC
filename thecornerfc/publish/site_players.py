@@ -335,6 +335,18 @@ def _decode(text):
     return re.sub(r"&(apos|#39|quot|amp|lt|gt);", lambda m: _ENTITIES[m.group(1)], text or "")
 
 
+def display_name(name, firstname, lastname=None):
+    """The name people search a player by, for his page's title (T-091): "Erling Haaland" for the
+    feed's "E. Haaland" (first name "Erling Braut"). His first given name in front of the surname
+    the short name already uses; None where the short name isn't an initial and a surname ("Rodri",
+    "Vinícius Júnior"), or the first name doesn't start with that initial."""
+    m = re.match(r"^(\w)\.\s+(.+)$", _decode(name).strip())
+    first = _decode(firstname).split()
+    if not m or not first or first[0][0].casefold() != m.group(1).casefold():
+        return None
+    return f"{first[0]} {m.group(2)}"
+
+
 def site_player_rows(rows, rankings=(), skills=None):
     """The rows of site.players, one dict per player in rows (PLAYER_FIELDS order, the export's
     order): the columns site_players() filters and sorts on, and "data", his row in
@@ -531,6 +543,10 @@ def export_player_seasons(conn, out_dir=OUT_DIR):
         "teams": {str(t): names.get(t) for t in team_ids},
         "born": {str(p): b.isoformat() for p, b in conn.execute(
             "select player_id, birth_date from players where player_id = any(%s) and birth_date is not null", [ids])},
+        "full": {str(p): full for p, full in (
+            (p, display_name(n, f, l)) for p, n, f, l in conn.execute(
+                "select player_id, name, firstname, lastname from players where player_id = any(%s) and firstname is not null", [ids]))
+            if full},
         "players": {str(p): {str(k): v for k, v in d.items()} for p, d in spells.items()},
         "positions": {str(p): d for p, d in positions.items()},   # {player: {season: [[role, minutes], ...]}}
     }
@@ -667,6 +683,7 @@ def export_player_pages(conn, out_dir=OUT_DIR, detail=None, free=None):
     detail = detail or {}
     for pid, page in pages.items():
         page["born"] = detail.get("born", {}).get(str(pid))
+        page["full_name"] = detail.get("full", {}).get(str(pid))
         page["spell_fields"] = SPELL_FIELDS
         page["spells"] = detail.get("players", {}).get(str(pid), {})
         page["positions"] = detail.get("positions", {}).get(str(pid), {})

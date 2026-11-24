@@ -1,10 +1,11 @@
 @page "/player/{id}"
 @model TheCornerFC.Web.Pages.PlayerTabs.IndexModel
 @{
-    ViewData["Title"] = $"{Model.P.Name}: rating, stats and position rank · The Corner FC";
-    var summary = PlayerSummary.Lines(Model.P.Name, Model.P.Position, Model.P.Age, Model.Nationality?.Name, Model.Team?.Name, Model.League?.Name,
+    var searched = Model.Doc?.FullName is { Length: > 0 } full ? full : Model.P.Name;
+    ViewData["Title"] = $"{searched}: rating, stats and position rank · The Corner FC";
+    var summary = PlayerSummary.Lines(searched, Model.P.Position, Model.P.Age, Model.Nationality?.Name, Model.Team?.Name, Model.League?.Name,
         Model.SeasonName, Model.Now?.Minutes, Model.Now?.Apps, Model.Now?.Goals, Model.Now?.Assists, Model.Keeper, Model.Rank, Model.LeagueRank, Model.P.Locked);
-    ViewData["Description"] = $"{Model.P.Name}{(Model.Team is { } t ? $" ({t.Name})" : "")}: Ability rank, this season's minutes, goals and assists, recent appearances and positions.";
+    ViewData["Description"] = $"{searched}{(Model.Team is { } t ? $" ({t.Name})" : "")}: Ability rank, this season's minutes, goals and assists, recent appearances and positions.";
     var now = Model.Now;
 }
 <div class="player-summary">@foreach (var line in summary){<p>@line</p>}</div>

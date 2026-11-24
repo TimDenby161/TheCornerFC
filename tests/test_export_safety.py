@@ -47,7 +47,7 @@ class ExportSafetyTests(unittest.TestCase):
             [(i,) for i in range(100)],
             Mock(fetchall=lambda: [(i, 2026, 1, 90, 50, 0, 0) for i in range(100)]),
             Mock(fetchall=lambda: []), Mock(fetchall=lambda: []),
-            [], [], [], [(1, "Club")], [],
+            [], [], [], [(1, "Club")], [], [],
         ]
         with tempfile.TemporaryDirectory() as tmp:
             live = Path(tmp) / "data"

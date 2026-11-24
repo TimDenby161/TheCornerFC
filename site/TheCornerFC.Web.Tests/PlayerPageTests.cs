@@ -13,7 +13,7 @@ public class PlayerPageTests
         """;
     const string Row = """{"total":1,"rows":[[129033,"J. Gvardiol","D",92.6,50,39,"Croatia",24,[92.6,91.1,96.0],[],3,600,{"FB":92.6,"CB":90.1},[459,1,3]]]}""";
     const string Doc = """
-        {"id":129033,"born":"2002-01-23","season_fields":["season","team","league","apps","starts","minutes","goals","assists","yellow","red"],
+        {"id":129033,"born":"2002-01-23","full_name":"Joško Gvardiol","season_fields":["season","team","league","apps","starts","minutes","goals","assists","yellow","red"],
          "seasons":[[2026,50,39,6,5,459,1,3,0,0],[2025,50,39,30,28,1374,2,2,3,0]],
          "match_fields":["fixture","date","league","team","opponent","home","gf","ga","started","minutes","role","rank","goals","assists","yellow","red"],
          "matches":[[1,"2026-10-04","39",50,42,1,2,1,1,90,"LB",92.1,1,0,0,0]],
@@ -43,7 +43,7 @@ public class PlayerPageTests
     {
         var (status, html) = await Get("/player/129033");
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Contains("<title>J. Gvardiol: rating, stats and position rank · The Corner FC</title>", html);
+        Assert.Contains("<title>Joško Gvardiol: rating, stats and position rank · The Corner FC</title>", html);
         Assert.Contains("<span class=\"val\">93</span><span class=\"lbl\">Ability</span>", html);
         Assert.Contains("of 600 in Premier League", html);
         Assert.Contains("<span class=\"pos-chip-pos\">FB</span><span class=\"pos-chip-rank\">93</span>", html);

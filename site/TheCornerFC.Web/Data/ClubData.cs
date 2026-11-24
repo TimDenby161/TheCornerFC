@@ -133,7 +133,9 @@ public sealed record PlayerDoc(
     [property: JsonPropertyName("spell_fields")] string[] SpellFields, Dictionary<string, JsonElement[][]>? Spells,
     Dictionary<string, JsonElement[][]>? Positions,
     JsonElement? Injury,              // [fixture, type, ban]
-    Dictionary<string, string>? Teams);
+    Dictionary<string, string>? Teams,
+    // the name people search him by ("Erling Haaland" for "E. Haaland"), where the export could tell it
+    [property: JsonPropertyName("full_name")] string? FullName = null);
 
 public sealed record SeasonLine(int Season, int Team, int League, int Apps, int? Starts, int Minutes, int? Goals, int? Assists, int? Yellow, int? Red);
 public sealed record Appearance(int Fixture, string Date, int League, int Team, int Opponent, int Home, int Gf, int Ga, int Started, int Minutes,

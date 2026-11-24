@@ -165,5 +165,19 @@ class SitePlayerRows(unittest.TestCase):
         self.assertNotIn('"players.json"', Path(export.__file__).read_text())
 
 
+
+class DisplayNameTests(unittest.TestCase):
+    def test_the_name_people_search_by(self):
+        from thecornerfc.publish.site_players import display_name
+        self.assertEqual(display_name("E. Haaland", "Erling Braut", "Haaland"), "Erling Haaland")
+        self.assertEqual(display_name("K. Mbappé", "Kylian", "Mbappé Lottin"), "Kylian Mbappé")
+        self.assertEqual(display_name("D. O&apos;Brien", "Darragh", "O'Brien"), "Darragh O'Brien")
+        self.assertEqual(display_name("Ł. Fabiański", "Łukasz", "Fabiański"), "Łukasz Fabiański")
+        # a short name that isn't an initial, or an initial the first name doesn't match: left alone
+        self.assertIsNone(display_name("Rodri", "Rodrigo", "Hernández Cascante"))
+        self.assertIsNone(display_name("Vinícius Júnior", "Vinícius José", "Paixão de Oliveira Júnior"))
+        self.assertIsNone(display_name("J. Doe", "Mark", "Doe"))
+        self.assertIsNone(display_name("E. Haaland", None, "Haaland"))
+
 if __name__ == "__main__":
     unittest.main()
