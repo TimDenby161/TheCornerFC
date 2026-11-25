@@ -175,7 +175,7 @@ public static partial class Players
         var all = Clubs.From(docTask.Result);
         var countries = ClubTable.Countries(site, all);
         var years = q["y"].ToString() == "1";
-        var positions = q["pos"].ToString().Split(',').Where(IsPosition).ToList();
+        var positions = q["pos"].ToString().Split(',').Where(IsPosition).Distinct().ToList();
         var groups = SelectedGroups(positions);
         var excluded = q["ex"].ToString().Split('|').Where(ClubTable.IsExcludeKey).Distinct().ToList();
         var search = q["q"].ToString();
@@ -291,8 +291,9 @@ public static partial class Players
         var p = ListParams(b);
         p["p_limit"] = PageRows;
         p["p_offset"] = offset;
-        var answer = await db.AskAs<PlayersAnswer>(token, "site_players", p);
-        return (answer.Total, answer.Paywall == true, ClubData.Players(b.Site, answer.Rows ?? []).Select(x => RowView(b.Site, x, b.Groups, SkillOf(b.Choices.Sort))).ToList());
+        // the database answers nothing for a list far past any page's size (T-098): an empty page
+        var answer = await db.AskAs<PlayersAnswer?>(token, "site_players", p);
+        return (answer?.Total ?? 0, answer?.Paywall == true, ClubData.Players(b.Site, answer?.Rows ?? []).Select(x => RowView(b.Site, x, b.Groups, SkillOf(b.Choices.Sort))).ToList());
     }
 
     static PlayerRow RowView(SiteDoc site, Player p, List<string> groups, string? skill) => new(

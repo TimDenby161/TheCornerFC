@@ -48,7 +48,7 @@ public sealed class PlayersModel(Database db) : PageModel
         Sliders = new[] { "age", "ab", "crank", "mins" }.ToDictionary(k => k, Make);
         Clubs = Ch.Clubs.Select(id => (id, B.Site.TeamName(id))).ToList();
         Nats = Ch.Nats.Select(n => (n, Names.FlagCodes.GetValueOrDefault(ClubTable.CountryDisplay(n)))).ToList();
-        Menu = ClubTable.Menu(B.Site, B.Countries, Ch.Filter, Players.Counts(countsTask.Result.Counts ?? [], B.Countries, B.Cups), ClubTable.ClubTitles);
+        Menu = ClubTable.Menu(B.Site, B.Countries, Ch.Filter, Players.Counts(countsTask.Result?.Counts ?? [], B.Countries, B.Cups), ClubTable.ClubTitles);
         ViewData["TabHead"] = TabHead.For("Players", "players");
     }
 
