@@ -147,7 +147,8 @@ class WorkflowIsolationTests(unittest.TestCase):
 class TimerTests(unittest.TestCase):
     """The timer (timer/) starts the scheduled jobs on the minute; GitHub's schedules are the
     back-up, and every job skips a slot another run has already worked (scripts/already_ran.py)."""
-    TIMED = {"nightly.yml": "sync", "matchday.yml": "matchday", "fpl.yml": "fpl"}
+    TIMED = {"nightly.yml": "sync", "matchday.yml": "matchday", "fpl.yml": "fpl", "daily-report.yml": "report"}
+    DAILY = {"daily-report.yml"}
 
     def test_each_timed_job_checks_its_slot_before_working(self):
         for name, work in self.TIMED.items():
@@ -161,13 +162,25 @@ class TimerTests(unittest.TestCase):
 
     def test_the_timer_starts_each_job_at_its_scheduled_time(self):
         timer = (ROOT / "timer/src/index.js").read_text()
-        pairs = dict(re.findall(r"'([^']+)': '([a-z]+\.yml)'", timer))
-        self.assertEqual(sorted(pairs.values()), sorted(self.TIMED))
+        block = timer.split("export const JOBS")[1].split("};")[0]
+        pairs = dict(re.findall(r"'([^']+)': '([a-z-]+\.yml)'", block))
+        self.assertEqual(sorted(pairs.values()), sorted(set(self.TIMED) - self.DAILY))
         for cron, name in pairs.items():
             with self.subTest(workflow=name):
                 first = re.search(r'cron: "([^"]+)"', WORKFLOWS[name]).group(1)
                 self.assertEqual(cron, first)
                 self.assertIn(f'"{cron}"', (ROOT / "timer/wrangler.jsonc").read_text())
+
+    def test_the_half_hour_tick_starts_each_daily_job_at_its_scheduled_time(self):
+        timer = (ROOT / "timer/src/index.js").read_text()
+        block = timer.split("export const DAILY")[1].split("};")[0]
+        pairs = {name: (h, m) for h, m, name in re.findall(r"'(\d\d):(\d\d)': '([a-z-]+\.yml)'", block)}
+        self.assertEqual(set(pairs), self.DAILY)
+        for name, (hour, minute) in pairs.items():
+            with self.subTest(workflow=name):
+                self.assertIn(minute, ("00", "30"))   # on a half-hour tick
+                cron = re.search(r'cron: "([^"]+)"', WORKFLOWS[name]).group(1)
+                self.assertEqual(cron, f"{int(minute)} {int(hour)} * * *")
 
     def test_the_timer_has_no_address_and_starts_only_main(self):
         config = code((ROOT / "timer/wrangler.jsonc").read_text().replace("//", " # "))

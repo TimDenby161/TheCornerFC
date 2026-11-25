@@ -1,6 +1,6 @@
 """Whether a scheduled job should do its work now, or skip because its slot's work is done.
 
-The nightly, match-day and FPL jobs are started two ways: by the timer (timer/, a Cloudflare
+The nightly, match-day, FPL and morning-email jobs are started two ways: by the timer (timer/, a Cloudflare
 Worker that starts them on the minute) and by GitHub's own schedules, kept as a back-up because
 GitHub's are late or dropped (2026-10-16: the 01:17 nightly started about 06:00; match day ran
 4.6 times a day instead of 48). Each job runs this first, in its `check` job:
@@ -13,7 +13,7 @@ and does its work only if this prints run=true. The rule:
   current slot: its work job succeeded and started at or after the slot began. A run that only
   skipped doesn't count, so a skip never makes the next slot skip too.
 
-Slots: the nightly once a UTC day (its back-up tries skip once one has worked); match day each
+Slots: the nightly and the morning email once a UTC day (back-up tries skip once one has worked); match day each
 half hour; FPL from 07:00, 13:00 and 19:00 UTC. Standard library only (it runs before anything
 is installed). Reads GitHub with the job's own token (actions: read).
 """
@@ -25,8 +25,8 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-SLOTS = {"nightly.yml": "day", "matchday.yml": "half-hour", "fpl.yml": (7, 13, 19)}
-WORK_JOB = {"nightly.yml": "sync", "matchday.yml": "matchday", "fpl.yml": "fpl"}
+SLOTS = {"nightly.yml": "day", "matchday.yml": "half-hour", "fpl.yml": (7, 13, 19), "daily-report.yml": "day"}
+WORK_JOB = {"nightly.yml": "sync", "matchday.yml": "matchday", "fpl.yml": "fpl", "daily-report.yml": "report"}
 
 
 def slot_start(workflow, now):

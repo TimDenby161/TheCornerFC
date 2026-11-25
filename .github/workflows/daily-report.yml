@@ -4,9 +4,16 @@ name: Daily report
 # (thecornerfc/pipeline/owner_report.py). Reads only: nothing is written, nothing committed, no
 # API-Football calls. This repository's logs are public, so the figures go only into the email.
 on:
+  # GitHub's scheduler is best-effort (2026-11-25: not started by 10:30), so the timer (timer/)
+  # starts this at 06:30 UTC and this schedule is the back-up; it skips once one has sent today's.
   schedule:
     - cron: "30 6 * * *"   # 06:30 UTC: 06:30 in winter, 07:30 in summer, UK time
-  workflow_dispatch:
+  workflow_dispatch:       # "Run workflow" by hand always runs; the timer passes source=timer
+    inputs:
+      source:
+        description: "Who started it: leave blank by hand (the timer sends 'timer')"
+        required: false
+        default: ""
 
 concurrency:
   group: daily-report
@@ -15,10 +22,31 @@ concurrency:
 permissions: {}
 
 jobs:
+  # Send only if no other run has sent today's (UTC) email (scripts/already_ran.py). A run
+  # started by hand always sends.
+  check:
+    permissions:
+      contents: read       # the script
+      actions: read        # to list this workflow's runs and their jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: scripts
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ inputs.source }}
+        run: python3 scripts/already_ran.py daily-report.yml
+
   report:
+    needs: check
     # Production's secrets are for main only: said here, and by the production environment's own
     # branch rule (guide/environments.md)
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.check.outputs.run == 'true'
     permissions:
       contents: read
     environment: Production

@@ -18,6 +18,19 @@ export const JOBS = {
 	'0 7,13,19 * * *': 'fpl.yml'
 };
 
+// jobs started by the half-hour tick at one time of day (UTC), so they need no Cron Trigger of
+// their own (the free plan allows five an account). The owner's morning email ran on GitHub's
+// schedule alone until 2026-11-25, when GitHub hadn't started it by 10:30
+export const DAILY = {
+	'06:30': 'daily-report.yml'
+};
+
+// the workflows a tick starts: its own job, and any daily job due at that minute
+export function workflowsFor(cron, when) {
+	const due = `${String(when.getUTCHours()).padStart(2, '0')}:${String(when.getUTCMinutes()).padStart(2, '0')}`;
+	return [JOBS[cron], cron === '*/30 * * * *' ? DAILY[due] : undefined].filter(Boolean);
+}
+
 export function dispatchRequest(workflow, token) {
 	return new Request(`https://api.github.com/repos/${REPO}/actions/workflows/${workflow}/dispatches`, {
 		method: 'POST',
@@ -34,13 +47,15 @@ export function dispatchRequest(workflow, token) {
 
 export default {
 	async scheduled(controller, env) {
-		const workflow = JOBS[controller.cron];
-		if (!workflow) return console.error('No job for', controller.cron);
-		const response = await fetch(dispatchRequest(workflow, env.GITHUB_TOKEN));
-		// GitHub answers 204 when the run is queued. Either way one line goes to the Worker's log
-		// (Observability), never anywhere a visitor could see it
-		if (response.status === 204) console.log(workflow, 'started');
-		else console.error(workflow, response.status, (await response.text()).slice(0, 300));
+		const workflows = workflowsFor(controller.cron, new Date(controller.scheduledTime));
+		if (!workflows.length) return console.error('No job for', controller.cron);
+		for (const workflow of workflows) {
+			const response = await fetch(dispatchRequest(workflow, env.GITHUB_TOKEN));
+			// GitHub answers 204 when the run is queued. Either way one line goes to the Worker's
+			// log (Observability), never anywhere a visitor could see it
+			if (response.status === 204) console.log(workflow, 'started');
+			else console.error(workflow, response.status, (await response.text()).slice(0, 300));
+		}
 	},
 	// nothing to visit
 	async fetch() {
