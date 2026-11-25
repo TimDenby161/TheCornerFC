@@ -1,0 +1,30 @@
+{
+ "id": "MC-0042",
+ "registration": {
+  "recorded": "2026-11-25",
+  "retrospective": false,
+  "date": "2026-11-25",
+  "title": "Odds history keeps only what is read, and a price only when it changes",
+  "component": "Betting rule",
+  "model": "betting",
+  "kind": "production change",
+  "what": "The odds capture keeps the match result, goals over/under at 1.5 to 4.5 and both teams to score, and stores a price only when it differs from the last one stored for that bookmaker and selection. Double chance and the other over/under lines are no longer kept.",
+  "why": "Odds were the database's fastest-growing table: about 790,000 rows a week. In a week's fixtures 49% of rows were over/under lines nothing reads, 10% double chance, which nothing reads, and 56% repeats of an unchanged price, stored again because the provider's update time is per fixture and moved with any price.",
+  "how": "config.ODDS_BET_IDS without 12 and config.ODDS_GOAL_LINES, applied in ingest._store_odds; record_odds compares the price (and kickoff, source) with the last observation, no longer the provider's update time. tests/test_odds_capture.py.",
+  "hypothesis": "Every reader's latest price at or before its cut-off is unchanged, so the paper bets, the market comparisons and every protocol see the same prices, while new odds rows fall by roughly 60 to 80%.",
+  "expected": {
+   "improves": null,
+   "metrics": [],
+   "betting": null,
+   "confidence": null,
+   "evidence": null
+  },
+  "success_criteria": "Not a prediction change: the paper bets' decisions are unchanged. Checked by the odds rows added a week after release against about 790,000 a week before.",
+  "code": {
+   "commit": null,
+   "experiment": null,
+   "model_version": null
+  }
+ },
+ "events": []
+}

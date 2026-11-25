@@ -12,7 +12,9 @@ def record_odds(conn, rows, captured_at, kickoffs):
         return
     config.require_db_write('record odds history')
     # Workflows are already serialized; fixture locks also make adjacent-state dedup safe
-    # for concurrent local ingestion. A -> B -> A is three observations, not two.
+    # for concurrent local ingestion. A -> B -> A is three observations, not two. A price is
+    # stored only when it differs from the last one: the provider's update time is per fixture,
+    # so it moved with any price and re-stored unchanged ones (56% of rows, 2026-11-25).
     for fixture in sorted({r['fixture_id'] for r in rows}):
         conn.execute('SELECT pg_advisory_xact_lock(%s,%s)', [73191,fixture])
     with conn.cursor() as cur:
@@ -21,11 +23,11 @@ def record_odds(conn, rows, captured_at, kickoffs):
             SELECT %(fixture_id)s,%(bookmaker_id)s,%(bet_id)s,%(selection)s,%(odd)s,
                    %(captured_at)s,%(effective_at)s,%(api_updated_at)s,'api_football/odds'
             WHERE NOT EXISTS (
-              SELECT 1 FROM (SELECT odds,provider_updated_at,source,effective_at FROM odds_observations
+              SELECT 1 FROM (SELECT odds,source,effective_at FROM odds_observations
                 WHERE fixture_id=%(fixture_id)s AND bookmaker_id=%(bookmaker_id)s
                   AND market_id=%(bet_id)s AND selection=%(selection)s
                 ORDER BY captured_at DESC,observation_id DESC LIMIT 1) previous
-              WHERE previous.odds=%(odd)s AND previous.provider_updated_at IS NOT DISTINCT FROM %(api_updated_at)s::timestamptz
+              WHERE previous.odds=%(odd)s
                 AND previous.effective_at IS NOT DISTINCT FROM %(effective_at)s::timestamptz
                 AND previous.source='api_football/odds')''',
             [{**r,'captured_at':captured_at,'effective_at':kickoffs.get(r['fixture_id'])}

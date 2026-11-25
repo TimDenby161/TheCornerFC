@@ -325,13 +325,16 @@ CUP_LINEUPS_FROM = "2020-07-01"
 
 FINISHED_STATUSES = ("FT", "AET", "PEN")
 
-# Odds markets to keep (API-Football bet ids). Everything else is discarded.
+# Odds markets to keep (API-Football bet ids). Everything else is discarded. Double Chance (12)
+# was kept until 2026-11-25 and read by nothing.
 ODDS_BET_IDS = {
     1: "Match Winner",
     5: "Goals Over/Under",
     8: "Both Teams Score",
-    12: "Double Chance",
 }
+# The over/under lines kept (bet 5): the ones the paper bets and the model's tests read. The
+# response carries about 30 more, which were stored until 2026-11-25 (half of all odds rows).
+ODDS_GOAL_LINES = ("1.5", "2.5", "3.5", "4.5")
 
 # Observed daily headers are distinct from any unconfirmed subscription allowance.
 API_LEDGER_PATH = os.getenv("API_LEDGER_PATH", ".api-usage/ledger.sqlite3")

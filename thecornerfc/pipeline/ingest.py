@@ -504,6 +504,8 @@ def _store_odds(conn, resp, bet_ids=None):
                     continue
                 bets[bet["id"]] = {"bet_id": bet["id"], "name": bet["name"]}
                 for v in bet.get("values", []):
+                    if bet["id"] == 5 and str(v["value"]).split(" ")[-1] not in config.ODDS_GOAL_LINES:
+                        continue
                     odd = _parse_stat(v.get("odd"))
                     rows.append({
                         "fixture_id": fixture_id,
