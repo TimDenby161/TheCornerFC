@@ -5188,7 +5188,7 @@ END; $$;
 
 COMMIT;
 
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-11-25, to staging and to production.
 -- The four public site functions that take lists answer nothing when a list is far longer than
 -- any page sends (T-098, owner's go-ahead 2026-11-25): anyone holding the public key can call
 -- them straight at Supabase, past the site's kept answers, and a huge list makes every row's
