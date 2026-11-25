@@ -134,7 +134,9 @@ One file for each change that was ever proposed, `experiments/changes/MC-0000.js
   each column is on. The twenty upcoming fixtures where the two models differ most are folded
   away under it. P18's verdict is not on the card: it is in the change's own page and the table
   of changes. A Bookmakers column beside them (`20261015_match_model_compare_market.sql`)
-  gives the closing prices with the margin taken out, averaged, as the Stats page does: on the
+  gives the closing prices with the margin taken out proportionally, averaged (the Stats page
+  has used the power method since 2026-11-25, `site_matches.without_margin`, so its figure is a
+  little better for the bookmakers than this column's): on the
   finished matches with stored prices, with both models on those same matches under it, and for
   an upcoming fixture once prices are stored (about 14 days before kickoff). The log of switches is
   `match_model_switches`. The live model is the one the site, the paper bets and the fantasy

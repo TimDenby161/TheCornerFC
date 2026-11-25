@@ -143,7 +143,9 @@ lists only include what's been reported.</p>
 
 <h3>The model against the bookmakers</h3>
 <p>We compare the model's chances with the bookmakers' chances: their odds with the bookmaker's
-margin taken out, averaged across bookmakers. A big difference is a <em>disagreement</em>, not an
+margin taken out, averaged across bookmakers. The margin is taken out by the power method, which
+takes more off the long shots, where bookmakers' prices are most generous; on our own matches it
+describes the bookmakers better than scaling every price down alike. A big difference is a <em>disagreement</em>, not an
 edge. The bookmakers see team news, sharp bettors' money and information we don't have, and so far
 they've been right more often when we disagreed (see <a href="#market">below</a>).</p>
 

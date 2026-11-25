@@ -15,7 +15,7 @@ from ..models.betting import BOOKMAKER, CAUTIOUS_RULE, MAX_ODDS, MIN_EDGE, is_ca
 from ..models.predictions import GOAL_LINES, goal_lines
 from .site_files import (OUT_DIR, _check_table_collapse, _r, _read_json, _sync_table, _table_exists, _write_json_file,
                          store_admin_doc)
-from .site_matches import market_probabilities, site_freshness
+from .site_matches import POWER_STEPS, market_probabilities, site_freshness
 
 # the export's one log, whichever module writes to it
 log = logging.getLogger("thecornerfc.publish.export")
@@ -117,12 +117,33 @@ STAT_MARKETS = {
 }
 
 
+def _newton_steps(steps):
+    """The power method's Newton steps as a chain of lateral joins on each bookmaker's set (q, and
+    q_open where the whole opening set is known), ending in columns k and k_open. Written out, not
+    recursive: a recursive query would store every step of every set (temp files, Disk IO)."""
+    def step(k, arr):
+        return (f"{k} - ((select sum(power(x, {k})) from unnest({arr}) x) - 1)"
+                f" / (select sum(power(x, {k}) * ln(x)) from unnest({arr}) x)")
+    # "offset 0" keeps each step a step: without it Postgres folds every step into the next, each
+    # uses the one before twice, and the expression doubles eight times (2026-11-25: a staging run
+    # that never finished)
+    out = ["cross join lateral (select 1.0::float8 as k0, 1.0::float8 as o0 offset 0) s0"]
+    for n in range(steps):
+        out.append(f"cross join lateral (select {step(f'k{n}', 'q')} as k{n + 1}, "
+                   f"case when all_open then {step(f'o{n}', 'q_open')} else 1.0 end as o{n + 1} offset 0) s{n + 1}")
+    out.append(f"cross join lateral (select k{steps} as k, o{steps} as k_open) sk")
+    return "\n               ".join(out)
+
+
 def market_consensus(conn, since):
     """{(fixture, market): {"close": [probs], "open": [probs] or None}} for finished fixtures
     since `since`, in STAT_MARKETS' selection order.
 
-    Each bookmaker's complete set of prices with its margin removed, averaged, worked out in the
-    database so only a dozen numbers per fixture come back. Closing = the last price before
+    Each bookmaker's complete set of prices with its margin removed by the power method
+    (site_matches.without_margin: Newton's method on k in the database, POWER_STEPS steps from
+    k = 1 written out one after another (_newton_steps), so nothing is stored between steps, for
+    the closing and the opening set), averaged, worked out in the database so only a
+    dozen numbers per fixture come back. Closing = the last price before
     kickoff (odds.odd); opening = odds.first_odd, only where the bookmaker's whole set was
     first seen before kickoff (odds loaded after a match was played have no real opening)."""
     lines = [f"{side} {l}" for l in GOAL_LINES for side in ("Over", "Under")]
@@ -141,14 +162,16 @@ def market_consensus(conn, since):
                  from odds o join ({matches}) f using (fixture_id)
                  where f.status_short = any(%s) and f.kickoff >= %s and o.odd > 1
                    and (o.bet_id in (1, 8) or (o.bet_id = 5 and o.selection = any(%s)))),
-               s as (
-                 select *, sum(1 / odd) over w as tot, count(*) over w as n,
-                        bool_and(has_open) over w as all_open,
-                        sum(case when has_open then 1 / first_odd end) over w as tot_open
-                 from o window w as (partition by fixture_id, bookmaker_id, bet_id, line))
-               select fixture_id, bet_id, line, sel, avg(1 / odd / tot),
-                      avg(1 / first_odd / tot_open) filter (where all_open)
-               from s where n = case when bet_id = 1 then 3 else 2 end
+               g as (
+                 select fixture_id, bookmaker_id, bet_id, line,
+                        array_agg(sel order by sel) as sels, array_agg(1 / odd order by sel) as q,
+                        bool_and(has_open) as all_open,
+                        array_agg(case when has_open then 1 / first_odd end order by sel) as q_open
+                 from o group by 1, 2, 3, 4
+                 having count(*) = case when bet_id = 1 then 3 else 2 end)
+               select fixture_id, bet_id, line, u.sel, avg(power(u.x, k)),
+                      avg(power(u.xo, k_open)) filter (where all_open)
+               from g {_newton_steps(POWER_STEPS)}, unnest(sels, q, q_open) as u(sel, x, xo)
                group by 1, 2, 3, 4""",
             [["FT", "AET", "PEN"], since, lines]):
         market = next((m for m, (b, l, _) in STAT_MARKETS.items() if b == bet and l == line), None)
