@@ -5125,7 +5125,7 @@ END; $$;
 
 COMMIT;
 
--- Repeatable. Not yet applied.
+-- Repeatable. Applied 2026-11-25, to staging and to production.
 -- A league's next round is free even when it is more than 7 days away (T-102, owner's decision
 -- 2026-11-25): in an international break the Premier League's next round was over a week off,
 -- so a free visitor saw no chances at all on its Matches tab. The 7-day line stays (the owner's
