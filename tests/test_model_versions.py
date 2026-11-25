@@ -22,10 +22,20 @@ class ModelVersionTests(unittest.TestCase):
 
     def test_identity_changes_with_provenance(self):
         baseline = version_metadata('match','baseline')['model_version_id']
-        for kwargs in ({'configuration':{'weight':0.2}}, {'code_sha':'a'*40}, {'notes':'reconstruction'},
+        for kwargs in ({'configuration':{'weight':0.2}}, {'notes':'reconstruction'},
                        {'training_window':(datetime(2020,1,1,tzinfo=timezone.utc),datetime(2021,1,1,tzinfo=timezone.utc))}):
             self.assertNotEqual(baseline,version_metadata('match','baseline',**kwargs)['model_version_id'])
         self.assertNotEqual(baseline,version_metadata('club','baseline')['model_version_id'])
+
+    def test_the_commit_is_recorded_but_not_part_of_the_identity(self):
+        # 2026-11-25: with the commit in the id, every commit to main re-versioned every model
+        plain = version_metadata('match','baseline',configuration={'source_digests':{'a.py':'1'}})
+        for sha in ('a'*40, 'b'*40, None):
+            other = version_metadata('match','baseline',configuration={'source_digests':{'a.py':'1'}},code_sha=sha)
+            self.assertEqual(plain['model_version_id'], other['model_version_id'])
+            self.assertEqual(other['code_sha'], sha)
+        moved = version_metadata('match','baseline',configuration={'source_digests':{'a.py':'2'}})
+        self.assertNotEqual(plain['model_version_id'], moved['model_version_id'])
 
     def test_rejects_invalid_metadata(self):
         for kwargs in ({'code_sha':'short'}, {'configuration':{'API_KEY':'secret'}},

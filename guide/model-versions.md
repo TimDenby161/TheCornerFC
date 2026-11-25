@@ -43,6 +43,12 @@ NULL pairs mean unknown/not applicable. A missing SHA remains NULL. Git discover
 returns NULL for a dirty tree because a commit alone cannot describe those edits.
 Use committed code for reproducible releases.
 
+The id is a hash of everything except `code_sha`: a version is its files' digests and
+settings, so a commit that changes no model file (a site change, say) keeps every model's id.
+`code_sha` records the first commit that ran the version. Until 2026-11-25 the commit was part
+of the id, and every commit to `main` made a new version of every model and a fresh snapshot of
+every upcoming fixture.
+
 Identity is a SHA-256 digest of canonical metadata, prefixed `mv_`. Re-registering
 identical metadata returns the same ID without overwriting its creation time.
 Changing configuration, SHA, windows, label, type or notes creates a new identity;

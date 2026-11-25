@@ -114,7 +114,13 @@ def version_metadata(model_type, version_name, *, configuration=None, code_sha=N
     serialized = json.dumps(metadata, sort_keys=True, separators=(',', ':'), allow_nan=False)
     # Round-trip isolates the metadata from subsequent mutation of caller dictionaries.
     metadata = json.loads(serialized)
-    metadata['model_version_id'] = 'mv_' + hashlib.sha256(serialized.encode()).hexdigest()
+    # The commit is recorded but is not part of the identity: a version is its files' digests and
+    # settings. With it in, every commit to main (a site change too) made a new id for every model
+    # and a fresh snapshot of every upcoming fixture (2026-11-25: 28 match ids in a week, digests
+    # unchanged). The stored code_sha is the first commit that ran the version.
+    identity = json.dumps({k: v for k, v in metadata.items() if k != 'code_sha'},
+                          sort_keys=True, separators=(',', ':'), allow_nan=False)
+    metadata['model_version_id'] = 'mv_' + hashlib.sha256(identity.encode()).hexdigest()
     return metadata
 
 
