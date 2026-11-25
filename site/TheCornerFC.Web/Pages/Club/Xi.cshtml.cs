@@ -12,6 +12,7 @@ public sealed class XiModel(Database db) : ClubPageModel(db)
     public string[]? Kit { get; private set; }
     public List<Lineups.Spot>? Spots { get; private set; }
     public int? Average { get; private set; }
+    public bool ModelPicked { get; private set; }
     public Depth.Strength? Squad { get; private set; }
     public NextMatch? Next { get; private set; }
 
@@ -21,9 +22,14 @@ public sealed class XiModel(Database db) : ClubPageModel(db)
         var squad = await C.SquadFor(Db, Visitor.Token);
         if (squad.Paywall) { Paywall = true; return null; }
         Kit = squad.Kit;
-        var xi = Depth.PredictedXi(squad.Depth);
-        var ranks = (xi ?? []).Where(c => c.Rank is not null).Select(c => c.Rank!.Value).ToList();
-        Spots = xi is null ? null : Lineups.Spots(xi.Select(c => new Lineups.Starter(c.P.Id, c.P.Name, c.Box.Label, c.Rank, c.Chance, c.Mins)).ToList());
+        // the model's XI for the next match, as its line-up panel shows and its after-match marks
+        // score (owner, 2026-11-25); the squad's start chances only where the model has none stored
+        var starters = squad.Next is { } next && !ClubData.Live.Contains(next.Status)
+            ? await MatchEndpoints.ModelXi(Db, site, Visitor.Token, next.Id, C.Id) : null;
+        ModelPicked = starters is not null;
+        starters ??= Depth.PredictedXi(squad.Depth)?.Select(c => new Lineups.Starter(c.P.Id, c.P.Name, c.Box.Label, c.Rank, c.Chance, c.Mins)).ToList();
+        var ranks = (starters ?? []).Where(c => c.Rank is not null).Select(c => c.Rank!.Value).ToList();
+        Spots = starters is null ? null : Lineups.Spots(starters);
         Average = ranks.Count > 0 ? Js.RoundInt(ranks.Sum() / ranks.Count) : null;
         Squad = Depth.SquadStrength(squad.Depth);
         if (squad.Next is { } m)

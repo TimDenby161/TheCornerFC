@@ -113,6 +113,35 @@ public static partial class MatchEndpoints
         instead = s.Instead is { } i ? new { name = i.Name, rank = i.Rank } : null, tip = s.Tip,
     }).ToList();
 
+    // A match to come: the model's predicted XI for each side as stored (predicted_lineups), each
+    // starter with his rank in the position he is picked in, as his own page has it, not the rank
+    // over his recent matches the stored line-up carries: one read for both elevens
+    static async Task<Dictionary<string, List<Lineups.XiRow>>> WithSlotRanks(Database db, SiteDoc site, string? token, Dictionary<string, JsonElement[][]>? xi)
+    {
+        var exact = (xi ?? []).ToDictionary(kv => kv.Key, kv => kv.Value.Select(Site.Lineups.ReadRow).ToList());
+        var ids = exact.Values.SelectMany(rows => rows.Select(r => r.Pid)).ToArray();
+        PlayersAnswer? answer = null;
+        if (ids.Length > 0)
+            try { answer = await db.AskAs<PlayersAnswer>(token, "site_players", new { p_ids = ids, p_limit = ids.Length }); }
+            catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException or JsonException) { }
+        var players = new Dictionary<int, Player>();
+        foreach (var p in ClubData.Players(site, answer?.Rows ?? [])) players[p.Id] = p;
+        return exact.ToDictionary(kv => kv.Key, kv => Site.Lineups.WithSlotRank(kv.Value, players));
+    }
+
+    // The model's predicted XI for one side of a match to come (the club XI tab, T-082: the XI the
+    // match's line-up panel shows and its after-match marks score), or null when none is stored or
+    // it is locked for this visitor
+    public static async Task<List<Lineups.Starter>?> ModelXi(Database db, SiteDoc site, string? token, int fixture, int team)
+    {
+        LineupsAnswer? fx;
+        try { fx = await db.AskAs<LineupsAnswer?>(token, "site_lineups", new { p_fixture = fixture }); }
+        catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException or JsonException) { return null; }
+        if (fx is null || fx.Locked == true || fx.Xi?.GetValueOrDefault(team.ToString()) is not { Length: > 0 } rows) return null;
+        var side = (await WithSlotRanks(db, site, token, new() { [team.ToString()] = rows }))[team.ToString()];
+        return side.Select(r => new Lineups.Starter(r.Pid, r.Name, r.Role is { Length: > 0 } role ? role : "CM", r.Rank)).ToList();
+    }
+
     static async Task<object> Lineups(Database db, SiteDoc site, Match m, bool paywall, string? token)
     {
         var finished = IsFinished(m);
@@ -140,21 +169,9 @@ public static partial class MatchEndpoints
         catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException or JsonException) { fx = null; }
         // predicted line-ups are for subscribers
         if (!finished && (fx?.Locked == true || paywall)) return new { locked = true };
-        var exact = ((finished ? fx?.Actual : fx?.Xi) ?? []).ToDictionary(kv => kv.Key, kv => kv.Value.Select(Site.Lineups.ReadRow).ToList());
-        // a match to come shows each predicted starter's rank in the position he is picked in, as
-        // his own page has it, not the rank over his recent matches the stored line-up carries: one
-        // read for both elevens
-        if (!finished)
-        {
-            var ids = exact.Values.SelectMany(rows => rows.Select(r => r.Pid)).ToArray();
-            PlayersAnswer? answer = null;
-            if (ids.Length > 0)
-                try { answer = await db.AskAs<PlayersAnswer>(token, "site_players", new { p_ids = ids, p_limit = ids.Length }); }
-                catch (Exception e) when (e is DatabaseException or HttpRequestException or TaskCanceledException or JsonException) { }
-            var players = new Dictionary<int, Player>();
-            foreach (var p in ClubData.Players(site, answer?.Rows ?? [])) players[p.Id] = p;
-            exact = exact.ToDictionary(kv => kv.Key, kv => Site.Lineups.WithSlotRank(kv.Value, players));
-        }
+        var exact = finished
+            ? (fx?.Actual ?? []).ToDictionary(kv => kv.Key, kv => kv.Value.Select(Site.Lineups.ReadRow).ToList())
+            : await WithSlotRanks(db, site, token, fx?.Xi);
 
         async Task<object> Side(int team, bool home)
         {

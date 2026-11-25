@@ -17,6 +17,9 @@
         <div class="club-section pp-section">
             @await Html.PartialAsync("_XiPitch", new TheCornerFC.Web.Site.Lineups.Pitch(Model.Spots!, Model.Kit))
             @if (Model.Average is { } avg){<div class="page-note u-center">Average rank @avg</div>}
+            <div class="page-note u-center">@(Model.ModelPicked
+                ? "The model's XI for the next match: the one its prediction uses and its line-up record marks."
+                : "From each player's chance of starting: the model hasn't picked its XI for the next match yet.")</div>
         </div>
     }
 }
