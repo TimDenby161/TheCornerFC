@@ -594,6 +594,11 @@ def sync_nightly(api, conn, league_ids):
         if league_id in config.PLAYER_LEAGUES:
             step("players", sync_players, [league_id], [season])
             step("injuries", sync_injuries, [league_id], [season])
+    cup_pairs = [(l, s) for l, s in pairs if l in config.CUP_INJURY_LEAGUES]
+    if cup_pairs:
+        clubs = player_clubs(conn)
+        for league_id, season in cup_pairs:
+            step("cup injuries", sync_injuries, [league_id], [season], clubs)
     if config.NATIONAL_SYNC:
         step("national fixtures", sync_national_fixtures)
         step("national line-ups", sync_national_lineups)
@@ -950,9 +955,22 @@ def _player_season_row(player_id, league_id, season, st):
     }
 
 
+PLAYER_CLUB_DAYS = 400       # a club counts as a player-data club if it played in one of those leagues this recently
+
+
+def player_clubs(conn):
+    """The clubs that played in config.PLAYER_LEAGUES in the last PLAYER_CLUB_DAYS: the ones
+    whose players we rank, so the ones a cup's injury list is kept for."""
+    return {t for (t,) in conn.execute(
+        """select distinct t from fixtures, unnest(array[home_team_id, away_team_id]) t
+           where league_id = any(%s) and kickoff > now() - make_interval(days => %s)""",
+        [config.PLAYER_LEAGUES, PLAYER_CLUB_DAYS])}
+
+
 @monitored("injuries", conn_index=1)
-def sync_injuries(api, conn, league_ids, seasons):
-    """Players listed as missing/doubtful per fixture (/injuries)."""
+def sync_injuries(api, conn, league_ids, seasons, clubs=None):
+    """Players listed as missing/doubtful per fixture (/injuries). clubs: keep only these
+    teams' players (a cup's list also names clubs we hold no player data for)."""
     for league_id in league_ids:
         for season in seasons:
             resp = api.get("injuries", league=league_id, season=season)
@@ -960,6 +978,8 @@ def sync_injuries(api, conn, league_ids, seasons):
             for item in resp:
                 p, fx = item.get("player") or {}, item.get("fixture") or {}
                 if not p.get("id") or not fx.get("id"):
+                    continue
+                if clubs is not None and item["team"]["id"] not in clubs:
                     continue
                 rows[(fx["id"], p["id"])] = {
                     "fixture_id": fx["id"], "player_id": p["id"], "team_id": item["team"]["id"],
@@ -1186,13 +1206,14 @@ def sync_fixture_players(api, conn, league_ids, batch_size=20):
 
 
 @monitored("injuries", conn_index=1)
-def sync_injuries_fixtures(api, conn, fixture_ids):
-    """Refresh the injury list for specific fixtures (one call each) - used close to kickoff."""
+def sync_injuries_fixtures(api, conn, fixture_ids, clubs=None):
+    """Refresh the injury list for specific fixtures (one call each) - used close to kickoff.
+    clubs: keep only these teams' players, as in sync_injuries."""
     rows = {}
     for fid, resp in _each_fixture(api, "injuries", fixture_ids):
         for item in resp:
             p, lg = item.get("player") or {}, item.get("league") or {}
-            if p.get("id"):
+            if p.get("id") and (clubs is None or item["team"]["id"] in clubs):
                 rows[(fid, p["id"])] = {
                     "fixture_id": fid, "player_id": p["id"], "team_id": item["team"]["id"],
                     "league_id": lg.get("id"), "season": lg.get("season"),

@@ -14,7 +14,8 @@ from ..models import betting, match_trees, predictions
 from .. import config
 from ..fantasy_games import fantasy_snapshots
 from .db import upsert
-from .ingest import _national_rows, _store_fixtures, sync_injuries_fixtures, sync_odds_fixtures
+from .ingest import (_national_rows, _store_fixtures, player_clubs, sync_injuries_fixtures,
+                     sync_odds_fixtures)
 from ..evidence.lineup_snapshots import capture_official
 from ..publish.export import refresh_match_states
 from .beat_the_model import score_safely as score_beat_the_model
@@ -27,6 +28,7 @@ MAX_ODDS_CALLS = 250
 LINEUP_WINDOW_MINUTES = 70   # XIs are published about an hour before kickoff; runs are 30 minutes apart
 MAX_LINEUP_CALLS = 10        # 20 fixtures per call
 PLAYER_CLUB_DAYS = 400       # a club counts as a player-data club if it played in one of those leagues this recently
+CUP_INJURY_MINUTES = (60, 90)  # a cup tie's injury list is refreshed once, in the run this far before kickoff
 
 
 def run_matchday(api, conn):
@@ -57,14 +59,20 @@ def run_matchday(api, conn):
     national = national_with_odds(conn, now)
     with_odds = ([f for f, l in upcoming if l in odds_leagues] + national)[:MAX_ODDS_CALLS]
     injury_fixtures = [f for f, l in upcoming if l in config.INJURY_MODEL_LEAGUES]
-    log.info("Match day: %d upcoming in %dh (%d with odds, %d with injury lists), %d recent results",
-             len(upcoming), WINDOW_HOURS, len(with_odds), len(injury_fixtures), len(recent))
+    cup_injury_fixtures = cup_injury_due(conn, now) if any(
+        l in config.CUP_INJURY_LEAGUES for _, l in upcoming) else []
+    log.info("Match day: %d upcoming in %dh (%d with odds, %d with injury lists, %d cup), %d recent results",
+             len(upcoming), WINDOW_HOURS, len(with_odds), len(injury_fixtures),
+             len(cup_injury_fixtures), len(recent))
 
     capture_prekickoff_lineups(api, conn, now)
     if with_odds:
         sync_odds_fixtures(api, conn, with_odds)
     if injury_fixtures:
         sync_injuries_fixtures(api, conn, injury_fixtures)
+    if cup_injury_fixtures:
+        # the opponents' list is kept only if they are a player-data club too
+        sync_injuries_fixtures(api, conn, cup_injury_fixtures, player_clubs(conn))
     if upcoming:
         predictions.update_predictions(conn, [f for f, _ in upcoming])
         match_trees.update_safely(conn, [f for f, _ in upcoming])          # before anything reads them
@@ -85,6 +93,22 @@ def _player_club(side):
         f"""exists (select 1 from fixtures p where p.{column} = f.{side} and p.league_id = any(%(leagues)s)
                    and p.kickoff < %(now)s and p.kickoff > %(since)s)"""
         for column in ("home_team_id", "away_team_id"))
+
+
+def cup_injury_due(conn, now):
+    """Cup and European fixtures (config.CUP_INJURY_LEAGUES) with a player-data club on either
+    side, kicking off CUP_INJURY_MINUTES from now: one injury-list call each, in the one run that
+    falls in that half hour (the nightly run fetched each competition's whole list already)."""
+    return [f for (f,) in conn.execute(
+        f"""select f.fixture_id from fixtures f
+           where f.status_short in ('NS', 'TBD') and f.kickoff > %(from)s and f.kickoff <= %(until)s
+             and f.league_id = any(%(cups)s)
+             and (({_player_club("home_team_id")}) or ({_player_club("away_team_id")}))
+           order by f.kickoff""",
+        {"now": now, "from": now + timedelta(minutes=CUP_INJURY_MINUTES[0]),
+         "until": now + timedelta(minutes=CUP_INJURY_MINUTES[1]),
+         "since": now - timedelta(days=PLAYER_CLUB_DAYS), "leagues": config.MATCH_PLAYER_LEAGUES,
+         "cups": config.CUP_INJURY_LEAGUES})]
 
 
 def capture_prekickoff_lineups(api, conn, now):

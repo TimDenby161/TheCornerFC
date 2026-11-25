@@ -12,6 +12,8 @@ python -m thecornerfc sync players  --leagues 39 140 --seasons 2024 2025
 python -m thecornerfc sync injuries --leagues 39 140 --seasons 2024 2025
 ```
 
+Cup and European ties have lists of their own (a UEFA ban shows only there), so the nightly job also fetches the whole list of each competition in `config.CUP_INJURY_LEAGUES` (one call each). It keeps only the clubs from the 22 leagues: those are the clubs whose predicted XIs it uses. The match-day run fetches each such tie's list once more, in the run 60 to 90 minutes before kickoff. That's about 8 calls a night, plus one per tie.
+
 Players out that the lists miss (League Two clubs often have no list) go in `thecornerfc/models/absences.json` by club id, with an optional `until` date. The export adds them to the club's list for its next match.
 
 API-Football's injury lists run from 2021 for the big five, the Championship, Turkey, the Netherlands, MLS and Norway. Elsewhere there's little or nothing before 2025.

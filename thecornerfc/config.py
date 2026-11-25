@@ -306,6 +306,12 @@ PLAYER_LEAGUES = [
     332,                           # Slovakia
 ]
 
+# Cups and European competitions whose injury and ban lists are fetched too, kept only for clubs
+# from PLAYER_LEAGUES (ingest.player_clubs): their predicted XIs for these matches leave out
+# whoever is listed. A league-only list misses a cup tie's own bans (a UEFA suspension) and every
+# injury, since the lists are per fixture
+CUP_INJURY_LEAGUES = [2, 3, 848, 531, 15, 45, 48, 46]
+
 # Leagues with enough injury history (2021+) for the injury adjustment; per-match player
 # minutes are fetched for these
 INJURY_MODEL_LEAGUES = [39, 40, 140, 135, 78, 61, 203, 88, 253, 103]

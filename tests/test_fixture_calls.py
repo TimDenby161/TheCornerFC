@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from thecornerfc.pipeline.api import QuotaExhausted
-from thecornerfc.pipeline.ingest import sync_injuries_fixtures, sync_odds_fixtures
+from thecornerfc.pipeline.ingest import sync_injuries, sync_injuries_fixtures, sync_odds_fixtures
 
 BUG = RuntimeError("API-Football error on odds {'fixture': 2}: {'error': '5xEr'}")
 
@@ -43,6 +43,30 @@ class FixtureCallTests(unittest.TestCase):
             sync_injuries_fixtures.__wrapped__(api, Mock(), [1, 2])
         rows = upsert.call_args.args[2]
         self.assertEqual([(r["fixture_id"], r["player_id"]) for r in rows], [(2, 9)])
+
+    @patch("thecornerfc.pipeline.ingest.upsert")
+    def test_a_cup_list_keeps_only_the_player_data_clubs(self, upsert):
+        api = Mock()
+        api.get.return_value = [
+            {"player": {"id": 9, "type": "Missing Fixture", "reason": "Red Card"},
+             "team": {"id": 33}, "league": {"id": 2, "season": 2026}},
+            {"player": {"id": 8, "type": "Missing Fixture", "reason": "Knee Injury"},
+             "team": {"id": 247}, "league": {"id": 2, "season": 2026}}]
+        sync_injuries_fixtures.__wrapped__(api, Mock(), [5], {33})
+        self.assertEqual([r["player_id"] for r in upsert.call_args.args[2]], [9])
+
+    @patch("thecornerfc.pipeline.ingest.upsert")
+    def test_a_competition_wide_cup_list_keeps_only_the_player_data_clubs(self, upsert):
+        api = Mock()
+        api.get.return_value = [
+            {"player": {"id": 9, "type": "Missing Fixture", "reason": "Suspended"},
+             "team": {"id": 33}, "fixture": {"id": 5}},
+            {"player": {"id": 8, "type": "Missing Fixture", "reason": "Knee Injury"},
+             "team": {"id": 247}, "fixture": {"id": 5}}]
+        sync_injuries.__wrapped__(api, Mock(), [2], [2026], {33})
+        api.get.assert_called_once_with("injuries", league=2, season=2026)
+        rows = upsert.call_args.args[2]
+        self.assertEqual([(r["player_id"], r["league_id"]) for r in rows], [(9, 2)])
 
 
 if __name__ == "__main__":

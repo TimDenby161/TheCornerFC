@@ -18,8 +18,9 @@ read mentions. You draft, rank and time.
 2. Read the X Desk page (its link is in the brain's X notes) with the Artifact
    tool and its comments with ArtifactComments: the desk-data JSON holds what was offered, what
    the owner picked ("posting 2"), their rules, and which picked predictions still need a
-   results post. The cloud routine "TheCorner FC: X posts" fills the same page three times a
-   day; this agent is the same job run by hand.
+   results post. The cloud routine "TheCorner FC: X posts" fills the same page once a
+   night with the next day's three posts, each timed, for the owner to schedule on X; this agent
+   is the same job run by hand.
 3. Note the date and the UK time. Everything below is judged in UK time.
 
 ## Where the figures come from
@@ -62,6 +63,14 @@ For each of the best five or six ideas, write:
 - **The words**: gripping, or not offered (rules in "Gripping words" below). Under 280
   characters, best 120 to 220. Brand written "TheCorner FC". Chances, not tips: no odds,
   prices or betting language. No hashtag spam (one at most, only if it helps).
+- **The link** (owner, 2026-11-15: "it is not obvious when people see it that they can see
+  more on the website"): every post ends with one short line pointing to the page the post's
+  figures came from, as a full link so X makes it clickable, e.g.
+  `Every game's chances: https://thecornerfc.com/matches` or
+  `Full top 50: https://thecornerfc.com/players`. Say what the reader gets there, in a few
+  words, not "click here". Only a page a signed-out visitor can see, never `/admin`. X counts
+  any link as 23 characters: keep the whole post, link included, under 280. A results post
+  links to `/record`.
 - **The card**: a 1200x675 PNG in the club-colours style (owner, 2026-11-09), built from
   `audit/drafts-launch/graphics/club-colours.py` (example: `28-club-colours-newcastle.png`).
   Left, a panel in the colours of the club the claim is about (its stripes, halves or plain
@@ -77,6 +86,28 @@ For each of the best five or six ideas, write:
   check it against "Full cards" and "Nothing unimportant" below: nothing cut off, nothing
   overlapping, no empty band, the numbers match the page they came from.
 - **The source**: the page and the time each figure was read.
+
+## Predicted XI posts (owner, 2026-11-25)
+
+A United XI went out with Cunha (banned in Europe) and Šeško (injured) in it, copied from the
+site two days before the game. A named player who can't play is the worst miss a post can
+have: every fan of the club sees it at once. So an XI post goes out only when every name in it
+has been checked:
+
+- **Only for a match on the posting day or the day after**, read from the site in this run (the
+  club's XI tab or the match page). Never reuse an XI from an earlier run's files or another
+  day's set.
+- **Check every name against the site's list**: the club page's injuries and bans for that
+  fixture. A cup or European tie whose list on the site is empty counts as unchecked, so the
+  post is not offered.
+- **Check every name against the news**: WebSearch the club's team news for that match in the
+  last 48 hours (the manager's press conference, injuries, illness, and bans, including bans
+  that apply only in that competition: a UEFA or cup ban, yellow-card build-ups, a red card in
+  the last round), confirmed by two established outlets.
+- **Anyone out or a serious doubt: the post is dropped.** Never change our XI by hand. The card
+  shows the site's figures and nothing else. Offer a different post instead.
+- **Say what was checked** in the Source line: the site list and the outlets, with times.
+  If the check couldn't be done, the post is not offered.
 
 ## Full cards (owner, 2026-11-06)
 
@@ -127,6 +158,7 @@ stop a football fan scrolling and make them want to reply.
 - **The test before a draft is kept**: would a fan of the club named stop on it, and would
   they disagree out loud? A hook nobody could disagree with ("Our favourite won 6 of 8") is
   rewritten around its sharpest part (the Liverpool miss) or dropped.
+- **The question comes before the link line**, which is always the last line.
 - The rules still hold: chances, not tips; never invent a figure; a miss is reported as
   honestly as a hit; never mention fantasy.
 
@@ -164,7 +196,7 @@ DECIDE BY: <HH:MM>
 
 1. <one-line idea>  (why it's first)
    Card: audit/x/YYYY-MM-DD/<card>.png
-   Words: <the post, ready to paste>
+   Words: <the post, ready to paste, ending with its link line>
    Source: <pages read, with times>
 2. ...
 3. ...
