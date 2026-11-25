@@ -20,6 +20,8 @@ is installed). Reads GitHub with the job's own token (actions: read).
 import json
 import os
 import sys
+import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -65,6 +67,24 @@ def work_done(get, workflow, slot, this_run):
     return done
 
 
+def with_retries(fetch, tries=4, wait=10, sleep=time.sleep):
+    """fetch(), tried again after a wait when GitHub answers 5xx or the network fails.
+
+    2026-11-25: one 502 Bad Gateway from GitHub's API stopped the 01:17 nightly before it began.
+    A 4xx (a bad token, a wrong path) is not retried: it won't mend itself.
+    """
+    for attempt in range(1, tries + 1):
+        try:
+            return fetch()
+        except urllib.error.HTTPError as error:
+            if error.code < 500 or attempt == tries:
+                raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == tries:
+                raise
+        sleep(wait * attempt)
+
+
 def main(workflow):
     repo, token = os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"]
 
@@ -72,8 +92,11 @@ def main(workflow):
         request = urllib.request.Request(f"https://api.github.com/repos/{repo}/{path}", headers={
             "Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28"})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.load(response)
+
+        def fetch():
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.load(response)
+        return with_retries(fetch)
 
     now = datetime.now(timezone.utc)
     slot = slot_start(workflow, now)

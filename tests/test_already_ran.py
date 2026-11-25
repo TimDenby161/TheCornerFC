@@ -76,5 +76,42 @@ class WorkDone(unittest.TestCase):
         self.assertTrue(ar.should_run("workflow_dispatch", "timer", slot, done))
 
 
+class Retries(unittest.TestCase):
+    """2026-11-25: one 502 from GitHub's API stopped the nightly before it began."""
+
+    @staticmethod
+    def failing(errors, answer):
+        calls = []
+
+        def fetch():
+            calls.append(1)
+            if len(calls) <= len(errors):
+                raise errors[len(calls) - 1]
+            return answer
+        return fetch, calls
+
+    @staticmethod
+    def http(code):
+        return ar.urllib.error.HTTPError("https://api.github.com", code, "x", {}, None)
+
+    def test_a_server_error_or_network_blip_is_tried_again(self):
+        waits = []
+        fetch, calls = self.failing([self.http(502), ar.urllib.error.URLError("reset"), TimeoutError()], {"ok": 1})
+        self.assertEqual(ar.with_retries(fetch, sleep=waits.append), {"ok": 1})
+        self.assertEqual((len(calls), waits), (4, [10, 20, 30]))
+
+    def test_it_gives_up_after_the_last_try(self):
+        fetch, calls = self.failing([self.http(502)] * 4, None)
+        with self.assertRaises(ar.urllib.error.HTTPError):
+            ar.with_retries(fetch, sleep=lambda s: None)
+        self.assertEqual(len(calls), 4)
+
+    def test_a_client_error_is_not_tried_again(self):
+        fetch, calls = self.failing([self.http(403)], None)
+        with self.assertRaises(ar.urllib.error.HTTPError):
+            ar.with_retries(fetch, sleep=lambda s: None)
+        self.assertEqual(len(calls), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
