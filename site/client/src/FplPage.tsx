@@ -120,7 +120,7 @@ export function Predictions({ owner, marking = true }: { owner: Owner; marking?:
 				<table key={String(one)} className={`calib-table fpl-table${one ? '' : ' multi'}`} ref={frozen}>
 					<thead><tr><th>#</th><th>Player</th>{marking && <><th title="In my team">Mine</th><th title="A player I want">Target</th></>}
 						{SORTS[one ? 'gw' : 'multi'].map(([k, label, title]) =>
-							<th key={k} title={title || undefined}><button type="button" className={`fpl-sort${v.sort === k ? ' on' : ''}`} aria-pressed={v.sort === k} aria-label={title || undefined} onClick={() => change({ sort: k }, true)}>{label}</button></th>)}
+							<th key={k} title={title || undefined} className={k === 'value' ? 'fpl-value' : undefined}><button type="button" className={`fpl-sort${v.sort === k ? ' on' : ''}`} aria-pressed={v.sort === k} aria-label={title || undefined} onClick={() => change({ sort: k }, true)}>{label}</button></th>)}
 						{!one && span.map((i) => <th key={i} title={day(gws[i].first_kickoff)}>{gwLabel(gws[i])}</th>)}
 					</tr></thead>
 					<tbody>
@@ -128,6 +128,7 @@ export function Predictions({ owner, marking = true }: { owner: Owner; marking?:
 					</tbody>
 				</table>
 			</Scroll>
+			{!one && <div className="stats-note fpl-swipe">Swipe the table sideways for later rounds.</div>}
 			{rows.length > FPL_SHOWN && <button type="button" className="show-all" id="fpl-more" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `Show all ${rows.length}`}</button>}
 		</div>
 		{marking && <div className="stats-note">Points are our model's prediction with FPL's scoring rules for the player's FPL position: appearance, goals, penalties, assists, FPL assists, clean sheets,
@@ -136,7 +137,7 @@ export function Predictions({ owner, marking = true }: { owner: Owner; marking?:
 			Penalties go mostly to each club's taker, from FPL's penalty order and who has taken them recently; a miss costs 2.
 			FPL assists are the ones FPL gives that match stats don't: winning a penalty a teammate scores, and rebounds or deflections from a player's shot.
 			Injuries use FPL's status: injured or suspended players are out until FPL's return date (or until FPL clears them), and doubtful players count at FPL's chance of playing for the next gameweek; match-day injury lists apply near kickoff.
-			Click a player's points to see where they come from.
+			Tap or click a player to see where his points come from.
 			{' '}{d.source === 'fpl' ? "Positions, prices, status and gameweeks come from FPL (updated nightly); players FPL doesn't list at their club are left out." : "FPL positions, prices and gameweeks appear after the first nightly FPL update; until then * marks our own position and rounds are the fixture list's."}
 			{' '}In the multi-gameweek view, capitals are home games and lower case away; a double gameweek shows both. Predictions further ahead assume today's form and fitness.
 			This is {d.model}, designed after the backtest below and still being tested on upcoming gameweeks: a guide, not a pick list.</div>}
@@ -145,7 +146,9 @@ export function Predictions({ owner, marking = true }: { owner: Owner; marking?:
 	function playerRows(r: ListRow, i: number) {
 		const pd = d!;
 		return <>
-			<tr><td>{i + 1}</td>
+			<tr className={pd.part_fields ? 'fpl-openable' : undefined} onClick={pd.part_fields ? (e) => {
+				if (!(e.target as HTMLElement).closest('a, button, input')) setOpen(open === r.p.player ? null : r.p.player);
+			} : undefined}><td>{i + 1}</td>
 				<FantasyWho owner={owner} id={r.p.player} name={r.p.name} team={r.p.team} teamName={teamOf(pd, r.p.team)} tag={plain(statusTag(r.p))}
 					line={one ? versus(pd, r.cells) : teamOf(pd, r.p.team)}
 					meta={<span className="fpl-meta"><span title={FPL_POS[r.p.pos]}>{r.p.pos}{!r.p.fpl_position && <span title={marking ? 'Not matched to FPL yet: our position' : 'Our own position'}>*</span>}</span>{r.price > 0 ? ` · £${r.price.toFixed(1)}` : ''}</span>} />
@@ -156,7 +159,7 @@ export function Predictions({ owner, marking = true }: { owner: Owner; marking?:
 					: <b>{r.xp.toFixed(1)}</b>}</td>
 				{one
 					? <><td>{r.minutes}</td><td>{r.goals.toFixed(2)}</td><td>{r.assists.toFixed(2)}</td></>
-					: <><td>{r.value > 0 ? r.value.toFixed(2) : '–'}</td>
+					: <><td className="fpl-value">{r.value > 0 ? r.value.toFixed(2) : '–'}</td>
 						{span.map((g) => {
 							const cs = r.cells.filter((c) => c.gw === g);
 							return cs.length

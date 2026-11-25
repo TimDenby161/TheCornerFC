@@ -62,3 +62,14 @@ export function roundScore(ms: BtmMatch[]): { you: number; model: number; marked
 // or ending with a space
 export const NAME_RULE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{1,18}[A-Za-z0-9._-]$/;
 export const nameOk = (name: string) => NAME_RULE.test(name.trim());
+
+// The round's one-line verdict over its finished matches, the first thing a player reads
+export function scoreHeadline(s: { you: number; model: number }): string {
+	const d = s.you - s.model, pts = (n: number) => `${n} ${n === 1 ? 'point' : 'points'}`;
+	if (d > 0) return `You're beating the model by ${pts(d)}`;
+	if (d < 0) return `The model leads you by ${pts(-d)}`;
+	return 'Level with the model';
+}
+
+// A match's points as its chip shows them: "+3", "+1", "0"
+export const pointsText = (n: number) => (n > 0 ? `+${n}` : '0');

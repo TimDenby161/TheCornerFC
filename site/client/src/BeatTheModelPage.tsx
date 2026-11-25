@@ -3,8 +3,9 @@
 // shown at once (owner's decisions 2026-11-23). Everything is asked of the server as the visitor
 // (Site/BeatTheModel.cs), which asks the database with their own token.
 import { useCallback, useEffect, useState } from 'react';
-import { goals, matchState, nameOk, roundScore, type BtmMatch, type BtmRound, type BtmRow, type BtmTable } from '../../../web/src/lib/beatTheModel.ts';
+import { goals, matchState, nameOk, pointsText, roundScore, scoreHeadline, type BtmMatch, type BtmRound, type BtmRow, type BtmTable } from '../../../web/src/lib/beatTheModel.ts';
 import { pageHref } from '../../../web/src/lib/menu.ts';
+import { CLUB_SHORT } from '../../../web/src/lib/names.ts';
 import { Crest } from './Crest.tsx';
 import { LocalTime } from './LocalTime.tsx';
 
@@ -79,8 +80,9 @@ function Round({ round, n, step, put }: { round: BtmRound; n: number | null; ste
 				<button type="button" className="filter-chip" aria-label="Previous round" disabled={n <= 1} onClick={() => step(-1)}>◀</button>
 				<button type="button" className="filter-chip" aria-label="Next round" disabled={n >= 38} onClick={() => step(1)}>▶</button></span>}
 		</div>
-		{score.marked > 0 && <div className="btm-total"><span>You <b>{score.you}</b></span><span>The Model <b>{score.model}</b></span>
-			<span className="stats-note">from {score.marked} finished {score.marked === 1 ? 'match' : 'matches'}</span></div>}
+		{score.marked > 0 && <div className={`btm-total${score.you > score.model ? ' ahead' : ''}`}>
+			<div className="btm-head">{scoreHeadline(score)}</div>
+			<div className="stats-note">You <b>{score.you}</b> · The Model <b>{score.model}</b>, from {score.marked} finished {score.marked === 1 ? 'match' : 'matches'}</div></div>}
 		<div className="stats-note">A pick is final once saved, and you'll see the model's score straight away. Picks close at kick-off.</div>
 		<div className="btm-list">
 			{ms.length ? ms.map((m) => <MatchRow key={m.id} m={m} home={team(m.home)} away={team(m.away)} put={put} />)
@@ -103,30 +105,32 @@ function MatchRow({ m, home, away, put }: { m: BtmMatch; home: string; away: str
 		setMsg('');
 		put({ ...m, pick: [hg, ag], model: (r as { model?: string | null }).model ?? null });
 	};
+	// on a phone the short name ("Nott'm Forest", "Man Utd") is shown, so both clubs fit beside the score
 	const side = (id: number, name: string, cls: string) =>
-		<div className={`btm-side ${cls}`}><Crest id={id} name={name} href={pageHref('club', id)} /><span title={name}>{name}</span></div>;
+		<div className={`btm-side ${cls}`}><Crest id={id} name={name} href={pageHref('club', id)} />
+			<span title={name}><span className="nm-full">{name}</span><span className="nm-short">{CLUB_SHORT[id] || name}</span></span></div>;
+	const pts = (n: number | null) => n != null && <> <span className={`btm-pts p${n}`}>{pointsText(n)}</span></>;
 	return <div className="btm-match" data-fixture={m.id}>
 		{side(m.home, home, 'home')}
-		<div className="btm-mid">
-			{state === 'open'
-				? <form className="btm-boxes" onSubmit={(e) => { e.preventDefault(); void save(); }}>
-					<input inputMode="numeric" maxLength={2} value={h} aria-label={`${home} goals`} onChange={(e) => setH(e.currentTarget.value)} />
-					<span>–</span>
-					<input inputMode="numeric" maxLength={2} value={a} aria-label={`${away} goals`} onChange={(e) => setA(e.currentTarget.value)} />
-					<button type="submit" className="mt-btn btm-save" disabled={busy}>Lock in</button>
-				</form>
-				: state === 'done' || state === 'live'
-					? <span className="btm-score">{m.hg ?? 0}–{m.ag ?? 0}</span>
-					: <span className="btm-score">v</span>}
+		<div className="btm-mid">{state === 'done' || state === 'live'
+			? <span className="btm-score">{m.hg ?? 0}–{m.ag ?? 0}</span>
+			: <span className="btm-score btm-v">v</span>}</div>
+		{side(m.away, away, 'away')}
+		<div className="btm-under">
+			{state === 'open' && <form className="btm-boxes" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+				<input inputMode="numeric" maxLength={2} value={h} aria-label={`${home} goals`} onChange={(e) => setH(e.currentTarget.value)} />
+				<span>–</span>
+				<input inputMode="numeric" maxLength={2} value={a} aria-label={`${away} goals`} onChange={(e) => setA(e.currentTarget.value)} />
+				<button type="submit" className="mt-btn btm-save" disabled={busy}>Lock in</button>
+			</form>}
 			<div className="btm-when">{state === 'done' ? 'Full time' : state === 'live' || state === 'missed' ? 'Kicked off' : state === 'off' ? 'Postponed'
 				: <><LocalTime iso={m.kickoff} show="day" /> · <LocalTime iso={m.kickoff} show="time" /></>}</div>
 			{(m.pick || m.model) && <div className="btm-line">
-				{m.pick ? <>You <b>{m.pick[0]}–{m.pick[1]}</b>{m.points != null && <> <span className={`btm-pts p${m.points}`}>{m.points}</span></>}</> : 'No pick'}
-				{m.model && <> · Model <b>{m.model.replace('-', '–')}</b>{m.model_points != null && <> <span className={`btm-pts p${m.model_points}`}>{m.model_points}</span></>}</>}
+				{m.pick ? <>You <b>{m.pick[0]}–{m.pick[1]}</b>{pts(m.points)}</> : 'No pick'}
+				{m.model && <> · Model <b>{m.model.replace('-', '–')}</b>{pts(m.model_points)}</>}
 			</div>}
 			{msg && <div className="stats-note mt-warn" role="alert">{msg}</div>}
 		</div>
-		{side(m.away, away, 'away')}
 	</div>;
 }
 
@@ -139,7 +143,7 @@ function Table({ n }: { n: number | null }) {
 		void ask<BtmTable>(`/btm/table${which === 'round' && n ? `?r=${n}` : ''}`).then((x) => { if (!gone) setT(x); });
 		return () => { gone = true; };
 	}, [which, n]);
-	const row = (r: BtmRow) => <tr key={`${r[0]}-${r[1]}`} className={r[6] ? 'me' : undefined}><td>{r[0]}</td><td className="fpl-player">{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td></tr>;
+	const row = (r: BtmRow) => <tr key={`${r[0]}-${r[1]}`} className={r[6] ? 'me' : undefined}><td>{r[0]}</td><td className="fpl-player">{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td className="btm-wide">{r[4]}</td><td className="btm-wide">{r[5]}</td></tr>;
 	const shown = t?.top || [];
 	return <div className="stats-card" id="btm-table">
 		<div className="fpl-filters"><span className="stats-label">Table</span>
@@ -149,9 +153,9 @@ function Table({ n }: { n: number | null }) {
 		{!t ? <div className="stats-note">Loading…</div>
 			: !t.ok ? <div className="stats-note mt-warn" role="alert">{t.error || UNREACHABLE}</div>
 			: <div className="fpl-scroll"><table className="calib-table btm-table">
-				<thead><tr><th>#</th><th>Player</th><th>Pts</th><th title="Exact scores">Exact</th><th title="Right results, exact scores included">Results</th><th>Played</th></tr></thead>
+				<thead><tr><th>#</th><th>Player</th><th>Pts</th><th title="Exact scores">Exact</th><th title="Right results, exact scores included" className="btm-wide">Results</th><th className="btm-wide">Played</th></tr></thead>
 				<tbody>
-					{t.model && <tr className="model"><td></td><td className="fpl-player">The Model</td><td>{t.model[0]}</td><td>{t.model[1]}</td><td>{t.model[2]}</td><td>{t.model[3]}</td></tr>}
+					{t.model && <tr className="model"><td></td><td className="fpl-player">The Model</td><td>{t.model[0]}</td><td>{t.model[1]}</td><td className="btm-wide">{t.model[2]}</td><td className="btm-wide">{t.model[3]}</td></tr>}
 					{shown.length ? shown.map(row) : <tr><td colSpan={6}>No finished matches yet: the table fills as they are played.</td></tr>}
 					{t.me && !shown.some((r) => r[6]) && row(t.me)}
 				</tbody></table></div>}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { goals, matchState, nameOk, pointsFor, roundScore, type BtmMatch } from './beatTheModel.ts';
+import { goals, matchState, nameOk, pointsFor, pointsText, roundScore, scoreHeadline, type BtmMatch } from './beatTheModel.ts';
 
 const at = Date.parse('2026-11-28T15:00:00Z');
 const match = (o: Partial<BtmMatch>): BtmMatch => ({
@@ -52,5 +52,21 @@ describe('nameOk', () => {
 		expect(nameOk('ab')).toBe(false);
 		expect(nameOk('a'.repeat(21))).toBe(false);
 		expect(nameOk('bad<name>')).toBe(false);
+	});
+});
+
+describe('scoreHeadline', () => {
+	it('says who is ahead and by how much', () => {
+		expect(scoreHeadline({ you: 6, model: 3 })).toBe("You're beating the model by 3 points");
+		expect(scoreHeadline({ you: 2, model: 3 })).toBe('The model leads you by 1 point');
+		expect(scoreHeadline({ you: 4, model: 4 })).toBe('Level with the model');
+	});
+});
+
+describe('pointsText', () => {
+	it('signs points won and leaves none as 0', () => {
+		expect(pointsText(3)).toBe('+3');
+		expect(pointsText(1)).toBe('+1');
+		expect(pointsText(0)).toBe('0');
 	});
 });

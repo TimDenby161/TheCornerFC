@@ -24,7 +24,7 @@ export function FantasyPointsPage({ email }: { email: string | null }) {
 					<div className="stats-note">Each player's points are our model's prediction for his position under the usual fantasy scoring: minutes, goals, assists,
 						clean sheets, goals conceded, saves, penalties, cards, bonus and defensive contributions. Goals come from our match predictions, shared out by each
 						player's shots and chances; minutes from how often he starts and how long he plays; injured and suspended players count as out until they are due back,
-						and doubtful ones at their chance of playing. Prices, positions and injury news are updated every night. Click a player's points to see where they come from.
+						and doubtful ones at their chance of playing. Prices, positions and injury news are updated every night. Tap a player to see where his points come from.
 						In the multi-round view, capitals are home games and lower case away. Further ahead assumes today's form and fitness: a guide, not a pick list.</div>
 					<div className="stats-note">The Corner FC is not affiliated with the Premier League or any fantasy football game.</div>
 				</div>

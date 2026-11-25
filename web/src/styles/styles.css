@@ -158,6 +158,8 @@
     .years-btn { position: relative; }
     .years-btn::after { content: ""; position: absolute; inset: -4px; }   /* a 26px tap area; the button stays 18px so the heading fits */
     .fpl-table th.sortable { min-width: 24px; padding-top: 8px; padding-bottom: 8px; }
+    .fpl-pager .filter-chip { min-width: 44px; min-height: 40px; }
+    .fpl-table th .fpl-sort { padding: 12px 6px; margin: -12px -6px; }   /* a tall tap area; the heading row keeps its height */
   }
   /* the page's name, the first thing read on a wide screen (a phone has it in the bar; the h1 is #app-title) */
   .tab-title { display: none; margin: 4px 0 6px; font-size: 40px; line-height: 0.95; font-weight: 900; font-stretch: 62%; text-transform: uppercase; }
@@ -787,27 +789,47 @@
   .fpl-table.multi { min-width: 640px; }
   /* Beat the Model (/beat-the-model) */
   .btm-list { display: grid; gap: 0; margin-top: 6px; }
-  .btm-match { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px;
-    padding: 10px 0; border-top: 1px solid var(--border); }
+  /* each match: the two clubs either side of the score, then the pick boxes and the lines under them */
+  .btm-match { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 6px 8px;
+    padding: 12px 0; border-top: 1px solid var(--border); }
   .btm-side { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; }
-  .btm-side span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btm-side > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .btm-side.away { flex-direction: row-reverse; text-align: right; }
-  .btm-mid { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 112px; }
-  .btm-boxes { display: flex; align-items: center; gap: 4px; }
-  .btm-boxes input { width: 40px; padding: 6px 0; text-align: center; font: inherit; font-weight: 700; font-variant-numeric: tabular-nums;
+  .btm-mid { min-width: 44px; text-align: center; }
+  .btm-under { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .btm-boxes { display: flex; align-items: center; gap: 6px; }
+  .btm-boxes input { width: 44px; height: 44px; padding: 0; text-align: center; font: inherit; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;
     border: 1px solid var(--text-muted); border-radius: 0; background: var(--surface-1); color: var(--text-primary); }
   .btm-score { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .btm-score.btm-v { color: var(--text-muted); font-weight: 600; font-size: 14px; }
   .btm-when, .btm-line { color: var(--text-muted); font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
+  .btm-line { font-size: 12px; }
   .btm-line b { color: var(--text-primary); }
-  .btm-pts { display: inline-block; min-width: 18px; padding: 0 4px; font-weight: 800; color: var(--text-primary); background: var(--chip-bg, rgba(127,127,127,0.18)); }
+  .btm-pts { display: inline-block; min-width: 22px; padding: 0 4px; text-align: center; font-weight: 800; color: var(--text-muted);
+    background: var(--chip-bg, rgba(127,127,127,0.18)); }
+  .btm-pts.p1 { color: var(--text-primary); }
   .btm-pts.p3 { color: var(--good-text); }
-  .btm-save { padding: 4px 10px; font-size: 12px; }
-  .btm-total { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; margin: 4px 0 2px; }
-  .btm-total b { font-size: 22px; font-variant-numeric: tabular-nums; }
+  .btm-save { min-height: 44px; padding: 0 16px; margin-left: 4px; font-size: 13px; }
+  .btm-total { margin: 6px 0 4px; }
+  .btm-head { font-size: 20px; font-weight: 800; line-height: 1.2; }
+  .btm-total.ahead .btm-head { color: var(--good-text); }
+  .btm-total b { font-variant-numeric: tabular-nums; color: var(--text-primary); }
   .btm-name { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
   .btm-name .table-search { flex: 1 1 160px; width: auto; margin: 0; }
+  .fpl-scroll .btm-table { min-width: 0; }
+  .btm-table th:nth-child(2), .btm-table td:nth-child(2) { text-align: left; }
   .btm-table tr.me td { font-weight: 700; }
   .btm-table tr.model td { font-style: italic; }
+  /* a phone: short club names, and the table keeps #, Player, Pts and Exact */
+  .nm-short { display: none; }
+  #btm-round, #btm-table { container-type: inline-size; }
+  @container (max-width: 559px) {
+    .btm-side .nm-full { display: none; }
+    .btm-side .nm-short { display: inline; }
+  }
+  @container (max-width: 479px) {
+    .btm-table .btm-wide { display: none; }
+  }
   /* one gameweek fits the card at any width: the name gives way (ellipsis), then spacing tightens */
   #fpl-next { container-type: inline-size; }
   .fpl-scroll .fpl-table:not(.multi) { min-width: 0; table-layout: auto; }
@@ -848,6 +870,20 @@
   @container (max-width: 639px) {
     .fpl-scroll .fpl-table.multi { width: max-content; min-width: 100%; }
     .fpl-table.multi .fpl-name { max-width: 120px; }
+  }
+  /* a phone: the rounds get the room (no rank or Pts/£m column, a shorter name), the club badge
+     stands in for the initials it used to cover, and a note says the table scrolls */
+  .fpl-swipe { display: none; }
+  .fpl-openable { cursor: pointer; }
+  @container (max-width: 639px) { .fpl-swipe { display: block; } }
+  @container (max-width: 479px) {
+    .fpl-table.multi :is(th, td).fpl-value, .fpl-table.multi thead th:first-child, .fpl-table.multi tbody tr:not(.fpl-break) td:first-child { display: none; }
+    .fpl-table.multi .fpl-name { max-width: 104px; }
+    .fpl-table.multi :is(th, td) { padding-left: 4px; padding-right: 4px; }
+    .fpl-face, .fpl-face .player-photo { width: 24px; height: 24px; }
+    .fpl-face .player-photo { display: none; }
+    .fpl-face .club-logo { position: static; width: 24px; height: 24px; box-shadow: none; }
+    .fpl-who { gap: 8px; }
   }
   .fpl-gw { font-variant-numeric: tabular-nums; white-space: nowrap; }
   .fpl-gw span { display: block; color: var(--text-muted); font-size: 10px; font-weight: 600; }

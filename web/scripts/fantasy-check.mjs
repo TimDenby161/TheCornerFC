@@ -87,6 +87,10 @@ try {
 	await shot('fpl-gw');
 	await click('#fpl-list .fpl-pts'); await sleep(200);
 	check('points open their parts', (await run(`document.querySelectorAll('.fpl-part').length`)) > 3, await text('.fpl-parts'));
+	await run(`document.querySelector('#fpl-list tbody tr:not(.fpl-break) .fpl-match').click()`);
+	check('a tap on the row shuts them again', await until(`!document.querySelector('#fpl-list .fpl-parts')`));
+	await run(`document.querySelectorAll('#fpl-list tbody tr:not(.fpl-break) .fpl-match')[1].click()`);
+	check('a tap anywhere on another row opens its parts', await until(`document.querySelectorAll('#fpl-list tbody tr')[2]?.classList.contains('fpl-break')`));
 	await run(`(() => { const el = document.querySelector('#fpl-list input[type=checkbox]'); el.click(); })()`); await sleep(400);
 	check('a tick is saved', posted.some((p) => p.startsWith('/fantasy/mark')), posted.join(' | '));
 	await setValue('#fpl-price input', '4', 'input', 1); await sleep(300);
