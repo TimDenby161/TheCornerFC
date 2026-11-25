@@ -26,5 +26,12 @@
    "model_version": null
   }
  },
- "events": []
+ "events": [
+  {
+   "date": "2026-11-25",
+   "type": "deployed",
+   "commit": "8ca3becb3",
+   "note": "Reached main 2026-11-25; the next odds capture and the next run's paper-betting version use it."
+  }
+ ]
 }
