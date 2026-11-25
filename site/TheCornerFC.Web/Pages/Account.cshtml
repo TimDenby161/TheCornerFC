@@ -92,7 +92,7 @@
                 var prices = Model.Prices;
                 @* what it adds first, then the plans, then the way on; what is free comes last *@
                 <p class="sub-title">The whole prediction. <em>Before kick-off.</em></p>
-                <p class="account-text">Everyone gets the model's chance of a win, a draw and a defeat for the next 7 days. Subscribers get everything behind it, for every match:</p>
+                <p class="account-text">Everyone gets the model's chance of a win, a draw and a defeat for the next 7 days, and for each league's next round when it's further off. Subscribers get everything behind it, for every match:</p>
                 <ul class="sub-list">@foreach (var (what, _) in AccountModel.Benefits){<li>@what</li>}</ul>
                 <p class="account-text sub-example"><a class="link-btn" href="/match/example" rel="nofollow">See an example match</a></p>
                 @if (!Model.Pay)

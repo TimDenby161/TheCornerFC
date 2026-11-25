@@ -139,6 +139,7 @@ from .site_players import (
 from .site_clubs import (
     CLUB_ACTIVE_DAYS,
     FREE_DAYS,
+    NEXT_ROUND_DAYS,
     HEX_COLOR,
     LEAGUE_FIXTURE_FIELDS,
     NEUTRAL_SQL,

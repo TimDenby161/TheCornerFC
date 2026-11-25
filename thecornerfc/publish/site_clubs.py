@@ -222,16 +222,23 @@ def export_clubs(conn, out_dir=OUT_DIR, positions=None):
 
 XG_RECENT = 5   # league games behind the tables' xG and xG conceded per 90
 FREE_DAYS = 7                # how far ahead the model's chances are free (the owner's line, 2026-10-04)
+NEXT_ROUND_DAYS = 4          # a league with nothing within FREE_DAYS: its next round (a Friday to Monday)
+                             # from its next kick-off is free too (owner, 2026-11-25; site_matches the same)
 LEAGUE_FIXTURE_FIELDS = ["id", "kickoff", "round", "home", "away", "status", "hg", "ag", "pen_h", "pen_a",
                          "home_xg", "away_xg", "p_home", "p_draw", "p_away"]
 
 
 def cut_league_fixtures(fixtures, now):
     """A league's fixtures (LEAGUE_FIXTURE_FIELDS rows) as its free file carries them: no
-    projected goals, and the chances only for kick-offs within FREE_DAYS of now."""
+    projected goals, and the chances only for kick-offs within FREE_DAYS of now, or, when the
+    league has nothing that soon (an international break), within NEXT_ROUND_DAYS of its next
+    kick-off: its next round."""
     at = LEAGUE_FIXTURE_FIELDS.index
     goals, chances = (at("home_xg"), at("away_xg")), (at("p_home"), at("p_draw"), at("p_away"))
     limit = (now + timedelta(days=FREE_DAYS)).isoformat()
+    upcoming = [f[at("kickoff")] for f in fixtures if f[at("kickoff")] > now.isoformat()]
+    if upcoming and min(upcoming) > limit:
+        limit = (datetime.fromisoformat(min(upcoming)) + timedelta(days=NEXT_ROUND_DAYS)).isoformat()
     out = []
     for f in fixtures:
         hide = set(goals) | (set(chances) if f[at("kickoff")] > limit else set())

@@ -141,6 +141,19 @@ class PaidLeagueFileTests(unittest.TestCase):
         self.assertEqual(cut[2], later[:10] + [None] * 5)
         self.assertEqual(soon[10], 1.6)                                    # the whole rows are untouched
 
+    def test_in_a_break_the_next_round_is_free(self):
+        # T-102 (owner, 2026-11-25): nothing within 7 days, so the round from the next kick-off
+        # (4 days) is free; the round after it stays for subscribers
+        from thecornerfc.publish import export
+        now = datetime(2026, 11, 12, 12, tzinfo=timezone.utc)
+        row = lambda fid, days: [fid, (now + timedelta(days=days)).isoformat(), "Regular Season - 12", 1, 2, "NS",
+                                 None, None, None, None, 1.6, 1.1, 0.5, 0.3, 0.2]
+        saturday, monday, next_round = row(1, 9), row(2, 11.3), row(3, 16)
+        cut = export.cut_league_fixtures([saturday, monday, next_round], now)
+        self.assertEqual([c[12:] for c in cut], [[0.5, 0.3, 0.2], [0.5, 0.3, 0.2], [None, None, None]])
+        self.assertTrue(all(c[10] is None and c[11] is None for c in cut))   # projected goals stay paid
+        self.assertEqual(export.NEXT_ROUND_DAYS, 4)
+
     def test_paid_files_are_stored_as_paid_rows(self):
         from unittest.mock import MagicMock, Mock, patch
         from thecornerfc.publish import export

@@ -21,7 +21,7 @@ const TITLES: Record<View, string> = {
 // What a subscription adds, and what is free without one: the account page has the same words
 // (AccountModel.Benefits, Free and Promise in Account.cshtml.cs): change the two together
 const BENEFITS = ['The projected score', 'The key reasons', 'Predicted line-ups', 'Projected tables', 'Every player ranked', 'Matches further ahead'];
-const FREE = "Free without an account: the club ratings, the league tables, results, the model's record, the chances for every match in the next 7 days, and the top 50 players with the top 10 of each league and position.";
+const FREE = "Free without an account: the club ratings, the league tables, results, the model's record, the chances for every match in the next 7 days and each league's next round, and the top 50 players with the top 10 of each league and position.";
 const PROMISE = 'Cancel whenever you like. Change your mind in the first 14 days and you get a full refund.';
 
 // ---- The check that a visitor isn't a bot (Cloudflare Turnstile, BotCheck.svelte). Its script is
@@ -158,7 +158,7 @@ export function AccountBox({ user, sub, botCheck, pay, prices, start, onview, on
 		// what it adds first, then the plans, then the way on; what is free comes last
 		body = <>
 			<p className="sub-title">The whole prediction. <em>Before kick-off.</em></p>
-			<p className="account-text">Everyone gets the model's chance of a win, a draw and a defeat for the next 7 days. Subscribers get everything behind it, for every match:</p>
+			<p className="account-text">Everyone gets the model's chance of a win, a draw and a defeat for the next 7 days, and for each league's next round when it's further off. Subscribers get everything behind it, for every match:</p>
 			<ul className="sub-list">{BENEFITS.map((b) => <li key={b}>{b}</li>)}</ul>
 			<p className="account-text sub-example"><a className="link-btn" href="/match/example" rel="nofollow">See an example match</a></p>
 			{!pay ? <p className="account-text"><b>Subscriptions are coming soon.</b> Until then, everything listed as free below is here for everyone, with no account needed.</p>

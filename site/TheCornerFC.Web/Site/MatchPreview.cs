@@ -78,7 +78,7 @@ public static class MatchPreview
             }
         }
         else if (!played && !ClubData.NoGame.Contains(v.Status))
-            lines.Add("The model's win, draw and loss chances for this match appear here free 7 days before kick-off.");
+            lines.Add("The model's win, draw and loss chances for this match appear here free 7 days before kick-off, or sooner when it is in its league's next round.");
 
         return lines;
     }

@@ -70,9 +70,9 @@ public sealed class AccountModel(AuthClient auth, Database db, PaymentsClient pa
         ("Predicted line-ups", "The eleven the model expects each club to start, before the team sheets."),
         ("Projected tables", "Where every club finishes its league, with its chance of each place."),
         ("Every player ranked", "The full 0 to 100 list in every position, not only the top 50."),
-        ("Matches further ahead", "The model's chances for matches more than 7 days away."),
+        ("Matches further ahead", "The model's chances for matches beyond the next 7 days and each league's next round."),
     ];
-    public const string Free = "Free without an account: the club ratings, the league tables, results, the model's record, the chances for every match in the next 7 days, and the top 50 players with the top 10 of each league and position.";
+    public const string Free = "Free without an account: the club ratings, the league tables, results, the model's record, the chances for every match in the next 7 days and each league's next round, and the top 50 players with the top 10 of each league and position.";
     // (the promise is the terms', #subscriptions: a full refund within 14 days of first subscribing)
     public const string Promise = "Cancel whenever you like. Change your mind in the first 14 days and you get a full refund.";
     const string NoCheck = "Wait for the check above the button to finish, then try again.";
