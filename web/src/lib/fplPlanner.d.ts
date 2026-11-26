@@ -16,7 +16,7 @@ export type Plan = { weeks: PlanWeek[]; total: number; hold: number };
 export type ChipOption = { k: number; gw: number; gain: number; squad?: number[] };
 export type ChipAdvice = {
 	name: string; played?: number | null; window: [number, number] | null; options?: ChipOption[]; closes?: boolean;
-	best?: ChipOption; verdict?: 'play' | 'last' | 'hold' | 'later';
+	best?: ChipOption; verdict?: 'play' | 'last' | 'hold' | 'later' | 'planned';
 };
 
 export const HORIZON: number, DECAY: number, HIT: number, MAX_FT: number;
@@ -28,4 +28,4 @@ export function bestMoves(ctx: Ctx, st: SquadState, obj: (squad: number[]) => nu
 	opts?: { singles?: number; doubles?: number; triples?: boolean }): Record<'singles' | 'doubles' | 'triples', { moves: Move[]; gain: number; state: SquadState }[]>;
 export function plan(prep: Prep, opts: { ft: number; first?: Move[] | null }): Plan;
 export function moveGain(prep: Prep, st: SquadState, move: Move, k: number): number | null;
-export function chipAdvice(prep: Prep, planned: Plan, chips: Chip[], opts?: { locked?: boolean }): ChipAdvice[];
+export function chipAdvice(prep: Prep, planned: Plan, chips: Chip[], opts?: { locked?: boolean; fixed?: Record<string, number> }): ChipAdvice[];

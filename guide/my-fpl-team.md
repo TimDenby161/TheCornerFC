@@ -26,6 +26,12 @@ signed in in that browser ([Accounts](accounts.md)).
   advised once its week's gain reaches 10 / 18 / 12 / 15, which usually takes a double
   gameweek. Otherwise it's held, unless its window closes within the predictions. All of these
   numbers are judgment, not fitted.
+  **Owner's request, 2026-11-26:** each chip has a "Play in" choice of its open weeks. A picked
+  week is kept (PLANNED GWn) whatever its gain, and no other chip is advised for it
+  (`chipAdvice`'s `fixed`). The pick is kept in that browser (`localStorage`, per entry and
+  season); "Best week" goes back to the advice. A Wildcard or Free Hit shows its whole squad for
+  the week (line-up, captain, bench, cost) as well as its changes, and a Wildcard's expected
+  points if kept for the next four weeks.
 - **Locking in.** "I've made these transfers" calls `lock_fpl_transfers` in Supabase with the
   week's moves. The page then plans from the squad after them, until the next FPL update reads
   the real transfers from FPL (FPL's squad wins). The browser talks only to this site: the

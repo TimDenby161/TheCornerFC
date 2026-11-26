@@ -106,10 +106,15 @@ try {
 	await run(`[...document.querySelectorAll('nav .menu-link')].find((a) => a.textContent === 'My FPL team').click()`);
 	check('My team: plans', await until(`!!document.querySelector('.mt-plan tbody tr')`, 20000), await text('.mt-title'));
 	check('this week', true, await text('#myteam-body .stats-card:nth-of-type(2)'));
-	check('line-up of 11 + 4', (await run(`document.querySelectorAll('.mt-pitch .mt-player').length`)) === 11 && (await run(`document.querySelectorAll('.mt-bench .mt-player').length`)) === 4);
+	check('line-up of 11 + 4', (await run(`document.querySelectorAll('.stats-card > .mt-pitch .mt-player').length`)) === 11 && (await run(`document.querySelectorAll('.stats-card > .mt-bench .mt-player').length`)) === 4);
 	check('chips', (await run(`document.querySelectorAll('.mt-chip').length`)) === 4, await run(`[...document.querySelectorAll('.mt-chip > div:first-child')].map((d) => d.textContent).join(' | ')`));
 	check('squad table', (await run(`document.querySelectorAll('.mt-squad tbody tr').length`)) === 15);
 	await shot('myteam');
+	const fhWeek = await run(`document.querySelector('#mt-pin-freehit option:nth-child(3)')?.value || ''`);
+	await setValue('#mt-pin-freehit', fhWeek, 'change');
+	check('a picked chip week is kept, its squad in full', await until(`document.querySelector('#mt-pin-freehit')?.closest('.mt-chip')?.textContent.includes('PLANNED GW${fhWeek}') && document.querySelectorAll('.mt-chip .mt-details[open] .mt-player').length === 15`, 20000), `GW${fhWeek}`);
+	await setValue('#mt-pin-freehit', '', 'change');
+	check('back to the best week', await until(`!!document.querySelector('#mt-lock') && !document.querySelector('#mt-pin-freehit')?.closest('.mt-chip')?.textContent.includes('PLANNED')`, 20000));
 	await click('#mt-lock'); check('lock in', await until(`!!document.querySelector('.mt-locked')`, 20000), `${await text('.mt-locked')} · ${posted.filter((p) => p.startsWith('/fantasy/lock')).join(' | ')}`);
 	await click('#mt-unlock'); check('undo', await until(`!!document.querySelector('#mt-lock')`, 20000));
 	await setValue('#mt-ft', '0', 'change');

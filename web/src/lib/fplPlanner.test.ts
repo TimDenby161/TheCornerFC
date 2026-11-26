@@ -111,6 +111,25 @@ test("chips: a double gameweek gets Triple Captain and Bench Boost; played and l
   assert.equal(new Set(played).size, played.length);
 });
 
+test("a chip week the owner picks is kept, and no other chip takes it", () => {
+  const pl = SQUAD.map((p) => [...p]);
+  const doubles = Object.fromEntries(SQUAD.map(([id]) => [id, [9]]));
+  const pool = [[60, "M", 200, 50, 6], [61, "F", 201, 50, 6], [62, "D", 202, 45, 5]];
+  const chips = [{ name: "wildcard", start: 2, stop: 19, played: null }, { name: "freehit", start: 2, stop: 19, played: null },
+    { name: "bboost", start: 1, stop: 19, played: null }];
+  const prep = P.prepare(world([...pl, ...pool], { doubles }), team({ chips }));
+  const planned = P.plan(prep, { ft: 1, first: [] });
+  const gw = prep.ctx.weeks[1].id;
+  const advice = Object.fromEntries(P.chipAdvice(prep, planned, chips, { locked: true, fixed: { wildcard: gw } }).map((a) => [a.name, a]));
+  assert.equal(advice.wildcard.verdict, "planned");
+  assert.equal(advice.wildcard.best.gw, gw);
+  assert.equal(advice.wildcard.best.squad.length, 15);
+  for (const a of [advice.freehit, advice.bboost]) if (a.verdict !== "hold") assert.ok(a.best.gw !== gw);
+  // a picked week outside the chip's options (here the locked first week) is ignored
+  const first = P.chipAdvice(prep, planned, chips, { locked: true, fixed: { wildcard: prep.ctx.weeks[0].id } }).find((a) => a.name === "wildcard");
+  assert.ok(first.verdict !== "planned");
+});
+
 test("a squad player with no prediction counts as zero and can be sold", () => {
   const t = team();
   t.squad[12] = { ...t.squad[12], api: null, fpl: 999 };

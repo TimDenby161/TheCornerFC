@@ -290,7 +290,9 @@ function climb(ctx, st, obj, quick) {
 // chips: fpl_team.json's chips. For each chip still to play, its expected gain in each week in
 // view with the planned squad, the week to play it, and whether to play it or hold it.
 // locked: the first week's transfers are done, so a Wildcard or Free Hit can't be played in it
-function chipAdvice(prep, planned, chips, { locked = false } = {}) {
+// fixed: { chip: gw } weeks the owner has picked; such a chip keeps its week ("planned") and comes
+// first, so no other chip takes it
+function chipAdvice(prep, planned, chips, { locked = false, fixed = {} } = {}) {
   const { ctx } = prep;
   const W = ctx.weeks.length, first = ctx.weeks[0].id, last = ctx.weeks[W - 1].id;
   const at = (k) => planned.weeks[Math.min(k, planned.weeks.length - 1)];
@@ -336,7 +338,12 @@ function chipAdvice(prep, planned, chips, { locked = false } = {}) {
   }
   // one chip a gameweek: the bigger gain keeps the week, the other takes its next best
   const taken = new Set();
-  for (const a of out.filter((a) => a.options?.length).sort((x, y) => y.options[0].gain / CHIP_PLAY[y.name] - x.options[0].gain / CHIP_PLAY[x.name])) {
+  for (const a of out) {
+    const o = a.options?.find((o) => o.gw === fixed[a.name]);
+    if (!o || taken.has(o.gw)) continue;
+    a.best = o; a.verdict = "planned"; taken.add(o.gw);
+  }
+  for (const a of out.filter((a) => a.options?.length && a.verdict !== "planned").sort((x, y) => y.options[0].gain / CHIP_PLAY[y.name] - x.options[0].gain / CHIP_PLAY[x.name])) {
     const pick = a.options.find((o) => !taken.has(o.gw));
     if (!pick) { a.verdict = "hold"; continue; }
     a.best = pick;

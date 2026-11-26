@@ -14,6 +14,11 @@ import { lockTransfers, setLocks, useOwner, type Owner } from './owner.ts';
 type Result = { prep: Prep; plan: Plan; chips: ChipAdvice[]; lock: Lock | null; ft: number };
 const ORDER: Record<string, number> = { G: 0, D: 1, M: 2, F: 3 };
 const money = (tenths: number) => `£${(tenths / 10).toFixed(1)}m`;
+// chip weeks the owner has picked ({ wildcard: 12 }), kept in this browser for the season
+const pinKey = (t: TeamDoc) => `mt-chip-weeks:${t.entry}:${t.season}`;
+function readPins(t: TeamDoc): Record<string, number> {
+	try { return JSON.parse(localStorage.getItem(pinKey(t)) || '{}') || {}; } catch { return {}; }
+}
 
 export function MyTeamPage({ email }: { email: string | null }) {
 	const owner = useOwner(email);
@@ -34,6 +39,13 @@ function Team({ owner, t, d }: { owner: Owner; t: TeamDoc; d: PredDoc }) {
 	const ftFpl = Math.max(t.free_transfers - t.made.length, 0);
 	// null: planning; false: couldn't
 	const [r, setR] = useState<Result | null | false>(null);
+	const [pins, setPins] = useState<Record<string, number>>(() => readPins(t));
+	function pin(name: string, gw: number | null) {
+		const next = { ...pins };
+		if (gw == null) delete next[name]; else next[name] = gw;
+		setPins(next);
+		try { localStorage.setItem(pinKey(t), JSON.stringify(next)); } catch { /* kept for this visit only */ }
+	}
 	const lock = locks.get(t.next_event) || null, ftWanted = ftPicked ?? ftFpl;
 	// The search takes a moment: "Planning…" is drawn first
 	useEffect(() => {
@@ -49,11 +61,11 @@ function Team({ owner, t, d }: { owner: Owner; t: TeamDoc; d: PredDoc }) {
 					if (first.length && !Planner.apply(prep.ctx, prep.start, first)) first = [];
 				}
 				const plan = Planner.plan(prep, { ft: ftWanted, first });
-				setR({ prep, plan, chips: Planner.chipAdvice(prep, plan, t.chips, { locked: !!lock }), lock, ft: ftWanted });
+				setR({ prep, plan, chips: Planner.chipAdvice(prep, plan, t.chips, { locked: !!lock, fixed: pins }), lock, ft: ftWanted });
 			} catch (err) { console.error(err); setR(false); }
 		}, 20);
 		return () => clearTimeout(timer);
-	}, [t, d, lock, ftWanted]);
+	}, [t, d, lock, ftWanted, pins]);
 
 	const passed = new Date(t.next_deadline) <= new Date();
 	const ftNow = r ? r.ft : ftWanted;
@@ -103,6 +115,21 @@ function Team({ owner, t, d }: { owner: Owner; t: TeamDoc; d: PredDoc }) {
 			if (!best?.squad || a.verdict === 'hold') return [];
 			const from = before(best.k).squad, out = from.filter((id) => !best.squad!.includes(id)), inn = best.squad.filter((id) => !from.includes(id));
 			return out.map((id, i) => [id, inn[i]]);
+		};
+		// a Wildcard or Free Hit squad in full: its line-up for the chip's week, then the bench
+		const chipSquad = (a: ChipAdvice) => {
+			const b = a.best;
+			if (!b?.squad || a.verdict === 'hold' || (a.name !== 'wildcard' && a.name !== 'freehit')) return null;
+			const sq = b.squad, l = Planner.lineup(r.prep.ctx, sq, b.k), cost = sq.reduce((v, id) => v + P(id).price, 0);
+			const nextWeeks = a.name === 'wildcard' ? r.prep.ctx.weeks.slice(b.k, b.k + 4).map((g, j) => `GW${g.id} ${Planner.lineup(r.prep.ctx, sq, b.k + j).points.toFixed(1)}`).join(' · ') : '';
+			const row = (p: PlanPlayer) => <div key={p.id} className="mt-player"><span className="mt-nm">{nm(p)}{p.id === l.captain ? <>{' '}<b className="mt-c" title="Captain">C</b></> : p.id === l.vice ? <>{' '}<b className="mt-c v" title="Vice-captain">V</b></> : null}</span>
+				<small>{code(p.team)} · {money(p.price)} · {fix(p, b.k)} · {p.xp[b.k].toFixed(1)}</small>{doubt(p)}</div>;
+			return <details className="mt-details" open={a.verdict === 'planned'}><summary>The GW{b.gw} {CHIP_NAMES[a.name]} squad · {l.points.toFixed(1)} expected points</summary>
+				<div className="mt-pitch">{['G', 'D', 'M', 'F'].map((pos) => <div key={pos} className="mt-row">{l.xi.map(P).filter((p) => p.pos === pos).map(row)}</div>)}</div>
+				<div className="stats-label mt-sub">Bench, in order</div>
+				<div className="mt-row mt-bench">{l.bench.map(P).map(row)}</div>
+				<div className="stats-note">Squad cost {money(cost)}, at today's prices.{nextWeeks && <> Expected points if kept: {nextWeeks}.</>}</div>
+			</details>;
 		};
 		const doubt = (p: PlanPlayer) => tag(p) && <>{' '}<span className="bet-tag warn">{tag(p)}</span></>;
 		const card = (p: PlanPlayer, captain: number, vice: number) =>
@@ -173,13 +200,21 @@ function Team({ owner, t, d }: { owner: Owner; t: TeamDoc; d: PredDoc }) {
 					const others = a.options.filter((o) => o !== b).slice(0, 4).map((o) => `GW${o.gw} +${o.gain.toFixed(1)}`).join(' · ');
 					const swaps = chipSwaps(a);
 					return <div key={a.name} className="mt-chip">
-						<div><b>{CHIP_NAMES[a.name]}</b>{a.verdict === 'play' && b ? <span className="fpl-badge pass">PLAY GW{b.gw}</span> : a.verdict === 'last' && b ? <span className="fpl-badge pass">LAST CHANCE: GW{b.gw}</span> : <span className="fpl-badge">HOLD</span>}</div>
+						<div><b>{CHIP_NAMES[a.name]}</b>{a.verdict === 'planned' && b ? <span className="fpl-badge pass">PLANNED GW{b.gw}</span> : a.verdict === 'play' && b ? <span className="fpl-badge pass">PLAY GW{b.gw}</span> : a.verdict === 'last' && b ? <span className="fpl-badge pass">LAST CHANCE: GW{b.gw}</span> : <span className="fpl-badge">HOLD</span>}</div>
 						<div className="stats-note">
-							{a.verdict === 'play' && b ? <>+{b.gain.toFixed(1)} expected points {gainText}.</>
+							{a.verdict === 'planned' && b ? <>Your pick: +{b.gain.toFixed(1)} expected points {gainText}.</>
+								: a.verdict === 'play' && b ? <>+{b.gain.toFixed(1)} expected points {gainText}.</>
 								: a.verdict === 'last' && b ? <>+{b.gain.toFixed(1)} expected points {gainText}: its window closes after GW{a.window[1]}, so play it in its best week left.</>
 								: b ? <>Best week so far is GW{b.gw} at +{b.gain.toFixed(1)} {gainText}; it's worth playing from about +{Planner.CHIP_PLAY[a.name]}, usually a double gameweek. Play by GW{a.window[1]}.</>
 								: <>No week left for it in the predictions. Play by GW{a.window[1]}.</>}
 							{others && <>{' '}Other weeks: {others}.</>}</div>
+						<div className="mt-lock"><label className="stats-label" htmlFor={`mt-pin-${a.name}`}>Play in</label>{' '}
+							<select id={`mt-pin-${a.name}`} className="mt-select" value={pins[a.name] ?? ''} onChange={(e) => pin(a.name, e.currentTarget.value ? +e.currentTarget.value : null)}>
+								<option value="">Best week</option>
+								{[...a.options].sort((x, y) => x.gw - y.gw).map((o) => <option key={o.gw} value={o.gw}>GW{o.gw} (+{o.gain.toFixed(1)})</option>)}
+								{pins[a.name] != null && !a.options.some((o) => o.gw === pins[a.name]) && <option value={pins[a.name]}>GW{pins[a.name]} (not open)</option>}
+							</select></div>
+						{chipSquad(a)}
 						{swaps.length > 0 && <details className="mt-details"><summary>The {CHIP_NAMES[a.name]} squad's changes</summary>
 							{swaps.map(([out, inn]) => <div key={out} className="mt-move"><span className="mt-nm">{nm(P(out))}</span><span className="mt-arrow">→</span><span className="mt-nm">{nm(P(inn))}</span></div>)}
 						</details>}
