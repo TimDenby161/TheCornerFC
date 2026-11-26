@@ -173,6 +173,11 @@ public class AccountTests
         Assert.Equal("/clubs?c=39", r.Headers.Location!.ToString());
         Assert.NotNull(SetCookie(r, Sessions.Cookie));
         Assert.Contains("\"token_hash\":\"abc\"", Body(site, site.Handler.Sent.Single(x => x.RequestUri!.AbsolutePath == "/auth/v1/verify")));
+        // a link whose page is another site's address (//evil.example) signs in but returns home, never
+        // there (T-112: before, it answered Location: //evil.example/x)
+        var away = await Client(site).GetAsync($"{Origin}//evil.example/x?token_hash=abc&type=signup");
+        Assert.Equal(HttpStatusCode.SeeOther, away.StatusCode);
+        Assert.Equal("/", away.Headers.Location!.ToString());
         // a password reset goes on to choosing the new one; a link that has been used says so
         Assert.Equal("/account?view=newpass", (await Client(site).GetAsync("/?token_hash=abc&type=recovery")).Headers.Location!.ToString());
         using var used = Site(_ => StubHandler.Json("""{"error_code":"otp_expired"}""", HttpStatusCode.Forbidden));

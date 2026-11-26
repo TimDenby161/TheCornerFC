@@ -41,6 +41,16 @@ public static class Sessions
         catch (Exception e) when (e is FormatException or JsonException) { return null; }
     }
 
+    // Where a finished sign-in link returns to: the same page without the link's own parameters. Only
+    // ever a path on this site: an address like //evil.example (a second slash) would otherwise send
+    // the newly signed-in visitor to another site (T-112), so anything AuthClient.SafePath refuses
+    // goes to the home page.
+    public static string ReturnPath(PathString path, IQueryCollection q)
+    {
+        var kept = q.Where(kv => !LinkParams.Contains(kv.Key)).SelectMany(kv => kv.Value.Select(v => new KeyValuePair<string, string>(kv.Key, v ?? ""))).ToList();
+        return AuthClient.SafePath($"{path}{(kept.Count > 0 ? "?" + Markup.Query(kept) : "")}");
+    }
+
     public static IApplicationBuilder UseSessions(this IApplicationBuilder app) => app.Use(async (context, next) =>
     {
         var auth = context.RequestServices.GetRequiredService<AuthClient>();
@@ -70,8 +80,7 @@ public static class Sessions
         // without those. A link that has expired or been used opens the account page saying so.
         if (HttpMethods.IsGet(request.Method) && (q.ContainsKey("token_hash") || q.ContainsKey("code") || q.ContainsKey("error_description")))
         {
-            var kept = q.Where(kv => !LinkParams.Contains(kv.Key)).SelectMany(kv => kv.Value.Select(v => new KeyValuePair<string, string>(kv.Key, v ?? ""))).ToList();
-            var back = $"{request.Path}{(kept.Count > 0 ? "?" + Markup.Query(kept) : "")}";
+            var back = ReturnPath(request.Path, q);
             string? failed = q.ContainsKey("error_description") ? (q["error_code"].ToString() is { Length: > 0 } ec ? ec : "error") : null;
             var recovery = false;
             if (failed is null && q.ContainsKey("token_hash") && LinkTypes.Contains(q["type"].ToString()))
