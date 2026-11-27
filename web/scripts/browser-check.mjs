@@ -115,9 +115,9 @@ const fitStats = await until(fits, 3000);
 await run(`[...document.querySelectorAll('.home-turn-list button')].find((b) => b.textContent === 'Players')?.click()`);
 await until(`document.querySelector('.home-turn-list button[aria-current]')?.textContent === 'Players'`);
 check('Home on a phone: the hero is as tall as the slide that\'s up, under its rules', fitStats && (await until(fits, 3000)));
-// ... and the way to subscribing stands under the slides whichever is up (here Players), not only on the first
+// ... and the way into a free account (Play free) stands under the slides whichever is up (here Players), not only on the first
 const joinUnder = await run(`(() => { const j = document.querySelector('.home-join'), box = document.querySelector('.home-slides'); if (!j) return 'no button'; const r = j.getBoundingClientRect(); return { shown: getComputedStyle(j).display !== 'none' && r.height > 40, under: r.top >= box.getBoundingClientRect().bottom - 5, onSlide: [...document.querySelectorAll('.home-slide .home-actions .home-ghost')].filter((a) => getComputedStyle(a).display !== 'none').length }; })()`);
-check('Home on a phone: "What subscribers get" under the slides, on every one', joinUnder.shown && joinUnder.under && joinUnder.onSlide === 0 && (await run(`document.querySelector('.home-join')?.textContent`)) === 'What subscribers get' && (await run(`document.querySelector('.home-join')?.getAttribute('href')`)) === '/account?view=subscribe', JSON.stringify(joinUnder));
+check('Home on a phone: "Play free" under the slides, on every one, and no strip above the hero', joinUnder.shown && joinUnder.under && joinUnder.onSlide === 0 && (await run(`document.querySelector('.home-join')?.textContent`)) === 'Play free' && (await run(`document.querySelector('.home-join')?.getAttribute('href')`)) === '/beat-the-model' && (await run(`getComputedStyle(document.querySelector('.home-free')).display`)) === 'none', JSON.stringify(joinUnder));
 // ... and it doesn't move as the slides turn: on a phone each is as tall as the tallest
 const joinTop = `Math.round(document.querySelector('.home-join').getBoundingClientRect().top - document.querySelector('.home-hero').getBoundingClientRect().top)`;
 const joinAt = [await run(joinTop)];
@@ -389,6 +389,7 @@ for (const [path, body, words] of [['/beat-the-model', '#btm-body', 'Predict the
 // ... and the invitations to them on Home, Players, Matches and a Premier League card to come (T-105)
 await open('/');
 check('Home: the Play free band names both, each linking to its page', await until(`!!document.querySelector('.home-play a[href="/beat-the-model"]') && !!document.querySelector('.home-play a[href="/fantasy-points"]')`));
+check('Home: the free-account strip comes before the hero, with Play free and Fantasy points', await until(`(() => { const b = document.querySelector('.home-free'), h = document.querySelector('.home-hero'); return !!b && !!h && !!(b.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING) && !!b.querySelector('a[href="/beat-the-model"]') && !!b.querySelector('a[href="/fantasy-points"]'); })()`));
 await open('/players');
 check('Players: the Fantasy points banner', await until(`!!document.querySelector('.play-banner a[href="/fantasy-points"]')`));
 await open('/matches?c=39');

@@ -32,6 +32,17 @@
     }
 }
 <section class="panel" data-tab="home" data-active="true">
+    @* The first thing a newcomer sees (T-115): what a free account gives, above the hero, on a wide screen.
+       A phone or a tablet has Play free pinned under the slides instead (.home-join). Signed out only. *@
+    @if (!Model.SignedIn)
+    {
+        <aside class="play-banner home-free" aria-label="Free with an account">
+            <span class="play-banner-eye">Free with an account</span>
+            <span class="play-banner-text">Predict every Premier League score this weekend and try to beat our model. Plus every player's fantasy points.</span>
+            <a class="mt-btn play-banner-go" href="/beat-the-model">Play free</a>
+            <a class="home-ghost" href="/fantasy-points">Fantasy points</a>
+        </aside>
+    }
     <div class="home-hero" role="region" aria-roledescription="carousel" aria-label="What's on the site">
         <!-- the corner of a pitch: the touchline and goal line, the corner arc and the flag (the site's mark) -->
         <svg class="home-pitch" viewBox="0 0 420 300" aria-hidden="true" focusable="false">
@@ -106,10 +117,10 @@
                 @for (var i = 0; i < slides.Count; i++){<button type="button" data-slide="@slides[i].Key" aria-current="@(i == 0 ? "true" : null)"><span>@slides[i].Name</span></button>}
             </div>
         </div>
-        <!-- on a phone or a tablet the way to subscribing stands under the slides, there whichever one is up
-             (on a wide screen it is on the first slide, beside its button). Everything free is open
-             without an account, so the button offers the subscription, not an account -->
-        @if (!Model.SignedIn){<a class="mt-btn home-go home-join" href="/account?view=subscribe">What subscribers get</a>}
+        <!-- on a phone or a tablet the way into a free account stands under the slides, there whichever one is up
+             (owner 2026-11-27, T-115: free users first). On a wide screen the strip above the hero says it, and
+             the subscription is on the first slide beside its button; on every screen it has its own band below -->
+        @if (!Model.SignedIn){<a class="mt-btn home-go home-join" href="/beat-the-model">Play free</a>}
     </div>
     @* What a free account gives (T-105): Beat the Model and Fantasy points. Each links to its own
        page, which has the way in, so a visitor who signs up there lands where they can play. *@

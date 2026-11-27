@@ -1279,6 +1279,11 @@
   .play-banner-eye { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
   .play-banner-text { flex: 1 1 260px; font-size: 14px; color: var(--text-primary); }
   .play-banner .mt-btn { padding: 6px 12px; font-size: 13px; }
+  /* Home's first line for a newcomer (T-115): the banner above the hero, its second way in beside the button */
+  .home-free { margin-bottom: 18px; }
+  .home-free .home-ghost { min-height: 0; padding: 6px 12px; font-size: 13px; }
+  /* a phone or a tablet has Play free pinned under the slides instead (Index.cshtml, .home-join) */
+  @media (max-width: 1099px) { .home-free { display: none; } }
   @media (max-width: 640px) { .home-play-items { grid-template-columns: 1fr; } .home-play-title { font-size: 28px; } }
   .home-brief { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 36px 28px; margin-top: 44px; }
   .home-brief-item { min-width: 0; padding-top: 14px; border-top: 2px solid var(--text-primary); }
